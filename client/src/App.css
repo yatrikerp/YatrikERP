@@ -1,0 +1,202 @@
+/* GENERAL RESET & LAYOUT */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', sans-serif;
+  background-color: #f4f8fb;
+  color: #002b5b;
+}
+
+.App {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+/* NAVBAR */
+.navbar {
+  background-color: #002b5b;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+}
+
+.navbar .logo {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.navbar nav a {
+  color: white;
+  margin: 0 1rem;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+.navbar nav a:hover {
+  color: #00c9a7;
+}
+
+.cta {
+  background-color: #ff6b6b;
+  border: none;
+  padding: 0.6rem 1rem;
+  color: white;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+/* HERO SECTION */
+.hero {
+  padding: 4rem 2rem;
+  background-color: #e0f7fa;
+  border-radius: 10px;
+}
+
+.hero h1 {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.hero p {
+  font-size: 1.1rem;
+  color: #444;
+}
+
+.hero-buttons {
+  margin-top: 1rem;
+}
+
+.hero-buttons button {
+  padding: 0.6rem 1.2rem;
+  margin: 0.5rem;
+  font-size: 1rem;
+  border: none;
+  border-radius: 5px;
+  background: linear-gradient(to right, #00c9a7, #00b49d);
+  color: white;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.hero-buttons button:hover {
+  background: #009688;
+}
+
+/* FEATURES SECTION */
+.features {
+  padding: 3rem 2rem;
+  background-color: #ffffff;
+  border-radius: 8px;
+  margin: 2rem 0;
+}
+
+.features h2 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.features ul {
+  list-style: none;
+  padding: 0;
+}
+
+.features li {
+  padding: 0.5rem 0;
+  font-size: 1.1rem;
+}
+
+/* TRIP PLANNER */
+.trip-planner {
+  padding: 3rem 2rem;
+  background-color: #e9f5ff;
+  border-radius: 10px;
+}
+
+.trip-planner h2 {
+  font-size: 2rem;
+}
+
+.trip-planner form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.trip-planner input {
+  width: 250px;
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+}
+
+/* LIVE TRACKER */
+.live-tracker {
+  padding: 3rem 2rem;
+  margin-top: 2rem;
+}
+
+.live-tracker iframe {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* NEWS CARD */
+.news {
+  padding: 2rem;
+}
+
+.news-card {
+  background-color: #ffffff;
+  border-radius: 10px;
+  padding: 1.5rem;
+  max-width: 600px;
+  margin: 1rem auto;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.news-card h3 {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.news-card p {
+  font-size: 1rem;
+  color: #333;
+}
+
+.news-card small {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+/* FOOTER */
+.footer {
+  margin-top: 3rem;
+  padding: 1rem;
+  background-color: #002b5b;
+  color: white;
+  font-size: 0.9rem;
+  border-radius: 6px;
+}
+
+/* RESPONSIVE TWEAKS */
+@media screen and (max-width: 768px) {
+  .navbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .hero h1 {
+    font-size: 2rem;
+  }
+
+  .trip-planner input {
+    width: 80%;
+  }
+}
