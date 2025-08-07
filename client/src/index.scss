@@ -1,0 +1,148 @@
+@use "sass:color";
+// === YATRIK ERP Global Theme ===
+$color-primary: #FF7F00;
+$color-bg: #FFFFFF;
+$color-text: #222222;
+$color-text-secondary: #666666;
+$color-success: #28a745;
+$color-danger: #dc3545;
+$color-shadow: #FFF3E0;
+$color-border: #f0f0f0;
+$color-card-hover: #FFF3E0;
+$font-main: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+
+body {
+  margin: 0;
+  font-family: $font-main;
+  background: $color-bg;
+  color: $color-text;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+.flex-row {
+  display: flex;
+  flex-direction: row;
+}
+
+.card {
+  background: $color-bg;
+  border: 1px solid $color-border;
+  border-radius: 1rem;
+  box-shadow: 0 2px 8px 0 rgba(255,127,0,0.06);
+  padding: 2rem;
+  transition: box-shadow 0.2s, background 0.2s;
+  &:hover {
+    background: $color-card-hover;
+    box-shadow: 0 4px 16px 0 rgba(255,127,0,0.12);
+  }
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 0.75em 2em;
+  border-radius: 0.75em;
+  border: none;
+  background: $color-primary;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 2px 4px 0 rgba(255,127,0,0.08);
+  transition: background 0.2s, box-shadow 0.2s;
+  &:hover, &:focus {
+    background: color.adjust($color-primary, $lightness: -8%);
+    box-shadow: 0 4px 12px 0 rgba(255,127,0,0.16);
+  }
+  &.btn-secondary {
+    background: #fff;
+    color: $color-primary;
+    border: 2px solid $color-primary;
+    &:hover, &:focus {
+      background: $color-card-hover;
+    }
+  }
+  &.btn-success {
+    background: $color-success;
+  }
+  &.btn-danger {
+    background: $color-danger;
+  }
+}
+
+.input {
+  width: 100%;
+  padding: 0.75em 1em;
+  border: 1px solid $color-border;
+  border-radius: 0.5em;
+  font-size: 1rem;
+  color: $color-text;
+  background: #fff;
+  margin-bottom: 1em;
+  transition: border 0.2s, box-shadow 0.2s;
+  &:focus {
+    border: 1.5px solid $color-primary;
+    outline: none;
+    box-shadow: 0 0 0 2px $color-shadow;
+  }
+}
+
+.alert {
+  padding: 1em 1.5em;
+  border-radius: 0.5em;
+  font-size: 0.95em;
+  margin-bottom: 1em;
+  border: 1px solid $color-danger;
+  background: #fff6f6;
+  color: $color-danger;
+  &.alert-success {
+    border-color: $color-success;
+    background: #eafaf1;
+    color: $color-success;
+  }
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: $color-text;
+  margin-bottom: 0.5em;
+}
+.subtitle {
+  font-size: 1.2rem;
+  color: $color-text-secondary;
+  margin-bottom: 1em;
+}
+.text-secondary {
+  color: $color-text-secondary;
+}
+
+.mt-2 { margin-top: 0.5em; }
+.mt-4 { margin-top: 1em; }
+.mt-6 { margin-top: 1.5em; }
+.mb-2 { margin-bottom: 0.5em; }
+.mb-4 { margin-bottom: 1em; }
+.mb-6 { margin-bottom: 1.5em; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-left { text-align: left; }
+.rounded { border-radius: 0.5em; }
+.shadow {
+  box-shadow: 0 2px 8px 0 rgba(34,34,34,0.06);
+}

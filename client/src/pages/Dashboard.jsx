@@ -23,35 +23,36 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      <nav className="bg-white border-b border-gray-100 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between h-16 items-center">
+    <div style={{ minHeight: '100vh', background: 'var(--color-bg)' }}>
+      <nav style={{ background: 'var(--color-bg)', borderBottom: '1px solid var(--color-border)', boxShadow: '0 2px 8px 0 rgba(34,34,34,0.06)' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '4rem' }}>
           <Logo size="default" />
-          <div className="flex items-center">
-            <span className="text-gray-600 mr-4 text-sm">{user?.email}</span>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <span className="text-secondary" style={{ marginRight: '1.5rem', fontSize: '1rem' }}>{user?.email}</span>
             <button
               onClick={handleLogout}
-              className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded text-sm shadow-sm"
+              className="btn btn-danger"
+              style={{ padding: '0.5em 1.5em', fontSize: '1em' }}
             >
               Logout
             </button>
           </div>
         </div>
       </nav>
-      <div className="max-w-7xl mx-auto py-8 px-4">
-        <div className="mb-8 text-2xl font-bold text-gray-800">Welcome to YATRIK ERP</div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white p-6 rounded-xl shadow border border-gray-100 flex flex-col items-start">
-            <h3 className="font-bold text-lg mb-2 text-blue-700">Bus Management</h3>
-            <p className="text-gray-600 text-sm">Manage your bus fleet, schedules, and routes.</p>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem 1rem' }}>
+        <div className="title mb-6">Welcome to YATRIK ERP</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '2rem' }}>
+          <div className="card" style={{ alignItems: 'flex-start' }}>
+            <h3 className="title mb-2" style={{ fontSize: '1.1rem', color: 'var(--color-primary)' }}>Bus Management</h3>
+            <p className="text-secondary">Manage your bus fleet, schedules, and routes.</p>
           </div>
-          <div className="bg-white p-6 rounded-xl shadow border border-gray-100 flex flex-col items-start">
-            <h3 className="font-bold text-lg mb-2 text-blue-700">Ticket Booking</h3>
-            <p className="text-gray-600 text-sm">View and manage passenger bookings.</p>
+          <div className="card" style={{ alignItems: 'flex-start' }}>
+            <h3 className="title mb-2" style={{ fontSize: '1.1rem', color: 'var(--color-primary)' }}>Ticket Booking</h3>
+            <p className="text-secondary">View and manage passenger bookings.</p>
           </div>
-          <div className="bg-white p-6 rounded-xl shadow border border-gray-100 flex flex-col items-start">
-            <h3 className="font-bold text-lg mb-2 text-blue-700">Reports</h3>
-            <p className="text-gray-600 text-sm">Access analytics and generate reports.</p>
+          <div className="card" style={{ alignItems: 'flex-start' }}>
+            <h3 className="title mb-2" style={{ fontSize: '1.1rem', color: 'var(--color-primary)' }}>Reports</h3>
+            <p className="text-secondary">Access analytics and generate reports.</p>
           </div>
         </div>
       </div>

@@ -42,63 +42,64 @@ const steps = [
 
 const LandingPage = () => {
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <div className="flex-col" style={{ minHeight: '100vh', background: 'var(--color-bg)' }}>
       {/* Top bar */}
-      <div className="flex justify-between items-center w-full max-w-6xl mx-auto pt-6 px-4">
+      <div className="flex-row" style={{ justifyContent: 'space-between', alignItems: 'center', width: '100%', maxWidth: '1100px', margin: '0 auto', padding: '2rem 1.5rem 0 1.5rem' }}>
         <Logo size="default" />
-        <div className="flex gap-4 items-center">
-          <Link to="/login" className="text-gray-700 font-medium hover:text-blue-700 transition text-sm">Login</Link>
-          <Link to="/register" className="text-gray-700 font-medium hover:text-blue-700 transition text-sm">Register</Link>
+        <div className="flex-row" style={{ gap: '1.5rem', alignItems: 'center', display: 'flex' }}>
+          <Link to="/login" style={{ color: 'var(--color-text)', fontWeight: 500, fontSize: '1rem', textDecoration: 'none' }}>Login</Link>
+          <Link to="/register" style={{ color: 'var(--color-text)', fontWeight: 500, fontSize: '1rem', textDecoration: 'none' }}>Register</Link>
         </div>
       </div>
       {/* Hero */}
-      <div className="flex flex-col items-center justify-center flex-1 w-full max-w-2xl mx-auto py-16">
-        <h1 className="text-4xl font-extrabold text-gray-900 mb-2 text-center">Kerala’s Smart Public Transport Platform</h1>
-        <p className="text-lg text-gray-600 mb-8 text-center">Live bus tracking, route planning, and digital ticketing for everyone.</p>
+      <div className="flex-col flex-center" style={{ flex: 1, width: '100%', maxWidth: '700px', margin: '0 auto', padding: '4rem 0' }}>
+        <h1 className="title text-center mb-2" style={{ fontSize: '2.5rem' }}>Kerala’s Smart Public Transport Platform</h1>
+        <p className="subtitle text-center mb-6" style={{ fontSize: '1.2rem' }}>Live bus tracking, route planning, and digital ticketing for everyone.</p>
         <Link
           to="/public-dashboard"
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-10 py-4 rounded-xl shadow-lg transition text-lg flex items-center gap-2"
+          className="btn"
+          style={{ fontSize: '1.2rem', padding: '1.2em 3em', borderRadius: '1em', marginBottom: '2em', display: 'flex', alignItems: 'center', gap: '0.7em' }}
         >
           Get Started <FaArrowRight />
         </Link>
       </div>
       {/* Features */}
-      <div className="w-full max-w-4xl mx-auto py-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Key Features</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+      <div style={{ width: '100%', maxWidth: '900px', margin: '0 auto', padding: '2rem 0' }}>
+        <h2 className="title text-center mb-6" style={{ fontSize: '2rem' }}>Key Features</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
           {features.map((f, i) => (
-            <div key={i} className="flex items-center gap-4 bg-white rounded-lg shadow p-4 border border-gray-100">
+            <div key={i} className="card flex-row" style={{ alignItems: 'center', gap: '1.2em' }}>
               {f.icon}
               <div>
-                <div className="font-semibold text-gray-800 text-base">{f.title}</div>
-                <div className="text-xs text-gray-500">{f.desc}</div>
+                <div className="title" style={{ fontSize: '1.1rem', marginBottom: '0.2em' }}>{f.title}</div>
+                <div className="text-secondary" style={{ fontSize: '0.95em' }}>{f.desc}</div>
               </div>
             </div>
           ))}
         </div>
       </div>
       {/* How it works */}
-      <div className="w-full max-w-3xl mx-auto py-8">
-        <h2 className="text-xl font-bold text-gray-900 mb-4 text-center">How it works</h2>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
+      <div style={{ width: '100%', maxWidth: '700px', margin: '0 auto', padding: '2rem 0' }}>
+        <h2 className="title text-center mb-4" style={{ fontSize: '1.3rem' }}>How it works</h2>
+        <div className="flex-row" style={{ gap: '2.5em', justifyContent: 'center', alignItems: 'center', display: 'flex' }}>
           {steps.map((s, i) => (
-            <div key={i} className="flex flex-col items-center">
-              <div className="bg-gray-100 rounded-full p-4 mb-2">{s.icon}</div>
-              <div className="text-gray-700 font-medium text-sm mb-1">{s.label}</div>
-              {i < steps.length - 1 && <div className="hidden sm:block h-8 border-l-2 border-gray-200 mx-4" />}
+            <div key={i} className="flex-col flex-center">
+              <div style={{ background: 'var(--color-shadow)', borderRadius: '50%', padding: '1.2em', marginBottom: '0.5em' }}>{s.icon}</div>
+              <div className="text-secondary" style={{ fontWeight: 500, fontSize: '1em', marginBottom: '0.2em' }}>{s.label}</div>
+              {i < steps.length - 1 && <div style={{ height: '2em', borderLeft: '2px solid var(--color-border)', margin: '0 1.5em' }} />}
             </div>
           ))}
         </div>
       </div>
       {/* Footer */}
-      <footer className="w-full border-t border-gray-100 py-6 bg-white mt-8">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-2">
+      <footer style={{ width: '100%', borderTop: '1px solid var(--color-border)', padding: '2rem 0', background: 'var(--color-bg)', marginTop: '2rem' }}>
+        <div className="flex-row" style={{ maxWidth: '1100px', margin: '0 auto', alignItems: 'center', justifyContent: 'space-between', display: 'flex', gap: '1.5em' }}>
           <Logo size="small" />
-          <div className="text-gray-400 text-xs">&copy; {new Date().getFullYear()} YATRIK ERP. All rights reserved.</div>
-          <div className="flex gap-4 text-gray-500 text-xs">
-            <a href="#" className="hover:text-blue-700 transition">Help</a>
-            <a href="#" className="hover:text-blue-700 transition">Contact</a>
-            <a href="#" className="hover:text-blue-700 transition">About</a>
+          <div className="text-secondary" style={{ fontSize: '0.95em' }}>&copy; {new Date().getFullYear()} YATRIK ERP. All rights reserved.</div>
+          <div className="flex-row" style={{ gap: '1.5em', fontSize: '0.95em', color: 'var(--color-text-secondary)' }}>
+            <a href="#" style={{ color: 'inherit', textDecoration: 'none' }}>Help</a>
+            <a href="#" style={{ color: 'inherit', textDecoration: 'none' }}>Contact</a>
+            <a href="#" style={{ color: 'inherit', textDecoration: 'none' }}>About</a>
           </div>
         </div>
       </footer>
