@@ -1,0 +1,23 @@
+YATRIK ERP SETUP INSTRUCTIONS
+
+1. INSTALL DEPENDENCIES:
+   npm run install-all
+
+2. SETUP ENVIRONMENT:
+   cd backend
+   cp env.example .env
+   # Edit .env with your database details
+
+3. INITIALIZE DATABASE:
+   npm run init:db
+
+4. START APPLICATION:
+   npm run dev
+
+5. CREATE ADMIN USER:
+   Use the registration API to create your first admin user
+
+6. ACCESS ADMIN PANEL:
+   Login with your admin credentials at /admin
+
+NO DEMO DATA - ALL DATA COMES FROM YOUR DATABASE

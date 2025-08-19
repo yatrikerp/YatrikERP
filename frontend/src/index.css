@@ -1,0 +1,1142 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700;800&display=swap');
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Focus styles */
+*:focus {
+  outline: 2px solid #ec4899;
+  outline-offset: 2px;
+}
+
+/* Button focus styles */
+button:focus {
+  outline: 2px solid #ec4899;
+  outline-offset: 2px;
+}
+
+/* Input focus styles */
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid #ec4899;
+  outline-offset: 2px;
+}
+
+/* Animation utilities */
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+.animate-slide-down {
+  animation: slideDown 0.3s ease-out;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { 
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to { 
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideDown {
+  from { 
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to { 
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from { 
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to { 
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ===== ANIMATED MAP PANEL STYLES ===== */
+.animated-map-panel {
+  position: relative;
+  display: inline-block;
+}
+
+.map-svg {
+  filter: drop-shadow(0 2px 20px rgba(0, 0, 0, 0.05));
+}
+
+/* Center logo group animations */
+.center-logo-group {
+  animation: logoGroupFloat 8s ease-in-out infinite;
+}
+
+.main-circle {
+  animation: mainCircleGlow 6s ease-in-out infinite;
+}
+
+.inner-ring {
+  animation: innerRingPulse 4s ease-in-out infinite;
+}
+
+.pulse-ring {
+  animation: pulseRingExpand 8s ease-in-out infinite;
+}
+
+@keyframes logoGroupFloat {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(0, -2px) scale(1.01);
+  }
+}
+
+@keyframes mainCircleGlow {
+  0%, 100% {
+    stroke-width: 2;
+    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.3));
+  }
+  50% {
+    stroke-width: 3;
+    filter: drop-shadow(0 0 12px rgba(59, 130, 246, 0.5));
+  }
+}
+
+@keyframes innerRingPulse {
+  0%, 100% {
+    opacity: 0.4;
+    stroke-width: 1;
+  }
+  50% {
+    opacity: 0.8;
+    stroke-width: 2;
+  }
+}
+
+@keyframes pulseRingExpand {
+  0% {
+    opacity: 0.1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 0.1;
+    transform: scale(1);
+  }
+}
+
+/* Logo container animations */
+.logo-container {
+  animation: logoFloat 6s ease-in-out infinite;
+}
+
+.logo-bg {
+  animation: logoBgGlow 5s ease-in-out infinite;
+}
+
+.logo-image {
+  animation: logoImageGlow 6s ease-in-out infinite;
+  filter: brightness(1.1) contrast(1.1);
+}
+
+@keyframes logoFloat {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(0, -1px) scale(1.02);
+  }
+}
+
+@keyframes logoBgGlow {
+  0%, 100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.1);
+  }
+}
+
+@keyframes logoImageGlow {
+  0%, 100% {
+    filter: brightness(1.1) contrast(1.1);
+    opacity: 1;
+  }
+  50% {
+    filter: brightness(1.2) contrast(1.2);
+    opacity: 0.95;
+  }
+}
+
+/* Professional routing path animations */
+.route-path {
+  animation: routeFlow 12s linear infinite;
+  opacity: 0.8;
+}
+
+.route-path.primary {
+  animation-duration: 10s;
+  animation-delay: 0s;
+}
+
+.route-path.secondary {
+  animation-duration: 12s;
+  animation-delay: 2s;
+}
+
+.route-path.tertiary {
+  animation-duration: 14s;
+  animation-delay: 4s;
+}
+
+.route-path.quaternary {
+  animation-duration: 16s;
+  animation-delay: 6s;
+}
+
+@keyframes routeFlow {
+  0% {
+    stroke-dashoffset: 0;
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -40;
+    opacity: 0.8;
+  }
+}
+
+/* Route endpoints animations */
+.route-endpoint {
+  animation: endpointPulse 4s ease-in-out infinite;
+}
+
+@keyframes endpointPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+/* Speed indicators animations */
+.speed-indicator {
+  animation: speedIndicatorFloat 6s ease-in-out infinite;
+}
+
+@keyframes speedIndicatorFloat {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translateY(-1px);
+    opacity: 1;
+  }
+}
+
+/* Route nodes animations */
+.route-node {
+  animation: nodeGlow 5s ease-in-out infinite;
+}
+
+.node-1 { animation-delay: 0s; }
+.node-2 { animation-delay: 1s; }
+.node-3 { animation-delay: 2s; }
+.node-4 { animation-delay: 3s; }
+
+@keyframes nodeGlow {
+  0%, 100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+/* Performance metrics animations */
+.performance-metrics .metric {
+  animation: metricFloat 8s ease-in-out infinite;
+}
+
+.response-time { animation-delay: 0s; }
+.route-count { animation-delay: 2s; }
+
+@keyframes metricFloat {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(0, -1px);
+  }
+}
+
+.metric-card {
+  transition: all 0.3s ease;
+}
+
+.metric:hover .metric-card {
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1));
+  transform: translateY(-1px);
+}
+
+/* Status indicators animations */
+.status-dot {
+  animation: statusDotPulse 6s ease-in-out infinite;
+}
+
+.dot-1 { animation-delay: 0s; }
+.dot-2 { animation-delay: 1.5s; }
+.dot-3 { animation-delay: 3s; }
+.dot-4 { animation-delay: 4.5s; }
+
+@keyframes statusDotPulse {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
+}
+
+/* Hover effects for interactive elements */
+.animated-map-panel:hover .main-circle {
+  animation-duration: 3s;
+}
+
+.animated-map-panel:hover .route-path {
+  animation-duration: 8s;
+}
+
+.animated-map-panel:hover .route-endpoint {
+  animation-duration: 2s;
+}
+
+.animated-map-panel:hover .performance-metrics .metric {
+  animation-duration: 4s;
+}
+
+/* Focus states for accessibility */
+.route-path:focus,
+.route-endpoint:focus,
+.metric:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .center-logo-group,
+  .main-circle,
+  .inner-ring,
+  .pulse-ring,
+  .logo-container,
+  .logo-bg,
+  .logo-image,
+  .route-path,
+  .route-endpoint,
+  .speed-indicator,
+  .route-node,
+  .performance-metrics .metric,
+  .status-dot {
+    animation: none;
+  }
+  
+  .metric:hover .metric-card {
+    transform: none;
+  }
+}
+
+/* Responsive utilities */
+@media (max-width: 640px) {
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Animated Map Panel Styles */
+.animated-map-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Route Line Animations */
+.route-line-1 {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: drawRoute 2s ease-in-out infinite alternate;
+}
+
+.route-line-2 {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: drawRoute 2s ease-in-out infinite alternate-reverse;
+}
+
+.route-line-3 {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: drawRoute 2.5s ease-in-out infinite alternate;
+}
+
+.route-line-4 {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: drawRoute 2.5s ease-in-out infinite alternate-reverse;
+}
+
+.route-line-5 {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: drawRoute 3s ease-in-out infinite alternate;
+}
+
+.route-line-6 {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: drawRoute 3s ease-in-out infinite alternate-reverse;
+}
+
+/* Connection Line Animations */
+.connection-line {
+  stroke-dasharray: 200;
+  stroke-dashoffset: 200;
+  animation: drawConnection 4s ease-in-out infinite;
+}
+
+/* Keyframe Animations */
+@keyframes drawRoute {
+  0% {
+    stroke-dashoffset: 100;
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0.7;
+  }
+}
+
+@keyframes drawConnection {
+  0% {
+    stroke-dashoffset: 200;
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0.3;
+  }
+}
+
+/* Map Container Animations */
+.animated-map-panel .absolute {
+  transition: all 0.3s ease-in-out;
+}
+
+.animated-map-panel .absolute:hover {
+  transform: scale(1.05) rotate(2deg);
+  z-index: 20;
+}
+
+/* Y Letter Animation */
+.animated-map-panel .text-8xl {
+  animation: yBounce 3s ease-in-out infinite;
+}
+
+@keyframes yBounce {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-10px) scale(1.05);
+  }
+}
+
+/* Floating Elements Animation */
+.animated-map-panel .bg-blue-500,
+.animated-map-panel .bg-green-500,
+.animated-map-panel .bg-purple-500 {
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  33% {
+    transform: translateY(-10px) rotate(5deg);
+  }
+  66% {
+    transform: translateY(5px) rotate(-5deg);
+  }
+}
+
+/* Feature Tags Animation */
+.animated-map-panel .animate-pulse {
+  animation: tagPulse 2s ease-in-out infinite;
+}
+
+@keyframes tagPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+/* Central Circle Glow */
+.animated-map-panel .bg-gradient-to-r {
+  animation: glowPulse 4s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    opacity: 0.2;
+    filter: blur(20px);
+  }
+  50% {
+    opacity: 0.4;
+    filter: blur(25px);
+  }
+}
+
+/* Map Background Animations */
+.animated-map-panel .bg-gradient-to-br {
+  animation: mapGlow 3s ease-in-out infinite alternate;
+}
+
+@keyframes mapGlow {
+  0% {
+    filter: brightness(1) saturate(1);
+  }
+  100% {
+    filter: brightness(1.1) saturate(1.2);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .animated-map-panel .w-48 {
+    width: 8rem;
+    height: 8rem;
+  }
+  
+  .animated-map-panel .text-8xl {
+    font-size: 4rem;
+  }
+  
+  .animated-map-panel .w-24 {
+    width: 5rem;
+    height: 5rem;
+  }
+  
+  .animated-map-panel .text-3xl {
+    font-size: 1.5rem;
+  }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  .animated-map-panel * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Map Element Animations */
+.map-marker {
+  animation: markerPulse 2s ease-in-out infinite;
+}
+
+.map-hub {
+  animation: hubGlow 3s ease-in-out infinite;
+}
+
+@keyframes markerPulse {
+  0%, 100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes hubGlow {
+  0%, 100% {
+    opacity: 0.8;
+    filter: drop-shadow(0 0 2px currentColor);
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 6px currentColor);
+  }
+}
+
+/* Enhanced Route Line Animations */
+.route-line-1, .route-line-3, .route-line-5 {
+  filter: drop-shadow(0 0 2px currentColor);
+}
+
+.route-line-2, .route-line-4, .route-line-6 {
+  filter: drop-shadow(0 0 2px currentColor);
+}
+
+/* Map Container Hover Effects */
+.animated-map-panel .absolute:hover .bg-gradient-to-br {
+  animation: mapHover 0.3s ease-in-out forwards;
+}
+
+@keyframes mapHover {
+  0% {
+    filter: brightness(1) saturate(1);
+  }
+  100% {
+    filter: brightness(1.2) saturate(1.3);
+  }
+}
+
+/* Y Letter Enhanced Animation */
+.animated-map-panel .text-8xl {
+  animation: yBounce 3s ease-in-out infinite;
+  filter: drop-shadow(0 4px 8px rgba(59, 130, 246, 0.3));
+}
+
+@keyframes yBounce {
+  0%, 100% {
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-8px) scale(1.02) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-12px) scale(1.05) rotate(0deg);
+  }
+  75% {
+    transform: translateY(-8px) scale(1.02) rotate(1deg);
+  }
+}
+
+/* Secondary Connection Line Animations */
+.connection-line-secondary {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: drawSecondaryConnection 6s ease-in-out infinite;
+}
+
+@keyframes drawSecondaryConnection {
+  0% {
+    stroke-dashoffset: 100;
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0.2;
+  }
+}
+
+/* Enhanced Floating Elements */
+.animated-map-panel .bg-yellow-400,
+.animated-map-panel .bg-pink-400,
+.animated-map-panel .bg-indigo-400 {
+  animation: enhancedFloat 8s ease-in-out infinite;
+}
+
+@keyframes enhancedFloat {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translateY(-15px) rotate(8deg) scale(1.1);
+  }
+  50% {
+    transform: translateY(-8px) rotate(0deg) scale(1.05);
+  }
+  75% {
+    transform: translateY(-12px) rotate(-8deg) scale(1.1);
+  }
+}
+
+/* Particle Animations */
+.animated-map-panel .animate-ping {
+  animation: enhancedPing 3s ease-in-out infinite;
+}
+
+@keyframes enhancedPing {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Enhanced Map Container Interactions */
+.animated-map-panel .absolute:hover {
+  transform: scale(1.05) rotate(2deg);
+  z-index: 20;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animated-map-panel .absolute:hover .bg-gradient-to-br {
+  animation: mapHover 0.3s ease-in-out forwards;
+}
+
+/* Smooth Transitions for All Elements */
+.animated-map-panel * {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Performance Optimizations */
+.animated-map-panel {
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.animated-map-panel .absolute {
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+/* Smooth page transitions */
+.page-transition {
+  transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+}
+
+.page-transition-enter {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.page-transition-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.page-transition-exit {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.page-transition-exit-active {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+/* Loading spinner animations */
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Smooth fade transitions */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Prevent layout shift during loading */
+.layout-stable {
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Smooth button transitions */
+.btn-transition {
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-transition:hover {
+  transform: translateY(-1px);
+}
+
+/* Prevent text selection during transitions */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Route transition optimizations */
+.route-transition {
+  min-height: 100vh;
+  will-change: opacity, transform;
+}
+
+.route-transition.transitioning {
+  pointer-events: none;
+}
+
+/* Performance optimizations */
+* {
+  box-sizing: border-box;
+}
+
+/* Prevent layout shifts during authentication */
+.auth-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Smooth sidebar transitions */
+.sidebar-transition {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+/* Optimize animations for performance */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Loading state optimizations */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(249, 250, 251, 0.9);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Prevent content jumping during state changes */
+.content-stable {
+  min-height: calc(100vh - 64px); /* Adjust based on your header height */
+  overflow-x: hidden;
+}
+
+/* Smooth navigation transitions */
+.nav-transition {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Optimize for mobile performance */
+@media (max-width: 768px) {
+  .route-transition {
+    transition-duration: 0.15s;
+  }
+  
+  .btn-transition:hover {
+    transform: none;
+  }
+}
+
+/* Form optimization styles */
+.form-optimized {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Fast input transitions */
+.input-fast {
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.input-fast:focus {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Button loading states */
+.btn-loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-loading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  animation: loading-shimmer 1.5s infinite;
+}
+
+@keyframes loading-shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Authentication form optimizations */
+.auth-form {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+.auth-form input:focus {
+  transform: scale(1.02);
+  transition: transform 0.1s ease-in-out;
+}
+
+/* Tab switching optimization */
+.tab-optimized {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: background-color, color;
+}
+
+.tab-optimized:hover {
+  transform: translateY(-1px);
+}
+
+/* OAuth button optimizations */
+.oauth-button-optimized {
+  transition: all 0.2s ease-in-out;
+  will-change: transform, box-shadow;
+}
+
+.oauth-button-optimized:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.oauth-button-optimized:active {
+  transform: translateY(0);
+}
+
+/* Form validation feedback */
+.validation-feedback {
+  animation: validationPulse 0.3s ease-in-out;
+}
+
+@keyframes validationPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+/* Loading spinner in buttons */
+.btn-spinner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-spinner .spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* Disabled state optimization */
+.btn-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+  transition: opacity 0.2s ease-in-out;
+}
+
+/* Form field focus optimization */
+.form-field-focus {
+  transition: all 0.15s ease-in-out;
+  will-change: transform, box-shadow;
+}
+
+.form-field-focus:focus-within {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* ===== LOGIN PAGE STYLES ===== */
+.login-social-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: #6b7280;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease-in-out;
+  text-decoration: none;
+}
+
+.login-social-icon:hover {
+  color: #ff3366;
+  background: #fff;
+  border-color: #ff3366;
+  transform: scale(1.06) rotate(1.5deg);
+  box-shadow: 0 4px 12px rgba(255, 51, 102, 0.15);
+}
+
+/* Tighten form spacing for more compact look */
+.login-form-compact .space-y-6 > * + * {
+  margin-top: 1.25rem; /* Reduced from 1.5rem */
+}
+
+.login-form-compact .mt-6 {
+  margin-top: 1.25rem; /* Reduced from 1.5rem */
+}
+
+.login-form-compact .pt-4 {
+  padding-top: 0.875rem; /* Reduced from 1rem */
+}
+
+/* Enhanced focus rings for inputs */
+.login-form-compact input:focus,
+.login-form-compact select:focus,
+.login-form-compact textarea:focus {
+  outline: none;
+  border-color: #ff3366;
+  box-shadow: 0 0 0 3px rgba(255, 51, 102, 0.1);
+}
+
+/* Button hover lift effect */
+.login-form-compact button[type="submit"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px rgba(255, 51, 102, 0.25);
+}
+
+/* OAuth button enhancements */
+.login-form-compact .oauth-button {
+  transition: all 0.2s ease-in-out;
+}
+
+.login-form-compact .oauth-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive adjustments */
+@media (max-width: 1023px) {
+  .login-hero-circle {
+    margin-bottom: 2rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .login-social-icon {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .login-social-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+
+
+
