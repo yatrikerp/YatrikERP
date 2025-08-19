@@ -28,4 +28,6 @@ npm run client    # Frontend on port 3000
 npm run dev       # Both simultaneously
 ```
 
+Starting the admin dashboard
+
 Visit http://localhost:3000 to see the application.
