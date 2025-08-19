@@ -1,6 +1,6 @@
 import React from 'react';
 import { Smartphone, Download, Star } from 'lucide-react';
-import logo from '../../assets/logo.png';
+import BrandLogo from '../Common/BrandLogo';
 
 const AppBanner = () => {
   return (
@@ -43,8 +43,8 @@ const AppBanner = () => {
               <div className="phone-mockup__screen">
                 <Smartphone className="phone-mockup__icon" />
                 <div className="phone-mockup__content">
-                  <div className="phone-mockup__logo">
-                    <img src={logo} alt="YATRIK ERP" className="h-13 w-auto" />
+                  <div className="phone-mockup__logo" style={{display:'flex', alignItems:'center', justifyContent:'center'}}>
+                    <BrandLogo size={20} />
                   </div>
                   <p className="phone-mockup__label">Smart Travel App</p>
                 </div>

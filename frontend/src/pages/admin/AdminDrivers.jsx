@@ -24,7 +24,7 @@ import {
   Filter,
   Car
 } from 'lucide-react';
-import logo from '../../assets/logo.png';
+import BrandLogo from '../../components/Common/BrandLogo';
 
 const AdminDrivers = () => {
   const [drivers, setDrivers] = useState([]);
@@ -316,7 +316,9 @@ const AdminDrivers = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <img src={logo} alt="Yatrik Logo" className="w-12 h-12 rounded-xl" />
+          <div className="w-12 h-12 flex items-center justify-center rounded-xl bg-gray-50">
+            <BrandLogo size={20} />
+          </div>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Yatrik Driver Management</h1>
             <p className="text-gray-600">Manage drivers and their depot assignments</p>

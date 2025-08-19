@@ -5,8 +5,15 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 // Request timeout configuration
 const REQUEST_TIMEOUT = 10000; // 10 seconds
 
+let warnedBase = false;
+
 export async function apiFetch(path, options = {}) {
-  const base = process.env.REACT_APP_API_URL || '';
+  const base = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+  if (!process.env.REACT_APP_API_URL && !warnedBase) {
+    // Helpful dev hint if env not configured
+    try { console.warn('[apiFetch] REACT_APP_API_URL not set; defaulting to http://localhost:5000'); } catch {}
+    warnedBase = true;
+  }
   const token = localStorage.getItem('token');
   
   // Create cache key

@@ -1,3 +1,4 @@
+/* Primary search action uses ERP Pink via vars set in landing.css */
 .btnSearch { background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 90%); box-shadow: 0 12px 26px var(--accent-shadow); }
 .btnSearch:hover { background: linear-gradient(135deg, var(--accent-hover) 0%, var(--accent-dark) 90%); box-shadow: 0 14px 30px var(--accent-shadow); }
 .searchCard {
@@ -62,10 +63,10 @@
 }
 .tab--active { 
     background:rgba(255,255,255, 0.95); 
-    color:#0f5a33; 
-    box-shadow: 0 4px 12px rgba(15,90,51,.12), 0 2px 4px rgba(15,90,51,.08); 
+    color:#0f172a; 
+    box-shadow: 0 4px 12px rgba(0,172,193,.18), 0 2px 4px rgba(0,172,193,.12); /* teal */
 }
-.tab__icon { width: 18px; height: 18px; }
+.tab__icon { width: 18px; height: 18px; color: var(--teal); }
 .hide-sm { display:none; }
 .show-sm { display:inline; }
 @media (min-width: 640px) { .hide-sm { display:inline; } .show-sm { display:none; } }
@@ -93,19 +94,17 @@
     position: relative;
     z-index: 2;
 }
-.toggle__btn:hover {
-    color: #475569;
-}
+.toggle__btn:hover { color: #475569; }
 .toggle__btn.is-active { 
     background:#ffffff; 
     color:#0f172a; 
-    box-shadow: 0 2px 8px rgba(0,0,0,.08), 0 1px 3px rgba(0,0,0,.06); 
+    box-shadow: 0 2px 8px rgba(0,172,193,.18), 0 1px 3px rgba(0,172,193,.12); /* teal */ 
 }
 
 .form { display:grid; gap: 12px; }
 .label { display:block; font-weight:600; color:#334155; margin-bottom:6px; }
 .field { position:relative; }
-.field__icon { position:absolute; left:12px; top:50%; transform:translateY(-50%); width:16px; height:16px; color:#94a3b8; }
+.field__icon { position:absolute; left:12px; top:50%; transform:translateY(-50%); width:16px; height:16px; color: var(--teal); }
 .input { 
     width:100%; 
     padding:10px 12px 10px 38px; 
@@ -118,18 +117,16 @@
 }
 .input:focus { 
     outline: none; 
-    border-color:#16a34a; 
-    box-shadow: 0 0 0 3px rgba(22,163,74,.15); 
+    border-color: var(--teal); 
+    box-shadow: 0 0 0 3px rgba(0,172,193,.15); 
 }
-.input::placeholder {
-    color: #9ca3af;
-}
+.input::placeholder { color: #9ca3af; }
 
 .row-2 { display:grid; gap:12px; grid-template-columns: 1fr; }
 @media (min-width: 768px) { .row-2 { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 
-.btnSearch { width:100%; background:#ff4d6d; color:#fff; border:0; padding:12px 16px; border-radius:12px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; box-shadow: 0 12px 24px rgba(255,77,109,.25); transition: transform .1s ease, box-shadow .2s ease, background .2s ease; }
-.btnSearch:hover { background:#ff3b6b; box-shadow: 0 14px 28px rgba(255,77,109,.3); }
+/* Primary Search Button uses ERP Pink (accent) */
+.btnSearch { width:100%; color:#fff; border:0; padding:12px 16px; border-radius:12px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform .1s ease, box-shadow .2s ease, background .2s ease; }
 .btnSearch__icon { width: 16px; height:16px; }
 
 

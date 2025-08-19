@@ -952,3 +952,53 @@
 	transform: translate(-50%, -50%) scale(0.7);
 }
 
+/* Professional left panel illustration */
+.lp-pro { width: 100%; max-width: 520px; }
+.lp-pro__svg { width: 100%; height: auto; display: block; }
+
+.lp-pro__ring { fill: none; stroke: rgba(0,172,193,0.25); stroke-width: 10; filter: blur(1px); animation: lpSpin 14s linear infinite; transform-origin: 260px 260px; }
+.lp-pro__road { fill: none; stroke: #CBD5E1; stroke-width: 6; stroke-linecap: round; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.08)); }
+.lp-pro__pins circle { fill: #00ACC1; filter: drop-shadow(0 0 8px rgba(0,172,193,0.35)); animation: pinPulse 2.2s ease-in-out infinite; }
+.lp-pro__brandTitle { font: 900 34px 'Poppins', system-ui; fill: #212121; letter-spacing: 1px; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.25)); }
+.lp-pro__brandSub { font: 800 12px 'Poppins', system-ui; fill: #FFFFFF; letter-spacing: 1.5px; }
+.lp-pro__card { filter: drop-shadow(0 12px 24px rgba(0,0,0,0.08)); animation: floatSlow 7s ease-in-out infinite; }
+.lp-pro__shield { filter: drop-shadow(0 10px 20px rgba(0,0,0,0.12)); animation: floatSlow 6.5s ease-in-out infinite reverse; }
+.lp-pro__bus { filter: drop-shadow(0 4px 10px rgba(233,30,99,.35)); }
+
+@keyframes lpSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes floatSlow { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@keyframes pinPulse { 0%,100% { opacity: .9; transform: scale(1); } 50% { opacity: 1; transform: scale(1.15); } }
+
+/* Brand overlay centered over the illustration */
+.lp-pro { position: relative; }
+.lp-pro__brandOverlay { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); z-index: 2; pointer-events: none; }
+
+/* Card-style banner matching reference with our logo mix */
+.lp-card { width: 100%; max-width: 720px; filter: saturate(1.02); }
+.lp-card__svg { width: 100%; height: auto; display: block; border-radius: 20px; }
+
+.lp-card__title { font: 900 44px 'Poppins', system-ui; fill: #0D1B2A; letter-spacing: 0.5px; }
+.lp-card__pill { font: 800 14px 'Poppins', system-ui; fill: #fff; letter-spacing: 1px; }
+.lp-card__subtitle { font: 600 16px 'Poppins', system-ui; fill: #475569; }
+
+.lp-card__badge { transform-origin: center; animation: badgeFloat 6s ease-in-out infinite; }
+.lp-card__bus { animation: busWiggle 4.5s ease-in-out infinite; transform-origin: 0 0; }
+.lp-card__route { fill:none; stroke:#00ACC1; stroke-width:6; stroke-linecap: round; stroke-dasharray: 10 12; animation: routeDashLP 7s linear infinite; filter: drop-shadow(0 4px 14px rgba(0,172,193,.25)); }
+.lp-card__shimmer { mix-blend-mode: overlay; opacity: .35; }
+
+@keyframes routeDashLP { to { stroke-dashoffset: -22; } }
+@keyframes badgeFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@keyframes busWiggle { 0%,100% { transform: rotate(0deg); } 50% { transform: rotate(-1.5deg); } }
+
+@media (max-width: 768px) {
+  .lp-card__title { font-size: 34px; }
+  .lp-card__subtitle { font-size: 14px; }
+}
+
+/* Smart orbit icons */
+.lp-orbit { transform-origin: 260px 230px; }
+.lp-icon { filter: drop-shadow(0 2px 6px rgba(0,0,0,.08)); animation: iconFloat2 6s ease-in-out infinite; }
+.lp-card__tagline { font: 600 13px 'Poppins', system-ui; fill: #64748B; }
+
+@keyframes iconFloat2 { 0%,100% { transform: translateY(0); opacity: .95; } 50% { transform: translateY(-6px); opacity: 1; } }
+

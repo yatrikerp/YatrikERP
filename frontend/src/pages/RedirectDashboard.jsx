@@ -12,7 +12,7 @@ export default function RedirectDashboard() {
     }
     let role = 'PASSENGER';
     try { role = (JSON.parse(userRaw)?.role || 'passenger').toUpperCase(); } catch {}
-    const dest = role === 'ADMIN' ? '/admin' : role === 'CONDUCTOR' ? '/conductor' : role === 'DRIVER' ? '/driver' : role === 'DEPOT_MANAGER' ? '/occ' : '/pax';
+    const dest = role === 'ADMIN' ? '/admin' : role === 'CONDUCTOR' ? '/conductor' : role === 'DRIVER' ? '/driver' : role === 'DEPOT_MANAGER' ? '/depot' : '/pax';
     navigate(dest, { replace: true });
   }, [navigate]);
   return null;

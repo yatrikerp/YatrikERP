@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Menu, X, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import BrandLogo from '../Common/BrandLogo';
 
 const Navigation = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -32,14 +33,14 @@ const Navigation = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
   return (
     <nav className="bg-white shadow-md border-b border-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center py-4">
+        <div className="flex items-center justify-between gap-4 py-4">
           {/* Logo */}
-          <Link to="/" className="flex items-center hover:opacity-80 transition-opacity duration-200">
-            <span className="ml-3 text-xl font-bold" style={{color: '#ff3366'}}>YATRIK ERP</span>
+          <Link to="/" className="flex items-center hover:opacity-80 transition-opacity duration-200 shrink-0">
+            <BrandLogo size={28} />
           </Link>
 
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8 ml-16">
+          {/* Desktop Navigation (centered) */}
+          <div className="hidden md:flex items-center justify-center gap-6 flex-1">
             {navItems.map((item) => (
               item.slug ? (
                 <button
@@ -62,7 +63,7 @@ const Navigation = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
           </div>
 
           {/* Auth Buttons */}
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden md:flex items-center gap-3 shrink-0">
             <Link
               to="/login"
               className="flex items-center space-x-2 text-gray-800 hover:text-primary-600 transition-colors font-medium text-base px-3 py-2 rounded-md hover:bg-gray-100"

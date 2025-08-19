@@ -3,12 +3,17 @@
 	background: #f6f8fb;
 }
 
+/* Update brand variables to ERP Pink and Teal */
 :root {
-    /* Bright pink theme for Book Now, Search buses, Sign Up */
-    --accent: #ff3b6b;        /* base pink */
-    --accent-dark: #e11d48;   /* deeper pink */
-    --accent-hover: #ff4d78;  /* hover */
-    --accent-shadow: rgba(255, 59, 107, 0.40);
+	/* ERP Pink for primary actions */
+	--accent: #E91E63;
+	--accent-dark: #C2185B;
+	--accent-hover: #EC407A;
+	--accent-shadow: rgba(233, 30, 99, 0.40);
+	/* Teal for secondary actions */
+	--teal: #00ACC1;
+	--teal-dark: #00838F;
+	--teal-shadow: rgba(0, 172, 193, 0.35);
 }
 
 .container {
@@ -464,18 +469,17 @@
     box-shadow: 0 10px 24px var(--accent-shadow);
 }
 .btn--accent:hover { background: linear-gradient(135deg, var(--accent-hover) 0%, var(--accent-dark) 90%); box-shadow: 0 12px 28px var(--accent-shadow); }
-.btn--secondary { 
-    background: linear-gradient(135deg, #1e40af 0%, #1d4ed8 90%);
-    color: #ffffff; 
-    border: 2px solid transparent;
-    font-weight: 700;
-    box-shadow: 0 8px 20px rgba(30, 64, 175, 0.25);
+/* Ensure secondary buttons use Teal consistently */
+.btn--secondary {
+	background: var(--teal);
+	color: #ffffff;
+	border: none;
+	box-shadow: 0 8px 20px var(--teal-shadow);
 }
-.btn--secondary:hover { 
-    background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 90%);
-    color: #ffffff;
-    transform: translateY(-2px) scale(1.02);
-    box-shadow: 0 12px 28px rgba(30, 64, 175, 0.35);
+.btn--secondary:hover {
+	background: var(--teal-dark);
+	transform: translateY(-2px);
+	box-shadow: 0 12px 28px var(--teal-shadow);
 }
 
 /* Header signup CTA shares accent theme */
@@ -539,5 +543,19 @@
 .footer__col a:hover { color:#86efac; }
 .footer__support { display:flex; align-items:center; gap:.4rem; color:#cbd5e1; }
 .footer__bottom { border-top:1px solid #0f172a; margin-top:1.25rem; padding-top:1rem; text-align:center; color:#94a3b8; font-size:.85rem; }
+
+/* Support Bar layout */
+.support-bar { background:#E91E63; color:#ffffff; }
+.support-inner { max-width: 1200px; margin: 0 auto; padding: 6px 16px; display:flex; align-items:center; justify-content: space-between; }
+.support-left { display:flex; align-items:center; gap: 24px; }
+.support-right { display:flex; align-items:center; gap: 14px; }
+.support-item { display:flex; align-items:center; gap:8px; color:#ffffff; }
+.support-text { color:#ffffff; font-weight:600; font-size: 13px; }
+.support-icon { width:16px; height:16px; color:#ffffff; }
+.support-link { display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:999px; color:#ffffff; opacity:.9; transition: opacity .2s ease, background .2s ease; }
+.support-link:hover { opacity: 1; background: rgba(255,255,255,.12); }
+@media (max-width:768px){
+  .support-inner{ flex-direction:column; gap:6px; }
+}
 
 

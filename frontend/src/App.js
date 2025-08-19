@@ -29,7 +29,6 @@ import AdminTrips from './pages/admin/AdminTrips';
 import AdminDuties from './pages/admin/AdminDuties';
 import AdminDrivers from './pages/admin/AdminDrivers';
 import AdminPassengers from './pages/admin/AdminPassengers';
-import AdminAudits from './pages/admin/AdminAudits';
 import AdminSystemStatus from './pages/admin/AdminSystemStatus';
 import AdminBuses from './pages/admin/AdminBuses';
 import AdminConductors from './pages/admin/AdminConductors';
@@ -41,7 +40,6 @@ import AdminDriverConflicts from './pages/admin/AdminDriverConflicts';
 import AdminUpcomingPayments from './pages/admin/AdminUpcomingPayments';
 import AdminPaymentHistory from './pages/admin/AdminPaymentHistory';
 import AdminRevenue from './pages/admin/AdminRevenue';
-import AdminWallets from './pages/admin/AdminWallets';
 import RedirectDashboard from './pages/RedirectDashboard';
 
 // Passenger Pages
@@ -224,23 +222,6 @@ function App() {
             </RequireAuth>
           } />
 
-          <Route path="/admin/audits" element={
-            <RequireAuth roles={['admin']}>
-              <AdminLayout>
-                <AdminAudits />
-              </AdminLayout>
-            </RequireAuth>
-          } />
-
-          <Route path="/admin/status" element={
-            <RequireAuth roles={['admin']}>
-              <AdminLayout>
-                <AdminSystemStatus />
-              </AdminLayout>
-            </RequireAuth>
-          } />
-
-          {/* Additional Admin Routes */}
           <Route path="/admin/buses" element={
             <RequireAuth roles={['admin']}>
               <AdminLayout>
@@ -289,7 +270,7 @@ function App() {
             </RequireAuth>
           } />
 
-          <Route path="/admin/driver-conflicts" element={
+          <Route path="/admin/conflicts" element={
             <RequireAuth roles={['admin']}>
               <AdminLayout>
                 <AdminDriverConflicts />
@@ -318,42 +299,18 @@ function App() {
               <AdminLayout>
                 <AdminRevenue />
               </AdminLayout>
-              </RequireAuth>
-            } />
-            
-          <Route path="/admin/wallets" element={
+            </RequireAuth>
+          } />
+
+          <Route path="/admin/status" element={
             <RequireAuth roles={['admin']}>
               <AdminLayout>
-                <AdminWallets />
+                <AdminSystemStatus />
               </AdminLayout>
             </RequireAuth>
           } />
 
-          {/* Passenger Routes */}
-          <Route path="/pax" element={
-            <RequireAuth roles={['passenger']}>
-              <AppShell>
-                <PassengerDashboard />
-              </AppShell>
-            </RequireAuth>
-          } />
-
-          <Route path="/pax/booking" element={
-            <RequireAuth roles={['passenger']}>
-              <AppShell>
-                <PassengerBooking />
-              </AppShell>
-            </RequireAuth>
-          } />
-
-          <Route path="/pax/results" element={
-            <RequireAuth roles={['passenger']}>
-              <AppShell>
-                <PassengerResults />
-              </AppShell>
-            </RequireAuth>
-          } />
-          </Routes>
+        </Routes>
       </Router>
     </AuthProvider>
   );

@@ -16,6 +16,13 @@ import {
   AlertTriangle
 } from 'lucide-react';
 
+// Helper: slugify for email
+const slugify = (s = '') => s.toString().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+const makeDepotEmail = (code, name) => {
+  const base = slugify(code) || slugify(name) || 'depot';
+  return `depot-${base}@yatrik.com`;
+};
+
 const AdminDepots = () => {
   const [depots, setDepots] = useState([]);
   const [users, setUsers] = useState([]);
@@ -34,23 +41,22 @@ const AdminDepots = () => {
   const [depotForm, setDepotForm] = useState({
     code: '',
     name: '',
-    address: {
-      street: '',
-      city: '',
-      state: '',
-      pincode: ''
-    },
-    contact: {
-      phone: '',
-      email: ''
-    },
+    address: { street: '', city: '', state: '', pincode: '' },
+    contact: { phone: '', email: '' },
     manager: '',
-    capacity: {
-      buses: 0,
-      staff: 0
-    },
-    status: 'active'
+    capacity: { buses: 0, staff: 0 },
+    status: 'active',
+    createLogin: false,
+    login: { email: '', password: '' }
   });
+
+  // Auto-generate depot login email when createLogin is enabled or name/code changes
+  useEffect(() => {
+    if (!depotForm.createLogin) return;
+    const email = makeDepotEmail(depotForm.code, depotForm.name);
+    setDepotForm(prev => ({ ...prev, login: { ...prev.login, email } }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [depotForm.createLogin, depotForm.name, depotForm.code]);
 
   useEffect(() => {
     fetchData();
@@ -59,113 +65,81 @@ const AdminDepots = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      
-      // Check if token exists
       const token = localStorage.getItem('token');
-      if (!token) {
-        console.error('❌ No authentication token found');
-        alert('Authentication token missing. Please login again.');
-        return;
-      }
-      
+      if (!token) { console.error('❌ No authentication token found'); alert('Authentication token missing. Please login again.'); return; }
       const [depotsResponse, usersResponse] = await Promise.all([
-        fetch(`/api/admin/depots?showAll=${showInactiveDepots}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        fetch('/api/admin/users', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+        fetch(`/api/admin/depots?showAll=${showInactiveDepots}`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch('/api/admin/users', { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
-
-      if (depotsResponse.ok) {
-        const depotsData = await depotsResponse.json();
-        setDepots(depotsData.depots || []);
-      } else {
-        console.error('❌ Depots fetch failed:', depotsResponse.status, depotsResponse.statusText);
-        const errorData = await depotsResponse.json().catch(() => ({}));
-        console.error('❌ Depots error details:', errorData);
-        
-        // Handle specific error cases
-        if (depotsResponse.status === 401) {
-          alert('Authentication failed. Please login again.');
-        } else if (depotsResponse.status === 403) {
-          alert('Access denied. Insufficient permissions.');
-        } else {
-          alert(`Failed to fetch depots: ${errorData.error || 'Unknown error'}`);
-        }
-      }
-
-      if (usersResponse.ok) {
-        const usersData = await usersResponse.json();
-        setUsers(usersData.users || []);
-      } else {
-        console.error('❌ Users fetch failed:', usersResponse.status, usersResponse.statusText);
-        const errorData = await usersResponse.json().catch(() => ({}));
-        console.error('❌ Users error details:', errorData);
-      }
-    } catch (error) {
-      console.error('❌ Error fetching data:', error);
-      alert('Network error while fetching data. Please check your connection.');
-    } finally {
-      setLoading(false);
-    }
+      if (depotsResponse.ok) { const depotsData = await depotsResponse.json(); setDepots(depotsData.depots || []); }
+      if (usersResponse.ok) { const usersData = await usersResponse.json(); setUsers(usersData.users || []); }
+    } catch (error) { console.error('❌ Error fetching data:', error); alert('Network error while fetching data. Please check your connection.'); }
+    finally { setLoading(false); }
   };
 
   const handleCreateDepot = async (e) => {
     e.preventDefault();
-    
-    // Validate required fields
-    if (!depotForm.code || !depotForm.name || !depotForm.contact.phone) {
-      alert('Please fill in all required fields (Code, Name, and Phone)');
-      return;
-    }
+    if (!depotForm.code || !depotForm.name || !depotForm.contact.phone) { alert('Please fill in all required fields (Code, Name, and Phone)'); return; }
 
     try {
-      // Format the data according to the backend model
       const depotData = {
         code: depotForm.code,
         name: depotForm.name,
-        address: {
-          street: depotForm.address.street || 'Main Street',
-          city: depotForm.address.city || 'City',
-          state: depotForm.address.state || 'State',
-          pincode: depotForm.address.pincode || '000000'
-        },
-        contact: {
-          phone: depotForm.contact.phone,
-          email: depotForm.contact.email || ''
-        },
+        address: { street: depotForm.address.street || 'Main Street', city: depotForm.address.city || 'City', state: depotForm.address.state || 'State', pincode: depotForm.address.pincode || '000000' },
+        contact: { phone: depotForm.contact.phone, email: depotForm.contact.email || '' },
         manager: depotForm.manager || '',
-        capacity: {
-          buses: parseInt(depotForm.capacity.buses) || 0,
-          staff: parseInt(depotForm.capacity.staff) || 0
-        },
+        capacity: { buses: parseInt(depotForm.capacity.buses) || 0, staff: parseInt(depotForm.capacity.staff) || 0 },
         status: depotForm.status
       };
 
-      const response = await fetch('/api/admin/depots', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(depotData)
-      });
+      const response = await fetch('/api/admin/depots', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` }, body: JSON.stringify(depotData) });
 
       if (response.ok) {
         const result = await response.json();
-        
-        // Immediately add to UI for instant feedback
-        setDepots(prevDepots => [result.depot, ...prevDepots]);
-        
-        alert('Depot created successfully');
+        // Robustly extract created depot and its id regardless of backend shape
+        const createdDepot = result?.depot || result?.data?.depot || result?.data || result;
+        const newDepotId = createdDepot?._id || createdDepot?.id;
+        setDepots(prevDepots => [createdDepot, ...prevDepots]);
+
+        if (depotForm.createLogin) {
+          const email = depotForm.login.email || makeDepotEmail(depotForm.code, depotForm.name);
+          const password = depotForm.login.password;
+          if (!password || password.length < 8) {
+            alert('Please set a temporary password (min 8 chars) for the depot login.');
+          } else if (!newDepotId) {
+            console.error('Could not resolve depotId from create response:', result);
+            alert('Depot created, but could not create login because depotId was missing in the response.');
+          } else {
+            try {
+              const userRes = await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ name: depotForm.manager || `${depotForm.name} Manager`, email, password, role: 'depot_manager', depotId: newDepotId, status: 'active' })
+              });
+              if (!userRes.ok) {
+                let err = {};
+                try { err = await userRes.json(); } catch {}
+                console.error('Failed to create depot login:', err);
+                alert(err.error || err.message || 'Depot created, but failed to create login. Check email uniqueness and password policy.');
+              } else {
+                alert(`Depot created and login provisioned: ${email}`);
+              }
+            } catch (err) {
+              console.error('Network error creating depot login:', err);
+              alert('Depot created, but network error while creating login.');
+            }
+          }
+        } else {
+          alert('Depot created successfully');
+        }
+
         setShowCreateModal(false);
         resetDepotForm();
-        // No need to call fetchData() - depot already added to UI
       } else {
-        const errorData = await response.json();
-        console.error('Error response:', errorData);
-        alert(errorData.error || 'Failed to create depot');
+        let errorData = {};
+        try { errorData = await response.json(); } catch {}
+        console.error('Error response creating depot:', errorData);
+        alert(errorData.error || errorData.message || 'Failed to create depot');
       }
     } catch (error) {
       console.error('Error creating depot:', error);
@@ -182,7 +156,9 @@ const AdminDepots = () => {
       contact: depot.contact || { phone: '', email: '' },
       manager: depot.manager || '',
       capacity: depot.capacity || { buses: 0, staff: 0 },
-      status: depot.status || 'active'
+      status: depot.status || 'active',
+      createLogin: false,
+      login: { email: '', password: '' }
     });
   };
 
@@ -347,7 +323,9 @@ const AdminDepots = () => {
         buses: 0,
         staff: 0
       },
-      status: 'active'
+      status: 'active',
+      createLogin: false,
+      login: { email: '', password: '' }
     });
   };
 
@@ -444,7 +422,7 @@ const AdminDepots = () => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Depot Management</h1>
-          <p className="text-gray-600">Manage bus depots and their staff</p>
+          <p className="text-gray-600">Manage bus depots and provision depot manager login</p>
         </div>
         <div className="flex items-center space-x-3">
           <button
@@ -828,10 +806,11 @@ const AdminDepots = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                   <input
                     type="email"
-                    value={depotForm.contact.email}
-                    onChange={(e) => setDepotForm(prev => ({ ...prev, contact: { ...prev.contact, email: e.target.value } }))}
+                    value={depotForm.login.email}
+                    onChange={(e) => setDepotForm(prev => ({ ...prev, login: { ...prev.login, email: e.target.value } }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Enter email address"
+                    readOnly
                   />
                 </div>
                 
@@ -859,6 +838,26 @@ const AdminDepots = () => {
                 </div>
               </div>
               
+              {/* Insert credentials section below existing inputs */}
+              <div className="rounded-lg border border-gray-200 p-4 bg-gray-50">
+                <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <input type="checkbox" className="rounded" checked={depotForm.createLogin} onChange={(e)=>setDepotForm(prev=>({...prev, createLogin:e.target.checked}))} />
+                  Create Depot Manager login now
+                </label>
+                {depotForm.createLogin && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Depot Login Email *</label>
+                      <input type="email" required value={depotForm.login.email} onChange={(e)=>setDepotForm(prev=>({...prev, login:{...prev.login, email:e.target.value}}))} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="manager@depot.com" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Temporary Password *</label>
+                      <input type="password" required value={depotForm.login.password} onChange={(e)=>setDepotForm(prev=>({...prev, login:{...prev.login, password:e.target.value}}))} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Set temp password" />
+                      <p className="text-xs text-gray-500 mt-1">Share these credentials with the depot. On first login, they’ll be redirected to the Depot Dashboard.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
                 <button
                   type="button"

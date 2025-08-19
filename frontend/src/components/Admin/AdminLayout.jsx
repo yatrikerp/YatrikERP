@@ -97,12 +97,6 @@ const AdminLayout = ({ children }) => {
       current: location.pathname === '/admin/system-status'
     },
     {
-      name: 'Audit Logs',
-      href: '/admin/audits',
-      icon: FileText,
-      current: location.pathname === '/admin/audits'
-    },
-    {
       name: 'Reports',
       href: '/admin/reports',
       icon: PieChart,

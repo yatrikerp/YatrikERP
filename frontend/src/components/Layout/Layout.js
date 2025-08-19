@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import BrandLogo from '../Common/BrandLogo';
 
 const Layout = () => {
   return (
@@ -8,7 +9,7 @@ const Layout = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <Link to="/" className="flex items-center hover:opacity-80 transition-opacity duration-200">
-              <span className="ml-2 text-xl font-bold text-primary-600">YATRIK ERP</span>
+              <BrandLogo size={28} />
             </Link>
             <nav className="flex space-x-8">
               <a href="/passenger/trip-planner" className="text-gray-700 hover:text-primary-600">Trip Planner</a>
