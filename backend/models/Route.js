@@ -7,7 +7,7 @@ const routeSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Indexes
-routeSchema.index({ code: 1 });
+// code index is already defined as unique in schema
 
 // Virtual for route summary
 // keep simple per Phase-0

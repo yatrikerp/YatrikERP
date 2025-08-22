@@ -128,7 +128,7 @@ depotSchema.pre('save', function(next) {
 });
 
 // Indexes
-depotSchema.index({ code: 1 });
+// code index is already defined as unique in schema
 depotSchema.index({ status: 1 });
 depotSchema.index({ 'address.city': 1, 'address.state': 1 });
 

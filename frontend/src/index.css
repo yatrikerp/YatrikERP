@@ -1093,6 +1093,17 @@ input:focus, select:focus, textarea:focus {
   padding-top: 0.875rem; /* Reduced from 1rem */
 }
 
+/* Thinner, longer inputs without changing layout */
+.login-form-compact input,
+.login-form-compact select,
+.login-form-compact textarea {
+  height: 36px;           /* thinner */
+  padding-left: 12px;     /* comfortable */
+  padding-right: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
 /* Enhanced focus rings for inputs */
 .login-form-compact input:focus,
 .login-form-compact select:focus,

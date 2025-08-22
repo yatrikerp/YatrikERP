@@ -30,6 +30,18 @@ const Auth = ({ initialMode = 'login' }) => {
   const [loginErrors, setLoginErrors] = useState({});
   const [signupErrors, setSignupErrors] = useState({});
   
+  // Fetch authoritative profile after login to ensure role/depotId are present
+  const fetchProfileAndLogin = async (userFromLogin, token) => {
+    const me = await apiFetch('/api/auth/me');
+    let finalUser = userFromLogin;
+    if (me.ok && me.data) {
+      // Prefer server profile if available
+      finalUser = me.data.data?.user || me.data.user || me.data;
+    }
+    login(finalUser, token);
+    // Don't navigate here - let the useEffect handle it
+  };
+
   // Navigate after successful login/signup
   useEffect(() => {
     if (user) {
@@ -73,22 +85,6 @@ const Auth = ({ initialMode = 'login' }) => {
     setSignupErrors(errors);
     return Object.keys(errors).length === 0;
   }, [signupForm]);
-
-  // Fetch authoritative profile after login to ensure role/depotId are present
-  const fetchProfileAndLogin = async (userFromLogin, token) => {
-    const me = await apiFetch('/api/auth/me');
-    let finalUser = userFromLogin;
-    if (me.ok && me.data) {
-      // Prefer server profile if available
-      finalUser = me.data.data?.user || me.data.user || me.data;
-    }
-    login(finalUser, token);
-    const role = (finalUser.role || 'passenger').toUpperCase();
-    const dest = role === 'ADMIN' ? '/admin' : role === 'CONDUCTOR' ? '/conductor' : role === 'DRIVER' ? '/driver' : role === 'DEPOT_MANAGER' ? '/depot' : redirectTo;
-    console.log('[Auth] post-login profile role redirect:', { role, dest });
-    // Navigate after state updates propagate a tick
-    setTimeout(() => navigate(dest, { replace: true }), 0);
-  };
 
   // Fast login with immediate UI feedback
   const onSubmitLogin = async (e) => {

@@ -4,8 +4,7 @@
 	align-items: center;
 	justify-content: center;
 	padding: 1.5rem 0;
-	background: linear-gradient(180deg, #eaf3ff 0%, #ffffff 100%);
-	border-radius: 16px;
+	background: transparent;
 }
 
 
@@ -202,6 +201,7 @@
   padding: 12px;
   text-align: center;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
   animation: dataFloat 6s ease-in-out infinite;
@@ -625,7 +625,7 @@
 /* Left Panel Container */
 .left-panel {
 	width: 100%;
-	background: linear-gradient(160deg, #eef6ff 0%, #ffffff 100%);
+	background: transparent;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -1001,4 +1001,256 @@
 .lp-card__tagline { font: 600 13px 'Poppins', system-ui; fill: #64748B; }
 
 @keyframes iconFloat2 { 0%,100% { transform: translateY(0); opacity: .95; } 50% { transform: translateY(-6px); opacity: 1; } }
+
+/* Hero Illustration Styles */
+.hero-illustration {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Bus Container Animations */
+.bus-container {
+  animation: float 6s ease-in-out infinite;
+  transform-origin: 500px 360px;
+}
+
+.bus-body {
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+}
+
+/* Floating Animation for Bus */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* Wheel Rotation */
+.wheel {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: rotate 3.2s linear infinite;
+  filter: drop-shadow(0 0 4px rgba(255, 0, 122, 0.4));
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Bus Shadow Animation */
+.bus-shadow {
+  animation: shadow-pulse 6s ease-in-out infinite;
+}
+
+@keyframes shadow-pulse {
+  0%, 100% {
+    opacity: 0.1;
+    transform: scaleX(1);
+  }
+  50% {
+    opacity: 0.15;
+    transform: scaleX(1.1);
+  }
+}
+
+/* Floating Particles */
+.floating-particle {
+  animation: float-particle 4s ease-in-out infinite;
+}
+
+@keyframes float-particle {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translateY(-15px) scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+/* Background Glow Pulse */
+.pulse-glow {
+  animation: glow-pulse 4s ease-in-out infinite;
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    opacity: 0.3;
+    stroke-width: 2;
+  }
+  50% {
+    opacity: 0.6;
+    stroke-width: 3;
+  }
+}
+
+/* Branding Text Animations */
+.monogram-y {
+  filter: drop-shadow(0 0 8px rgba(0, 196, 204, 0.2));
+}
+
+.galaxy-arc.slow { animation: galaxySpin 26s linear infinite; opacity: .45; }
+.galaxy-arc.fast { animation: galaxySpin 18s linear infinite reverse; opacity: .35; }
+.galaxy-belt { stroke-dasharray: 8 10; animation: beltDash 12s linear infinite; opacity: .4; }
+.galaxy-star { fill: #A3BFFA; filter: drop-shadow(0 0 6px rgba(163,191,250,.75)); }
+.galaxy-rotate.slow { animation: galaxySpin 24s linear infinite; transform-origin: 500px 360px; }
+.galaxy-rotate.fast { animation: galaxySpin 16s linear infinite reverse; transform-origin: 500px 360px; }
+
+@keyframes galaxySpin { to { transform: rotate(360deg); } }
+@keyframes beltDash { to { stroke-dashoffset: -140; } }
+
+.branding {
+  animation: fade-in-up 1.5s ease-out 0.5s both;
+}
+
+.brand-title {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 48px;
+  font-weight: 800;
+  fill: #1a1a2e;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.brand-title::after {
+  content: '';
+  display: block;
+  height: 3px;
+  width: 140px;
+  margin-top: 6px;
+  transform: translateX(0);
+  background: linear-gradient(90deg, #FF007A, #00C4CC);
+  animation: underlineSlide 3.5s ease-in-out infinite;
+}
+
+@keyframes underlineSlide {
+  0%, 100% { transform: translateX(0); opacity: 0.7; }
+  50% { transform: translateX(8px); opacity: 1; }
+}
+
+.brand-subtitle {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  fill: #FF007A;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 4px rgba(255, 0, 122, 0.3);
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Bus Windows Glow */
+.bus-container rect[fill="#E6F3FF"] {
+  animation: window-glow 3s ease-in-out infinite;
+}
+
+@keyframes window-glow {
+  0%, 100% {
+    fill: #E6F3FF;
+  }
+  50% {
+    fill: #CCE7FF;
+  }
+}
+
+/* Headlights Glow */
+.bus-container circle[fill="#FFD700"] {
+  animation: headlight-glow 2s ease-in-out infinite;
+}
+
+@keyframes headlight-glow {
+  0%, 100% {
+    opacity: 0.8;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.3);
+  }
+}
+
+/* Accent Stripe Animation */
+.bus-container rect[fill="url(#accentStripe)"] {
+  animation: stripe-flow 4s linear infinite;
+}
+
+@keyframes stripe-flow {
+  0% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.8;
+  }
+}
+
+/* Hover Effects */
+.hero-illustration:hover .bus-container {
+  animation-play-state: paused;
+}
+
+.hero-illustration:hover .floating-particle {
+  animation-duration: 2s;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .brand-title {
+    font-size: 36px;
+  }
+  
+  .brand-subtitle {
+    font-size: 20px;
+  }
+  
+  .bus-container {
+    transform: scale(0.8);
+  }
+}
+
+/* Smooth Transitions */
+* {
+  transition: all 0.3s ease;
+}
+
+/* Enhanced Particle Effects */
+.floating-particle:nth-child(odd) {
+  animation-delay: 0s;
+}
+
+.floating-particle:nth-child(even) {
+  animation-delay: 2s;
+}
+
+/* Bus Container Hover Enhancement */
+.bus-container:hover {
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.15));
+}
+
+/* Text Glow Enhancement */
+.brand-title:hover,
+.brand-subtitle:hover {
+  filter: brightness(1.1);
+}
 

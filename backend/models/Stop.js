@@ -8,7 +8,7 @@ const stopSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Indexes
-stopSchema.index({ code: 1 });
+// code index is already defined as unique in schema
 stopSchema.index({ name: 'text' });
 
 // Virtual for full address

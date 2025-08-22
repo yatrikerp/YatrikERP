@@ -83,6 +83,51 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// GET /api/auth/me - Get current user profile for redirection
+router.get('/me', async (req, res) => {
+  try {
+    const auth = req.headers.authorization || '';
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    
+    if (!token) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'No token provided' 
+      });
+    }
+
+    const payload = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    const user = await User.findById(payload.userId).select('-password');
+    
+    if (!user) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'User not found' 
+      });
+    }
+
+    return res.json({ 
+      success: true, 
+      data: { 
+        user: {
+          id: user._id, 
+          name: user.name, 
+          email: user.email,
+          role: user.role, 
+          depotId: user.depotId || null, 
+          status: user.status
+        } 
+      }
+    });
+  } catch (error) {
+    console.error('Auth me error:', error);
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Invalid token' 
+    });
+  }
+});
+
 // OAuth routes
 router.get('/google', (req, res, next) => {
   // Store the 'next' parameter in the session for the callback

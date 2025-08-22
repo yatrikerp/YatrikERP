@@ -31,7 +31,10 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "dev:vite": "vite",
+    "build:vite": "vite build",
+    "preview:vite": "vite preview --port 4173"
   },
   "eslintConfig": {
     "extends": [
@@ -52,9 +55,11 @@
     ]
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.16",
     "postcss": "^8.4.32",
-    "tailwindcss": "^3.3.6"
+    "tailwindcss": "^3.3.6",
+    "vite": "^5.4.1"
   },
   "proxy": "http://localhost:5000"
 }
