@@ -1,512 +1,437 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Bus, MapPin, Calendar, Search, Star, Heart, 
-  TrendingUp, Clock, Users, Shield, Gift, 
-  Navigation, Waves, Mountain, Leaf, Building,
-  Camera, Coffee, Car, Train, Plane, Ticket, MessageSquare
-} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useHashSection } from '../../hooks/useHashSection';
-import ContactUsPanel from '../../components/pax/ContactUsPanel';
-import CancellationPolicyPanel from '../../components/pax/CancellationPolicyPanel';
-import FeedbackPanel from '../../components/pax/FeedbackPanel';
-import ManageBookingPanel from '../../components/pax/ManageBookingPanel';
-import StatusCheckPanel from '../../components/pax/StatusCheckPanel';
-import KeralaDestinationsShowcase from '../../components/pax/KeralaDestinationsShowcase';
-import AnimatedStats from '../../components/pax/AnimatedStats';
+import { 
+  Calendar, 
+  MapPin, 
+  Clock, 
+  Bus, 
+  User, 
+  Phone, 
+  Mail, 
+  Bell, 
+  Search, 
+  Filter,
+  Download,
+  Eye,
+  Star,
+  MessageSquare,
+  HelpCircle,
+  Settings,
+  LogOut,
+  TrendingUp,
+  Award,
+  Shield,
+  Zap,
+  Navigation,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Play,
+  Pause,
+  Square
+} from 'lucide-react';
+
+// Dashboard Components
+import UpcomingTripsPanel from '../../components/pax/UpcomingTripsPanel';
+import LiveTrackingPanel from '../../components/pax/LiveTrackingPanel';
+import BookingHistoryPanel from '../../components/pax/BookingHistoryPanel';
+import NotificationsPanel from '../../components/pax/NotificationsPanel';
+import TripSearchPanel from '../../components/pax/TripSearchPanel';
+import MyBookingsPanel from '../../components/pax/MyBookingsPanel';
+import SupportFeedbackPanel from '../../components/pax/SupportFeedbackPanel';
+import PaymentHistoryPanel from '../../components/pax/PaymentHistoryPanel';
 
 const Dashboard = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { section, setSection } = useHashSection();
-  const [currentOffer, setCurrentOffer] = useState(0);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [notifications, setNotifications] = useState([]);
+  const [upcomingTrips, setUpcomingTrips] = useState([]);
+  const [liveTrips, setLiveTrips] = useState([]);
+  const [bookingHistory, setBookingHistory] = useState([]);
 
-  // Auto-rotate offers
+  // Mock data for demonstration
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentOffer((prev) => (prev + 1) % 3);
-    }, 4000);
-    return () => clearInterval(interval);
+    // Simulate loading data
+    setUpcomingTrips([
+      {
+        id: 1,
+        route: 'Kochi → Trivandrum',
+        busNumber: 'KL-07-AB-1234',
+        departure: '2025-08-20T08:00:00',
+        arrival: '2025-08-20T14:00:00',
+        seatNo: 'A12',
+        status: 'Not Started',
+        fare: 450,
+        busType: 'AC Sleeper'
+      },
+      {
+        id: 2,
+        route: 'Kochi → Bangalore',
+        busNumber: 'KL-07-CD-5678',
+        departure: '2025-08-22T20:00:00',
+        arrival: '2025-08-23T08:00:00',
+        seatNo: 'B15',
+        status: 'Not Started',
+        fare: 1200,
+        busType: 'AC Multi-Axle'
+      }
+    ]);
+
+    setLiveTrips([
+      {
+        id: 3,
+        route: 'Kochi → Chennai',
+        busNumber: 'KL-07-EF-9012',
+        departure: '2025-08-19T06:00:00',
+        arrival: '2025-08-19T18:00:00',
+        seatNo: 'C08',
+        status: 'In Progress',
+        currentLocation: 'Salem',
+        eta: '2 hours',
+        progress: 65
+      }
+    ]);
+
+    setNotifications([
+      {
+        id: 1,
+        type: 'reminder',
+        title: 'Trip Reminder',
+        message: 'Your Kochi → Trivandrum trip departs in 2 hours',
+        time: '2 hours ago',
+        read: false
+      },
+      {
+        id: 2,
+        type: 'update',
+        title: 'Trip Update',
+        message: 'Your Kochi → Bangalore trip is confirmed',
+        time: '1 day ago',
+        read: true
+      }
+    ]);
   }, []);
 
-  const keralaDestinations = [
-    {
-      name: "Munnar",
-      icon: <Mountain className="w-8 h-8" />,
-      description: "Tea Gardens & Hills",
-      rating: 4.8,
-      image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=300&fit=crop",
-      popular: true
-    },
-    {
-      name: "Alleppey",
-      icon: <Waves className="w-8 h-8" />,
-      description: "Backwaters & Houseboats",
-      rating: 4.9,
-      image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=300&fit=crop",
-      popular: true
-    },
-    {
-      name: "Kochi",
-      icon: <Building className="w-8 h-8" />,
-      description: "Historic Port City",
-      rating: 4.7,
-      image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=300&fit=crop"
-    },
-    {
-      name: "Thekkady",
-      icon: <Leaf className="w-8 h-8" />,
-      description: "Wildlife Sanctuary",
-      rating: 4.6,
-      image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=300&fit=crop"
-    },
-    {
-      name: "Varkala",
-      icon: <Waves className="w-8 h-8" />,
-      description: "Cliff Beach Resort",
-      rating: 4.5,
-      image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=300&fit=crop"
-    },
-    {
-      name: "Wayanad",
-      icon: <Mountain className="w-8 h-8" />,
-      description: "Adventure & Nature",
-      rating: 4.7,
-      image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=300&fit=crop"
+  const handleLogout = () => {
+    logout();
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Not Started': return 'text-blue-600 bg-blue-50';
+      case 'In Progress': return 'text-green-600 bg-green-50';
+      case 'Completed': return 'text-gray-600 bg-gray-50';
+      case 'Cancelled': return 'text-red-600 bg-red-50';
+      case 'Delayed': return 'text-orange-600 bg-orange-50';
+      default: return 'text-gray-600 bg-gray-50';
     }
+  };
+
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'Not Started': return <Clock className="w-4 h-4" />;
+      case 'In Progress': return <Play className="w-4 h-4" />;
+      case 'Completed': return <CheckCircle className="w-4 h-4" />;
+      case 'Cancelled': return <XCircle className="w-4 h-4" />;
+      case 'Delayed': return <AlertCircle className="w-4 h-4" />;
+      default: return <Clock className="w-4 h-4" />;
+    }
+  };
+
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: <TrendingUp className="w-5 h-5" /> },
+    { id: 'trips', label: 'My Trips', icon: <Bus className="w-5 h-5" /> },
+    { id: 'bookings', label: 'Bookings', icon: <Calendar className="w-5 h-5" /> },
+    { id: 'tracking', label: 'Live Tracking', icon: <Navigation className="w-5 h5" /> },
+    { id: 'payments', label: 'Payments', icon: <Shield className="w-5 h-5" /> },
+    { id: 'support', label: 'Support', icon: <HelpCircle className="w-5 h-5" /> }
   ];
 
-  const popularRoutes = [
-    {
-      from: "Bangalore",
-      to: "Munnar",
-      duration: "8h 30m",
-      price: "₹1,200",
-      frequency: "Daily",
-      icon: <Mountain className="w-6 h-6" />
-    },
-    {
-      from: "Chennai",
-      to: "Alleppey",
-      duration: "12h 15m",
-      price: "₹1,500",
-      frequency: "Daily",
-      icon: <Waves className="w-6 h-6" />
-    },
-    {
-      from: "Hyderabad",
-      to: "Kochi",
-      duration: "16h 45m",
-      price: "₹1,800",
-      frequency: "Daily",
-      icon: <Building className="w-6 h-6" />
-    },
-    {
-      from: "Mumbai",
-      to: "Thekkady",
-      duration: "20h 30m",
-      price: "₹2,200",
-      frequency: "Daily",
-      icon: <Leaf className="w-6 h-6" />
-    }
-  ];
+  const renderOverview = () => (
+    <div className="space-y-6">
+      {/* Welcome Section */}
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-6 text-white">
+          <div className="flex items-center justify-between">
+              <div>
+            <h1 className="text-2xl font-bold">Welcome back, {user?.name}!</h1>
+            <p className="text-blue-100 mt-1">Ready for your next journey?</p>
+          </div>
+          <div className="text-right">
+            <div className="text-3xl font-bold">{upcomingTrips.length}</div>
+            <div className="text-blue-100">Upcoming Trips</div>
+          </div>
+              </div>
+            </div>
+            
+      {/* Quick Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+          <div className="flex items-center">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Bus className="w-6 h-6 text-blue-600" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-gray-600">Total Trips</p>
+              <p className="text-xl font-bold text-gray-900">{upcomingTrips.length + liveTrips.length + bookingHistory.length}</p>
+            </div>
+          </div>
+        </div>
 
-  const offers = [
-    {
-      title: "Kerala Monsoon Special",
-      description: "Get 15% OFF on all Kerala routes",
-      code: "KERALA15",
-      icon: <Gift className="w-8 h-8" />,
-      color: "from-purple-500 to-pink-500"
-    },
-    {
-      title: "Weekend Getaway",
-      description: "Flat ₹200 OFF on weekend bookings",
-      code: "WEEKEND200",
-      icon: <Calendar className="w-8 h-8" />,
-      color: "from-blue-500 to-cyan-500"
-    },
-    {
-      title: "Group Travel",
-      description: "Book 4+ seats, get 20% OFF",
-      code: "GROUP20",
-      icon: <Users className="w-8 h-8" />,
-      color: "from-green-500 to-emerald-500"
-    }
-  ];
+        <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+          <div className="flex items-center">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <CheckCircle className="w-6 h-6 text-green-600" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-gray-600">Completed</p>
+              <p className="text-xl font-bold text-gray-900">{bookingHistory.filter(trip => trip.status === 'Completed').length}</p>
+            </div>
+          </div>
+        </div>
 
-  const renderPanel = () => {
-    switch (section) {
-      case 'contact':
-        return <ContactUsPanel />;
-      case 'cancellation':
-        return <CancellationPolicyPanel />;
-      case 'feedback':
-        return <FeedbackPanel />;
-      case 'manage':
-        return <ManageBookingPanel />;
-      case 'status':
-        return <StatusCheckPanel />;
+        <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+          <div className="flex items-center">
+            <div className="p-2 bg-orange-100 rounded-lg">
+              <Clock className="w-6 h-6 text-orange-600" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-gray-600">Upcoming</p>
+              <p className="text-xl font-bold text-gray-900">{upcomingTrips.length}</p>
+            </div>
+          </div>
+              </div>
+
+        <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+          <div className="flex items-center">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <Bell className="w-6 h-6 text-purple-600" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-gray-600">Notifications</p>
+              <p className="text-xl font-bold text-gray-900">{notifications.filter(n => !n.read).length}</p>
+                </div>
+                </div>
+                </div>
+              </div>
+
+      {/* Upcoming Trips */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div className="p-6 border-b border-gray-100">
+          <h2 className="text-xl font-bold text-gray-900">Upcoming Trips</h2>
+          <p className="text-gray-600 mt-1">Your next adventures await</p>
+        </div>
+        <div className="p-6">
+          {upcomingTrips.length > 0 ? (
+            <div className="space-y-4">
+              {upcomingTrips.map((trip) => (
+                <div key={trip.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="font-semibold text-gray-900">{trip.route}</h3>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(trip.status)}`}>
+                          {trip.status}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
+                        <div>
+                          <span className="font-medium">Bus:</span> {trip.busNumber}
+                        </div>
+                        <div>
+                          <span className="font-medium">Seat:</span> {trip.seatNo}
+                        </div>
+                        <div>
+                          <span className="font-medium">Departure:</span> {new Date(trip.departure).toLocaleString()}
+                        </div>
+                        <div>
+                          <span className="font-medium">Fare:</span> ₹{trip.fare}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                        <Eye className="w-5 h-5" />
+                      </button>
+                      <button className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors">
+                        <Download className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Bus className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">No upcoming trips</p>
+              <button className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                Book Your First Trip
+              </button>
+            </div>
+          )}
+                </div>
+              </div>
+
+      {/* Live Trips */}
+      {liveTrips.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <div className="p-6 border-b border-gray-100">
+            <h2 className="text-xl font-bold text-gray-900">Live Trips</h2>
+            <p className="text-gray-600 mt-1">Track your current journey</p>
+          </div>
+          <div className="p-6">
+            {liveTrips.map((trip) => (
+              <div key={trip.id} className="border border-green-200 rounded-xl p-4 bg-green-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="font-semibold text-gray-900">{trip.route}</h3>
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                        {trip.status}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
+                      <div>
+                        <span className="font-medium">Current:</span> {trip.currentLocation}
+                      </div>
+                      <div>
+                        <span className="font-medium">ETA:</span> {trip.eta}
+                        </div>
+                        <div>
+                        <span className="font-medium">Progress:</span> {trip.progress}%
+                        </div>
+                      <div>
+                        <span className="font-medium">Seat:</span> {trip.seatNo}
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-green-500 h-2 rounded-full transition-all duration-300" 
+                          style={{ width: `${trip.progress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                  <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                    Track Live
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+            
+            {/* Quick Actions */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div className="p-6 border-b border-gray-100">
+          <h2 className="text-xl font-bold text-gray-900">Quick Actions</h2>
+          <p className="text-gray-600 mt-1">What would you like to do?</p>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <button className="p-4 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all text-center">
+              <Search className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+              <span className="text-sm font-medium text-gray-700">Search Trips</span>
+            </button>
+            <button className="p-4 border border-gray-200 rounded-xl hover:border-green-300 hover:bg-green-50 transition-all text-center">
+              <Calendar className="w-8 h-8 text-green-600 mx-auto mb-2" />
+              <span className="text-sm font-medium text-gray-700">Book Ticket</span>
+            </button>
+            <button className="p-4 border border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50 transition-all text-center">
+              <Navigation className="w-8 h-8 text-purple-600 mx-auto mb-2" />
+              <span className="text-sm font-medium text-gray-700">Live Track</span>
+            </button>
+            <button className="p-4 border border-gray-200 rounded-xl hover:border-orange-300 hover:bg-orange-50 transition-all text-center">
+              <MessageSquare className="w-8 h-8 text-orange-600 mx-auto mb-2" />
+              <span className="text-sm font-medium text-gray-700">Get Support</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'overview':
+        return renderOverview();
+      case 'trips':
+        return <UpcomingTripsPanel trips={upcomingTrips} />;
+      case 'bookings':
+        return <MyBookingsPanel />;
+      case 'tracking':
+        return <LiveTrackingPanel />;
+      case 'payments':
+        return <PaymentHistoryPanel />;
+      case 'support':
+        return <SupportFeedbackPanel />;
       default:
-        return null;
+        return renderOverview();
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
-      {/* Header with User Welcome */}
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white shadow-sm border-b border-gray-100"
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <motion.div
-                animate={{ rotate: [0, 10, -10, 0] }}
-                transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
-                className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center"
-              >
-                <Bus className="w-6 h-6 text-white" />
-              </motion.div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">YATRIK ERP</h1>
-                <p className="text-gray-600">Smart Bus Travel</p>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <h1 className="text-2xl font-bold text-blue-600">YATRIK ERP</h1>
               </div>
             </div>
             
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.3 }}
-              className="text-right"
-            >
-              <p className="text-gray-600">Welcome back,</p>
-              <p className="text-xl font-semibold text-gray-900">{user?.name || 'Traveler'}</p>
-            </motion.div>
-          </div>
-        </div>
-      </motion.div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* Main Content - Left Side */}
-          <div className="lg:col-span-2 space-y-8">
-            
-            {/* Hero Search Section */}
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8"
-            >
-              <div className="text-center mb-8">
-                <motion.h2 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.4 }}
-                  className="text-3xl font-bold text-gray-900 mb-2"
-                >
-                  Discover Kerala's Beauty
-                </motion.h2>
-                <motion.p 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.6 }}
-                  className="text-gray-600 text-lg"
-                >
-                  Book your bus tickets to the most beautiful destinations in God's Own Country
-                </motion.p>
-              </div>
-
-              {/* Search Form */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="From"
-                    className="w-full pl-10 pr-4 py-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  />
-                </div>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="To"
-                    className="w-full pl-10 pr-4 py-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  />
-                </div>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="date"
-                    className="w-full pl-10 pr-4 py-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  />
-                </div>
-              </div>
-
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-8 rounded-xl font-semibold text-lg hover:from-blue-700 hover:to-purple-700 focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50 transition-all flex items-center justify-center gap-3"
-              >
-                <Search className="w-6 h-6" />
-                Search Buses
-              </motion.button>
-            </motion.div>
-
-            {/* Offers Section */}
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="space-y-4"
-            >
-              <h3 className="text-2xl font-bold text-gray-900">Special Offers</h3>
+            <div className="flex items-center space-x-4">
+              {/* Notifications */}
+              <button className="relative p-2 text-gray-400 hover:text-gray-500">
+                <Bell className="w-6 h-6" />
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-400"></span>
+                )}
+              </button>
               
+              {/* User Menu */}
               <div className="relative">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={currentOffer}
-                    initial={{ opacity: 0, x: 50 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -50 }}
-                    transition={{ duration: 0.5 }}
-                    className={`bg-gradient-to-r ${offers[currentOffer].color} rounded-2xl p-6 text-white shadow-lg`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <h4 className="text-xl font-bold mb-2">{offers[currentOffer].title}</h4>
-                        <p className="text-white/90 mb-3">{offers[currentOffer].description}</p>
-                        <div className="bg-white/20 rounded-lg px-3 py-2 inline-block">
-                          <span className="text-sm font-medium">Code: {offers[currentOffer].code}</span>
-                        </div>
-                      </div>
-                      <motion.div
-                        animate={{ rotate: [0, 10, -10, 0] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                        className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center"
-                      >
-                        {offers[currentOffer].icon}
-                      </motion.div>
+                <button className="flex items-center space-x-2 text-gray-700 hover:text-gray-900">
+                  <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                    <span className="text-white font-medium">{user?.name?.charAt(0)}</span>
                     </div>
-                  </motion.div>
-                </AnimatePresence>
-                
-                {/* Offer Indicators */}
-                <div className="flex justify-center gap-2 mt-4">
-                  {offers.map((_, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setCurrentOffer(index)}
-                      className={`w-3 h-3 rounded-full transition-all ${
-                        index === currentOffer ? 'bg-blue-600 w-8' : 'bg-gray-300'
-                      }`}
-                    />
-                  ))}
-                </div>
+                  <span className="hidden md:block font-medium">{user?.name}</span>
+                </button>
               </div>
-            </motion.div>
-
-            {/* Popular Routes */}
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-              className="space-y-4"
-            >
-              <h3 className="text-2xl font-bold text-gray-900">Popular Routes to Kerala</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {popularRoutes.map((route, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.8 + index * 0.1 }}
-                    whileHover={{ y: -5, scale: 1.02 }}
-                    className="bg-white rounded-xl p-6 shadow-md border border-gray-100 hover:shadow-lg transition-all cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                          {route.icon}
-                        </div>
-                        <div>
-                          <h4 className="font-semibold text-gray-900">{route.from} → {route.to}</h4>
-                          <p className="text-sm text-gray-600">{route.duration}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-blue-600">{route.price}</p>
-                        <p className="text-xs text-gray-500">{route.frequency}</p>
-                      </div>
-                    </div>
-                    
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:from-blue-600 hover:to-blue-700 transition-all"
-                    >
-                      Book Now
-                    </motion.button>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
+            </div>
           </div>
-
-          {/* Right Sidebar */}
-          <div className="space-y-6">
-            
-            {/* Quick Actions */}
-            <motion.div 
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.8 }}
-              className="bg-white rounded-2xl shadow-md border border-gray-100 p-6"
-            >
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h3>
-              
-              <div className="space-y-3">
-                {[
-                  { icon: <Ticket className="w-5 h-5" />, label: 'My Tickets', action: () => setSection('manage') },
-                  { icon: <Search className="w-5 h-5" />, label: 'Check Status', action: () => setSection('status') },
-                  { icon: <Heart className="w-5 h-5" />, label: 'Saved Routes', action: () => {} },
-                  { icon: <Clock className="w-5 h-5" />, label: 'Recent Searches', action: () => {} }
-                ].map((item, index) => (
-                  <motion.button
-                    key={index}
-                    whileHover={{ x: 5 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={item.action}
-                    className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-all text-left"
-                  >
-                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
-                      {item.icon}
-                    </div>
-                    <span className="font-medium text-gray-700">{item.label}</span>
-                  </motion.button>
-                ))}
-              </div>
-            </motion.div>
-
-            {/* Kerala Destinations */}
-            <motion.div 
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 1.0 }}
-              className="bg-white rounded-2xl shadow-md border border-gray-100 p-6"
-            >
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Top Kerala Destinations</h3>
-              
-              <div className="space-y-3">
-                {keralaDestinations.slice(0, 4).map((dest, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 1.2 + index * 0.1 }}
-                    whileHover={{ x: 5 }}
-                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-all cursor-pointer"
-                  >
-                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center text-green-600">
-                      {dest.icon}
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-900">{dest.name}</h4>
-                      <p className="text-sm text-gray-600">{dest.description}</p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                      <span className="text-sm font-medium text-gray-700">{dest.rating}</span>
-                    </div>
-                  </motion.div>
-                ))}
+        </div>
               </div>
               
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="w-full mt-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-2 px-4 rounded-lg font-medium hover:from-green-600 hover:to-emerald-700 transition-all"
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Navigation Tabs */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-8">
+          <div className="flex space-x-1 p-2">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center space-x-2 px-4 py-3 rounded-xl font-medium transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
               >
-                View All Destinations
-              </motion.button>
-            </motion.div>
-
-            {/* Support & Help */}
-            <motion.div 
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 1.4 }}
-              className="bg-white rounded-2xl shadow-md border border-gray-100 p-6"
-            >
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Support & Help</h3>
-              
-              <div className="space-y-3">
-                {[
-                  { icon: <MessageSquare className="w-5 h-5" />, label: 'Contact Us', action: () => setSection('contact') },
-                  { icon: <Shield className="w-5 h-5" />, label: 'Cancellation Policy', action: () => setSection('cancellation') },
-                  { icon: <Star className="w-5 h-5" />, label: 'Feedback', action: () => setSection('feedback') }
-                ].map((item, index) => (
-                  <motion.button
-                    key={index}
-                    whileHover={{ x: 5 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={item.action}
-                    className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-all text-left"
-                  >
-                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600">
-                      {item.icon}
-                    </div>
-                    <span className="font-medium text-gray-700">{item.label}</span>
-                  </motion.button>
-                ))}
-              </div>
-            </motion.div>
+                {tab.icon}
+                <span>{tab.label}</span>
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Kerala Destinations Showcase */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8 }}
-          className="mt-16"
-        >
-          <KeralaDestinationsShowcase />
-        </motion.div>
-
-        {/* Animated Stats Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8 }}
-          className="mt-16"
-        >
-          <AnimatedStats />
-        </motion.div>
-
-        {/* Dynamic Panel Display */}
-        <AnimatePresence mode="wait">
-          {section && (
-            <motion.div
-              key={section}
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -30 }}
-              transition={{ duration: 0.3 }}
-              className="mt-8"
-            >
-              {renderPanel()}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Main Content */}
+        {renderContent()}
       </div>
     </div>
   );

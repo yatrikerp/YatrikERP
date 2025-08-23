@@ -133,6 +133,31 @@ function App() {
               </RequireAuth>
             } />
             
+            {/* Passenger Routes */}
+          <Route path="/pax" element={
+            <RequireAuth roles={['passenger']}>
+              <AppShell>
+                <PassengerDashboard />
+              </AppShell>
+            </RequireAuth>
+          } />
+
+          <Route path="/pax/booking" element={
+            <RequireAuth roles={['passenger']}>
+              <AppShell>
+                <PassengerBooking />
+              </AppShell>
+            </RequireAuth>
+          } />
+
+          <Route path="/pax/results" element={
+            <RequireAuth roles={['passenger']}>
+              <AppShell>
+                <PassengerResults />
+              </AppShell>
+            </RequireAuth>
+          } />
+            
             {/* Admin Routes */}
           <Route path="/admin" element={
             <RequireAuth roles={['admin']}>

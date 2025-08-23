@@ -90,7 +90,7 @@ const LeftPanel = () => {
             <feGaussianBlur stdDeviation="3" result="blur" />
             <feFlood floodColor="#E91E63" floodOpacity="0.4" />
             <feComposite in2="blur" operator="in" />
-            <feMerge>
+            <feMerge> 
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>

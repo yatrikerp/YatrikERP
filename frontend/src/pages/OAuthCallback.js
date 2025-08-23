@@ -12,11 +12,13 @@ const OAuthCallback = () => {
   useEffect(() => {
     const handleGoogleCallback = async () => {
       try {
+        console.log('🔍 OAuth Callback - Starting...');
+        
         // Check for OAuth error first
         const error = searchParams.get('error');
         
         if (error) {
-          console.error('Google OAuth error:', error);
+          console.error('❌ Google OAuth error:', error);
           setError('Authentication failed. Please try again.');
           setTimeout(() => navigate('/login'), 3000);
           return;
@@ -25,27 +27,39 @@ const OAuthCallback = () => {
         // Check if we have user data and token from backend OAuth
         const user = searchParams.get('user');
         const token = searchParams.get('token');
+        const nextParam = searchParams.get('next');
         
-        console.log('OAuth callback received - user:', user ? 'present' : 'missing', 'token:', token ? 'present' : 'missing');
+        console.log('📋 OAuth callback received:');
+        console.log('  - User data:', user ? '✅ Present' : '❌ Missing');
+        console.log('  - Token:', token ? '✅ Present' : '❌ Missing');
+        console.log('  - Next param:', nextParam || 'None');
         
         if (user && token) {
           try {
             // Parse user data from backend
             const userData = JSON.parse(decodeURIComponent(user));
-            console.log('User data received from backend:', userData);
+            console.log('👤 User data parsed successfully:', {
+              id: userData._id,
+              name: userData.name,
+              email: userData.email,
+              role: userData.role,
+              authProvider: userData.authProvider
+            });
             
             // Log in the user with backend data
+            console.log('🔐 Calling login function...');
             login(userData, token);
-            
-            console.log('User logged in successfully, redirecting to dashboard...');
+            console.log('✅ User logged in successfully');
             
             // Check if there's a specific redirect destination from the URL
-            const urlParams = new URLSearchParams(window.location.search);
-            const nextParam = urlParams.get('next');
+            console.log('🧭 Determining redirect destination...');
             
             // Redirect based on role, but prioritize the 'next' parameter if it's a valid route for the user's role
             const role = (userData.role || 'passenger').toUpperCase();
             let dest;
+            
+            console.log('🎯 User role:', role);
+            console.log('🎯 Next parameter:', nextParam);
             
             if (nextParam && nextParam.startsWith('/')) {
               // Check if the user has access to the requested route
@@ -57,10 +71,14 @@ const OAuthCallback = () => {
                 (nextParam.startsWith('/depot') && role === 'DEPOT_MANAGER')
               );
               
+              console.log('🔒 Route access check:', { nextParam, hasAccess });
+              
               if (hasAccess) {
                 dest = nextParam;
+                console.log('✅ User has access to requested route');
               } else {
                 // User doesn't have access to requested route, redirect to their default dashboard
+                console.log('❌ User does not have access to requested route, using default dashboard');
                 dest = role === 'ADMIN' ? '/admin' :
                        role === 'CONDUCTOR' ? '/conductor' :
                        role === 'DRIVER' ? '/driver' :
@@ -69,6 +87,7 @@ const OAuthCallback = () => {
               }
             } else {
               // No specific destination, use role-based routing
+              console.log('🎯 No specific destination, using role-based routing');
               dest = role === 'ADMIN' ? '/admin' :
                      role === 'CONDUCTOR' ? '/conductor' :
                      role === 'DRIVER' ? '/driver' :
@@ -76,11 +95,13 @@ const OAuthCallback = () => {
                      '/pax';
             }
             
-            console.log('OAuth redirect:', { role, nextParam, finalDest: dest });
+            console.log('🚀 Final redirect destination:', dest);
+            console.log('🔄 Navigating to:', dest);
+            
             navigate(dest, { replace: true });
             return;
           } catch (parseError) {
-            console.error('Error parsing user data:', parseError);
+            console.error('❌ Error parsing user data:', parseError);
             setError('Invalid user data received. Please try again.');
             setTimeout(() => navigate('/login'), 3000);
             return;
@@ -88,7 +109,7 @@ const OAuthCallback = () => {
         }
         
         // If no user data or token, show error
-        console.error('No user data or token received from OAuth callback');
+        console.error('❌ No user data or token received from OAuth callback');
         setError('Authentication incomplete. Please try signing in again.');
         setTimeout(() => navigate('/login'), 3000);
 

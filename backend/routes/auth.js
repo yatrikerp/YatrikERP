@@ -128,7 +128,8 @@ router.get('/me', async (req, res) => {
   }
 });
 
-// OAuth routes
+// OAuth routes - RESTRICTED TO PASSENGERS ONLY
+// Staff members (conductors, drivers, depot managers, admins) must use email/password authentication
 router.get('/google', (req, res, next) => {
   // Store the 'next' parameter in the session for the callback
   if (req.query.next) {

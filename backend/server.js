@@ -93,7 +93,7 @@ if (oauthConfig.google.clientSecret) {
           email: email || `${googleId}@google.local`,
           phone: '0000000000',
           password: 'oauth:google',
-          role: 'passenger', // Default role for OAuth users
+          role: 'passenger', // OAuth users can only be passengers
           authProvider: 'google',
           emailVerified: !!email,
           profilePicture: profile.photos && profile.photos[0] ? profile.photos[0].value : '',
@@ -103,6 +103,13 @@ if (oauthConfig.google.clientSecret) {
         if (!user.providerIds) user.providerIds = {};
         if (!user.providerIds.google) user.providerIds.google = googleId;
         if (!user.authProvider || user.authProvider === 'local') user.authProvider = 'google';
+        
+        // Ensure OAuth users remain as passengers (security measure)
+        if (user.authProvider === 'google' && user.role !== 'passenger') {
+          console.log(`⚠️ OAuth user ${user.email} role changed from ${user.role} to passenger for security`);
+          user.role = 'passenger';
+        }
+        
         await user.save();
       }
       return done(null, user);
@@ -140,6 +147,13 @@ if (process.env.TWITTER_CONSUMER_KEY && process.env.TWITTER_CONSUMER_SECRET) {
         if (!user.providerIds) user.providerIds = {};
         if (!user.providerIds.twitter) user.providerIds.twitter = twitterId;
         if (!user.authProvider || user.authProvider === 'local') user.authProvider = 'twitter';
+        
+        // Ensure OAuth users remain as passengers (security measure)
+        if (user.authProvider === 'twitter' && user.role !== 'passenger') {
+          console.log(`⚠️ OAuth user ${user.email} role changed from ${user.role} to passenger for security`);
+          user.role = 'passenger';
+        }
+        
         await user.save();
       }
       return done(null, user);
@@ -177,6 +191,13 @@ if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) {
         if (!user.providerIds) user.providerIds = {};
         if (!user.providerIds.microsoft) user.providerIds.microsoft = msId;
         if (!user.authProvider || user.authProvider === 'local') user.authProvider = 'microsoft';
+        
+        // Ensure OAuth users remain as passengers (security measure)
+        if (user.authProvider === 'microsoft' && user.role !== 'passenger') {
+          console.log(`⚠️ OAuth user ${user.email} role changed from ${user.role} to passenger for security`);
+          user.role = 'passenger';
+        }
+        
         await user.save();
       }
       return done(null, user);
