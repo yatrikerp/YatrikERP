@@ -1,0 +1,9 @@
+{
+  "name": "Yatrik ERP",
+  "short_name": "Yatrik",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#E91E63",
+  "icons": []
+}

@@ -144,6 +144,7 @@ const SupportFeedbackPanel = () => {
             </div>
           </div>
         </div>
+      </div>
 
       {/* Support Form */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
@@ -530,7 +531,6 @@ const SupportFeedbackPanel = () => {
       </div>
     </div>
   );
-};
 
   return (
     <div className="space-y-6">

@@ -7,6 +7,7 @@ import AdminLayout from './components/Admin/AdminLayout';
 import LandingPage from './pages/LandingPage';
 import Auth from './pages/Auth';
 import OAuthCallback from './pages/OAuthCallback';
+import ResetPassword from './pages/ResetPassword';
 import Profile from './pages/Profile';
 import Wallet from './pages/Wallet';
 import TripPlanner from './pages/TripPlanner';
@@ -24,6 +25,8 @@ import AdminFarePolicy from './pages/admin/AdminFarePolicy';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminDepots from './pages/admin/AdminDepots';
 import AdminRoutes from './pages/admin/AdminRoutes';
+import RoutesManagement from './pages/admin/RoutesManagement';
+import DepotManagement from './pages/admin/DepotManagement';
 import AdminStops from './pages/admin/AdminStops';
 import AdminTrips from './pages/admin/AdminTrips';
 import AdminDuties from './pages/admin/AdminDuties';
@@ -60,6 +63,7 @@ function App() {
           <Route path="/login" element={<Auth initialMode="login" />} />
           <Route path="/signup" element={<Auth initialMode="signup" />} />
           <Route path="/oauth/callback" element={<OAuthCallback />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
             
             {/* Protected Routes */}
           <Route path="/profile" element={
@@ -203,6 +207,22 @@ function App() {
             <RequireAuth roles={['admin']}>
               <AdminLayout>
                 <AdminRoutes />
+              </AdminLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/admin/routes-management" element={
+            <RequireAuth roles={['admin']}>
+              <AdminLayout>
+                <RoutesManagement />
+              </AdminLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/admin/depot-management" element={
+            <RequireAuth roles={['admin']}>
+              <AdminLayout>
+                <DepotManagement />
               </AdminLayout>
             </RequireAuth>
           } />

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { auth } = require('../middleware/auth');
-const { writeAudit, auditPayloads } = require('../lib/audit');
+
 const tokenBlacklist = require('../lib/tokenBlacklist');
 
 // Import models
@@ -14,7 +14,7 @@ const Duty = require('../models/Duty');
 const Booking = require('../models/Booking');
 const Ticket = require('../models/Ticket');
 const SystemConfig = require('../models/SystemConfig');
-const AuditLog = require('../models/AuditLog');
+
 
 // Health check endpoint (no auth required)
 router.get('/health', (req, res) => {
@@ -167,8 +167,7 @@ router.put('/config', async (req, res) => {
     await config.save();
     const after = config.toObject();
 
-    // Audit log
-    await writeAudit(req, auditPayloads.update('SystemConfig', config._id.toString(), before, after));
+    
 
     // Emit to admin dashboard
     if (req.app.get('io')) {
@@ -302,8 +301,7 @@ router.post('/users', async (req, res) => {
     await user.save();
     const userObj = user.toObject();
 
-    // Audit log
-    await writeAudit(req, auditPayloads.create('User', user._id.toString(), userObj));
+    
 
     res.status(201).json({
       message: 'User created successfully',
@@ -362,12 +360,7 @@ router.put('/users/:id', async (req, res) => {
     await user.save();
     const after = user.toObject();
 
-    // Audit log
-    if (role && role !== before.role) {
-      await writeAudit(req, auditPayloads.roleChange('User', id, before, after, reason));
-    } else {
-      await writeAudit(req, auditPayloads.update('User', id, before, after));
-    }
+
 
     res.json({
       message: 'User updated successfully',
@@ -399,11 +392,7 @@ router.post('/users/:id/reset-password', async (req, res) => {
     await user.save();
     const after = user.toObject();
 
-    // Audit log
-    await writeAudit(req, auditPayloads.update('User', id, before, after, {
-      action: 'PASSWORD_RESET',
-      reason: 'Admin reset password'
-    }));
+
 
     res.json({
       message: 'Password reset successfully',
@@ -427,13 +416,7 @@ router.post('/users/:id/force-logout', async (req, res) => {
 
     // Note: This would require JWT to include jti (JWT ID) for blacklisting
     // For now, we'll just log the action
-    await writeAudit(req, {
-      action: 'FORCE_LOGOUT',
-      target: { collection: 'User', id },
-      before: { userId: id },
-      after: { userId: id, loggedOut: true },
-      metadata: { reason: 'Admin force logout' }
-    });
+
 
     res.json({ message: 'Force logout logged successfully' });
   } catch (error) {
@@ -470,8 +453,7 @@ router.delete('/users/:id', async (req, res) => {
     // Delete the user
     await User.findByIdAndDelete(id);
 
-    // Audit log
-    await writeAudit(req, auditPayloads.delete('User', id, before));
+
 
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
@@ -519,8 +501,7 @@ router.post('/depots', async (req, res) => {
     await depot.save();
     const depotObj = depot.toObject();
 
-    // Audit log
-    await writeAudit(req, auditPayloads.create('Depot', depot._id.toString(), depotObj));
+
 
     console.log('✅ Depot created successfully');
     res.status(201).json({
@@ -625,8 +606,7 @@ router.put('/depots/:id', async (req, res) => {
     await depot.save();
     const after = depot.toObject();
 
-    // Audit log
-    await writeAudit(req, auditPayloads.update('Depot', id, before, after));
+
 
     console.log('✅ Depot updated successfully');
     res.json({
@@ -668,8 +648,7 @@ router.delete('/depots/:id', async (req, res) => {
     await depot.save();
     const after = depot.toObject();
 
-    // Audit log
-    await writeAudit(req, auditPayloads.statusChange('Depot', id, before, after, 'Admin soft delete'));
+
 
     console.log('✅ Depot soft deleted successfully');
     res.json({
@@ -702,7 +681,7 @@ router.post('/routes', async (req, res) => {
     const route = new Route(req.body);
     await route.save();
     
-    await writeAudit(req, auditPayloads.create('Route', route._id.toString(), route.toObject()));
+
     
     res.status(201).json({ message: 'Route created successfully', route });
   } catch (error) {
@@ -727,7 +706,7 @@ router.post('/stops', async (req, res) => {
     const stop = new Stop(req.body);
     await stop.save();
     
-    await writeAudit(req, auditPayloads.create('Stop', stop._id.toString(), stop.toObject()));
+
     
     res.status(201).json({ message: 'Stop created successfully', stop });
   } catch (error) {
@@ -783,7 +762,7 @@ router.post('/trips', async (req, res) => {
     const trip = new Trip(req.body);
     await trip.save();
     
-    await writeAudit(req, auditPayloads.create('Trip', trip._id.toString(), trip.toObject()));
+
     
     res.status(201).json({ message: 'Trip created successfully', trip });
   } catch (error) {
@@ -828,12 +807,7 @@ router.put('/trips/:id/assign-crew', async (req, res) => {
     await Promise.all([trip.save(), duty.save()]);
     const after = trip.toObject();
 
-    // Audit log
-    await writeAudit(req, auditPayloads.update('Trip', id, before, after, {
-      action: 'ASSIGN_CREW',
-      driverId,
-      conductorId
-    }));
+
 
     res.json({
       message: 'Crew assigned successfully',
@@ -917,14 +891,7 @@ router.post('/duties/:id/close-force', async (req, res) => {
     await duty.save();
     const after = duty.toObject();
 
-    // Audit log
-    await writeAudit(req, {
-      action: 'FORCE_CLOSE_DUTY',
-      target: { collection: 'Duty', id },
-      before,
-      after,
-      metadata: { reason }
-    });
+
 
     res.json({
       message: 'Duty force closed successfully',
@@ -1043,52 +1010,7 @@ router.get('/passengers/:id/bookings', async (req, res) => {
   }
 });
 
-// =================================================================
-// 9) Audits
-// =================================================================
 
-// GET /api/admin/audits
-router.get('/audits', async (req, res) => {
-  try {
-    const { actor, action, target, from, to, page = 1, limit = 20 } = req.query;
-    const skip = (page - 1) * limit;
-
-    const query = {};
-    if (actor) query.actorId = actor;
-    if (action) query.action = action;
-    if (target) {
-      if (target.collection) query['target.collection'] = target.collection;
-      if (target.id) query['target.id'] = target.id;
-    }
-    if (from || to) {
-      query.at = {};
-      if (from) query.at.$gte = new Date(from);
-      if (to) query.at.$lte = new Date(to);
-    }
-
-    const [audits, total] = await Promise.all([
-      AuditLog.find(query)
-        .populate('actorId', 'name email role')
-        .sort({ at: -1 })
-        .skip(skip)
-        .limit(parseInt(limit)),
-      AuditLog.countDocuments(query)
-    ]);
-
-    res.json({
-      audits,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit)
-      }
-    });
-  } catch (error) {
-    console.error('Audits fetch error:', error);
-    res.status(500).json({ error: 'Failed to fetch audits' });
-  }
-});
 
 // =================================================================
 // 10) Conductor & Driver Management

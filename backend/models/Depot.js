@@ -1,23 +1,23 @@
 const mongoose = require('mongoose');
 
 const depotSchema = new mongoose.Schema({
-  code: {
+  // Basic Depot Information
+  depotCode: {
     type: String,
     required: true,
     unique: true,
-    uppercase: true,
     trim: true,
-    minlength: 2,
-    maxlength: 10
+    uppercase: true
   },
-  name: {
+  depotName: {
     type: String,
     required: true,
-    trim: true,
-    maxlength: 100
+    trim: true
   },
-  address: {
-    street: {
+  
+  // Location Information
+  location: {
+    address: {
       type: String,
       required: true,
       trim: true
@@ -35,103 +35,171 @@ const depotSchema = new mongoose.Schema({
     pincode: {
       type: String,
       required: true,
-      trim: true,
-      match: /^[1-9][0-9]{5}$/
+      trim: true
     },
     coordinates: {
-      lat: {
-        type: Number,
-        min: -90,
-        max: 90
-      },
-      lng: {
-        type: Number,
-        min: -180,
-        max: 180
-      }
+      latitude: Number,
+      longitude: Number
     }
   },
+  
+  // Contact Information
   contact: {
     phone: {
       type: String,
       required: true,
-      trim: true,
-      match: /^[6-9]\d{9}$/
+      trim: true
     },
     email: {
       type: String,
-      lowercase: true,
+      required: true,
       trim: true,
-      match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      lowercase: true
+    },
+    manager: {
+      name: String,
+      phone: String,
+      email: String
     }
   },
-  manager: {
-    type: String,
-    trim: true,
-    default: ''
-  },
-  status: {
-    type: String,
-    enum: ['active', 'inactive'],
-    default: 'active'
-  },
+  
+  // Depot Capacity
   capacity: {
-    buses: {
+    totalBuses: {
       type: Number,
-      default: 0,
+      required: true,
       min: 0
     },
-    staff: {
+    availableBuses: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    maintenanceBuses: {
       type: Number,
       default: 0,
       min: 0
     }
   },
+  
+  // Operating Hours
+  operatingHours: {
+    openTime: {
+      type: String, // Format: "HH:MM"
+      required: true
+    },
+    closeTime: {
+      type: String, // Format: "HH:MM"
+      required: true
+    },
+    workingDays: [{
+      type: String,
+      enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+      default: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+    }]
+  },
+  
+  // Facilities
   facilities: [{
     type: String,
-    enum: ['parking', 'maintenance', 'fuel', 'canteen', 'restroom', 'wifi']
+    enum: [
+      'Fuel_Station',
+      'Maintenance_Bay',
+      'Washing_Bay',
+      'Parking_Lot',
+      'Driver_Rest_Room',
+      'Canteen',
+      'Security_Office',
+      'Admin_Office',
+      'Training_Room',
+      'Spare_Parts_Store'
+    ]
   }],
-  operatingHours: {
-    open: {
-      type: String,
-      default: '06:00',
-      match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
-    },
-    close: {
-      type: String,
-      default: '22:00',
-      match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
-    }
+  
+  // Depot Status
+  status: {
+    type: String,
+    enum: ['active', 'inactive', 'maintenance', 'closed'],
+    default: 'active'
+  },
+  
+  // Metadata
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  updatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  isActive: {
+    type: Boolean,
+    default: true
   }
 }, {
   timestamps: true
 });
 
-// Pre-save middleware to handle validation errors gracefully
-depotSchema.pre('save', function(next) {
-  // Ensure required fields are present
-  if (!this.code || !this.name || !this.contact?.phone) {
-    return next(new Error('Missing required fields: code, name, and phone are required'));
-  }
-  
-  // Validate phone format
-  if (this.contact.phone && !/^[6-9]\d{9}$/.test(this.contact.phone)) {
-    return next(new Error('Invalid phone number format. Must be 10 digits starting with 6-9'));
-  }
-  
-  // Validate pincode format
-  if (this.address?.pincode && !/^[1-9][0-9]{5}$/.test(this.address.pincode)) {
-    return next(new Error('Invalid pincode format. Must be 6 digits'));
-  }
-  
-  next();
+// Indexes for better performance
+depotSchema.index({ depotCode: 1 });
+depotSchema.index({ 'location.city': 1 });
+depotSchema.index({ 'location.state': 1 });
+depotSchema.index({ status: 1 });
+depotSchema.index({ isActive: 1 });
+
+// Virtual for full address
+depotSchema.virtual('fullAddress').get(function() {
+  return `${this.location.address}, ${this.location.city}, ${this.location.state} - ${this.location.pincode}`;
 });
 
-// Indexes
-// code index is already defined as unique in schema
-depotSchema.index({ status: 1 });
-depotSchema.index({ 'address.city': 1, 'address.state': 1 });
+// Virtual for available capacity percentage
+depotSchema.virtual('capacityPercentage').get(function() {
+  if (this.capacity.totalBuses === 0) return 0;
+  return Math.round((this.capacity.availableBuses / this.capacity.totalBuses) * 100);
+});
 
-module.exports = mongoose.model('Depot', depotSchema);
+// Method to update bus count
+depotSchema.methods.updateBusCount = function(type, count) {
+  switch (type) {
+    case 'available':
+      this.capacity.availableBuses = Math.max(0, this.capacity.availableBuses + count);
+      break;
+    case 'maintenance':
+      this.capacity.maintenanceBuses = Math.max(0, this.capacity.maintenanceBuses + count);
+      break;
+    case 'total':
+      this.capacity.totalBuses = Math.max(0, this.capacity.totalBuses + count);
+      break;
+  }
+  return this.save();
+};
+
+// Method to check if depot can accommodate more buses
+depotSchema.methods.canAccommodateBuses = function(count) {
+  return this.capacity.availableBuses + count <= this.capacity.totalBuses;
+};
+
+// Static method to find depots by city
+depotSchema.statics.findByCity = function(city) {
+  return this.find({
+    'location.city': { $regex: city, $options: 'i' },
+    isActive: true,
+    status: 'active'
+  });
+};
+
+// Static method to find depots with available capacity
+depotSchema.statics.findWithAvailableCapacity = function(minCapacity = 0) {
+  return this.find({
+    'capacity.availableBuses': { $gte: minCapacity },
+    isActive: true,
+    status: 'active'
+  });
+};
+
+const Depot = mongoose.model('Depot', depotSchema);
+
+module.exports = Depot;
 
 

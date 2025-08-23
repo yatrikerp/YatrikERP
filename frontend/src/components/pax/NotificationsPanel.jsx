@@ -20,98 +20,30 @@ const NotificationsPanel = () => {
   const [filter, setFilter] = useState('all');
   const [selectedNotification, setSelectedNotification] = useState(null);
 
-  // Mock data for demonstration
+  // Fetch notifications from backend
   useEffect(() => {
-    const mockNotifications = [
-      {
-        id: 1,
-        type: 'reminder',
-        title: 'Trip Reminder',
-        message: 'Your Kochi → Trivandrum trip departs in 2 hours',
-        time: '2 hours ago',
-        read: false,
-        priority: 'high',
-        tripId: 'TR001',
-        route: 'Kochi → Trivandrum',
-        departure: '2025-08-20T08:00:00',
-        busNumber: 'KL-07-AB-1234',
-        seatNo: 'A12'
-      },
-      {
-        id: 2,
-        type: 'update',
-        title: 'Trip Update',
-        message: 'Your Kochi → Bangalore trip is confirmed',
-        time: '1 day ago',
-        read: true,
-        priority: 'medium',
-        tripId: 'TR002',
-        route: 'Kochi → Bangalore',
-        departure: '2025-08-22T20:00:00',
-        busNumber: 'KL-07-CD-5678',
-        seatNo: 'B15'
-      },
-      {
-        id: 3,
-        type: 'delay',
-        title: 'Trip Delay',
-        message: 'Your Kochi → Chennai trip is delayed by 30 minutes',
-        time: '3 hours ago',
-        read: false,
-        priority: 'high',
-        tripId: 'TR003',
-        route: 'Kochi → Chennai',
-        departure: '2025-08-19T06:00:00',
-        busNumber: 'KL-07-EF-9012',
-        seatNo: 'C08'
-      },
-      {
-        id: 4,
-        type: 'cancellation',
-        title: 'Trip Cancelled',
-        message: 'Your Bangalore → Kochi trip has been cancelled due to technical issues',
-        time: '2 days ago',
-        read: true,
-        priority: 'high',
-        tripId: 'TR004',
-        route: 'Bangalore → Kochi',
-        departure: '2025-08-18T08:00:00',
-        busNumber: 'KA-01-GH-3456',
-        seatNo: 'A15'
-      },
-      {
-        id: 5,
-        type: 'feedback',
-        title: 'Feedback Request',
-        message: 'How was your recent trip? Please share your experience',
-        time: '3 days ago',
-        read: false,
-        priority: 'low',
-        tripId: 'TR005',
-        route: 'Kochi → Munnar',
-        departure: '2025-08-15T06:00:00',
-        busNumber: 'KL-07-IJ-7890',
-        seatNo: 'D20'
-      },
-      {
-        id: 6,
-        type: 'payment',
-        title: 'Payment Successful',
-        message: 'Payment of ₹450 for Kochi → Trivandrum has been processed',
-        time: '4 days ago',
-        read: true,
-        priority: 'medium',
-        tripId: 'TR001',
-        route: 'Kochi → Trivandrum',
-        departure: '2025-08-20T08:00:00',
-        busNumber: 'KL-07-AB-1234',
-        seatNo: 'A12'
-      }
-    ];
-    
-    setNotifications(mockNotifications);
-    setFilteredNotifications(mockNotifications);
+    fetchNotifications();
   }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      const response = await fetch('/api/notifications', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setNotifications(data.notifications || []);
+          setFilteredNotifications(data.notifications || []);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    }
+  };
 
   // Filter notifications
   useEffect(() => {

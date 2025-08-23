@@ -20,7 +20,7 @@ import {
   LineChart
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import BrandLogo from '../../components/Common/BrandLogo';
+
 
 const AdminMasterDashboard = () => {
   const [stats, setStats] = useState({
@@ -127,14 +127,9 @@ const AdminMasterDashboard = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <div className="w-12 h-12 flex items-center justify-center rounded-xl bg-gray-50">
-            <BrandLogo size={20} />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Yatrik Admin Dashboard</h1>
-            <p className="text-gray-600">Welcome back! Here's what's happening with your system today.</p>
-          </div>
+        <div className="text-center lg:text-left">
+          <h1 className="text-3xl font-bold text-gray-900">Yatrik Admin Dashboard</h1>
+          <p className="text-gray-600">Welcome back! Here's what's happening with your system today.</p>
         </div>
         <div className="flex items-center space-x-3">
           <button
@@ -265,7 +260,7 @@ const AdminMasterDashboard = () => {
             description="Add, edit, or remove bus routes and schedules"
             icon={Route}
             color="bg-green-500"
-            action={() => window.location.href = '/admin/routes'}
+            action={() => window.location.href = '/admin/routes-management'}
           />
           <QuickActionCard
             title="Schedule Trip"
@@ -273,6 +268,13 @@ const AdminMasterDashboard = () => {
             icon={Calendar}
             color="bg-purple-500"
             action={() => window.location.href = '/admin/trips'}
+          />
+          <QuickActionCard
+            title="Manage Depots"
+            description="Manage bus depots, capacity, and facilities"
+            icon={MapPin}
+            color="bg-indigo-500"
+            action={() => window.location.href = '/admin/depot-management'}
           />
           <QuickActionCard
             title="View Reports"

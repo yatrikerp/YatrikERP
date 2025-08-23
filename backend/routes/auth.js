@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const passport = require('passport');
 const User = require('../models/User');
+const { sendEmail } = require('../config/email');
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
@@ -20,7 +21,14 @@ router.post('/register', async (req, res) => {
     }
 
     // Create user
-    const user = new User({ name, email, phone, password, role });
+    const user = new User({ 
+      name, 
+      email, 
+      phone, 
+      password, 
+      role,
+      authProvider: 'local' // Ensure authProvider is set for validation
+    });
     await user.save();
 
     // Generate token
@@ -36,9 +44,11 @@ router.post('/register', async (req, res) => {
     });
 
   } catch (error) {
+    console.error('Registration error details:', error);
     res.status(500).json({
       success: false,
-      error: 'Registration failed'
+      error: 'Registration failed',
+      details: error.message
     });
   }
 });
@@ -79,6 +89,115 @@ router.post('/login', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Login failed'
+    });
+  }
+});
+
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email is required'
+      });
+    }
+
+    // Check if user exists
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Don't reveal if user exists or not for security
+      return res.json({
+        success: true,
+        message: 'If an account with that email exists, a password reset link has been sent.'
+      });
+    }
+
+    // Generate a secure reset token
+    const crypto = require('crypto');
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    
+    // Store reset token in user document with expiration (24 hours)
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+    await user.save();
+
+    // Create reset link
+    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+    
+    // Send email with reset link
+    const emailResult = await sendEmail(email, 'passwordReset', {
+      resetLink: resetLink,
+      userName: user.name
+    });
+
+    if (emailResult.success) {
+      console.log(`Password reset email sent to ${email}`);
+      res.json({
+        success: true,
+        message: 'Password reset link has been sent to your email.'
+      });
+    } else {
+      console.error('Failed to send email:', emailResult.error);
+      // Still return success to user, but log the email failure
+      res.json({
+        success: true,
+        message: 'Password reset link has been sent to your email.'
+      });
+    }
+
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process password reset request'
+    });
+  }
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Token and new password are required'
+      });
+    }
+
+    // Find user with valid reset token
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or expired reset token'
+      });
+    }
+
+    // Update password and clear reset token
+    user.password = newPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Password has been reset successfully'
+    });
+
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to reset password'
     });
   }
 });
@@ -131,11 +250,12 @@ router.get('/me', async (req, res) => {
 // OAuth routes - RESTRICTED TO PASSENGERS ONLY
 // Staff members (conductors, drivers, depot managers, admins) must use email/password authentication
 router.get('/google', (req, res, next) => {
-  // Store the 'next' parameter in the session for the callback
-  if (req.query.next) {
-    req.session.oauthNext = req.query.next;
-  }
-  passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+  // Pass the 'next' parameter directly to Google OAuth
+  const nextParam = req.query.next || '/pax';
+  passport.authenticate('google', { 
+    scope: ['profile', 'email'],
+    state: Buffer.from(JSON.stringify({ next: nextParam })).toString('base64')
+  })(req, res, next);
 });
 
 const oauthConfig = require('../config/oauth');
@@ -143,18 +263,31 @@ const oauthConfig = require('../config/oauth');
 router.get('/google/callback', passport.authenticate('google', { failureRedirect: oauthConfig.frontendURL + '/login' }), async (req, res) => {
   try {
     const user = req.user;
+    
+    // Generate JWT token instantly
     const token = jwt.sign({ 
       userId: user._id, 
       role: (user.role || 'passenger').toUpperCase(),
       name: user.name,
       email: user.email
     }, oauthConfig.jwtSecret, { expiresIn: oauthConfig.jwtExpire });
+    
+    // Get the 'next' parameter from state (faster than session)
+    let nextParam = '/pax';
+    try {
+      if (req.query.state) {
+        const stateData = JSON.parse(Buffer.from(req.query.state, 'base64').toString());
+        nextParam = stateData.next || '/pax';
+      }
+    } catch (e) {
+      // Fallback to default if state parsing fails
+      nextParam = '/pax';
+    }
+    
+    // Encode user data (remove password)
     const userParam = encodeURIComponent(JSON.stringify({ ...user.toObject(), password: undefined }));
     
-    // Get the stored 'next' parameter from session
-    const nextParam = req.session.oauthNext || '/pax';
-    delete req.session.oauthNext; // Clean up session
-    
+    // Instant redirect with all data
     const redirectUrl = `${oauthConfig.frontendURL}/oauth/callback?token=${encodeURIComponent(token)}&user=${userParam}&next=${encodeURIComponent(nextParam)}`;
     res.redirect(redirectUrl);
   } catch (err) {

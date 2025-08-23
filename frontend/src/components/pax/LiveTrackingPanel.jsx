@@ -17,45 +17,29 @@ const LiveTrackingPanel = () => {
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [isTracking, setIsTracking] = useState(false);
 
-  // Mock data for demonstration
+  // Fetch active trips from backend
   useEffect(() => {
-    setActiveTrips([
-      {
-        id: 1,
-        route: 'Kochi → Chennai',
-        busNumber: 'KL-07-EF-9012',
-        departure: '2025-08-19T06:00:00',
-        arrival: '2025-08-19T18:00:00',
-        seatNo: 'C08',
-        status: 'In Progress',
-        currentLocation: 'Salem',
-        eta: '2 hours',
-        progress: 65,
-        driver: 'Rajesh Kumar',
-        conductor: 'Suresh Menon',
-        nextStop: 'Vellore',
-        speed: '65 km/h',
-        coordinates: { lat: 11.6643, lng: 78.1460 }
-      },
-      {
-        id: 2,
-        route: 'Bangalore → Kochi',
-        busNumber: 'KA-01-GH-3456',
-        departure: '2025-08-19T08:00:00',
-        arrival: '2025-08-19T20:00:00',
-        seatNo: 'A15',
-        status: 'In Progress',
-        currentLocation: 'Mysore',
-        eta: '4 hours',
-        progress: 45,
-        driver: 'Mohan Das',
-        conductor: 'Krishna Iyer',
-        nextStop: 'Palakkad',
-        speed: '58 km/h',
-        coordinates: { lat: 12.2958, lng: 76.6394 }
-      }
-    ]);
+    fetchActiveTrips();
   }, []);
+
+  const fetchActiveTrips = async () => {
+    try {
+      const response = await fetch('/api/trips/active', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setActiveTrips(data.trips || []);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching active trips:', error);
+    }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {

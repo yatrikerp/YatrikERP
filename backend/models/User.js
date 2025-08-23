@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema({
   phone: {
     type: String,
     required: function() { return this.authProvider === 'local'; },
-    match: [/^[0-9]{10}$/, 'Please enter a valid 10-digit phone number']
+    match: [/^[\+]?[0-9]{7,15}$/, 'Please enter a valid phone number (7-15 digits)']
   },
   password: {
     type: String,
@@ -132,7 +132,10 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  lockUntil: Date
+  lockUntil: Date,
+  // Password reset fields
+  resetPasswordToken: String,
+  resetPasswordExpires: Date
 }, {
   timestamps: true
 });

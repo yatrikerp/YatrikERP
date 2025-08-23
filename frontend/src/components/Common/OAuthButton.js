@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 // provider: 'google' renders the official multi-color G icon
-const OAuthButton = ({ href, provider = 'google', icon, children, ariaLabel, onClick, className = '' }) => {
-  const baseClasses = "w-full inline-flex items-center justify-center gap-3 py-3 px-5 rounded-full border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300 oauth-button";
+const OAuthButton = ({ href, provider = 'google', icon, children, ariaLabel, onClick, className = '', disabled = false }) => {
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const baseClasses = "w-full inline-flex items-center justify-center gap-3 py-3 px-5 rounded-full border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300 oauth-button disabled:opacity-50 disabled:cursor-not-allowed";
 
   const googleIcon = (
     <svg className="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true">
@@ -14,15 +16,39 @@ const OAuthButton = ({ href, provider = 'google', icon, children, ariaLabel, onC
   );
   const resolvedIcon = provider === 'google' ? googleIcon : icon;
   
+  const handleClick = async (e) => {
+    if (disabled || isLoading) return;
+    
+    setIsLoading(true);
+    
+    if (onClick) {
+      try {
+        await onClick(e);
+      } finally {
+        setIsLoading(false);
+      }
+    } else if (href) {
+      // For OAuth links, add a small delay to show loading state
+      setTimeout(() => {
+        window.location.href = href;
+      }, 100);
+    }
+  };
+  
   if (onClick) {
     return (
       <button
-        onClick={onClick}
+        onClick={handleClick}
         aria-label={ariaLabel}
         className={`${baseClasses} ${className}`}
+        disabled={disabled || isLoading}
       >
-        {resolvedIcon}
-        <span>{children}</span>
+        {isLoading ? (
+          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
+        ) : (
+          resolvedIcon
+        )}
+        <span>{isLoading ? 'Processing...' : children}</span>
       </button>
     );
   }
@@ -32,9 +58,14 @@ const OAuthButton = ({ href, provider = 'google', icon, children, ariaLabel, onC
       href={href}
       aria-label={ariaLabel}
       className={`${baseClasses} ${className}`}
+      onClick={handleClick}
     >
-      {resolvedIcon}
-      <span>{children}</span>
+      {isLoading ? (
+        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
+      ) : (
+        resolvedIcon
+      )}
+      <span>{isLoading ? 'Processing...' : children}</span>
     </a>
   );
 };

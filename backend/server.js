@@ -241,6 +241,7 @@ app.use('/api/promos', require('./routes/promos'));
 app.use('/api/conductor', require('./routes/conductor'));
 app.use('/api/driver', require('./routes/driver'));
 app.use('/api/depot', require('./routes/depot'));
+app.use('/api/depot-auth', require('./routes/depotAuth'));
 app.use('/api/admin', require('./routes/admin'));
 
 // Health check endpoint

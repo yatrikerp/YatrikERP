@@ -38,7 +38,7 @@ async function initDatabase() {
     const collections = [
       'users', 'buses', 'routes', 'stops', 'trips', 
       'bookings', 'tickets', 'depots', 'farepolicies', 
-      'systemconfigs', 'auditlogs', 'wallets', 'duties'
+      'systemconfigs', 'wallets', 'duties'
     ];
 
     for (const collectionName of collections) {

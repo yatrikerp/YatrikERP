@@ -154,8 +154,7 @@ const AdminLayout = ({ children }) => {
       <div className={`fixed inset-0 z-50 lg:hidden transition-all duration-300 ease-in-out ${sidebarOpen ? 'block' : 'hidden'}`}>
         <div className="fixed inset-0 bg-gray-600 bg-opacity-75 transition-opacity duration-300" onClick={() => setSidebarOpen(false)} />
         <div className={`fixed inset-y-0 left-0 flex w-64 flex-col bg-white shadow-xl transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-          <div className="flex h-16 items-center justify-between px-6 border-b border-gray-200">
-            <h2 className="text-xl font-bold text-gray-900">Yatrik ERP</h2>
+          <div className="flex h-16 items-center justify-end px-6 border-b border-gray-200">
             <button
               onClick={() => setSidebarOpen(false)}
               className="text-gray-400 hover:text-gray-600"
@@ -191,7 +190,7 @@ const AdminLayout = ({ children }) => {
         <div className="flex flex-col flex-grow bg-white shadow-xl border-r border-gray-200">
           {/* Logo */}
           <div className="flex h-16 items-center px-6 border-b border-gray-200">
-            <h2 className="text-xl font-bold text-gray-900">Yatrik ERP</h2>
+            <h2 className="text-xl font-bold text-gray-900">Admin Panel</h2>
           </div>
 
           {/* Navigation */}
