@@ -5,7 +5,6 @@ const depotSchema = new mongoose.Schema({
   depotCode: {
     type: String,
     required: true,
-    unique: true,
     trim: true,
     uppercase: true
   },

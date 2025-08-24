@@ -107,6 +107,8 @@ const DepotManagement = () => {
   const handleDepotInputChange = (e) => {
     const { name, value } = e.target;
     
+    console.log('🔄 Input change:', name, value);
+    
     if (name.includes('.')) {
       const parts = name.split('.');
       if (parts.length === 2) {
@@ -115,31 +117,43 @@ const DepotManagement = () => {
           // Handle permissions as checkboxes
           return;
         }
-        setDepotForm(prev => ({
-          ...prev,
-          [section]: {
-            ...prev[section],
-            [field]: value
-          }
-        }));
-      } else if (parts.length === 3) {
-        const [section, subsection, field] = parts;
-        setDepotForm(prev => ({
-          ...prev,
-          [section]: {
-            ...prev[section],
-            [subsection]: {
-              ...prev[section]?.[subsection],
+        setDepotForm(prev => {
+          const newState = {
+            ...prev,
+            [section]: {
+              ...prev[section],
               [field]: value
             }
-          }
-        }));
+          };
+          console.log('📝 Updated state (2 parts):', newState);
+          return newState;
+        });
+      } else if (parts.length === 3) {
+        const [section, subsection, field] = parts;
+        setDepotForm(prev => {
+          const newState = {
+            ...prev,
+            [section]: {
+              ...prev[section],
+              [subsection]: {
+                ...prev[section]?.[subsection],
+                [field]: value
+              }
+            }
+          };
+          console.log('📝 Updated state (3 parts):', newState);
+          return newState;
+        });
       }
     } else {
-      setDepotForm(prev => ({
-        ...prev,
-        [name]: value
-      }));
+      setDepotForm(prev => {
+        const newState = {
+          ...prev,
+          [name]: value
+        };
+        console.log('📝 Updated state (simple):', newState);
+        return newState;
+      });
     }
   };
 
@@ -236,11 +250,13 @@ const DepotManagement = () => {
   const handleCreateDepot = async (e) => {
     e.preventDefault();
     
-    console.log('Form submitted, current form state:', depotForm);
+    console.log('🚀 Form submitted, current form state:', depotForm);
+    console.log('🔍 Depot Code in form:', depotForm.depotCode);
+    console.log('🔍 Depot Name in form:', depotForm.depotName);
     
     const errors = validateDepotForm();
     if (errors.length > 0) {
-      console.log('Validation failed with errors:', errors);
+      console.log('❌ Validation failed with errors:', errors);
       window.alert(`Please fix the following errors:\n${errors.join('\n')}`);
       return;
     }
@@ -262,13 +278,17 @@ const DepotManagement = () => {
           manager: depotForm.contact.manager
         },
         capacity: {
-          totalBuses: parseInt(depotForm.capacity.totalBuses) || 0,
-          availableBuses: parseInt(depotForm.capacity.availableBuses) || 0,
+          totalBuses: parseInt(depotForm.capacity.totalBuses) || 25,
+          availableBuses: parseInt(depotForm.capacity.availableBuses) || 25,
           maintenanceBuses: parseInt(depotForm.capacity.maintenanceBuses) || 0
         },
-        operatingHours: depotForm.operatingHours,
-        facilities: depotForm.facilities,
-        status: depotForm.status,
+        operatingHours: {
+          openTime: depotForm.operatingHours.openTime || '06:00',
+          closeTime: depotForm.operatingHours.closeTime || '22:00',
+          workingDays: depotForm.operatingHours.workingDays || ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        },
+        facilities: depotForm.facilities || [],
+        status: depotForm.status || 'active',
         createUserAccount: depotForm.createUserAccount,
         userAccount: depotForm.createUserAccount ? {
           username: depotForm.userAccount.username,
@@ -280,9 +300,11 @@ const DepotManagement = () => {
       };
 
       console.log('Sending depot data to backend:', depotData);
+      console.log('Depot Code being sent:', depotData.depotCode);
+      console.log('Depot Name being sent:', depotData.depotName);
 
       // Make API call to backend
-      const response = await fetch('/api/depot', {
+      const response = await fetch('/api/admin/depots', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -366,7 +388,7 @@ const DepotManagement = () => {
   const fetchDepots = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/depot', {
+      const response = await fetch('/api/admin/depots', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -374,12 +396,16 @@ const DepotManagement = () => {
       
       if (response.ok) {
         const result = await response.json();
-        if (result.success && result.data) {
+        console.log('Depots fetch response:', result);
+        if (result.depots) {
+          setDepots(result.depots);
+        } else if (result.success && result.data) {
           setDepots(result.data);
         } else {
           setDepots([]);
         }
       } else {
+        console.error('Failed to fetch depots:', response.status);
         setDepots([]);
       }
     } catch (error) {

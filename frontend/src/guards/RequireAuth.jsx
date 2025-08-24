@@ -4,12 +4,12 @@ import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 
 export default function RequireAuth({ children, roles }) {
-  const { user, loading, isLoggingOut } = useAuth();
+  const { user, loading, isLoggingOut, isLoggingIn } = useAuth();
   const location = useLocation();
   
   // Memoize role check to prevent unnecessary re-renders
   const hasAccess = useMemo(() => {
-    if (loading || isLoggingOut) return true; // Show loading state
+    if (loading || isLoggingOut || isLoggingIn) return true; // Show loading state
     
     if (!user) return false;
     
@@ -18,16 +18,33 @@ export default function RequireAuth({ children, roles }) {
     const userRole = user.role?.toUpperCase();
     const allowedRoles = roles.map(r => (r || '').toUpperCase());
     
-    return allowedRoles.includes(userRole);
-  }, [user, roles, loading, isLoggingOut]);
+    const hasRole = allowedRoles.includes(userRole);
+    
+    if (!hasRole) {
+      console.log(`Access denied: User role ${userRole} not in allowed roles ${allowedRoles.join(', ')}`);
+    }
+    
+    return hasRole;
+  }, [user, roles, loading, isLoggingOut, isLoggingIn]);
   
   // Show loading state while checking authentication
-  if (loading || isLoggingOut) {
-    return <LoadingSpinner fullScreen text="Authenticating..." />;
+  if (loading || isLoggingOut || isLoggingIn) {
+    return (
+      <LoadingSpinner 
+        fullScreen 
+        text={
+          loading ? "Loading..." : 
+          isLoggingIn ? "Signing in..." : 
+          isLoggingOut ? "Signing out..." : 
+          "Authenticating..."
+        } 
+      />
+    );
   }
   
   // Redirect to login if not authenticated
   if (!user) {
+    console.log('User not authenticated, redirecting to login');
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
   
@@ -43,10 +60,10 @@ export default function RequireAuth({ children, roles }) {
             <p>Required roles: <strong className="text-gray-700">{roles?.join(', ').toUpperCase()}</strong></p>
           </div>
           <button 
-            onClick={() => window.location.href = '/login'} 
+            onClick={() => window.location.href = '/dashboard'} 
             className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors btn-transition"
           >
-            Go to Login
+            Go to Dashboard
           </button>
         </div>
       </div>

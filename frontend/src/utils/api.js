@@ -8,10 +8,10 @@ const REQUEST_TIMEOUT = 10000; // 10 seconds
 let warnedBase = false;
 
 export async function apiFetch(path, options = {}) {
-  const base = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+  const base = process.env.REACT_APP_API_URL || '';
   if (!process.env.REACT_APP_API_URL && !warnedBase) {
     // Helpful dev hint if env not configured
-    try { console.warn('[apiFetch] REACT_APP_API_URL not set; defaulting to http://localhost:5000'); } catch {}
+    try { console.warn('[apiFetch] REACT_APP_API_URL not set; using relative URLs with Vite proxy'); } catch {}
     warnedBase = true;
   }
   const token = localStorage.getItem('token');

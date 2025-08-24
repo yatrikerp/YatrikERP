@@ -5,7 +5,6 @@ const routeSchema = new mongoose.Schema({
   routeNumber: {
     type: String,
     required: true,
-    unique: true,
     trim: true,
     uppercase: true
   },

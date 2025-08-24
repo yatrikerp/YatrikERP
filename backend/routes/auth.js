@@ -5,9 +5,11 @@ const jwt = require('jsonwebtoken');
 const passport = require('passport');
 const User = require('../models/User');
 const { sendEmail } = require('../config/email');
+const { validateRegistrationEmail, validateProfileUpdateEmail } = require('../middleware/emailValidation');
+const { userValidations, handleValidationErrors } = require('../middleware/validation');
 
 // POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', userValidations.register, handleValidationErrors, validateRegistrationEmail, async (req, res) => {
   try {
     const { name, email, phone, password, role = 'passenger' } = req.body;
 
@@ -54,11 +56,26 @@ router.post('/register', async (req, res) => {
 });
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', userValidations.login, handleValidationErrors, async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email }).select('+password');
+    // Add validation
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email and password are required'
+      });
+    }
+
+    // Remove artificial delay - it's not needed for security
+    // await new Promise(resolve => setTimeout(resolve, 200));
+
+    // Optimize database query - only select necessary fields
+    const user = await User.findOne({ email })
+      .select('+password name role status depotId lastLogin loginAttempts lockUntil')
+      .lean(); // Use lean() for better performance
+    
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -66,29 +83,78 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    const isPasswordValid = await user.comparePassword(password);
+    // Check if account is locked
+    if (user.lockUntil && user.lockUntil > Date.now()) {
+      return res.status(423).json({
+        success: false,
+        error: 'Account is temporarily locked due to too many failed attempts'
+      });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
+      // Increment failed login attempts - use updateOne for better performance
+      await User.updateOne(
+        { _id: user._id },
+        { 
+          $inc: { loginAttempts: 1 },
+          $set: { 
+            lockUntil: user.loginAttempts + 1 >= 5 ? Date.now() + 2 * 60 * 60 * 1000 : undefined 
+          }
+        }
+      );
+      
       return res.status(401).json({
         success: false,
         error: 'Invalid credentials'
       });
     }
 
+    // Reset login attempts and update last login in single operation
+    await User.updateOne(
+      { _id: user._id },
+      { 
+        $set: { 
+          loginAttempts: 0, 
+          lockUntil: undefined,
+          lastLogin: new Date()
+        }
+      }
+    );
+
+    // Generate token with role information
     const token = jwt.sign(
-      { userId: user._id, role: (user.role || 'passenger').toUpperCase(), name: user.name, email: user.email },
+      { 
+        userId: user._id, 
+        role: (user.role || 'passenger').toUpperCase(), 
+        name: user.name, 
+        email: email 
+      },
       process.env.JWT_SECRET || 'secret',
       { expiresIn: '7d' }
     );
 
+    // Prepare user data (remove sensitive information)
+    const userData = {
+      _id: user._id,
+      name: user.name,
+      email: email,
+      role: (user.role || 'passenger').toUpperCase(), // Ensure role is uppercase for consistency
+      status: user.status,
+      depotId: user.depotId,
+      lastLogin: new Date()
+    };
+
     res.json({
       success: true,
-      data: { user: { ...user.toObject(), password: undefined }, token }
+      data: { user: userData, token }
     });
 
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({
       success: false,
-      error: 'Login failed'
+      error: 'Login failed. Please try again.'
     });
   }
 });
@@ -125,7 +191,7 @@ router.post('/forgot-password', async (req, res) => {
     await user.save();
 
     // Create reset link
-    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+    const resetLink = `${oauthConfig.frontendURL}/reset-password?token=${resetToken}`;
     
     // Send email with reset link
     const emailResult = await sendEmail(email, 'passwordReset', {
@@ -304,7 +370,7 @@ router.get('/twitter', (req, res, next) => {
   passport.authenticate('twitter')(req, res, next);
 });
 
-router.get('/twitter/callback', passport.authenticate('twitter', { failureRedirect: process.env.FRONTEND_URL + '/login' }), async (req, res) => {
+router.get('/twitter/callback', passport.authenticate('twitter', { failureRedirect: oauthConfig.frontendURL + '/login' }), async (req, res) => {
   try {
     const user = req.user;
     const token = jwt.sign({ 
@@ -312,17 +378,17 @@ router.get('/twitter/callback', passport.authenticate('twitter', { failureRedire
       role: (user.role || 'passenger').toUpperCase(),
       name: user.name,
       email: user.email
-    }, process.env.JWT_SECRET || 'secret', { expiresIn: process.env.JWT_EXPIRE || '7d' });
+    }, oauthConfig.jwtSecret, { expiresIn: oauthConfig.jwtExpire });
     const userParam = encodeURIComponent(JSON.stringify({ ...user.toObject(), password: undefined }));
     
     // Get the stored 'next' parameter from session
     const nextParam = req.session.oauthNext || '/pax';
     delete req.session.oauthNext; // Clean up session
     
-    const redirectUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/oauth/callback?token=${encodeURIComponent(token)}&user=${userParam}&next=${encodeURIComponent(nextParam)}`;
+    const redirectUrl = `${oauthConfig.frontendURL}/oauth/callback?token=${encodeURIComponent(token)}&user=${userParam}&next=${encodeURIComponent(nextParam)}`;
     res.redirect(redirectUrl);
   } catch (err) {
-    res.redirect((process.env.FRONTEND_URL || 'http://localhost:3000') + '/login');
+    res.redirect(oauthConfig.frontendURL + '/login');
   }
 });
 
@@ -334,7 +400,7 @@ router.get('/microsoft', (req, res, next) => {
   passport.authenticate('microsoft')(req, res, next);
 });
 
-router.get('/microsoft/callback', passport.authenticate('microsoft', { failureRedirect: process.env.FRONTEND_URL + '/login' }), async (req, res) => {
+router.get('/microsoft/callback', passport.authenticate('microsoft', { failureRedirect: oauthConfig.frontendURL + '/login' }), async (req, res) => {
   try {
     const user = req.user;
     const token = jwt.sign({ 
@@ -342,17 +408,17 @@ router.get('/microsoft/callback', passport.authenticate('microsoft', { failureRe
       role: (user.role || 'passenger').toUpperCase(),
       name: user.name,
       email: user.email
-    }, process.env.JWT_SECRET || 'secret', { expiresIn: process.env.JWT_EXPIRE || '7d' });
+    }, oauthConfig.jwtSecret, { expiresIn: oauthConfig.jwtExpire });
     const userParam = encodeURIComponent(JSON.stringify({ ...user.toObject(), password: undefined }));
     
     // Get the stored 'next' parameter from session
-    const nextParam = req.session.oauthNext || '/pax';
+    const nextParam = req.session.oauthNext || 'pax';
     delete req.session.oauthNext; // Clean up session
     
-    const redirectUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/oauth/callback?token=${encodeURIComponent(token)}&user=${userParam}&next=${encodeURIComponent(nextParam)}`;
+    const redirectUrl = `${oauthConfig.frontendURL}/oauth/callback?token=${encodeURIComponent(token)}&user=${userParam}&next=${encodeURIComponent(nextParam)}`;
     res.redirect(redirectUrl);
   } catch (err) {
-    res.redirect((process.env.FRONTEND_URL || 'http://localhost:3000') + '/login');
+    res.redirect(oauthConfig.frontendURL + '/login');
   }
 });
 

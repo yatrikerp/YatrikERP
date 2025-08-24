@@ -63,7 +63,7 @@ const Auth = ({ initialMode = 'login' }) => {
   // Preload Google OAuth for instant performance
   useEffect(() => {
     const preloadGoogleOAuth = () => {
-      const googleOAuthUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/google?next=${encodeURIComponent(redirectTo)}`;
+      const googleOAuthUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/api/auth/google?next=${encodeURIComponent(redirectTo)}`;
       
       // Create a hidden link to preload the OAuth endpoint
       const link = document.createElement('link');
@@ -258,7 +258,7 @@ const Auth = ({ initialMode = 'login' }) => {
                   </div>
                   <div className="mt-6">
                     <OAuthButton 
-                      href={`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/google?next=${encodeURIComponent(redirectTo)}`} 
+                      href={`${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/api/auth/google?next=${encodeURIComponent(redirectTo)}`} 
                       ariaLabel="Sign in with Google" 
                       icon={<FaGoogle className="text-red-500" />}
                       disabled={isLoggingIn || isSigningUp}
@@ -365,7 +365,7 @@ const Auth = ({ initialMode = 'login' }) => {
                 </div>
                 <div className="mt-6">
                   <OAuthButton 
-                    href={`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/google?next=${encodeURIComponent(redirectTo)}&mode=signup`} 
+                    href={`${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/api/auth/google?next=${encodeURIComponent(redirectTo)}&mode=signup`} 
                     ariaLabel="Sign up with Google" 
                     icon={<FaGoogle className="text-red-500" />}
                     className="py-2 transform hover:scale-105 active:scale-95 transition-transform duration-100"

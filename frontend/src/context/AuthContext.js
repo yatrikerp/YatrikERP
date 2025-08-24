@@ -14,6 +14,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   useEffect(() => {
     // Check if user is logged in from localStorage
@@ -22,7 +23,15 @@ export const AuthProvider = ({ children }) => {
     
     if (token && userData) {
       try {
-        setUser(JSON.parse(userData));
+        const parsedUser = JSON.parse(userData);
+        // Validate user data structure
+        if (parsedUser && parsedUser._id && parsedUser.role) {
+          setUser(parsedUser);
+        } else {
+          // Invalid user data, clear storage
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+        }
       } catch (error) {
         console.error('Error parsing user data:', error);
         localStorage.removeItem('token');
@@ -33,13 +42,40 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const login = useCallback((userData, token) => {
+  const login = useCallback(async (userData, token) => {
+    if (isLoggingIn) return; // Prevent multiple login calls
+    
+    setIsLoggingIn(true);
     console.log('AuthContext.login called:', { userData, token });
-    setUser(userData);
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(userData));
-    console.log('AuthContext.login completed, user state should be updated');
-  }, []);
+    
+    try {
+      // Validate user data
+      if (!userData || !userData._id || !userData.role) {
+        throw new Error('Invalid user data');
+      }
+      
+      // Normalize role to uppercase
+      const normalizedUser = {
+        ...userData,
+        role: userData.role.toUpperCase()
+      };
+      
+      setUser(normalizedUser);
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(normalizedUser));
+      
+      console.log('AuthContext.login completed, user state updated:', normalizedUser);
+      
+      // Remove artificial delay - not needed
+      // await new Promise(resolve => setTimeout(resolve, 100));
+      
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }, [isLoggingIn]);
 
   const logout = useCallback(async () => {
     if (isLoggingOut) return; // Prevent multiple logout calls
@@ -53,8 +89,8 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     
-    // Small delay to ensure smooth transition
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Remove artificial delay - not needed
+    // await new Promise(resolve => setTimeout(resolve, 100));
     
     setIsLoggingOut(false);
   }, [isLoggingOut]);
@@ -64,7 +100,8 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     loading,
-    isLoggingOut
+    isLoggingOut,
+    isLoggingIn
   };
 
   return (

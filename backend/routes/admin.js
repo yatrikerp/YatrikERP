@@ -1,33 +1,19 @@
 const express = require('express');
 const router = express.Router();
-const { auth } = require('../middleware/auth');
-
-const tokenBlacklist = require('../lib/tokenBlacklist');
-
-// Import models
 const User = require('../models/User');
-const Depot = require('../models/Depot');
 const Route = require('../models/Route');
-const Stop = require('../models/Stop');
 const Trip = require('../models/Trip');
-const Duty = require('../models/Duty');
 const Booking = require('../models/Booking');
-const Ticket = require('../models/Ticket');
-const SystemConfig = require('../models/SystemConfig');
+const Depot = require('../models/Depot');
+const Bus = require('../models/Bus');
+const Duty = require('../models/Duty');
+const { auth, requireRole } = require('../middleware/auth');
 
+// Helper function to create role-based auth middleware
+const authRole = (roles) => [auth, requireRole(roles)];
 
-// Health check endpoint (no auth required)
-router.get('/health', (req, res) => {
-  console.log('🏥 Admin health check hit');
-  res.json({ 
-    status: 'OK', 
-    message: 'Admin routes are accessible',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Admin middleware - ensure user is ADMIN
-const adminAuth = auth(['ADMIN']);
+// Admin authentication middleware
+const adminAuth = authRole(['admin', 'ADMIN', 'Admin']);
 
 // Apply admin auth to all routes
 router.use(adminAuth);
@@ -469,44 +455,130 @@ router.delete('/users/:id', async (req, res) => {
 // POST /api/admin/depots
 router.post('/depots', async (req, res) => {
   try {
-    const { code, name, address, contact, manager, capacity, facilities, operatingHours } = req.body;
+    const { 
+      depotCode, 
+      depotName, 
+      location, 
+      contact, 
+      capacity, 
+      facilities, 
+      operatingHours,
+      createUserAccount,
+      userAccount 
+    } = req.body;
 
     console.log('📝 POST /api/admin/depots - Create request received');
     console.log('📦 Request data:', req.body);
+    console.log('🔍 Depot Code from request:', req.body.depotCode);
+    console.log('🔍 Depot Name from request:', req.body.depotName);
+    console.log('🔍 Location from request:', req.body.location);
+    console.log('🔍 Contact from request:', req.body.contact);
 
     // Basic validation
-    if (!code || !name) {
-      return res.status(400).json({ error: 'Missing required fields: code and name are required' });
+    if (!depotCode || !depotName) {
+      return res.status(400).json({ error: 'Missing required fields: depotCode and depotName are required' });
     }
 
     // Check if depot code already exists
-    const existingDepot = await Depot.findOne({ code: code.toUpperCase() });
+    const existingDepot = await Depot.findOne({ depotCode: depotCode.toUpperCase() });
     if (existingDepot) {
       return res.status(400).json({ error: 'Depot code already exists' });
     }
 
-    const depot = new Depot({
-      code: code.toUpperCase(),
-      name,
-      address,
-      contact,
-      manager,
-      capacity,
-      facilities,
-      operatingHours
-    });
+    // Check if user object exists
+    if (!req.user || !req.user._id) {
+      console.error('❌ User object missing or invalid:', req.user);
+      return res.status(401).json({ 
+        error: 'Authentication failed - user not found',
+        details: 'User object is missing or invalid'
+      });
+    }
 
-    console.log('🏗️ Creating depot with data:', depot);
+    console.log('👤 User object:', req.user);
+    console.log('🆔 User ID:', req.user._id);
 
+    // Prepare depot data with required fields
+    const depotData = {
+      depotCode: depotCode.toUpperCase(),
+      depotName,
+      location: {
+        address: location?.address || 'Address not provided',
+        city: location?.city || 'City not provided',
+        state: location?.state || 'State not provided',
+        pincode: location?.pincode || '000000'
+      },
+      contact: {
+        phone: contact?.phone || 'Phone not provided',
+        email: contact?.email || `${depotCode.toLowerCase()}@yatrik.com`,
+        manager: contact?.manager || {}
+      },
+      capacity: {
+        totalBuses: parseInt(capacity?.totalBuses) || 25,
+        availableBuses: parseInt(capacity?.availableBuses) || 25,
+        maintenanceBuses: parseInt(capacity?.maintenanceBuses) || 0
+      },
+      operatingHours: {
+        openTime: operatingHours?.openTime || '06:00',
+        closeTime: operatingHours?.closeTime || '22:00',
+        workingDays: operatingHours?.workingDays || ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+      },
+      facilities: facilities || [],
+      status: 'active',
+      createdBy: req.user._id
+    };
+
+    console.log('🏗️ Creating depot with data:', depotData);
+
+    const depot = new Depot(depotData);
     await depot.save();
     const depotObj = depot.toObject();
 
+    // Create depot user account if requested
+    let depotUser = null;
+    if (createUserAccount && userAccount) {
+      try {
+        const DepotUser = require('../models/DepotUser');
+        
+        const userAccountData = {
+          username: userAccount.username,
+          email: userAccount.email || `${depotCode.toLowerCase()}@yatrik.com`,
+          password: userAccount.password,
+          depotId: depot._id,
+          depotCode: depot.depotCode,
+          depotName: depot.depotName,
+          role: userAccount.role || 'depot_manager',
+          permissions: userAccount.permissions || [
+            'manage_buses',
+            'view_buses',
+            'manage_routes',
+            'view_routes',
+            'manage_schedules',
+            'view_schedules',
+            'view_reports',
+            'view_depot_info'
+          ]
+        };
 
+        depotUser = new DepotUser(userAccountData);
+        await depotUser.save();
+      } catch (userError) {
+        console.error('Error creating depot user account:', userError);
+        // Continue with depot creation even if user creation fails
+      }
+    }
 
     console.log('✅ Depot created successfully');
     res.status(201).json({
+      success: true,
       message: 'Depot created successfully',
-      depot: depotObj
+      depot: depotObj,
+      depotUser: depotUser ? {
+        id: depotUser._id,
+        username: depotUser.username,
+        email: depotUser.email,
+        role: depotUser.role,
+        permissions: depotUser.permissions
+      } : null
     });
   } catch (error) {
     console.error('❌ Depot creation error:', error);
@@ -518,19 +590,6 @@ router.post('/depots', async (req, res) => {
         error: 'Validation failed', 
         details: validationErrors 
       });
-    }
-    
-    // Handle custom validation errors from pre-save middleware
-    if (error.message && error.message.includes('Missing required fields')) {
-      return res.status(400).json({ error: error.message });
-    }
-    
-    if (error.message && error.message.includes('Invalid phone number format')) {
-      return res.status(400).json({ error: error.message });
-    }
-    
-    if (error.message && error.message.includes('Invalid pincode format')) {
-      return res.status(400).json({ error: error.message });
     }
     
     res.status(500).json({ error: 'Failed to create depot' });
@@ -551,7 +610,7 @@ router.get('/depots', async (req, res) => {
     const query = showAll === 'true' ? {} : { status: 'active' };
     
     const depots = await Depot.find(query)
-      .populate('manager', 'name email role')
+      .populate('createdBy', 'name email role')
       .sort({ createdAt: -1 });
 
     console.log(`✅ Found ${depots.length} depots (${showAll === 'true' ? 'all' : 'active only'})`);

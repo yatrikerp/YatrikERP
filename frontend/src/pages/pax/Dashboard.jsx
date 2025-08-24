@@ -151,7 +151,7 @@ const Dashboard = () => {
   const renderContent = () => {
     switch (activeSection) {
       case 'overview':
-        return (
+  return (
           <div className="space-y-6">
             <GlassCard className="p-6 text-white bg-gradient-to-r from-blue-600/90 to-purple-600/90">
               <h1 className="text-2xl font-bold">Welcome back, {user?.name || 'Passenger'}!</h1>
@@ -181,16 +181,16 @@ const Dashboard = () => {
                 <UpcomingTripsPanel trips={upcomingTrips} />
               </div>
             </div>
-
+            
                           {liveTrips.length > 0 && (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
                   <div className="p-6 border-b border-gray-100">
                     <h2 className="text-xl font-bold text-gray-900">Live Trips</h2>
                     <p className="text-gray-600 mt-1">Track your current journey</p>
-                  </div>
+          </div>
                   <div className="p-6">
                     <LiveTrackingPanel trips={liveTrips} />
-                  </div>
+              </div>
                 </div>
               )}
 
@@ -223,12 +223,12 @@ const Dashboard = () => {
                       <div className="mt-4 text-center">
                         <p className="text-sm text-gray-600">Current Location</p>
                         <p className="font-semibold text-gray-900">{trip.currentLocation}</p>
-                      </div>
+                    </div>
                     </AnimatedCard>
                   ))}
                 </div>
               )}
-            </div>
+              </div>
           );
 
       case 'trips':
@@ -263,13 +263,13 @@ const Dashboard = () => {
           <div className="flex items-center mb-8">
             <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center mr-3">
               <Bus className="w-6 h-6 text-white" />
-            </div>
-            <div>
+                        </div>
+                        <div>
               <h1 className="font-bold text-xl">YATRIK ERP</h1>
               <p className="text-sm text-gray-500">Transport Company</p>
-            </div>
-          </div>
-
+                      </div>
+                    </div>
+                    
           <nav className="space-y-2 mb-8">
             {navigationSections.map((section) => (
               <button
@@ -317,8 +317,8 @@ const Dashboard = () => {
                 onMarkAsRead={markNotificationAsRead}
                 onDismiss={dismissNotification}
               />
-            </div>
-          </div>
+                    </div>
+              </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             {renderContent()}
@@ -330,19 +330,19 @@ const Dashboard = () => {
           <div className="flex items-center mb-6">
             <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold mr-3">
               {user?.name?.charAt(0) || 'U'}
-            </div>
-            <div className="flex-1">
+                    </div>
+                    <div className="flex-1">
               <h3 className="font-semibold">{user?.name || 'User Name'}</h3>
               <p className="text-sm text-gray-500">Passenger</p>
-            </div>
-          </div>
+                    </div>
+                    </div>
 
           <div className="space-y-4 mb-6">
             <div className="bg-blue-50 rounded-xl p-4 text-center">
               <h4 className="text-gray-600 mb-1 text-sm">Active Bookings</h4>
               <p className="text-2xl font-bold text-blue-600">{upcomingTrips.length}</p>
-            </div>
-
+              </div>
+              
             <div className="bg-purple-50 rounded-xl p-4 text-center">
               <h4 className="text-gray-600 mb-1 text-sm">Total Spent</h4>
               <p className="text-2xl font-bold text-purple-600">₹{(upcomingTrips.reduce((sum, trip) => sum + trip.fare, 0)).toLocaleString()}</p>
@@ -351,7 +351,7 @@ const Dashboard = () => {
             <div className="bg-green-50 rounded-xl p-4 text-center">
               <h4 className="text-gray-600 mb-1 text-sm">Completed Trips</h4>
               <p className="text-2xl font-bold text-green-600">{bookingHistory.length}</p>
-            </div>
+              </div>
           </div>
         </div>
 

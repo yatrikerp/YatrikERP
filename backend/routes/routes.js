@@ -2,7 +2,10 @@ const express = require('express');
 const router = express.Router();
 const Route = require('../models/Route');
 const Depot = require('../models/Depot');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { auth, requireRole } = require('../middleware/auth');
+
+// Helper function to create role-based auth middleware
+const authRole = (roles) => [auth, requireRole(roles)];
 
 // Get all routes (public - visible to all users)
 router.get('/', async (req, res) => {
@@ -162,7 +165,7 @@ router.get('/depot/:depotId', async (req, res) => {
 });
 
 // Create new route (admin only)
-router.post('/', authenticateToken, requireRole(['admin', 'manager']), async (req, res) => {
+router.post('/', authRole(['admin', 'manager']), async (req, res) => {
   try {
     const routeData = {
       ...req.body,
@@ -207,7 +210,7 @@ router.post('/', authenticateToken, requireRole(['admin', 'manager']), async (re
 });
 
 // Update route (admin only)
-router.put('/:id', authenticateToken, requireRole(['admin', 'manager']), async (req, res) => {
+router.put('/:id', authRole(['admin', 'manager']), async (req, res) => {
   try {
     const routeData = {
       ...req.body,
@@ -258,7 +261,7 @@ router.put('/:id', authenticateToken, requireRole(['admin', 'manager']), async (
 });
 
 // Delete route (admin only)
-router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.delete('/:id', authRole(['admin']), async (req, res) => {
   try {
     const route = await Route.findByIdAndUpdate(
       req.params.id,
@@ -288,7 +291,7 @@ router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res
 });
 
 // Add schedule to route (admin/manager only)
-router.post('/:id/schedules', authenticateToken, requireRole(['admin', 'manager']), async (req, res) => {
+router.post('/:id/schedules', authRole(['admin', 'manager']), async (req, res) => {
   try {
     const route = await Route.findById(req.params.id);
     
@@ -322,7 +325,7 @@ router.post('/:id/schedules', authenticateToken, requireRole(['admin', 'manager'
 });
 
 // Update schedule (admin/manager only)
-router.put('/:id/schedules/:scheduleId', authenticateToken, requireRole(['admin', 'manager']), async (req, res) => {
+router.put('/:id/schedules/:scheduleId', authRole(['admin', 'manager']), async (req, res) => {
   try {
     const route = await Route.findById(req.params.id);
     
@@ -350,7 +353,7 @@ router.put('/:id/schedules/:scheduleId', authenticateToken, requireRole(['admin'
 });
 
 // Remove schedule (admin/manager only)
-router.delete('/:id/schedules/:scheduleId', authenticateToken, requireRole(['admin', 'manager']), async (req, res) => {
+router.delete('/:id/schedules/:scheduleId', authRole(['admin', 'manager']), async (req, res) => {
   try {
     const route = await Route.findById(req.params.id);
     
@@ -378,7 +381,7 @@ router.delete('/:id/schedules/:scheduleId', authenticateToken, requireRole(['adm
 });
 
 // Get route statistics (admin only)
-router.get('/stats/overview', authenticateToken, requireRole(['admin', 'manager']), async (req, res) => {
+router.get('/stats/overview', authRole(['admin', 'manager']), async (req, res) => {
   try {
     const totalRoutes = await Route.countDocuments({ isActive: true });
     const activeRoutes = await Route.countDocuments({ isActive: true, status: 'active' });

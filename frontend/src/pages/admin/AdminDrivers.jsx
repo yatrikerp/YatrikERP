@@ -238,7 +238,7 @@ const AdminDrivers = () => {
 
   const getDepotCode = (depotId) => {
     const depot = depots.find(d => d._id === depotId);
-    return depot ? depot.code : 'N/A';
+    return depot ? (depot.depotCode || depot.code) : 'N/A';
   };
 
   const isLicenseExpired = (expiryDate) => {
@@ -617,7 +617,7 @@ const AdminDrivers = () => {
                   >
                     <option value="">Select Depot</option>
                     {depots.map(depot => (
-                      <option key={depot._id} value={depot._id}>{depot.name} ({depot.code})</option>
+                                              <option key={depot._id} value={depot._id}>{depot.depotName || depot.name} ({depot.depotCode || depot.code})</option>
                     ))}
                   </select>
                 </div>

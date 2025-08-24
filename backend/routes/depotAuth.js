@@ -1,9 +1,13 @@
 const express = require('express');
+const router = express.Router();
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const DepotUser = require('../models/DepotUser');
 const Depot = require('../models/Depot');
-const { authenticateToken, requireRole } = require('../middleware/auth');
-const router = express.Router();
+const { auth } = require('../middleware/auth');
+
+// Helper function to create auth middleware
+const authMiddleware = auth;
 
 // Depot User Login
 router.post('/login', async (req, res) => {
@@ -103,7 +107,7 @@ router.post('/login', async (req, res) => {
 });
 
 // Get Depot User Profile
-router.get('/profile', authenticateToken, async (req, res) => {
+router.get('/profile', authMiddleware, async (req, res) => {
   try {
     const user = await DepotUser.findById(req.user.userId)
       .select('-password -loginAttempts -lockUntil')
@@ -131,7 +135,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
 });
 
 // Change Password
-router.post('/change-password', authenticateToken, async (req, res) => {
+router.post('/change-password', authMiddleware, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
 
@@ -184,7 +188,7 @@ router.post('/change-password', authenticateToken, async (req, res) => {
 });
 
 // Get Depot Dashboard Data
-router.get('/dashboard', authenticateToken, async (req, res) => {
+router.get('/dashboard', authMiddleware, async (req, res) => {
   try {
     const depotId = req.user.depotId;
     
@@ -237,7 +241,7 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
 });
 
 // Logout (client-side token removal)
-router.post('/logout', authenticateToken, async (req, res) => {
+router.post('/logout', authMiddleware, async (req, res) => {
   try {
     // In a real application, you might want to add the token to a blacklist
     // For now, we'll just return success as the client removes the token
@@ -257,7 +261,7 @@ router.post('/logout', authenticateToken, async (req, res) => {
 });
 
 // Refresh Token (optional - for extending session)
-router.post('/refresh-token', authenticateToken, async (req, res) => {
+router.post('/refresh-token', authMiddleware, async (req, res) => {
   try {
     const user = await DepotUser.findById(req.user.userId);
     if (!user || user.status !== 'active') {
@@ -297,7 +301,7 @@ router.post('/refresh-token', authenticateToken, async (req, res) => {
 });
 
 // Check if user has specific permission
-router.get('/check-permission/:permission', authenticateToken, async (req, res) => {
+router.get('/check-permission/:permission', authMiddleware, async (req, res) => {
   try {
     const { permission } = req.params;
     

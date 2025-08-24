@@ -1,0 +1,69 @@
+.validation-feedback {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  animation: slideIn 0.3s ease;
+}
+
+.validation-icon {
+  flex-shrink: 0;
+}
+
+.validation-message {
+  line-height: 1.2;
+}
+
+/* Success state */
+.validation-success {
+  color: #10b981;
+}
+
+.validation-success .validation-icon {
+  color: #10b981;
+}
+
+/* Error state */
+.validation-error {
+  color: #ef4444;
+}
+
+.validation-error .validation-icon {
+  color: #ef4444;
+}
+
+/* Warning state */
+.validation-warning {
+  color: #f59e0b;
+}
+
+.validation-warning .validation-icon {
+  color: #f59e0b;
+}
+
+/* Animation */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .validation-feedback {
+    font-size: 11px;
+    gap: 4px;
+  }
+  
+  .validation-icon {
+    size: 14px;
+  }
+}

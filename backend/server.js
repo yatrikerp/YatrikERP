@@ -9,7 +9,19 @@ require('dotenv').config();
 const session = require('express-session');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000; // Use environment variable or default to 5000
+
+// MongoDB Connection with proper error handling
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/yatrik_erp');
+    console.log('✅ Connected to MongoDB');
+    console.log(`🗄️  Database: ${mongoose.connection.name}`);
+  } catch (error) {
+    console.error('❌ MongoDB connection error:', error);
+    process.exit(1);
+  }
+};
 
 // OAuth / Passport
 const passport = require('passport');
@@ -24,8 +36,8 @@ app.use(compression());
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000, // 15 minutes
+  max: process.env.RATE_LIMIT_MAX || 100, // limit each IP to 100 requests per windowMs
   message: 'Too many requests from this IP, please try again later.'
 });
 app.use('/api/', limiter);
@@ -36,7 +48,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true
 }));
 
@@ -45,7 +57,7 @@ app.use(morgan('combined'));
 
 // Session (used by OAuth flows)
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'change-me',
+  secret: process.env.JWT_SECRET || 'yatrikerp',
   resave: false,
   saveUninitialized: false,
   cookie: { secure: false }
@@ -70,18 +82,18 @@ passport.deserializeUser(async (id, done) => {
 
 const issueJwtForUser = (user) => {
   const jwt = require('jsonwebtoken');
-  return jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'secret', { expiresIn: process.env.JWT_EXPIRE || '7d' });
+  return jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'yatrikerp', { expiresIn: process.env.JWT_EXPIRE || '7d' });
 };
 
 // Import OAuth config
 const oauthConfig = require('./config/oauth');
 
-// Google Strategy
-if (oauthConfig.google.clientSecret) {
+// Google Strategy - Only load if credentials are properly configured
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(new GoogleStrategy({
-    clientID: oauthConfig.google.clientID,
-    clientSecret: oauthConfig.google.clientSecret,
-    callbackURL: oauthConfig.google.callbackURL
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:5000/api/auth/google/callback'
   }, async (accessToken, refreshToken, profile, done) => {
     try {
       const email = profile.emails && profile.emails[0] ? profile.emails[0].value.toLowerCase() : undefined;
@@ -117,6 +129,11 @@ if (oauthConfig.google.clientSecret) {
       return done(err);
     }
   }));
+  console.log('✅ Google OAuth strategy configured successfully');
+} else {
+  console.error('❌ Google OAuth strategy not configured - missing credentials');
+  console.error('   Required environment variables: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET');
+  console.error('   Server will start but Google OAuth will not work');
 }
 
 // Twitter Strategy
@@ -207,27 +224,6 @@ if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) {
   }));
 }
 
-// Database connection
-if (!process.env.MONGODB_URI) {
-  console.error('❌ Error: MONGODB_URI environment variable is not set!');
-  console.log('Please create a .env file in the backend directory with:');
-  console.log('MONGODB_URI=mongodb://localhost:27017/yatrik-erp');
-  console.log('\nOr copy from env.example:');
-  console.log('cp env.example .env');
-  process.exit(1);
-}
-
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(() => console.log('✅ Connected to MongoDB successfully'))
-  .catch((err) => {
-    console.error('❌ MongoDB connection error:', err.message);
-    if (err.name === 'MongoServerSelectionError') {
-      console.log('\n💡 Make sure MongoDB is running and MONGODB_URI is correct in your .env file');
-    }
-    process.exit(1);
-  });
-
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
@@ -267,10 +263,10 @@ app.use('*', (req, res) => {
 const http = require('http');
 const server = http.createServer(app);
 const { Server } = require('socket.io');
-const { wsAuth } = require('./middleware/auth');
+const { auth } = require('./middleware/auth');
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
     credentials: true
   }
 });
@@ -278,7 +274,24 @@ const io = new Server(server, {
 // Make io available to the app for admin routes
 app.set('io', io);
 
-io.use(wsAuth);
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake?.query?.token;
+    if (!token) return next(new Error('NO_TOKEN'));
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'yatrikerp');
+    socket.user = {
+      _id: decoded.userId || decoded._id || decoded.id,
+      role: decoded.role || decoded.userRole || 'PASSENGER',
+      name: decoded.name,
+      email: decoded.email,
+    };
+    return next();
+  } catch (err) {
+    return next(new Error('INVALID_TOKEN'));
+  }
+});
+
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
   
@@ -347,8 +360,39 @@ io.on('connection', (socket) => {
 
 module.exports.io = io;
 
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+// Graceful server startup with port conflict handling
+const startServer = async () => {
+  try {
+    // Connect to MongoDB first
+    await connectDB();
+    
+    // Start the server
+    server.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+      console.log(`🔐 JWT Secret: ${process.env.JWT_SECRET ? 'Configured' : 'Using default'}`);
+      console.log(`📧 Email: ${process.env.EMAIL_USER ? 'Configured' : 'Not configured'}`);
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+// Handle server errors gracefully
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use!`);
+    console.error(`   To fix this, run: netstat -ano | findstr :${PORT}`);
+    console.error(`   Then kill the process: taskkill /PID <PID> /F`);
+    console.error(`   Or use a different port by setting PORT environment variable`);
+    process.exit(1);
+  } else {
+    console.error('❌ Server error:', error);
+    process.exit(1);
+  }
 });
+
+// Start the server
+startServer();

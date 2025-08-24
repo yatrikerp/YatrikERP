@@ -5,11 +5,11 @@ export const GOOGLE_CONFIG = {
   // Your Google OAuth Client ID (you'll get this from Google Cloud Console)
   CLIENT_ID: '889305333159-938odo67058fepqktsd8ro7pvsp5c4lv.apps.googleusercontent.com',
   
-  // Backend OAuth endpoint
-  BACKEND_OAUTH_URL: 'http://localhost:5000/api/auth/google',
+  // Backend OAuth endpoint (using relative URL for proxy)
+  BACKEND_OAUTH_URL: '/api/auth/google',
   
   // Frontend callback URL
-  FRONTEND_CALLBACK_URL: 'http://localhost:3000/oauth/callback'
+  FRONTEND_CALLBACK_URL: 'http://localhost:5173/oauth/callback'
 };
 
 // Helper function to handle Google authentication via backend

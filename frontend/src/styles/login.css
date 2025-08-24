@@ -54,110 +54,41 @@
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-/* Brand circle */
-.login-circle {
+  background: linear-gradient(135deg, #E91E63 0%, #FF4081 100%);
   position: relative;
-  width: clamp(280px, 60vh, 560px);
-  height: clamp(280px, 60vh, 560px);
-  border-radius: 9999px;
-  background: radial-gradient(closest-side, rgba(46, 125, 50, 0.10), rgba(46, 125, 50, 0.08)),
-              linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2));
-  box-shadow: 0 20px 60px rgba(11,61,145,0.12), inset 0 0 0 1px rgba(255,255,255,0.7);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  display: grid;
-  place-items: center;
-  overflow: hidden;
+  overflow: visible;
+  min-height: 100vh;
+  height: 100vh;
 }
 
-/* Cross routes */
-.login-route {
-  position: absolute;
-  background-image: repeating-linear-gradient(90deg, rgba(0,0,0,0.0), rgba(0,0,0,0.0) 10px, rgba(11,61,145,0.35) 10px, rgba(11,61,145,0.35) 20px);
+.login-illustration {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  min-height: 400px;
 }
 
-.login-route--h { /* horizontal */
-  width: 78%;
-  height: 2px;
-}
+/* Brand circle - Removed */
 
-.login-route--v { /* vertical */
-  height: 78%;
-  width: 2px;
-}
+/* Cross routes - Removed */
 
-.login-route--h,
-.login-route--v {
-  filter: drop-shadow(0 1px 0 rgba(11,61,145,0.1));
-}
+/* Markers - Removed */
 
-/* Markers */
-.login-marker {
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  background: #ffffff;
-  border-radius: 9999px;
-  box-shadow: 0 0 0 3px rgba(233,30,99,0.15), 0 6px 16px rgba(2,6,23,0.15);
-}
+/* Marker after styles - Removed */
 
-.login-marker::after {
-  content: "";
-  position: absolute;
-  inset: 3px;
-  border-radius: inherit;
-  background: radial-gradient(circle at 50% 50%, var(--brand-pink), var(--brand-blue-dark));
-  animation: markerPulse 2.6s ease-in-out infinite;
-}
+/* Marker left - Removed */
+/* Marker right - Removed */
+/* Marker top - Removed */
+/* Marker bottom - Removed */
 
-.login-marker--left { left: 11%; top: 50%; transform: translate(-50%, -50%); }
-.login-marker--right { right: 11%; top: 50%; transform: translate(50%, -50%); }
-.login-marker--top { top: 11%; left: 50%; transform: translate(-50%, -50%); }
-.login-marker--bottom { bottom: 11%; left: 50%; transform: translate(-50%, 50%); }
+/* markerPulse animation removed - replaced with AI animation */
 
-@keyframes markerPulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.15); opacity: 0.9; }
-}
+/* Bus icons - Removed */
 
-/* Bus icons moving along the lines */
-.login-bus {
-  position: absolute;
-  width: 18px;
-  height: 10px;
-  border-radius: 3px;
-  background: linear-gradient(180deg, #0e7490, #083344);
-  box-shadow: 0 2px 6px rgba(2,6,23,0.25);
-}
-
-.login-bus::after {
-  content: "";
-  position: absolute;
-  right: 2px; top: 2px; bottom: 2px; width: 6px;
-  border-radius: 2px;
-  background: rgba(255,255,255,0.85);
-}
-
-.login-bus--h { top: calc(50% - 5px); left: 11%; animation: moveH 7s linear infinite; }
-.login-bus--v { left: calc(50% - 9px); top: 11%; animation: moveV 7s linear infinite; }
-
-@keyframes moveH { 0% { left: 11%; } 50% { left: 89%; } 100% { left: 11%; } }
-@keyframes moveV { 0% { top: 11%; } 50% { top: 89%; } 100% { top: 11%; } }
-
-/* Center Y letter */
-.login-letter-y {
-  position: relative;
-  font-weight: 800;
-  font-size: clamp(84px, 12vh, 160px);
-  line-height: 1;
-  background: linear-gradient(135deg, var(--brand-pink) 0%, var(--brand-blue-dark) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow: 0 6px 26px rgba(233, 30, 99, 0.25), 0 10px 30px rgba(11,61,145,0.2);
-}
+/* Center Y letter - Removed */
 
 /* Right panel */
 .login-right {
@@ -220,7 +151,9 @@
   width: 100%;
   font-weight: 600;
   cursor: pointer;
-  transition: transform .15s ease, box-shadow .2s ease, background-color .2s ease;
+  transition: box-shadow .2s ease, background-color .2s ease;
+  transform: none !important;
+  transform-origin: center !important;
 }
 
 .login-btn--primary {
@@ -229,8 +162,49 @@
   border-color: transparent;
   box-shadow: 0 8px 16px rgba(233,30,99,0.25);
 }
-.login-btn--primary:hover { transform: translateY(-1px); box-shadow: 0 12px 22px rgba(233,30,99,0.32); }
-.login-btn--primary:active { transform: translateY(0); }
+.login-btn--primary:hover { 
+  box-shadow: 0 12px 22px rgba(233,30,99,0.32); 
+  transform: none !important; 
+}
+.login-btn--primary:active { 
+  box-shadow: 0 8px 16px rgba(233,30,99,0.25); 
+  transform: none !important; 
+}
+.login-btn--primary:focus { 
+  transform: none !important; 
+  outline: none !important; 
+}
+
+/* Prevent any size changes during loading states */
+.login-btn:disabled,
+.login-btn[disabled] {
+  transform: none !important;
+  width: 100% !important;
+  height: 44px !important;
+  font-size: inherit !important;
+  padding: inherit !important;
+}
+
+/* Override any Tailwind or global CSS that might affect button size */
+.login-btn,
+.login-btn *,
+.login-btn:hover,
+.login-btn:active,
+.login-btn:focus,
+.login-btn:disabled,
+.login-btn[disabled] {
+  transform: none !important;
+  transform-origin: center !important;
+  scale: 1 !important;
+  width: 100% !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  max-height: 44px !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+}
 
 .login-divider-text { position: relative; text-align: center; color: var(--text-500); font-size: 13px; margin: 14px 0; }
 .login-divider-text::before,
@@ -247,8 +221,19 @@
   font-weight: 600;
   box-shadow: none;
 }
-.login-btn--google:hover { background: #f7f8fa; box-shadow: none; }
-.login-btn--google:active { background: #eef1f4; }
+.login-btn--google:hover { 
+  background: #f7f8fa; 
+  box-shadow: none; 
+  transform: none !important; 
+}
+.login-btn--google:active { 
+  background: #eef1f4; 
+  transform: none !important; 
+}
+.login-btn--google:focus { 
+  transform: none !important; 
+  outline: none !important; 
+}
 .login-g { width: 20px; height: 20px; }
 
 .login-alert { background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; padding: 8px 10px; border-radius: 10px; font-size: 13px; }
@@ -270,7 +255,6 @@
 @media (max-width: 1024px) {
   .login-left { flex: 0 0 45%; }
   .login-right { flex: 1 1 55%; }
-  .login-circle { width: clamp(240px, 40vh, 420px); height: clamp(240px, 40vh, 420px); }
 }
 
 /* Mobile stack */
@@ -278,15 +262,11 @@
   .login-wrap { flex-direction: column; height: auto; }
   .login-wrap::after { display: none; }
   .login-left, .login-right { height: auto; }
-  .login-left { padding: 24px 0 8px; }
+  .login-left { padding: 24px 0 8px; min-height: 300px; }
   .login-right { padding: 12px 16px 24px; }
   .login-card { margin: 0 auto; }
 }
 
-/* Motion preferences */
-@media (prefers-reduced-motion: reduce) {
-  .login-bus--h, .login-bus--v { animation: none; }
-  .login-marker::after { animation: none; }
-}
+/* Motion preferences - Old animations removed */
 
 

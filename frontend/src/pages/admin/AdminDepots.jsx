@@ -83,13 +83,38 @@ const AdminDepots = () => {
 
     try {
       const depotData = {
-        code: depotForm.code,
-        name: depotForm.name,
-        address: { street: depotForm.address.street || 'Main Street', city: depotForm.address.city || 'City', state: depotForm.address.state || 'State', pincode: depotForm.address.pincode || '000000' },
-        contact: { phone: depotForm.contact.phone, email: depotForm.contact.email || '' },
-        manager: depotForm.manager || '',
-        capacity: { buses: parseInt(depotForm.capacity.buses) || 0, staff: parseInt(depotForm.capacity.staff) || 0 },
-        status: depotForm.status
+        depotCode: depotForm.code,
+        depotName: depotForm.name,
+        location: { 
+          address: depotForm.address.street || 'Address not provided', 
+          city: depotForm.address.city || 'City not provided', 
+          state: depotForm.address.state || 'State not provided', 
+          pincode: depotForm.address.pincode || '000000' 
+        },
+        contact: { 
+          phone: depotForm.contact.phone, 
+          email: depotForm.contact.email || `${depotForm.code.toLowerCase()}@yatrik.com`,
+          manager: { name: depotForm.manager || '' }
+        },
+        capacity: { 
+          totalBuses: parseInt(depotForm.capacity.buses) || 25, 
+          availableBuses: parseInt(depotForm.capacity.buses) || 25, 
+          maintenanceBuses: 0 
+        },
+        operatingHours: {
+          openTime: '06:00',
+          closeTime: '22:00',
+          workingDays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        },
+        facilities: [],
+        createUserAccount: depotForm.createLogin,
+        userAccount: depotForm.createLogin ? {
+          username: depotForm.code.toLowerCase(),
+          email: depotForm.login.email || `${depotForm.code.toLowerCase()}@yatrik.com`,
+          password: depotForm.login.password,
+          role: 'depot_manager',
+          permissions: ['manage_buses', 'view_buses', 'manage_routes', 'view_routes']
+        } : null
       };
 
       const response = await fetch('/api/admin/depots', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` }, body: JSON.stringify(depotData) });
@@ -150,11 +175,11 @@ const AdminDepots = () => {
   const openEditDepot = (depot) => {
     setEditingDepot(depot);
     setDepotForm({
-      code: depot.code || '',
-      name: depot.name || '',
-      address: depot.address || { street: '', city: '', state: '', pincode: '' },
+      code: depot.depotCode || depot.code || '',
+      name: depot.depotName || depot.name || '',
+      address: depot.location || depot.address || { street: '', city: '', state: '', pincode: '' },
       contact: depot.contact || { phone: '', email: '' },
-      manager: depot.manager || '',
+      manager: depot.contact?.manager?.name || depot.manager || '',
       capacity: depot.capacity || { buses: 0, staff: 0 },
       status: depot.status || 'active',
       createLogin: false,
@@ -251,23 +276,30 @@ const AdminDepots = () => {
     try {
       // Format the data according to the backend model
       const depotData = {
-        code: depotForm.code,
-        name: depotForm.name,
-        address: {
-          street: depotForm.address.street || 'Main Street',
-          city: depotForm.address.city || 'City',
-          state: depotForm.address.state || 'State',
+        depotCode: depotForm.code,
+        depotName: depotForm.name,
+        location: {
+          address: depotForm.address.street || 'Address not provided',
+          city: depotForm.address.city || 'City not provided',
+          state: depotForm.address.state || 'State not provided',
           pincode: depotForm.address.pincode || '000000'
         },
         contact: {
           phone: depotForm.contact.phone,
-          email: depotForm.contact.email || ''
+          email: depotForm.contact.email || `${depotForm.code.toLowerCase()}@yatrik.com`,
+          manager: { name: depotForm.manager || '' }
         },
-        manager: depotForm.manager || '',
         capacity: {
-          buses: parseInt(depotForm.capacity.buses) || 0,
-          staff: parseInt(depotForm.capacity.staff) || 0
+          totalBuses: parseInt(depotForm.capacity.buses) || 25,
+          availableBuses: parseInt(depotForm.capacity.buses) || 25,
+          maintenanceBuses: 0
         },
+        operatingHours: {
+          openTime: '06:00',
+          closeTime: '22:00',
+          workingDays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        },
+        facilities: [],
         status: depotForm.status
       };
 
@@ -383,13 +415,13 @@ const AdminDepots = () => {
           'Address not available';
         
         return [
-          depot.code,
-          depot.name,
+          depot.depotCode || depot.code,
+          depot.depotName || depot.name,
           address,
           depot.contact?.phone || 'N/A',
           depot.contact?.email || 'N/A',
-          depot.manager || 'N/A',
-          depot.capacity?.buses ? `${depot.capacity.buses} buses` : 'N/A',
+          depot.contact?.manager?.name || depot.manager || 'N/A',
+          depot.capacity?.totalBuses || depot.capacity?.buses ? `${depot.capacity.totalBuses || depot.capacity.buses} buses` : 'N/A',
           depot.status,
           conductors,
           drivers,
@@ -519,12 +551,12 @@ const AdminDepots = () => {
         {depots
           .filter(depot => 
             !searchTerm || 
-            depot.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            depot.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            depot.address?.street?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            depot.address?.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            depot.address?.state?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            depot.address?.pincode?.toLowerCase().includes(searchTerm.toLowerCase())
+            (depot.depotName || depot.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (depot.depotCode || depot.code || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (depot.location?.address || depot.address?.street || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (depot.location?.city || depot.address?.city || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (depot.location?.state || depot.address?.state || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (depot.location?.pincode || depot.address?.pincode || '').toLowerCase().includes(searchTerm.toLowerCase())
           )
           .map((depot) => {
             const depotUsers = getUsersByDepot(depot._id);
@@ -543,15 +575,15 @@ const AdminDepots = () => {
                       </div>
                       <div>
                         <div className="flex items-center space-x-3 mb-2">
-                          <h3 className="text-xl font-semibold text-gray-900">{depot.name}</h3>
+                          <h3 className="text-xl font-semibold text-gray-900">{depot.depotName || depot.name}</h3>
                           {getStatusBadge(depot.status)}
                         </div>
                         <div className="flex items-center space-x-4 text-sm text-gray-600">
-                          <span className="font-medium">Code: {depot.code}</span>
+                          <span className="font-medium">Code: {depot.depotCode || depot.code}</span>
                           <span className="flex items-center">
                             <MapPin className="w-4 h-4 mr-1" />
-                            {depot.address?.street ? 
-                              `${depot.address.street}, ${depot.address.city}, ${depot.address.state} - ${depot.address.pincode}` : 
+                            {depot.location?.address || depot.address?.street ? 
+                              `${depot.location?.address || depot.address?.street}, ${depot.location?.city || depot.address?.city}, ${depot.location?.state || depot.address?.state} - ${depot.location?.pincode || depot.address?.pincode}` : 
                               'Address not available'
                             }
                           </span>
@@ -569,7 +601,7 @@ const AdminDepots = () => {
                       <div className="text-right">
                         <div className="text-sm text-gray-500">Capacity</div>
                         <div className="text-lg font-semibold text-gray-900">
-                          {depot.capacity?.buses ? `${depot.capacity.buses} buses` : 'N/A'}
+                          {depot.capacity?.totalBuses || depot.capacity?.buses ? `${depot.capacity.totalBuses || depot.capacity.buses} buses` : 'N/A'}
                         </div>
                       </div>
                       <div className="text-right">
@@ -894,12 +926,12 @@ const AdminDepots = () => {
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Depot Code</label>
-                    <p className="text-lg text-gray-900 font-mono bg-gray-50 px-3 py-2 rounded-lg">{viewingDepot.code}</p>
+                    <p className="text-lg text-gray-900 font-mono bg-gray-50 px-3 py-2 rounded-lg">{viewingDepot.depotCode || viewingDepot.code}</p>
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Depot Name</label>
-                    <p className="text-lg text-gray-900">{viewingDepot.name}</p>
+                    <p className="text-lg text-gray-900">{viewingDepot.depotName || viewingDepot.name}</p>
                   </div>
                   
                   <div>
@@ -925,22 +957,22 @@ const AdminDepots = () => {
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Street</label>
-                    <p className="text-gray-900">{viewingDepot.address?.street || 'Not specified'}</p>
+                    <p className="text-gray-900">{viewingDepot.location?.address || viewingDepot.address?.street || 'Not specified'}</p>
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700">City</label>
-                    <p className="text-gray-900">{viewingDepot.address?.city || 'Not specified'}</p>
+                    <p className="text-gray-900">{viewingDepot.location?.city || viewingDepot.address?.city || 'Not specified'}</p>
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700">State</label>
-                    <p className="text-gray-900">{viewingDepot.address?.state || 'Not specified'}</p>
+                    <p className="text-gray-900">{viewingDepot.location?.state || viewingDepot.address?.state || 'Not specified'}</p>
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Pincode</label>
-                    <p className="text-gray-900">{viewingDepot.address?.pincode || 'Not specified'}</p>
+                    <p className="text-gray-900">{viewingDepot.location?.pincode || viewingDepot.address?.pincode || 'Not specified'}</p>
                   </div>
                 </div>
                 
@@ -965,12 +997,12 @@ const AdminDepots = () => {
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Bus Capacity</label>
-                    <p className="text-gray-900">{viewingDepot.capacity?.buses || 0} buses</p>
+                    <p className="text-gray-900">{viewingDepot.capacity?.totalBuses || viewingDepot.capacity?.buses || 0} buses</p>
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Staff Capacity</label>
-                    <p className="text-gray-900">{viewingDepot.capacity?.staff || 0} staff</p>
+                    <label className="block text-sm font-medium text-gray-700">Available Buses</label>
+                    <p className="text-gray-900">{viewingDepot.capacity?.availableBuses || 0} buses</p>
                   </div>
                 </div>
               </div>
@@ -1005,7 +1037,7 @@ const AdminDepots = () => {
             <div className="p-6">
               <h3 className="text-xl font-bold text-red-900 mb-4">Confirm Deletion</h3>
               <p className="text-gray-700 mb-6">
-                Are you sure you want to delete depot "{depotToDelete.name}"? This action cannot be undone.
+                Are you sure you want to delete depot "{depotToDelete.depotName || depotToDelete.name}"? This action cannot be undone.
               </p>
               <div className="flex items-center justify-end space-x-3">
                 <button

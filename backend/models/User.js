@@ -11,7 +11,6 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     required: function() { return this.authProvider === 'local'; },
-    unique: true,
     lowercase: true,
     match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
   },
@@ -24,7 +23,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: function() { return this.authProvider === 'local'; },
     minlength: [6, 'Password must be at least 6 characters long'],
-    select: false
+    select: false // This means password won't be returned in queries by default
   },
   role: {
     type: String,
@@ -115,9 +114,9 @@ const userSchema = new mongoose.Schema({
     default: 'local'
   },
   providerIds: {
-    google: { type: String, index: true },
-    twitter: { type: String, index: true },
-    microsoft: { type: String, index: true }
+    google: { type: String },
+    twitter: { type: String },
+    microsoft: { type: String }
   },
   emailVerified: {
     type: Boolean,
@@ -144,13 +143,18 @@ const userSchema = new mongoose.Schema({
 userSchema.index({ phone: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ depotId: 1 });
+userSchema.index({ email: 1 }); // Add email index for faster login queries
+userSchema.index({ status: 1 }); // Add status index for role-based filtering
+userSchema.index({ 'providerIds.google': 1 }); // Add OAuth provider indexes
+userSchema.index({ 'providerIds.twitter': 1 });
+userSchema.index({ 'providerIds.microsoft': 1 });
 
 // Password hashing middleware
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   
   try {
-    const salt = await bcrypt.genSalt(12);
+    const salt = await bcrypt.genSalt(10); // Reduced from 12 to 10 for better performance
     this.password = await bcrypt.hash(this.password, salt);
     next();
   } catch (error) {

@@ -1,0 +1,169 @@
+.error-popup {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  max-width: 400px;
+  min-width: 300px;
+  transform: translateX(100%);
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.popup-enter {
+  transform: translateX(0);
+}
+
+.popup-exit {
+  transform: translateX(100%);
+}
+
+.popup-content {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px 12px 20px;
+  gap: 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.popup-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.popup-icon.success {
+  color: #10b981;
+}
+
+.popup-icon.warning {
+  color: #f59e0b;
+}
+
+.popup-icon.info {
+  color: #3b82f6;
+}
+
+.popup-icon.error {
+  color: #ef4444;
+}
+
+.popup-title {
+  font-weight: 600;
+  font-size: 16px;
+  color: #1f2937;
+  flex-grow: 1;
+}
+
+.popup-close {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.popup-close:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #6b7280;
+}
+
+.popup-message {
+  padding: 16px 20px 20px 20px;
+  color: #4b5563;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.popup-progress {
+  height: 4px;
+  background: rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  animation: progress 3s linear forwards;
+  border-radius: 0 0 16px 16px;
+}
+
+/* Type-specific styles */
+.popup-success .progress-bar {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.popup-warning .progress-bar {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.popup-info .progress-bar {
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+}
+
+.popup-error .progress-bar {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+/* Progress bar animation */
+@keyframes progress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+/* Responsive design */
+@media (max-width: 480px) {
+  .error-popup {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+    min-width: auto;
+  }
+  
+  .popup-content {
+    border-radius: 12px;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .popup-content {
+    background: #1f2937;
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .popup-title {
+    color: #f9fafb;
+  }
+  
+  .popup-message {
+    color: #d1d5db;
+  }
+  
+  .popup-header {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .popup-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}

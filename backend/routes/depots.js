@@ -2,7 +2,10 @@ const express = require('express');
 const router = express.Router();
 const Depot = require('../models/Depot');
 const Route = require('../models/Route');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { auth, requireRole } = require('../middleware/auth');
+
+// Helper function to create role-based auth middleware
+const authRole = (roles) => [auth, requireRole(roles)];
 
 // Get all depots (public - visible to all users)
 router.get('/', async (req, res) => {
@@ -138,7 +141,7 @@ router.get('/:id/routes', async (req, res) => {
 });
 
 // Create new depot (admin only)
-router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.post('/', authRole(['admin']), async (req, res) => {
   try {
     const depotData = {
       ...req.body,
@@ -208,7 +211,7 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
 });
 
 // Update depot (admin only)
-router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.put('/:id', authRole(['admin']), async (req, res) => {
   try {
     const depotData = {
       ...req.body,
@@ -244,7 +247,7 @@ router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
 });
 
 // Delete depot (admin only)
-router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.delete('/:id', authRole(['admin']), async (req, res) => {
   try {
     // Check if depot has active routes
     const activeRoutes = await Route.countDocuments({
@@ -287,7 +290,7 @@ router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res
 });
 
 // Update depot bus capacity (admin/manager only)
-router.patch('/:id/capacity', authenticateToken, requireRole(['admin', 'manager']), async (req, res) => {
+router.patch('/:id/capacity', authRole(['admin', 'manager']), async (req, res) => {
   try {
     const { type, count } = req.body;
 
@@ -325,7 +328,7 @@ router.patch('/:id/capacity', authenticateToken, requireRole(['admin', 'manager'
 });
 
 // Get depot statistics (admin only)
-router.get('/stats/overview', authenticateToken, requireRole(['admin', 'manager']), async (req, res) => {
+router.get('/stats/overview', authRole(['admin', 'manager']), async (req, res) => {
   try {
     const totalDepots = await Depot.countDocuments({ isActive: true });
     const activeDepots = await Depot.countDocuments({ isActive: true, status: 'active' });

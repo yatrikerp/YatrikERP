@@ -1,20 +1,74 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import LoadingSpinner from '../components/Common/LoadingSpinner';
 
 export default function RedirectDashboard() {
   const navigate = useNavigate();
+  const { user, loading } = useAuth();
+
+
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userRaw = localStorage.getItem('user');
-    if (!token || !userRaw) {
+    if (loading) return; // Wait for auth context to load
+    
+    if (!user) {
       navigate('/login', { replace: true });
       return;
     }
-    let role = 'PASSENGER';
-    try { role = (JSON.parse(userRaw)?.role || 'passenger').toUpperCase(); } catch {}
-    const dest = role === 'ADMIN' ? '/admin' : role === 'CONDUCTOR' ? '/conductor' : role === 'DRIVER' ? '/driver' : role === 'DEPOT_MANAGER' ? '/depot' : '/pax';
-    navigate(dest, { replace: true });
-  }, [navigate]);
+
+    // Instant redirect for fastest performance
+      try {
+      const role = user.role?.toLowerCase() || 'passenger';
+        let destination = '/pax'; // Default to passenger dashboard
+        
+      // Map roles to destinations with exact matching
+        switch (role) {
+        case 'admin':
+            destination = '/admin';
+            break;
+        case 'conductor':
+            destination = '/conductor';
+            break;
+        case 'driver':
+            destination = '/driver';
+            break;
+        case 'depot_manager':
+            destination = '/depot';
+            break;
+        case 'passenger':
+            destination = '/pax';
+            break;
+        default:
+          // Default fallback
+          destination = '/pax';
+          console.warn(`Unknown role: ${role}, defaulting to passenger dashboard`);
+      }
+      
+      console.log('=== ROLE-BASED REDIRECT DEBUG ===');
+      console.log('User object:', user);
+      console.log('Raw role from user:', user.role);
+      console.log('Normalized role:', role);
+      console.log('Role type:', typeof role);
+      console.log('Role length:', role.length);
+      console.log('Selected destination:', destination);
+      console.log('================================');
+        navigate(destination, { replace: true });
+      } catch (error) {
+        console.error('Redirect error:', error);
+        navigate('/pax', { replace: true });
+      }
+  }, [navigate, user, loading]);
+
+  // Show loading spinner while auth is loading
+  if (loading) {
+    return (
+      <LoadingSpinner 
+        fullScreen 
+        text="Loading..." 
+      />
+    );
+  }
+
   return null;
 }
 

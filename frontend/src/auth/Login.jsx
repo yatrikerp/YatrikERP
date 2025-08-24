@@ -3,6 +3,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../utils/api';
+import RoleTestPanel from '../components/Common/RoleTestPanel';
+import { handleGoogleAuth } from '../config/googleAuth';
+import ErrorPopup from '../components/Common/ErrorPopup';
+import { validateField, validateRoleEmail, PHONE_VALIDATION, PASSWORD_VALIDATION, NAME_VALIDATION } from '../utils/validation';
+import ValidationFeedback from '../components/Common/ValidationFeedback';
+import AISchedulingAnimation from '../components/Common/AISchedulingAnimation';
 import '../styles/login.css';
 
 const Login = () => {
@@ -13,6 +19,9 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showErrorPopup, setShowErrorPopup] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [errorType, setErrorType] = useState('error');
   
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -28,6 +37,22 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validation checks
+    if (!formData.email.trim()) {
+      setErrorMessage('Please enter your email address');
+      setErrorType('warning');
+      setShowErrorPopup(true);
+      return;
+    }
+    
+    if (!formData.password.trim()) {
+      setErrorMessage('Please enter your password');
+      setErrorType('warning');
+      setShowErrorPopup(true);
+      return;
+    }
+    
     setIsLoading(true);
     setError('');
 
@@ -36,40 +61,74 @@ const Login = () => {
         method: 'POST',
         body: JSON.stringify({ email: formData.email, password: formData.password })
       });
+      
       if (!res.ok) {
-        throw new Error(res.message || 'Login failed');
+        // Handle different error types
+        let errorType = 'error';
+        let errorMsg = res.message || 'Login failed';
+        
+        if (res.status === 401) {
+          errorType = 'warning';
+          errorMsg = 'Invalid email or password. Please check your credentials.';
+        } else if (res.status === 423) {
+          errorType = 'warning';
+          errorMsg = 'Account is temporarily locked due to too many failed attempts. Please try again later.';
+        } else if (res.status === 429) {
+          errorType = 'warning';
+          errorMsg = 'Too many login attempts. Please wait a moment before trying again.';
+        } else if (res.status >= 500) {
+          errorType = 'error';
+          errorMsg = 'Server error. Please try again later.';
+        }
+        
+        throw new Error(errorMsg);
       }
+      
       const user = res.data.data?.user || res.data.user;
       const token = res.data.data?.token || res.data.token;
+      
       if (user && token) {
+        // Store user data and token
         login(user, token);
+        
+        // Show success message
+        setErrorMessage(`Welcome back, ${user.name}! Redirecting to dashboard...`);
+        setErrorType('success');
+        setShowErrorPopup(true);
+        
+        // Navigate to dashboard immediately for fastest performance
         navigate('/dashboard');
       } else {
         throw new Error('Invalid response from server');
       }
     } catch (err) {
-      setError(err.message || 'Login failed. Please try again.');
-    } finally {
+      const errorMsg = err.message || 'Login failed. Please try again.';
+      setError(errorMsg);
+      setErrorMessage(errorMsg);
+      setErrorType('error');
+      setShowErrorPopup(true);
       setIsLoading(false);
     }
   };
 
   return (
     <div className="login-page">
+      {/* Error Popup */}
+      <ErrorPopup
+        show={showErrorPopup}
+        message={errorMessage}
+        type={errorType}
+        duration={3000}
+        onClose={() => setShowErrorPopup(false)}
+      />
+      
+      {/* Temporary Role Test Panel for debugging */}
+      <RoleTestPanel />
+      
       <div className="login-wrap">
         <section className="login-left" aria-hidden="true">
-          <div className="login-circle">
-            <div className="login-route login-route--h">
-              <div className="login-marker login-marker--left" />
-              <div className="login-bus login-bus--h" />
-              <div className="login-marker login-marker--right" />
-            </div>
-            <div className="login-route login-route--v">
-              <div className="login-marker login-marker--top" />
-              <div className="login-bus login-bus--v" />
-              <div className="login-marker login-marker--bottom" />
-            </div>
-            <div className="login-letter-y" aria-label="Y">Y</div>
+          <div className="login-illustration">
+            <AISchedulingAnimation />
           </div>
         </section>
 
@@ -101,9 +160,6 @@ const Login = () => {
             <div className="login-slider" aria-live="polite">
               <div className="login-slide">
                 <form onSubmit={handleSubmit} className="login-form" autoComplete="on">
-                  {error && (
-                    <div className="login-alert" role="alert">{error}</div>
-                  )}
 
                   <label htmlFor="email" className="login-label">Email address</label>
                   <input
@@ -150,13 +206,25 @@ const Login = () => {
                   </div>
 
                   <button type="submit" disabled={isLoading} className="login-btn login-btn--primary">
-                    {isLoading ? 'Signing in…' : 'Sign in'}
+                    {isLoading ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Signing in...</span>
+                      </div>
+                    ) : (
+                      'Sign in'
+                    )}
                   </button>
                 </form>
 
                 <div className="login-divider-text" aria-hidden="true">or continue with</div>
 
-                <button className="login-btn login-btn--google" aria-label="Continue with Google">
+                <button 
+                  type="button"
+                  className="login-btn login-btn--google" 
+                  aria-label="Continue with Google"
+                  onClick={handleGoogleAuth}
+                >
                   <svg className="login-g" viewBox="0 0 24 24" aria-hidden="true">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -189,79 +257,318 @@ function SignupForm({ onSuccess }) {
     email: '',
     phone: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    role: 'passenger'
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showErrorPopup, setShowErrorPopup] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [errorType, setErrorType] = useState('error');
+  const [touchedFields, setTouchedFields] = useState({});
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
     setError('');
+    
+    // Mark field as touched
+    setTouchedFields(prev => ({ ...prev, [name]: true }));
+    
+    // Real-time validation
+    if (name === 'name') {
+      const errors = validateField('name', value);
+      setFieldErrors(prev => ({ ...prev, name: errors }));
+    } else if (name === 'email') {
+      const errors = validateField('email', value);
+      setFieldErrors(prev => ({ ...prev, email: errors }));
+    } else if (name === 'phone') {
+      const errors = validateField('phone', value);
+      setFieldErrors(prev => ({ ...prev, phone: errors }));
+    } else if (name === 'password') {
+      const errors = validateField('password', value);
+      setFieldErrors(prev => ({ ...prev, password: errors }));
+    } else if (name === 'confirmPassword') {
+      // For confirm password, we don't need to validate against backend rules
+      // Just track that it's been touched
+    }
+  };
+
+  const showPopup = (message, type = 'error') => {
+    setErrorMessage(message);
+    setErrorType(type);
+    setShowErrorPopup(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Comprehensive validation checks
+    const nameErrors = validateField('name', formData.name);
+    if (nameErrors.length > 0) {
+      showPopup(nameErrors[0], 'warning');
+      return;
+    }
+    
+    const emailErrors = validateField('email', formData.email);
+    if (emailErrors.length > 0) {
+      showPopup(emailErrors[0], 'warning');
+      return;
+    }
+    
+    // Phone validation with detailed checks
+    if (!formData.phone.trim()) {
+      showPopup('Please enter your phone number', 'warning');
+      return;
+    }
+    
+    if (!PHONE_VALIDATION.test(formData.phone)) {
+      showPopup(`Phone number must be ${PHONE_VALIDATION.minLength}-${PHONE_VALIDATION.maxLength} digits. ${PHONE_VALIDATION.description}`, 'warning');
+      return;
+    }
+    
+    // Password validation with detailed checks
+    if (!formData.password.trim()) {
+      showPopup('Please enter a password', 'warning');
+      return;
+    }
+    
+    if (!PASSWORD_VALIDATION.test(formData.password)) {
+      showPopup(PASSWORD_VALIDATION.description, 'warning');
+      return;
+    }
+    
+    if (formData.password !== formData.confirmPassword) {
+      showPopup('Passwords do not match. Please try again.', 'warning');
+      return;
+    }
+    
+    // Role-based email validation
+    const role = formData.role || 'passenger';
+    const emailValidation = validateRoleEmail(formData.email, role);
+    if (!emailValidation.isValid) {
+      showPopup(emailValidation.message, 'warning');
+      return;
+    }
+    
     setIsLoading(true);
     setError('');
 
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setIsLoading(false);
-      return;
-    }
     try {
       const res = await apiFetch('/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({ name: formData.name, email: formData.email, phone: formData.phone, password: formData.password })
       });
+      
       if (!res.ok) {
-        throw new Error(res.message || 'Signup failed');
+        // Handle different error types
+        let errorType = 'error';
+        let errorMsg = res.message || 'Signup failed';
+        
+        if (res.status === 400) {
+          errorType = 'warning';
+          if (res.message?.includes('email')) {
+            errorMsg = 'This email is already registered. Please use a different email or try logging in.';
+          } else if (res.message?.includes('phone')) {
+            errorMsg = 'This phone number is already registered. Please use a different number.';
+          } else {
+            errorMsg = 'Please check your input and try again.';
+          }
+        } else if (res.status === 422) {
+          errorType = 'warning';
+          errorMsg = 'Invalid email format. Please enter a valid email address.';
+        } else if (res.status >= 500) {
+          errorType = 'error';
+          errorMsg = 'Server error. Please try again later.';
+        }
+        
+        throw new Error(errorMsg);
       }
+      
       const user = res.data.data?.user || res.data.user;
       const token = res.data.data?.token || res.data.token;
+      
       if (user && token) {
+        // Show success message
+        showPopup(`Account created successfully! Welcome, ${user.name}!`, 'success');
+        
+        // Login the user
         login(user, token);
+        
+        // Navigate after a short delay to show success message
+        setTimeout(() => {
+          onSuccess?.();
+        }, 2000);
       }
-      onSuccess?.();
     } catch (err) {
-      setError(err.message || 'Signup failed. Please try again.');
+      showPopup(err.message || 'Signup failed. Please try again.', 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="login-form" autoComplete="on">
-      {error && <div className="login-alert" role="alert">{error}</div>}
+    <>
+      {/* Error Popup for Signup */}
+      <ErrorPopup
+        show={showErrorPopup}
+        message={errorMessage}
+        type={errorType}
+        duration={4000}
+        onClose={() => setShowErrorPopup(false)}
+      />
+      
+      <form onSubmit={handleSubmit} className="login-form" autoComplete="on">
 
       <label htmlFor="su-name" className="login-label">Full name</label>
-      <input id="su-name" name="name" type="text" className="login-input" value={formData.name} onChange={handleChange} required />
+      <input 
+        id="su-name" 
+        name="name" 
+        type="text" 
+        className="login-input" 
+        value={formData.name} 
+        onChange={handleChange} 
+        placeholder="Enter your full name"
+        required 
+      />
+      <ValidationFeedback
+        field="name"
+        value={formData.name}
+        isValid={!fieldErrors.name || fieldErrors.name.length === 0}
+        isTouched={touchedFields.name}
+        errorMessage={fieldErrors.name?.[0]}
+        successMessage="Name format is valid"
+      />
 
       <label htmlFor="su-email" className="login-label">Email address</label>
-      <input id="su-email" name="email" type="email" className="login-input" value={formData.email} onChange={handleChange} required />
+      <input 
+        id="su-email" 
+        name="email" 
+        type="email" 
+        className="login-input" 
+        value={formData.email} 
+        onChange={handleChange} 
+        placeholder="admin@yatrik.com"
+        required 
+      />
+      <ValidationFeedback
+        field="email"
+        value={formData.email}
+        isValid={!fieldErrors.email || fieldErrors.email.length === 0}
+        isTouched={touchedFields.email}
+        errorMessage={fieldErrors.email?.[0]}
+        successMessage="Email format is valid"
+      />
+      
+      <label htmlFor="su-role" className="login-label">Role</label>
+      <select 
+        id="su-role" 
+        name="role" 
+        className="login-input" 
+        value={formData.role} 
+        onChange={handleChange}
+        required
+      >
+        <option value="passenger">Passenger</option>
+        <option value="conductor">Conductor</option>
+        <option value="driver">Driver</option>
+        <option value="depot_manager">Depot Manager</option>
+        <option value="admin">Admin</option>
+      </select>
+
+      <label htmlFor="su-phone" className="login-label">Phone number</label>
+      <input 
+        id="su-phone" 
+        name="phone" 
+        type="tel" 
+        className="login-input" 
+        value={formData.phone} 
+        onChange={handleChange} 
+        placeholder="Enter 10-digit phone number"
+        pattern="[6-9][0-9]{9}"
+        title="Please enter a valid 10-digit phone number starting with 6-9"
+        required 
+      />
+      <ValidationFeedback
+        field="phone"
+        value={formData.phone}
+        isValid={!fieldErrors.phone || fieldErrors.phone.length === 0}
+        isTouched={touchedFields.phone}
+        errorMessage={fieldErrors.phone?.[0]}
+        successMessage="Phone number format is valid"
+      />
 
       <label htmlFor="su-password" className="login-label">Password</label>
       <div className="login-password">
-        <input id="su-password" name="password" type={showPassword ? 'text' : 'password'} className="login-input" value={formData.password} onChange={handleChange} required />
+        <input 
+          id="su-password" 
+          name="password" 
+          type={showPassword ? 'text' : 'password'} 
+          className="login-input" 
+          value={formData.password} 
+          onChange={handleChange} 
+          placeholder="Enter strong password"
+          required 
+        />
         <button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} className="login-eye" onClick={() => setShowPassword(!showPassword)}>
           {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
       </div>
+      <ValidationFeedback
+        field="password"
+        value={formData.password}
+        isValid={!fieldErrors.password || fieldErrors.password.length === 0}
+        isTouched={touchedFields.password}
+        errorMessage={fieldErrors.password?.[0]}
+        successMessage="Password meets security requirements"
+      />
 
       <label htmlFor="su-confirm" className="login-label">Confirm password</label>
       <div className="login-password">
-        <input id="su-confirm" name="confirmPassword" type={showConfirmPassword ? 'text' : 'password'} className="login-input" value={formData.confirmPassword} onChange={handleChange} required />
+        <input 
+          id="su-confirm" 
+          name="confirmPassword" 
+          type={showConfirmPassword ? 'text' : 'password'} 
+          className="login-input" 
+          value={formData.confirmPassword} 
+          onChange={handleChange} 
+          placeholder="Confirm your password"
+          required 
+        />
         <button type="button" aria-label={showConfirmPassword ? 'Hide password' : 'Show password'} className="login-eye" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
           {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
       </div>
+      <ValidationFeedback
+        field="confirmPassword"
+        value={formData.confirmPassword}
+        isValid={formData.password === formData.confirmPassword && formData.confirmPassword.trim() !== ''}
+        isTouched={touchedFields.confirmPassword}
+        errorMessage={formData.confirmPassword.trim() !== '' && formData.password !== formData.confirmPassword ? 'Passwords do not match' : ''}
+        successMessage="Passwords match"
+      />
 
-      <button type="submit" disabled={isLoading} className="login-btn login-btn--primary">{isLoading ? 'Creating account…' : 'Create account'}</button>
+      <button type="submit" disabled={isLoading} className="login-btn login-btn--primary">
+        {isLoading ? (
+          <div className="flex items-center space-x-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            <span>Creating account...</span>
+          </div>
+        ) : (
+          'Create account'
+        )}
+      </button>
 
       <div className="login-divider-text" aria-hidden="true">or continue with</div>
-      <button className="login-btn login-btn--google" aria-label="Continue with Google">
+      <button 
+        type="button"
+        className="login-btn login-btn--google" 
+        aria-label="Continue with Google"
+        onClick={handleGoogleAuth}
+      >
         <svg className="login-g" viewBox="0 0 24 24" aria-hidden="true">
           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
           <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -270,6 +577,7 @@ function SignupForm({ onSuccess }) {
         </svg>
         <span>Sign up with Google</span>
       </button>
-    </form>
+      </form>
+    </>
   );
 }

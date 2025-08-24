@@ -1,0 +1,412 @@
+/* AI Scheduling Animation - Professional Enterprise Grade */
+
+.ai-scheduling-animation {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  min-height: 400px;
+  background: transparent;
+}
+
+.ai-scheduling-svg {
+  width: 100%;
+  height: 100%;
+  max-width: 800px;
+  max-height: 600px;
+  min-height: 400px;
+  filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.08));
+}
+
+/* ========================================
+   AI BRAIN ANIMATIONS
+   ======================================== */
+
+/* Brain Glow Animation */
+@keyframes brainGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 20px rgba(76, 175, 80, 0.6));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 30px rgba(76, 175, 80, 0.8));
+    transform: scale(1.02);
+  }
+}
+
+.ai-brain {
+  animation: brainGlow 3s ease-in-out infinite;
+}
+
+/* Circuit Flow Animation */
+@keyframes circuitFlow {
+  0% {
+    stroke-dashoffset: 100;
+    opacity: 0.6;
+  }
+  50% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -100;
+    opacity: 0.6;
+  }
+}
+
+.ai-circuit path {
+  stroke-dasharray: 20, 10;
+  stroke-dashoffset: 100;
+  animation: circuitFlow 4s linear infinite;
+}
+
+.ai-circuit path:nth-child(1) { animation-delay: 0s; }
+.ai-circuit path:nth-child(2) { animation-delay: 1.3s; }
+.ai-circuit path:nth-child(3) { animation-delay: 2.6s; }
+
+/* ========================================
+   CALENDAR & CLOCK ANIMATIONS
+   ======================================== */
+
+/* Calendar Tick Animation */
+@keyframes calendarTick {
+  0%, 100% {
+    transform: translateY(0);
+    filter: drop-shadow(0 8px 20px rgba(233, 30, 99, 0.3));
+  }
+  50% {
+    transform: translateY(-5px);
+    filter: drop-shadow(0 12px 25px rgba(233, 30, 99, 0.4));
+  }
+}
+
+.calendar-clock {
+  animation: calendarTick 2s ease-in-out infinite;
+}
+
+/* ========================================
+   ROUTE PATH ANIMATIONS
+   ======================================== */
+
+/* Route Drawing Animation */
+@keyframes routeDraw {
+  0% {
+    stroke-dashoffset: 1000;
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+.route-path path {
+  stroke-dasharray: 20, 10;
+  stroke-dashoffset: 1000;
+  animation: routeDraw 6s ease-in-out infinite;
+}
+
+.route-path path:nth-child(2) {
+  animation-delay: 0.5s;
+}
+
+/* Route Nodes Pulse */
+.route-path circle {
+  animation: dataPulse 4s ease-in-out infinite;
+}
+
+.route-path circle:nth-child(1) { animation-delay: 0s; }
+.route-path circle:nth-child(2) { animation-delay: 2s; }
+.route-path circle:nth-child(3) { animation-delay: 4s; }
+
+/* ========================================
+   BUS MOVEMENT ANIMATIONS
+   ======================================== */
+
+/* Bus Movement Animation */
+@keyframes busMove {
+  0%, 100% {
+    transform: translateX(0) translateY(0);
+    filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.15));
+  }
+  25% {
+    transform: translateX(10px) translateY(-3px);
+    filter: drop-shadow(0 12px 25px rgba(0, 0, 0, 0.2));
+  }
+  50% {
+    transform: translateX(0) translateY(-5px);
+    filter: drop-shadow(0 15px 30px rgba(0, 0, 0, 0.25));
+  }
+  75% {
+    transform: translateX(-10px) translateY(-3px);
+    filter: drop-shadow(0 12px 25px rgba(0, 0, 0, 0.2));
+  }
+}
+
+.moving-bus {
+  animation: busMove 8s ease-in-out infinite;
+}
+
+/* ========================================
+   DEPOT RADAR ANIMATIONS
+   ======================================== */
+
+/* Radar Pulse Animation */
+@keyframes radarPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+}
+
+.depot-radar {
+  animation: radarPulse 5s ease-in-out infinite;
+}
+
+/* Individual Radar Wave Animations */
+@keyframes radarWave1 {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+@keyframes radarWave2 {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes radarWave3 {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+
+.radar-pulse-1 {
+  animation: radarWave1 3s ease-out infinite;
+}
+
+.radar-pulse-2 {
+  animation: radarWave2 3s ease-out infinite 1s;
+}
+
+.radar-pulse-3 {
+  animation: radarWave3 3s ease-out infinite 2s;
+}
+
+/* ========================================
+   CONNECTION LINES ANIMATIONS
+   ======================================== */
+
+/* Connection Flow Animation */
+@keyframes connectionFlow {
+  0% {
+    stroke-dashoffset: 50;
+    opacity: 0.7;
+  }
+  50% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -50;
+    opacity: 0.7;
+  }
+}
+
+.connection-lines path {
+  stroke-dasharray: 8, 4;
+  stroke-dashoffset: 50;
+  animation: connectionFlow 7s ease-in-out infinite;
+}
+
+.connection-lines path:nth-child(1) { animation-delay: 0s; }
+.connection-lines path:nth-child(2) { animation-delay: 2.3s; }
+.connection-lines path:nth-child(3) { animation-delay: 4.6s; }
+
+/* Connection Nodes Pulse */
+.connection-lines circle {
+  animation: dataPulse 4s ease-in-out infinite;
+}
+
+.connection-lines circle:nth-child(4) { animation-delay: 0s; }
+.connection-lines circle:nth-child(5) { animation-delay: 1.5s; }
+.connection-lines circle:nth-child(6) { animation-delay: 3s; }
+
+/* ========================================
+   DATA PARTICLES ANIMATIONS
+   ======================================== */
+
+/* Particle Float Animation */
+@keyframes particleFloat {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-10px) scale(1.1);
+    opacity: 1;
+  }
+}
+
+.data-particles circle {
+  animation: particleFloat 6s ease-in-out infinite;
+}
+
+.data-particles circle:nth-child(1) { animation-delay: 0s; }
+.data-particles circle:nth-child(2) { animation-delay: 1s; }
+.data-particles circle:nth-child(3) { animation-delay: 2s; }
+.data-particles circle:nth-child(4) { animation-delay: 3s; }
+.data-particles circle:nth-child(5) { animation-delay: 4s; }
+.data-particles circle:nth-child(6) { animation-delay: 5s; }
+
+/* ========================================
+   UTILITY ANIMATIONS
+   ======================================== */
+
+/* Data Pulse Animation */
+@keyframes dataPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+
+/* ========================================
+   PREMIUM HOVER EFFECTS
+   ======================================== */
+
+/* Interactive Hover Effects */
+.ai-scheduling-animation:hover .ai-brain {
+  filter: drop-shadow(0 0 35px rgba(76, 175, 80, 0.8));
+}
+
+.ai-scheduling-animation:hover .calendar-clock {
+  filter: drop-shadow(0 0 25px rgba(233, 30, 99, 0.5));
+}
+
+.ai-scheduling-animation:hover .moving-bus {
+  filter: drop-shadow(0 0 30px rgba(0, 0, 0, 0.3));
+}
+
+.ai-scheduling-animation:hover .depot-radar {
+  filter: drop-shadow(0 0 25px rgba(233, 30, 99, 0.4));
+}
+
+.ai-scheduling-animation:hover .route-path path {
+  stroke-width: 8;
+}
+
+.ai-scheduling-animation:hover .connection-lines path {
+  stroke-width: 4;
+}
+
+/* ========================================
+   RESPONSIVE DESIGN
+   ======================================== */
+
+@media (max-width: 768px) {
+  .ai-scheduling-svg {
+    max-width: 100%;
+    max-height: 400px;
+    min-height: 300px;
+  }
+  
+  .ai-scheduling-animation {
+    padding: 1rem;
+    min-height: 300px;
+  }
+}
+
+@media (max-width: 480px) {
+  .ai-scheduling-svg {
+    max-height: 300px;
+    min-height: 250px;
+  }
+  
+  .ai-scheduling-animation {
+    padding: 0.5rem;
+    min-height: 250px;
+  }
+}
+
+/* ========================================
+   ACCESSIBILITY & PERFORMANCE
+   ======================================== */
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  .ai-scheduling-animation * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  .ai-scheduling-animation {
+    filter: contrast(1.2);
+  }
+}
+
+/* Print Styles */
+@media print {
+  .ai-scheduling-animation {
+    display: none;
+  }
+}
+
+/* ========================================
+   SMOOTH TRANSITIONS
+   ======================================== */
+
+/* Smooth Transitions for All Elements */
+.ai-scheduling-animation * {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced Visual Quality */
+.route-path path,
+.connection-lines path {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.moving-bus rect {
+  stroke-linejoin: round;
+}
+
+/* Premium Animation Timing */
+* {
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
