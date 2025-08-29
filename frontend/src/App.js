@@ -5,6 +5,7 @@ import RequireAuth from './guards/RequireAuth';
 import AppShell from './components/Layout/AppShell';
 import AdminLayout from './components/Admin/AdminLayout';
 import LandingPage from './pages/LandingPage';
+import TripResults from './pages/TripResults';
 import Auth from './pages/Auth';
 import OAuthCallback from './pages/OAuthCallback';
 import ResetPassword from './pages/ResetPassword';
@@ -16,7 +17,7 @@ import Ticket from './pages/Ticket';
 
 import ConductorDashboard from './pages/ConductorDashboard';
 import DriverDashboard from './pages/DriverDashboard';
-import DepotDashboard from './pages/DepotDashboard';
+import DepotDashboard from './pages/depot/DepotDashboard';
 
 // Admin Pages
 import AdminMasterDashboard from './pages/admin/AdminMasterDashboard';
@@ -46,7 +47,7 @@ import AdminRevenue from './pages/admin/AdminRevenue';
 import RedirectDashboard from './pages/RedirectDashboard';
 
 // Passenger Pages
-import PassengerDashboard from './pages/pax/Dashboard';
+import PassengerDashboard from './pages/pax/PassengerDashboard';
 import PassengerBooking from './pages/pax/Booking';
 import PassengerResults from './pages/pax/Results';
 
@@ -59,6 +60,7 @@ function App() {
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<LandingPage />} />
+            <Route path="/search-results" element={<TripResults />} />
           {/* Use unified Auth page for both login and signup */}
           <Route path="/login" element={<Auth initialMode="login" />} />
           <Route path="/signup" element={<Auth initialMode="signup" />} />
@@ -155,9 +157,15 @@ function App() {
           } />
 
           <Route path="/pax/results" element={
+            <AppShell>
+              <PassengerResults />
+            </AppShell>
+          } />
+          
+          <Route path="/pax/booking/:id" element={
             <RequireAuth roles={['passenger']}>
               <AppShell>
-                <PassengerResults />
+                <PassengerBooking />
               </AppShell>
             </RequireAuth>
           } />

@@ -15,6 +15,7 @@ import {
   XCircle,
   AlertTriangle
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 // Helper: slugify for email
 const slugify = (s = '') => s.toString().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -24,6 +25,7 @@ const makeDepotEmail = (code, name) => {
 };
 
 const AdminDepots = () => {
+  const navigate = useNavigate();
   const [depots, setDepots] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -474,7 +476,7 @@ const AdminDepots = () => {
             <span>Export</span>
           </button>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => navigate('/admin/depot-management')}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
           >
             <Plus className="w-4 h-4" />
@@ -707,7 +709,7 @@ const AdminDepots = () => {
           <h3 className="text-lg font-medium text-gray-900 mb-2">No depots found</h3>
           <p className="text-gray-500 mb-6">Get started by creating your first depot</p>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => navigate('/admin/depot-management')}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-4 h-4 inline mr-2" />

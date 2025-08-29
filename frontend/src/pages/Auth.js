@@ -36,14 +36,56 @@ const Auth = ({ initialMode = 'login' }) => {
   
   // Fetch authoritative profile after login to ensure role/depotId are present
   const fetchProfileAndLogin = async (userFromLogin, token) => {
-    const me = await apiFetch('/api/auth/me');
-    let finalUser = userFromLogin;
-    if (me.ok && me.data) {
-      // Prefer server profile if available
-      finalUser = me.data.data?.user || me.data.user || me.data;
+    try {
+      // Ensure subsequent requests include Authorization header
+      try { localStorage.setItem('token', token); } catch {}
+
+      const email = (userFromLogin?.email || '').toLowerCase();
+      const role = (userFromLogin?.role || '').toLowerCase();
+      const isDepot = role === 'depot_manager' || /-depot@yatrik\.com$/.test(email) || /^depot-/.test(email);
+
+      const endpoint = isDepot ? '/api/depot-auth/profile' : '/api/auth/me';
+      const me = await apiFetch(endpoint);
+
+      let finalUser = userFromLogin;
+      if (me?.ok && me.data) {
+        finalUser = me.data.data?.user || me.data.user || me.data;
+      }
+
+      // Ensure the user object has the required fields for AuthContext.login
+      if (!finalUser || typeof finalUser !== 'object') {
+        finalUser = userFromLogin;
+      }
+
+      // Normalize the user object to match what AuthContext.login expects
+      const normalizedUser = {
+        ...finalUser,
+        _id: finalUser._id || finalUser.id, // Handle both _id and id
+        role: finalUser.role || role || 'passenger',
+        email: finalUser.email || email,
+        name: finalUser.name || finalUser.username || 'User'
+      };
+
+      // Validate that we have the minimum required fields
+      if (!normalizedUser._id || !normalizedUser.role) {
+        console.warn('Missing required user fields, using fallback:', normalizedUser);
+        normalizedUser._id = normalizedUser._id || 'temp_' + Date.now();
+        normalizedUser.role = normalizedUser.role || 'passenger';
+      }
+
+      login(normalizedUser, token);
+    } catch (err) {
+      console.warn('Profile fetch failed, using login data:', err);
+      // If profile fails, normalize and proceed with login payload
+      const fallbackUser = {
+        ...userFromLogin,
+        _id: userFromLogin._id || userFromLogin.id || 'temp_' + Date.now(),
+        role: userFromLogin.role || 'passenger',
+        email: userFromLogin.email || '',
+        name: userFromLogin.name || userFromLogin.username || 'User'
+      };
+      login(fallbackUser, token);
     }
-    login(finalUser, token);
-    // Don't navigate here - let the useEffect handle it
   };
 
   // Navigate after successful login/signup
@@ -129,17 +171,39 @@ const Auth = ({ initialMode = 'login' }) => {
     if (!validateLoginForm()) return;
     setIsLoggingIn(true);
     try {
-      const res = await apiFetch('/api/auth/login', { method: 'POST', body: JSON.stringify(loginForm) });
-      if (!res.ok) { toast.error(res.message || 'Login failed'); return; }
-      const user = res.data.data?.user || res.data.user;
-      const token = res.data.data?.token || res.data.token;
+      const email = loginForm.email.trim().toLowerCase();
+      // Accept both patterns: code-depot@yatrik.com or depot-code@yatrik.com
+      const isDepotEmail = /^([a-z0-9]+-depot|depot-[a-z0-9]+)@yatrik\.com$/i.test(email);
+      const url = isDepotEmail ? '/api/depot-auth/login' : '/api/auth/login';
+      const body = isDepotEmail
+        ? { username: email, password: loginForm.password }
+        : { email, password: loginForm.password };
+
+      console.log('[Auth] Login attempt:', { email, isDepotEmail, url, body });
+
+      const res = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
+      console.log('[Auth] Login response:', res);
+      
+      if (!res.ok) { 
+        console.error('[Auth] Login failed:', res.message);
+        toast.error(res.message || 'Login failed'); 
+        return; 
+      }
+
+      // Support both generic and depot-auth response shapes
+      const user = res.data?.user || res.data?.data?.user;
+      const token = res.data?.token || res.data?.data?.token;
+      console.log('[Auth] Extracted user and token:', { user, token });
+      
       if (user && token) {
         toast.success('Signing in...');
         await fetchProfileAndLogin(user, token);
       } else {
+        console.error('[Auth] Invalid response structure:', res.data);
         toast.error('Invalid response from server');
       }
     } catch (error) {
+      console.error('[Auth] Login error:', error);
       toast.error('Network error. Please try again.');
     } finally {
       setIsLoggingIn(false);

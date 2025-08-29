@@ -6,6 +6,9 @@ const Trip = require('../models/Trip');
 const User = require('../models/User');
 const Bus = require('../models/Bus');
 const Duty = require('../models/Duty');
+const Booking = require('../models/Booking');
+const FuelLog = require('../models/FuelLog');
+const Depot = require('../models/Depot');
 
 // Helper function to create role-based auth middleware
 const authRole = (roles) => [auth, requireRole(roles)];
@@ -16,35 +19,73 @@ const depotAuth = authRole(['depot_manager', 'DEPOT_MANAGER']);
 // Apply depot auth to all routes
 router.use(depotAuth);
 
-// GET /api/depot/dashboard - Depot dashboard data
+// GET /api/depot/dashboard - Comprehensive depot dashboard data
 router.get('/dashboard', async (req, res) => {
   try {
     const depotId = req.user.depotId;
     
-    // Get depot statistics
-    const [totalTrips, activeTrips, totalBuses, availableBuses] = await Promise.all([
+    // Get comprehensive depot statistics
+    const [totalTrips, activeTrips, totalBuses, availableBuses, totalRoutes, totalBookings, totalFuelLogs] = await Promise.all([
       Trip.countDocuments({ 'routeId.depotId': depotId }),
       Trip.countDocuments({ 'routeId.depotId': depotId, status: { $in: ['scheduled', 'running'] } }),
       Bus.countDocuments({ depotId }),
-      Bus.countDocuments({ depotId, status: 'available' })
+      Bus.countDocuments({ depotId, status: 'available' }),
+      Route.countDocuments({ depotId }),
+      Booking.countDocuments({ 'tripId.routeId.depotId': depotId }),
+      FuelLog.countDocuments({ depotId })
     ]);
 
-    // Get recent trips
+    // Get today's data
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const [todayTrips, todayBookings, todayRevenue] = await Promise.all([
+      Trip.countDocuments({ 
+        'routeId.depotId': depotId, 
+        createdAt: { $gte: today, $lt: tomorrow } 
+      }),
+      Booking.countDocuments({ 
+        'tripId.routeId.depotId': depotId, 
+        createdAt: { $gte: today, $lt: tomorrow } 
+      }),
+      Booking.aggregate([
+        { $match: { 'tripId.routeId.depotId': depotId, createdAt: { $gte: today, $lt: tomorrow } } },
+        { $group: { _id: null, total: { $sum: '$fareAmount' } } }
+      ])
+    ]);
+
+    // Get recent trips with full details
     const recentTrips = await Trip.find({ 'routeId.depotId': depotId })
       .populate('routeId')
-      .populate('driverId', 'name')
-      .populate('conductorId', 'name')
+      .populate('driverId', 'name phone')
+      .populate('conductorId', 'name phone')
+      .populate('busId', 'busNumber registrationNumber')
       .sort({ createdAt: -1 })
       .limit(10)
       .lean();
 
-    // Get crew assignments
-    const crewAssignments = await Duty.find({ depotId })
+    // Get active crew assignments
+    const activeCrew = await Duty.find({ 
+      depotId, 
+      date: { $gte: today },
+      status: { $in: ['assigned', 'in_progress'] }
+    })
       .populate('driverId', 'name phone')
       .populate('conductorId', 'name phone')
       .populate('tripId')
-      .sort({ date: -1 })
-      .limit(5)
+      .populate('busId', 'busNumber')
+      .sort({ date: 1 })
+      .lean();
+
+    // Get fuel logs for today
+    const todayFuelLogs = await FuelLog.find({ 
+      depotId, 
+      createdAt: { $gte: today, $lt: tomorrow } 
+    })
+      .populate('busId', 'busNumber')
+      .sort({ createdAt: -1 })
       .lean();
 
     res.json({
@@ -54,16 +95,44 @@ router.get('/dashboard', async (req, res) => {
           totalTrips,
           activeTrips,
           totalBuses,
-          availableBuses
+          availableBuses,
+          totalRoutes,
+          totalBookings,
+          totalFuelLogs,
+          todayTrips,
+          todayBookings,
+          todayRevenue: todayRevenue[0]?.total || 0
         },
         recentTrips,
-        crewAssignments
+        activeCrew,
+        todayFuelLogs
       }
     });
 
   } catch (error) {
     console.error('Depot dashboard error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch depot data' });
+  }
+});
+
+// GET /api/depot/routes - Get all routes for depot
+router.get('/routes', async (req, res) => {
+  try {
+    const depotId = req.user.depotId;
+    
+    const routes = await Route.find({ depotId })
+      .populate('stops')
+      .sort({ name: 1 })
+      .lean();
+
+    res.json({
+      success: true,
+      data: routes
+    });
+
+  } catch (error) {
+    console.error('Get depot routes error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch routes' });
   }
 });
 
@@ -102,7 +171,7 @@ router.post('/routes', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Route creation error:', error);
+    console.error('Create route error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to create route'
@@ -110,113 +179,51 @@ router.post('/routes', async (req, res) => {
   }
 });
 
-// GET /api/depot/routes - Get depot routes
-router.get('/routes', async (req, res) => {
+// GET /api/depot/trips - Get all trips for depot
+router.get('/trips', async (req, res) => {
   try {
     const depotId = req.user.depotId;
+    const { status, date } = req.query;
     
-    const routes = await Route.find({ depotId, status: 'active' })
-      .sort({ createdAt: -1 })
+    let query = { 'routeId.depotId': depotId };
+    if (status) query.status = status;
+    if (date) {
+      const searchDate = new Date(date);
+      searchDate.setHours(0, 0, 0, 0);
+      const nextDate = new Date(searchDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      query.date = { $gte: searchDate, $lt: nextDate };
+    }
+
+    const trips = await Trip.find(query)
+      .populate('routeId')
+      .populate('driverId', 'name phone')
+      .populate('conductorId', 'name phone')
+      .populate('busId', 'busNumber registrationNumber')
+      .sort({ date: 1, departureTime: 1 })
       .lean();
 
     res.json({
       success: true,
-      data: { routes },
-      message: `Found ${routes.length} routes`
+      data: trips
     });
 
   } catch (error) {
-    console.error('Fetch routes error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch routes'
-    });
-  }
-});
-
-// PUT /api/depot/routes/:id - Update route
-router.put('/routes/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const depotId = req.user.depotId;
-    const updateData = req.body;
-
-    const route = await Route.findOne({ _id: id, depotId });
-    if (!route) {
-      return res.status(404).json({
-        success: false,
-        message: 'Route not found'
-      });
-    }
-
-    Object.assign(route, updateData);
-    await route.save();
-
-    res.json({
-      success: true,
-      data: { route },
-      message: 'Route updated successfully'
-    });
-
-  } catch (error) {
-    console.error('Route update error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update route'
-    });
-  }
-});
-
-// DELETE /api/depot/routes/:id - Delete route
-router.delete('/routes/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const depotId = req.user.depotId;
-
-    const route = await Route.findOne({ _id: id, depotId });
-    if (!route) {
-      return res.status(404).json({
-        success: false,
-        message: 'Route not found'
-      });
-    }
-
-    // Check if route has active trips
-    const activeTrips = await Trip.countDocuments({ routeId: id, status: { $in: ['scheduled', 'running'] } });
-    if (activeTrips > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot delete route with active trips'
-      });
-    }
-
-    route.status = 'inactive';
-    await route.save();
-
-    res.json({
-      success: true,
-      message: 'Route deactivated successfully'
-    });
-
-  } catch (error) {
-    console.error('Route deletion error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete route'
-    });
+    console.error('Get depot trips error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch trips' });
   }
 });
 
 // POST /api/depot/trips - Create new trip
 router.post('/trips', async (req, res) => {
   try {
-    const { routeId, busId, driverId, conductorId, serviceDate, startTime } = req.body;
+    const { routeId, date, departureTime, arrivalTime, busId, driverId, conductorId, fare } = req.body;
     const depotId = req.user.depotId;
 
-    if (!routeId || !serviceDate || !startTime) {
+    if (!routeId || !date || !departureTime || !busId) {
       return res.status(400).json({
         success: false,
-        message: 'Route ID, service date, and start time are required'
+        message: 'Route, date, departure time, and bus are required'
       });
     }
 
@@ -225,18 +232,21 @@ router.post('/trips', async (req, res) => {
     if (!route) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid route for this depot'
+        message: 'Route not found or not accessible'
       });
     }
 
     const trip = new Trip({
       routeId,
+      date: new Date(date),
+      departureTime,
+      arrivalTime,
       busId,
       driverId,
       conductorId,
-      serviceDate: new Date(serviceDate),
-      startTime,
+      baseFare: fare || route.baseFare,
       status: 'scheduled',
+      depotId,
       createdBy: req.user._id
     });
 
@@ -249,7 +259,7 @@ router.post('/trips', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Trip creation error:', error);
+    console.error('Create trip error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to create trip'
@@ -257,66 +267,89 @@ router.post('/trips', async (req, res) => {
   }
 });
 
-// GET /api/depot/trips - Get depot trips
-router.get('/trips', async (req, res) => {
+// PUT /api/depot/trips/:id - Update trip
+router.put('/trips/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const depotId = req.user.depotId;
+    const updates = req.body;
+
+    const trip = await Trip.findOne({ _id: id, depotId });
+    if (!trip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trip not found'
+      });
+    }
+
+    Object.assign(trip, updates);
+    await trip.save();
+
+    res.json({
+      success: true,
+      data: { trip },
+      message: 'Trip updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Update trip error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update trip'
+    });
+  }
+});
+
+// GET /api/depot/crew - Get all crew assignments
+router.get('/crew', async (req, res) => {
   try {
     const depotId = req.user.depotId;
-    const { status, date } = req.query;
-
-    let query = { 'routeId.depotId': depotId };
+    const { date, status } = req.query;
     
-    if (status) {
-      query.status = status;
-    }
-    
+    let query = { depotId };
     if (date) {
       const searchDate = new Date(date);
       searchDate.setHours(0, 0, 0, 0);
-      const nextDay = new Date(searchDate);
-      nextDay.setDate(nextDay.getDate() + 1);
-      query.serviceDate = { $gte: searchDate, $lt: nextDay };
+      const nextDate = new Date(searchDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      query.date = { $gte: searchDate, $lt: nextDate };
     }
+    if (status) query.status = status;
 
-    const trips = await Trip.find(query)
-      .populate('routeId')
-      .populate('busId')
+    const crew = await Duty.find(query)
       .populate('driverId', 'name phone')
       .populate('conductorId', 'name phone')
-      .sort({ serviceDate: 1, startTime: 1 })
+      .populate('tripId')
+      .populate('busId', 'busNumber')
+      .sort({ date: 1, startTime: 1 })
       .lean();
 
     res.json({
       success: true,
-      data: { trips },
-      message: `Found ${trips.length} trips`
+      data: crew
     });
 
   } catch (error) {
-    console.error('Fetch trips error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch trips'
-    });
+    console.error('Get depot crew error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch crew' });
   }
 });
 
 // POST /api/depot/crew - Assign crew to trip
 router.post('/crew', async (req, res) => {
   try {
-    const { tripId, driverId, conductorId } = req.body;
+    const { tripId, driverId, conductorId, busId, date, startTime, endTime } = req.body;
     const depotId = req.user.depotId;
 
-    if (!tripId || !driverId || !conductorId) {
+    if (!tripId || !driverId || !conductorId || !busId || !date) {
       return res.status(400).json({
         success: false,
-        message: 'Trip ID, driver ID, and conductor ID are required'
+        message: 'Trip, driver, conductor, bus, and date are required'
       });
     }
 
     // Verify trip belongs to depot
-    const trip = await Trip.findOne({ _id: tripId, 'routeId.depotId': depotId })
-      .populate('routeId');
-    
+    const trip = await Trip.findOne({ _id: tripId, depotId });
     if (!trip) {
       return res.status(400).json({
         success: false,
@@ -324,45 +357,29 @@ router.post('/crew', async (req, res) => {
       });
     }
 
-    // Verify crew members belong to depot
-    const [driver, conductor] = await Promise.all([
-      User.findOne({ _id: driverId, depotId, role: 'driver' }),
-      User.findOne({ _id: conductorId, depotId, role: 'conductor' })
-    ]);
-
-    if (!driver || !conductor) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid driver or conductor for this depot'
-      });
-    }
-
-    // Update trip with crew
-    trip.driverId = driverId;
-    trip.conductorId = conductorId;
-    await trip.save();
-
-    // Create duty assignment
     const duty = new Duty({
       tripId,
       driverId,
       conductorId,
-      depotId,
-      date: trip.serviceDate,
+      busId,
+      date: new Date(date),
+      startTime,
+      endTime,
       status: 'assigned',
+      depotId,
       assignedBy: req.user._id
     });
 
     await duty.save();
 
-    res.json({
+    res.status(201).json({
       success: true,
-      data: { trip, duty },
+      data: { duty },
       message: 'Crew assigned successfully'
     });
 
   } catch (error) {
-    console.error('Crew assignment error:', error);
+    console.error('Assign crew error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to assign crew'
@@ -370,99 +387,69 @@ router.post('/crew', async (req, res) => {
   }
 });
 
-// GET /api/depot/live-map - Live map data for depot
-router.get('/live-map', async (req, res) => {
+// GET /api/depot/bookings - Get all bookings for depot
+router.get('/bookings', async (req, res) => {
   try {
     const depotId = req.user.depotId;
+    const { date, status, tripId } = req.query;
     
-    // Get running trips with mock GPS data
-    const runningTrips = await Trip.find({
-      'routeId.depotId': depotId,
-      status: { $in: ['running', 'boarding'] }
-    })
-    .populate('routeId')
-    .populate('driverId', 'name')
-    .populate('conductorId', 'name')
-    .lean();
+    let query = { 'tripId.routeId.depotId': depotId };
+    if (date) {
+      const searchDate = new Date(date);
+      searchDate.setHours(0, 0, 0, 0);
+      const nextDate = new Date(searchDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      query.createdAt = { $gte: searchDate, $lt: nextDate };
+    }
+    if (status) query.status = status;
+    if (tripId) query.tripId = tripId;
 
-    // Add mock GPS coordinates for Phase-0
-    const liveMapData = runningTrips.map(trip => ({
-      ...trip,
-      currentLocation: {
-        lat: 10.8505 + (Math.random() - 0.5) * 0.1, // Mock Kerala coordinates
-        lng: 76.2711 + (Math.random() - 0.5) * 0.1,
-        timestamp: new Date(),
-        speed: Math.floor(Math.random() * 60) + 40, // 40-100 km/h
-        heading: Math.floor(Math.random() * 360) // 0-360 degrees
-      }
-    }));
+    const bookings = await Booking.find(query)
+      .populate('tripId')
+      .populate('passengerId', 'name phone')
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json({
       success: true,
-      data: { trips: liveMapData },
-      message: `Tracking ${liveMapData.length} active trips`
+      data: bookings
     });
 
   } catch (error) {
-    console.error('Live map error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch live map data'
-    });
+    console.error('Get depot bookings error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch bookings' });
   }
 });
 
-// POST /api/depot/concessions - Approve concession requests
-router.post('/concessions', async (req, res) => {
+// GET /api/depot/fuel - Get fuel logs for depot
+router.get('/fuel', async (req, res) => {
   try {
-    const { bookingId, concessionType, discountPercentage, reason } = req.body;
     const depotId = req.user.depotId;
-
-    if (!bookingId || !concessionType || !discountPercentage) {
-      return res.status(400).json({
-        success: false,
-        message: 'Booking ID, concession type, and discount percentage are required'
-      });
+    const { date, busId } = req.query;
+    
+    let query = { depotId };
+    if (date) {
+      const searchDate = new Date(date);
+      searchDate.setHours(0, 0, 0, 0);
+      const nextDate = new Date(searchDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      query.createdAt = { $gte: searchDate, $lt: nextDate };
     }
+    if (busId) query.busId = busId;
 
-    // Verify booking belongs to depot
-    const booking = await Booking.findById(bookingId)
-      .populate('tripId')
-      .populate('routeId');
-
-    if (!booking || booking.routeId.depotId.toString() !== depotId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Booking not found or not accessible'
-      });
-    }
-
-    // Apply concession
-    const discountAmount = (booking.fareAmount * discountPercentage) / 100;
-    booking.concession = {
-      type: concessionType,
-      discountPercentage,
-      discountAmount,
-      reason,
-      approvedBy: req.user._id,
-      approvedAt: new Date()
-    };
-
-    booking.finalFare = booking.fareAmount - discountAmount;
-    await booking.save();
+    const fuelLogs = await FuelLog.find(query)
+      .populate('busId', 'busNumber registrationNumber')
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json({
       success: true,
-      data: { booking },
-      message: 'Concession approved successfully'
+      data: fuelLogs
     });
 
   } catch (error) {
-    console.error('Concession approval error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to approve concession'
-    });
+    console.error('Get depot fuel logs error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch fuel logs' });
   }
 });
 
@@ -489,24 +476,25 @@ router.post('/fuel', async (req, res) => {
     }
 
     // Create fuel log
-    const fuelLog = {
+    const fuelLog = new FuelLog({
       busId,
       fuelType,
       quantity,
       cost,
       odometerReading,
       notes,
-      recordedBy: req.user._id,
-      recordedAt: new Date()
-    };
+      depotId,
+      recordedBy: req.user._id
+    });
 
-    // Store in bus document for Phase-0
-    if (!bus.fuelLogs) bus.fuelLogs = [];
-    bus.fuelLogs.push(fuelLog);
-    bus.lastFuelReading = odometerReading;
-    bus.lastFuelDate = new Date();
-    
-    await bus.save();
+    await fuelLog.save();
+
+    // Update bus odometer reading
+    if (odometerReading) {
+      bus.lastFuelReading = odometerReading;
+      bus.lastFuelDate = new Date();
+      await bus.save();
+    }
 
     res.json({
       success: true,
@@ -519,6 +507,102 @@ router.post('/fuel', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to record fuel log'
+    });
+  }
+});
+
+// GET /api/depot/reports - Generate depot reports
+router.get('/reports', async (req, res) => {
+  try {
+    const depotId = req.user.depotId;
+    const { startDate, endDate, type } = req.query;
+    
+    const start = startDate ? new Date(startDate) : new Date();
+    start.setHours(0, 0, 0, 0);
+    
+    const end = endDate ? new Date(endDate) : new Date();
+    end.setHours(23, 59, 59, 999);
+
+    let reportData = {};
+
+    if (type === 'daily' || !type) {
+      // Daily operations report
+      const [trips, bookings, fuelLogs, revenue] = await Promise.all([
+        Trip.countDocuments({ 
+          'routeId.depotId': depotId, 
+          date: { $gte: start, $lte: end } 
+        }),
+        Booking.countDocuments({ 
+          'tripId.routeId.depotId': depotId, 
+          createdAt: { $gte: start, $lte: end } 
+        }),
+        FuelLog.countDocuments({ 
+          depotId, 
+          createdAt: { $gte: start, $lte: end } 
+        }),
+        Booking.aggregate([
+          { $match: { 'tripId.routeId.depotId': depotId, createdAt: { $gte: start, $lte: end } } },
+          { $group: { _id: null, total: { $sum: '$fareAmount' } } }
+        ])
+      ]);
+
+      reportData = {
+        period: { start, end },
+        trips,
+        bookings,
+        fuelLogs,
+        revenue: revenue[0]?.total || 0
+      };
+    }
+
+    res.json({
+      success: true,
+      data: reportData
+    });
+
+  } catch (error) {
+    console.error('Generate report error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate report'
+    });
+  }
+});
+
+// GET /api/depot/buses - Get all buses for depot
+router.get('/buses', async (req, res) => {
+  try {
+    const depotId = req.user.depotId;
+    
+    // Get buses with basic information
+    const buses = await Bus.find({ depotId })
+      .select('busNumber registrationNumber busType capacity status lastMaintenance odometerReading lastFuelReading lastFuelDate')
+      .lean();
+
+    // Get bus counts for stats
+    const [totalBuses, availableBuses, maintenanceBuses] = await Promise.all([
+      Bus.countDocuments({ depotId }),
+      Bus.countDocuments({ depotId, status: 'available' }),
+      Bus.countDocuments({ depotId, status: 'maintenance' })
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        buses,
+        stats: {
+          totalBuses,
+          availableBuses,
+          maintenanceBuses
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get depot buses error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch depot buses'
     });
   }
 });

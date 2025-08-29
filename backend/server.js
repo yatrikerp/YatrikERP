@@ -231,14 +231,18 @@ app.use('/api/routes', require('./routes/routes'));
 app.use('/api/stops', require('./routes/stops'));
 app.use('/api/trips', require('./routes/trips'));
 app.use('/api/booking', require('./routes/booking'));
+app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/alerts', require('./routes/alerts'));
 app.use('/api/promos', require('./routes/promos'));
 app.use('/api/conductor', require('./routes/conductor'));
 app.use('/api/driver', require('./routes/driver'));
+app.use('/api/duty', require('./routes/duty'));
+app.use('/api/attendance', require('./routes/attendance'));
 app.use('/api/depot', require('./routes/depot'));
 app.use('/api/depot-auth', require('./routes/depotAuth'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/payment', require('./routes/payment'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

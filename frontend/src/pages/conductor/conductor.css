@@ -1,0 +1,459 @@
+/* Conductor Dashboard Styles */
+
+.conductor-dashboard {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Duty Status Colors */
+.duty-status-assigned {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.duty-status-started {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.duty-status-in_progress {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.duty-status-completed {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+/* Active Duty Banner */
+.active-duty-banner {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border: 1px solid #93c5fd;
+}
+
+.active-duty-banner h2 {
+  color: #1e40af;
+  font-weight: 600;
+}
+
+.active-duty-banner p {
+  color: #1d4ed8;
+}
+
+/* QR Scanner Section */
+.qr-scanner-section {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+}
+
+.qr-input {
+  border: 2px solid #0ea5e9;
+  transition: all 0.2s ease-in-out;
+}
+
+.qr-input:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}
+
+/* Tab Navigation */
+.tab-nav {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tab-nav button {
+  position: relative;
+  transition: all 0.2s ease-in-out;
+  font-weight: 500;
+}
+
+.tab-nav button:hover {
+  color: #374151;
+}
+
+.tab-nav button.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+
+.tab-nav button.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: #2563eb;
+}
+
+/* Duty Cards */
+.duty-card {
+  transition: all 0.2s ease-in-out;
+  border: 1px solid #e5e7eb;
+  background: white;
+}
+
+.duty-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.duty-card .status-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Passenger Cards */
+.passenger-card {
+  transition: all 0.2s ease-in-out;
+  border: 1px solid #e5e7eb;
+  background: white;
+}
+
+.passenger-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.passenger-status-booked {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.passenger-status-boarded {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+/* Button Styles */
+.btn-start-duty {
+  background-color: #059669;
+  color: white;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-start-duty:hover {
+  background-color: #047857;
+  transform: translateY(-1px);
+}
+
+.btn-continue-duty {
+  background-color: #2563eb;
+  color: white;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-continue-duty:hover {
+  background-color: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.btn-close-duty {
+  background-color: #dc2626;
+  color: white;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-close-duty:hover {
+  background-color: #b91c1c;
+  transform: translateY(-1px);
+}
+
+.btn-scan-ticket {
+  background-color: #2563eb;
+  color: white;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-scan-ticket:hover {
+  background-color: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.btn-validate-ticket {
+  background-color: #059669;
+  color: white;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-validate-ticket:hover {
+  background-color: #047857;
+  transform: translateY(-1px);
+}
+
+.btn-validate-ticket:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-mark-vacant {
+  background-color: #fee2e2;
+  color: #991b1b;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-mark-vacant:hover {
+  background-color: #fecaca;
+  transform: translateY(-1px);
+}
+
+/* Loading States */
+.loading-spinner {
+  border: 2px solid #f3f4f6;
+  border-top: 2px solid #2563eb;
+  border-radius: 50%;
+  width: 3rem;
+  height: 3rem;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Empty States */
+.empty-state {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.empty-state .icon {
+  font-size: 4rem;
+  color: #d1d5db;
+  margin-bottom: 1rem;
+}
+
+.empty-state .message {
+  color: #6b7280;
+  margin-bottom: 1rem;
+}
+
+/* Grid Layouts */
+.grid-cols-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+.grid-cols-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .grid-cols-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .grid-cols-2 {
+    grid-template-columns: 1fr;
+  }
+  
+  .tab-nav {
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  
+  .tab-nav button {
+    padding: 0.75rem 1rem;
+    min-width: auto;
+  }
+  
+  .active-duty-banner .flex {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .active-duty-banner .flex > div:last-child {
+    width: 100%;
+  }
+  
+  .active-duty-banner .flex > div:last-child .flex {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .active-duty-banner .flex > div:last-child .flex > button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .grid-cols-4 {
+    grid-template-columns: 1fr;
+  }
+  
+  .duty-card .grid,
+  .passenger-card .grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+}
+
+/* Animation Classes */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-in-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Hover Effects */
+.hover-lift {
+  transition: transform 0.2s ease-in-out;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+}
+
+.hover-scale {
+  transition: transform 0.2s ease-in-out;
+}
+
+.hover-scale:hover {
+  transform: scale(1.02);
+}
+
+/* Focus States */
+.focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Print Styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-break {
+    page-break-before: always;
+  }
+}
+
+/* Utility Classes */
+.text-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.text-base {
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+
+.text-lg {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+}
+
+.text-xl {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+}
+
+.text-2xl {
+  font-size: 1.5rem;
+  line-height: 2rem;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+.font-bold {
+  font-weight: 700;
+}
+
+/* Spacing Utilities */
+.space-y-2 > * + * {
+  margin-top: 0.5rem;
+}
+
+.space-y-4 > * + * {
+  margin-top: 1rem;
+}
+
+.space-y-6 > * + * {
+  margin-top: 1.5rem;
+}
+
+.space-y-8 > * + * {
+  margin-top: 2rem;
+}
+
+.space-x-2 > * + * {
+  margin-left: 0.5rem;
+}
+
+.space-x-4 > * + * {
+  margin-left: 1rem;
+}
+
+.space-x-6 > * + * {
+  margin-left: 1.5rem;
+}
+
+.space-x-8 > * + * {
+  margin-left: 2rem;
+}
+

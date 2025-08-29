@@ -1,12 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Bus, Activity } from 'lucide-react';
 
 const AppShell = ({ children }) => {
-  const links = [
-    { to: '/admin/trips', label: 'Trips', icon: Bus },
-    { to: '/admin/status', label: 'System Status', icon: Activity },
-  ];
+  const links = [];
 
   return (
     <div className="min-h-screen bg-gray-50">

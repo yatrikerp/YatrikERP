@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../../utils/api';
+import { useAuth } from '../../context/AuthContext';
 
 const PaxResults = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [params] = useSearchParams();
   const [trips, setTrips] = useState([]);
 
@@ -28,7 +30,13 @@ const PaxResults = () => {
             </div>
             <div className="flex items-center gap-4">
               <div className="bg-green-100 text-green-800 text-sm font-bold px-3 py-1 rounded-full">₹{t.fare}</div>
-              <button onClick={()=>navigate(`/pax/booking/${t._id}`)} className="bg-primary-600 text-white rounded-full px-4 py-2">Select Berth</button>
+              <button onClick={()=>{
+                if(!user){
+                  navigate(`/login?next=/pax/booking/${t._id}`);
+                } else {
+                  navigate(`/pax/booking/${t._id}`);
+                }
+              }} className="bg-primary-600 text-white rounded-full px-4 py-2">Select Berth</button>
             </div>
           </div>
         </div>

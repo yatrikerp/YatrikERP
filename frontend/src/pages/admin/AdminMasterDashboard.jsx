@@ -270,10 +270,17 @@ const AdminMasterDashboard = () => {
             action={() => window.location.href = '/admin/trips'}
           />
           <QuickActionCard
+            title="Bus Management"
+            description="Manage fleet, maintenance, and real-time monitoring"
+            icon={Bus}
+            color="bg-indigo-500"
+            action={() => window.location.href = '/admin/buses'}
+          />
+          <QuickActionCard
             title="Manage Depots"
             description="Manage bus depots, capacity, and facilities"
             icon={MapPin}
-            color="bg-indigo-500"
+            color="bg-purple-500"
             action={() => window.location.href = '/admin/depot-management'}
           />
           <QuickActionCard

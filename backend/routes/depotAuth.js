@@ -12,39 +12,42 @@ const authMiddleware = auth;
 // Depot User Login
 router.post('/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, email, password } = req.body;
+    const identifier = (username || email || '').toString().trim().toLowerCase();
 
-    if (!username || !password) {
+    if (!identifier || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Username and password are required'
+        message: 'Username/email and password are required'
       });
     }
 
-    // Find user by credentials
-    const user = await DepotUser.findByCredentials(username, password);
-    
+    // Allow login by either username or email
+    const user = await DepotUser.findOne({
+      $or: [
+        { username: identifier },
+        { email: identifier }
+      ]
+    }).select('+password');
+
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
-    // Check if user is active
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
     if (user.status !== 'active') {
-      return res.status(401).json({
-        success: false,
-        message: `Account is ${user.status}. Please contact administrator.`
-      });
+      return res.status(401).json({ success: false, message: `Account is ${user.status}. Please contact administrator.` });
     }
 
-    // Generate JWT token
     const token = jwt.sign(
       {
         userId: user._id,
         username: user.username,
-        role: user.role,
+        role: user.role || 'depot_manager',
         depotId: user.depotId,
         depotCode: user.depotCode,
         permissions: user.permissions
@@ -53,9 +56,8 @@ router.post('/login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    // Get depot information
     const depot = await Depot.findById(user.depotId);
-    
+
     res.json({
       success: true,
       message: 'Login successful',
@@ -64,7 +66,7 @@ router.post('/login', async (req, res) => {
         id: user._id,
         username: user.username,
         email: user.email,
-        role: user.role,
+        role: user.role || 'depot_manager',
         depotId: user.depotId,
         depotCode: user.depotCode,
         depotName: user.depotName,
@@ -84,25 +86,13 @@ router.post('/login', async (req, res) => {
 
   } catch (error) {
     console.error('Depot login error:', error);
-    
     if (error.message === 'Invalid credentials') {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid username or password'
-      });
+      return res.status(401).json({ success: false, message: 'Invalid username or password' });
     }
-    
-    if (error.message.includes('Account is temporarily locked')) {
-      return res.status(423).json({
-        success: false,
-        message: 'Account is temporarily locked due to too many failed login attempts. Please try again later.'
-      });
+    if (error.message?.includes('Account is temporarily locked')) {
+      return res.status(423).json({ success: false, message: 'Account is temporarily locked due to too many failed login attempts. Please try again later.' });
     }
-
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error during login'
-    });
+    res.status(500).json({ success: false, message: 'Internal server error during login' });
   }
 });
 
@@ -208,10 +198,14 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
         depotCode: depot.depotCode,
         depotName: depot.depotName,
         location: depot.location,
+        contact: depot.contact,
         capacity: depot.capacity,
         status: depot.status,
         operatingHours: depot.operatingHours,
-        facilities: depot.facilities
+        facilities: depot.facilities,
+        isActive: depot.isActive,
+        createdAt: depot.createdAt,
+        updatedAt: depot.updatedAt
       },
       user: {
         username: req.user.username,

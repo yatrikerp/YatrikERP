@@ -79,57 +79,80 @@ router.get('/search', async (req, res) => {
     const nextDay = new Date(searchDate);
     nextDay.setDate(nextDay.getDate() + 1);
 
-    // Find trips for the specified date - Fixed date comparison
+    // Find trips for the specified date using start/end-of-day range
+    const startOfDay = new Date(searchDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(searchDate);
+    endOfDay.setDate(endOfDay.getDate() + 1);
+    endOfDay.setHours(0, 0, 0, 0);
+
     const trips = await Trip.find({
-      $expr: {
-        $and: [
-          { $gte: [{ $dateToString: { format: "%Y-%m-%d", date: "$serviceDate" } }, date] },
-          { $lt: [{ $dateToString: { format: "%Y-%m-%d", date: "$serviceDate" } }, nextDay.toISOString().split('T')[0]] }
-        ]
-      },
-      status: { $in: ['scheduled', 'boarding', 'running'] }
+      serviceDate: { $gte: startOfDay, $lt: endOfDay },
+      // Avoid only-cancelled trips; do not over-restrict status as admin may use custom statuses
+      status: { $ne: 'cancelled' }
     }).populate('routeId').populate('driverId', 'name').populate('conductorId', 'name').lean();
 
     console.log('Found trips:', trips.length);
 
-    // Filter trips that match the from/to cities
+    // Filter trips that match the from/to terms across city, location, and route name
     const matchingTrips = trips.filter(trip => {
       if (!trip.routeId) return false;
-      
       const route = trip.routeId;
-      
-      // Check if route has the required cities
-      const hasFrom = 
-        (route.startingPoint?.city && route.startingPoint.city.toLowerCase().includes(from.toLowerCase())) ||
-        (route.endingPoint?.city && route.endingPoint.city.toLowerCase().includes(from.toLowerCase())) ||
-        (route.intermediateStops && route.intermediateStops.some(stop => 
-          stop.city && stop.city.toLowerCase().includes(from.toLowerCase())
-        ));
-      
-      const hasTo = 
-        (route.startingPoint?.city && route.startingPoint.city.toLowerCase().includes(to.toLowerCase())) ||
-        (route.endingPoint?.city && route.endingPoint.city.toLowerCase().includes(to.toLowerCase())) ||
-        (route.intermediateStops && route.intermediateStops.some(stop => 
-          stop.city && stop.city.toLowerCase().includes(to.toLowerCase())
-        ));
-      
-      return hasFrom && hasTo;
+      const fromTerm = String(from || '').toLowerCase();
+      const toTerm = String(to || '').toLowerCase();
+
+      const matchPlace = (term) => {
+        if (!term) return false;
+        const sp = route.startingPoint || {};
+        const ep = route.endingPoint || {};
+        const name = (route.routeName || '').toLowerCase();
+        const spCity = (sp.city || '').toLowerCase();
+        const spLoc = (sp.location || '').toLowerCase();
+        const epCity = (ep.city || '').toLowerCase();
+        const epLoc = (ep.location || '').toLowerCase();
+
+        const stops = Array.isArray(route.intermediateStops) ? route.intermediateStops : [];
+        const stopMatch = stops.some(s => {
+          const sCity = (s.city || '').toLowerCase();
+          const sLoc = (s.location || '').toLowerCase();
+          return sCity.includes(term) || sLoc.includes(term);
+        });
+
+        return (
+          name.includes(term) ||
+          spCity.includes(term) || spLoc.includes(term) ||
+          epCity.includes(term) || epLoc.includes(term) ||
+          stopMatch
+        );
+      };
+
+      return matchPlace(fromTerm) && matchPlace(toTerm);
     });
 
     console.log('Matching trips:', matchingTrips.length);
 
     if (matchingTrips.length === 0) {
-      // If no trips found, try to find any routes that match
+      // If no trips found, try to find any routes that match (AND the from/to conditions)
       const routes = await Route.find({
-        $or: [
-          { 'startingPoint.city': { $regex: from, $options: 'i' } },
-          { 'endingPoint.city': { $regex: from, $options: 'i' } },
-          { 'intermediateStops.city': { $regex: from, $options: 'i' } }
-        ],
-        $or: [
-          { 'startingPoint.city': { $regex: to, $options: 'i' } },
-          { 'endingPoint.city': { $regex: to, $options: 'i' } },
-          { 'intermediateStops.city': { $regex: to, $options: 'i' } }
+        $and: [
+          { $or: [
+            { 'startingPoint.city': { $regex: from, $options: 'i' } },
+            { 'startingPoint.location': { $regex: from, $options: 'i' } },
+            { 'endingPoint.city': { $regex: from, $options: 'i' } },
+            { 'endingPoint.location': { $regex: from, $options: 'i' } },
+            { 'intermediateStops.city': { $regex: from, $options: 'i' } },
+            { 'intermediateStops.location': { $regex: from, $options: 'i' } },
+            { 'routeName': { $regex: from, $options: 'i' } }
+          ]},
+          { $or: [
+            { 'startingPoint.city': { $regex: to, $options: 'i' } },
+            { 'startingPoint.location': { $regex: to, $options: 'i' } },
+            { 'endingPoint.city': { $regex: to, $options: 'i' } },
+            { 'endingPoint.location': { $regex: to, $options: 'i' } },
+            { 'intermediateStops.city': { $regex: to, $options: 'i' } },
+            { 'intermediateStops.location': { $regex: to, $options: 'i' } },
+            { 'routeName': { $regex: to, $options: 'i' } }
+          ]}
         ],
         status: 'active'
       }).populate('depot').lean();
@@ -419,13 +442,20 @@ function calculateDuration(distanceKm) {
 // POST /api/booking - Create booking (Passenger)
 router.post('/', authRole(['PASSENGER','ADMIN']), async (req, res) => {
   try {
-    const { tripId, seatNo, from, to } = req.body || {};
+    const {
+      tripId,
+      seatNo,
+      boardingStopId,
+      destinationStopId,
+      passengerDetails,
+      paymentMethod = 'razorpay'
+    } = req.body || {};
     
-    if (!tripId || !seatNo) {
+    if (!tripId || !seatNo || !boardingStopId || !destinationStopId) {
       return res.status(400).json({ 
         ok: false, 
         code: 'MISSING_PARAMS', 
-        message: 'Trip ID and seat number are required' 
+        message: 'tripId, seatNo, boardingStopId, and destinationStopId are required' 
       });
     }
 
@@ -456,25 +486,39 @@ router.post('/', authRole(['PASSENGER','ADMIN']), async (req, res) => {
     // Calculate fare
     const route = trip.routeId;
     const fare = calculateFare(route.totalDistance || 100);
+    const concessionAmount = 0;
+    const totalAmount = fare - concessionAmount;
+
+    // Expiry time (lock seat for 15 minutes)
+    const expiryTime = new Date(Date.now() + 15 * 60 * 1000);
 
     // Create booking
     const booking = await Booking.create({ 
       passengerId: req.user._id, 
       tripId, 
       seatNo, 
-      fareAmount: fare, 
-      status: 'initiated',
-      from,
-      to,
-      bookingDate: new Date()
+      fareAmount: fare,
+      concessionAmount,
+      totalAmount,
+      status: 'pending_payment',
+      paymentStatus: 'pending',
+      paymentMethod,
+      boardingStopId,
+      destinationStopId,
+      passengerDetails: passengerDetails || {},
+      bookingTime: new Date(),
+      expiryTime
     });
 
     res.json({ 
       ok: true, 
       data: { 
-        bookingId: booking._id, 
-        fare,
-        message: 'Booking created successfully' 
+        bookingId: booking._id,
+        fare: booking.fareAmount,
+        totalAmount: booking.totalAmount,
+        status: booking.status,
+        expiryTime: booking.expiryTime,
+        message: 'Booking created successfully. Proceed to payment.' 
       } 
     });
 
@@ -488,7 +532,7 @@ router.post('/', authRole(['PASSENGER','ADMIN']), async (req, res) => {
   }
 });
 
-// POST /api/booking/confirm - Confirm booking and generate ticket
+// POST /api/booking/confirm - Confirm booking (after payment) and generate ticket
 router.post('/confirm', authRole(['PASSENGER','ADMIN']), async (req, res) => {
   try {
     const { bookingId } = req.body || {};
@@ -501,7 +545,7 @@ router.post('/confirm', authRole(['PASSENGER','ADMIN']), async (req, res) => {
       });
     }
 
-    const booking = await Booking.findById(bookingId);
+    const booking = await Booking.findById(bookingId).populate('tripId');
     if (!booking) {
       return res.status(404).json({ 
         ok: false, 
@@ -510,11 +554,11 @@ router.post('/confirm', authRole(['PASSENGER','ADMIN']), async (req, res) => {
       });
     }
 
-    if (booking.status !== 'initiated') {
+    if (booking.status !== 'paid' && booking.paymentStatus !== 'completed') {
       return res.status(400).json({ 
         ok: false, 
         code: 'INVALID_STATUS', 
-        message: 'Booking cannot be confirmed in current status' 
+        message: 'Booking cannot be confirmed until payment is completed' 
       });
     }
 
@@ -525,14 +569,30 @@ router.post('/confirm', authRole(['PASSENGER','ADMIN']), async (req, res) => {
     // Generate PNR and ticket
     const pnr = generatePNR();
     const expiresAt = new Date(new Date().getTime() + 24 * 60 * 60 * 1000); // 24 hours
-    
+
+    // Compose passenger and trip details for ticket
+    const passengerName = booking.passengerDetails?.name || 'Passenger';
+    const fareAmount = booking.totalAmount;
+    const seatNumber = booking.seatNo;
+
     const ticket = await Ticket.create({ 
       bookingId: booking._id, 
       pnr, 
-      qrPayload: `YATRIK|PNR:${pnr}|Trip:${booking.tripId}|Seat:${booking.seatNo}`,
+      qrPayload: `YATRIK|PNR:${pnr}|Trip:${booking.tripId}|Seat:${seatNumber}`,
       expiresAt, 
       state: 'active',
-      status: 'issued'
+      passengerName,
+      seatNumber,
+      boardingStop: booking.boardingStopId?.toString() || '',
+      destinationStop: booking.destinationStopId?.toString() || '',
+      fareAmount,
+      tripDetails: {
+        tripId: booking.tripId?._id || booking.tripId,
+        busNumber: booking.tripId?.busNumber || '',
+        departureTime: booking.tripId?.startTime ? new Date(`2000-01-01T${booking.tripId.startTime}:00Z`) : undefined,
+        arrivalTime: undefined,
+        routeName: ''
+      }
     });
 
     res.json({ 
@@ -593,8 +653,7 @@ router.get('/tickets/active', authRole(['PASSENGER','ADMIN']), async (req, res) 
     const bookingIds = bookings.map(b => b._id);
     const tickets = await Ticket.find({ 
       bookingId: { $in: bookingIds }, 
-      state: 'active',
-      status: 'issued'
+      state: 'active'
     }).sort({ createdAt: -1 }).lean();
 
     res.json({ 

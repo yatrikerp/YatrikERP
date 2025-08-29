@@ -7,59 +7,33 @@ export default function RedirectDashboard() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
 
-
   useEffect(() => {
     if (loading) return; // Wait for auth context to load
-    
     if (!user) {
       navigate('/login', { replace: true });
       return;
     }
 
-    // Instant redirect for fastest performance
-      try {
-      const role = user.role?.toLowerCase() || 'passenger';
-        let destination = '/pax'; // Default to passenger dashboard
-        
-      // Map roles to destinations with exact matching
-        switch (role) {
-        case 'admin':
-            destination = '/admin';
-            break;
-        case 'conductor':
-            destination = '/conductor';
-            break;
-        case 'driver':
-            destination = '/driver';
-            break;
-        case 'depot_manager':
-            destination = '/depot';
-            break;
-        case 'passenger':
-            destination = '/pax';
-            break;
-        default:
-          // Default fallback
-          destination = '/pax';
-          console.warn(`Unknown role: ${role}, defaulting to passenger dashboard`);
-      }
-      
-      console.log('=== ROLE-BASED REDIRECT DEBUG ===');
-      console.log('User object:', user);
-      console.log('Raw role from user:', user.role);
-      console.log('Normalized role:', role);
-      console.log('Role type:', typeof role);
-      console.log('Role length:', role.length);
-      console.log('Selected destination:', destination);
-      console.log('================================');
-        navigate(destination, { replace: true });
-      } catch (error) {
-        console.error('Redirect error:', error);
-        navigate('/pax', { replace: true });
-      }
+    try {
+      const role = user.role?.toLowerCase() || '';
+      const email = (user.email || '').toLowerCase();
+      const depotEmailPattern = /^[a-z0-9]+-depot@yatrik\.com$/; // tvm-depot@yatrik.com
+
+      let destination = '/pax';
+      if (role === 'admin') destination = '/admin';
+      else if (role === 'depot_manager') destination = '/depot';
+      else if (role === 'conductor') destination = '/conductor';
+      else if (role === 'driver') destination = '/driver';
+      else if (depotEmailPattern.test(email)) destination = '/depot';
+      else destination = '/pax';
+
+      navigate(destination, { replace: true });
+    } catch (error) {
+      console.error('Redirect error:', error);
+      navigate('/pax', { replace: true });
+    }
   }, [navigate, user, loading]);
 
-  // Show loading spinner while auth is loading
   if (loading) {
     return (
       <LoadingSpinner 

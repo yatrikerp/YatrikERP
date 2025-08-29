@@ -33,6 +33,7 @@
     "passport-microsoft": "^1.0.0",
     "passport-twitter": "^1.0.4",
     "qrcode": "^1.5.3",
+    "razorpay": "^2.9.6",
     "socket.io": "^4.7.5"
   },
   "devDependencies": {
