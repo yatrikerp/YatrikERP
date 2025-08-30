@@ -13,8 +13,23 @@ const AuthLayout = ({ title, subtitle, children }) => {
       {/* Right Column */}
       <div className="auth-col auth-right">
         <div className="auth-form-wrap">
+          {/* Header Bar in Right Panel */}
+          <div className="auth-header-bar">
+            <div className="auth-header-content">
+              <div className="auth-header-left">
+                <div className="auth-logo-container" onClick={() => window.location.href = '/'} style={{ cursor: 'pointer' }}>
+                  <div className="auth-logo-icon">🚌</div>
+                  <span className="auth-logo-text">YATRIK</span>
+                  <div className="auth-erp-badge">ERP</div>
+                </div>
+              </div>
+              <div className="auth-header-right">
+                <a href="#" className="auth-help-link">Help</a>
+              </div>
+            </div>
+          </div>
+          
           <div className="auth-header">
-            <Link to="/" className="auth-brand">YATRIK ERP</Link>
             <div className="auth-title">
               <h1>{title}</h1>
               {subtitle && <p>{subtitle}</p>}
@@ -56,6 +71,176 @@ const AuthLayout = ({ title, subtitle, children }) => {
         .auth-form-wrap {
           width: 100%;
           max-width: 420px;
+          margin-top: 80px;
+        }
+
+        /* Header Bar - Full Page Width */
+        .auth-header-bar {
+          height: 60px;
+          width: 100vw;
+          background: #FFFFFF;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+          border-bottom: 1px solid #DDDDDD;
+          position: fixed;
+          top: 0;
+          left: 0;
+          z-index: 1000;
+        }
+
+        .auth-header-content {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          height: 100%;
+          padding: 0 2rem;
+          width: 100%;
+        }
+
+        .auth-header-left {
+          display: flex;
+          align-items: center;
+        }
+
+        .auth-logo-container {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          transition: all 0.2s ease;
+        }
+
+        .auth-logo-container:hover {
+          transform: scale(1.05);
+        }
+
+        .auth-logo-icon {
+          font-size: 1.25rem;
+          width: 28px;
+          height: 28px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, #00BCD4, #00BCD4);
+          border-radius: 50%;
+          color: white;
+          flex-shrink: 0;
+        }
+
+        .auth-logo-text {
+          font-size: 1.125rem;
+          font-weight: 700;
+          color: #1F2937;
+          letter-spacing: 0.025em;
+          flex-shrink: 0;
+        }
+
+        .auth-erp-badge {
+          background: #E91E63;
+          color: white;
+          padding: 0.25rem 0.75rem;
+          border-radius: 20px;
+          font-size: 0.875rem;
+          font-weight: 700;
+          letter-spacing: 0.025em;
+          flex-shrink: 0;
+        }
+
+        .auth-header-right {
+          display: flex;
+          align-items: center;
+        }
+
+        .auth-help-link {
+          color: #555555;
+          text-decoration: none;
+          font-size: 0.875rem;
+          font-weight: 500;
+          padding: 0.5rem 1rem;
+          border-radius: 6px;
+          transition: all 0.2s ease;
+        }
+
+        .auth-help-link:hover {
+          color: #E91E63;
+          background: rgba(233, 30, 99, 0.05);
+        }
+          margin-bottom: 1rem;
+          border-radius: 12px 12px 0 0;
+        }
+
+        .auth-header-content {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          height: 100%;
+          padding: 0 1.5rem;
+        }
+
+        .auth-header-left {
+          display: flex;
+          align-items: center;
+        }
+
+        .auth-logo-container {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          transition: all 0.2s ease;
+        }
+
+        .auth-logo-container:hover {
+          transform: scale(1.05);
+        }
+
+        .auth-logo-icon {
+          font-size: 1.25rem;
+          width: 28px;
+          height: 28px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, #00BCD4, #00BCD4);
+          border-radius: 50%;
+          color: white;
+          flex-shrink: 0;
+        }
+
+        .auth-logo-text {
+          font-size: 1.125rem;
+          font-weight: 700;
+          color: #1F2937;
+          letter-spacing: 0.025em;
+          flex-shrink: 0;
+        }
+
+        .auth-erp-badge {
+          background: #E91E63;
+          color: white;
+          padding: 0.25rem 0.75rem;
+          border-radius: 20px;
+          font-size: 0.875rem;
+          font-weight: 700;
+          letter-spacing: 0.025em;
+          flex-shrink: 0;
+        }
+
+        .auth-header-right {
+          display: flex;
+          align-items: center;
+        }
+
+        .auth-help-link {
+          color: #555555;
+          text-decoration: none;
+          font-size: 0.875rem;
+          font-weight: 500;
+          padding: 0.5rem 1rem;
+          border-radius: 6px;
+          transition: all 0.2s ease;
+        }
+
+        .auth-help-link:hover {
+          color: #E91E63;
+          background: rgba(233, 30, 99, 0.05);
         }
 
         .auth-header { margin-bottom: 1rem; text-align: left; }

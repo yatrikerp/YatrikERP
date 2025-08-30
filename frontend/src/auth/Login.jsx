@@ -8,7 +8,7 @@ import { handleGoogleAuth } from '../config/googleAuth';
 import ErrorPopup from '../components/Common/ErrorPopup';
 import { validateField, validateRoleEmail, PHONE_VALIDATION, PASSWORD_VALIDATION, NAME_VALIDATION } from '../utils/validation';
 import ValidationFeedback from '../components/Common/ValidationFeedback';
-import TransportDashboardIllustration from '../components/Common/TransportDashboardIllustration';
+import loginImage from '../assets/login.png';
 import '../styles/login.css';
 
 const Login = () => {
@@ -128,7 +128,7 @@ const Login = () => {
       <div className="login-wrap">
         <section className="login-left" aria-hidden="true">
           <div className="login-illustration">
-            <TransportDashboardIllustration />
+            <img src={loginImage} alt="Transport Dashboard" className="login-image" />
           </div>
         </section>
 
