@@ -190,7 +190,7 @@
 }
 
 .search-btn {
-  background: #E91E63; /* ERP Pink */
+  background: #E91E63; /* ERP Pink - Same as signup button */
   color: white;
   border: none;
   padding: 18px 25px;
@@ -200,7 +200,7 @@
 }
 
 .search-btn:hover {
-  background: #C2185B;
+  background: #C2185B; /* Darker ERP Pink on hover */
 }
 
 /* Hero Visual */

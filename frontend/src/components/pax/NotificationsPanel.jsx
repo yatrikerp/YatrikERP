@@ -19,7 +19,7 @@ const NotificationsPanel = ({ notificationsData, onDismiss, onMarkAsRead }) => {
       id: 2,
       type: 'info',
       title: 'Boarding Started',
-      message: 'Boarding has started for your Mumbai → Delhi trip. Please reach the platform.',
+      message: 'Boarding has started for your Kochi → Thiruvananthapuram trip. Please reach the platform.',
       timestamp: '10 minutes ago',
       isRead: false,
       icon: MapPin,

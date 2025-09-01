@@ -25,7 +25,7 @@ const PassengerDashboard = () => {
     setNextTrip({
       id: 1,
       busNumber: 'KL-07-AB-1234',
-      route: 'Mumbai → Delhi',
+      route: 'Kochi → Thiruvananthapuram',
       seatNo: '18',
       departureTime: '14:30',
       date: 'Dec 15, 2024',

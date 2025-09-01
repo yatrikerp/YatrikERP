@@ -120,13 +120,11 @@
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
   object-fit: cover;
   transition: all 0.3s ease;
-  border: 2px solid rgba(255, 255, 255, 0.1);
 }
 
 .content-area img:hover {
   transform: scale(1.02);
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
-  border-color: rgba(255, 255, 255, 0.2);
 }
 
 /* Route Overlay Styling */
@@ -153,8 +151,7 @@
 
 /* Main Route Animation - Using light pink/red from image */
 .main-route {
-  animation: routeDash 10s linear infinite;
-  filter: drop-shadow(0 0 12px rgba(255, 192, 203, 0.8));
+  display: none; /* Hide the circular route line */
 }
 
 @keyframes routeDash {
@@ -267,3 +264,22 @@
     animation: none !important;
   }
 }
+
+        /* Additional pins with staggered animations */
+        .pin-extra {
+          animation: pinPulse 8s ease-in-out infinite;
+          filter: drop-shadow(0 0 4px rgba(0, 188, 212, 0.3));
+        }
+
+        .pin-extra:nth-child(9) { animation-delay: 0.5s; }
+        .pin-extra:nth-child(10) { animation-delay: 1.25s; }
+        .pin-extra:nth-child(11) { animation-delay: 2s; }
+        .pin-extra:nth-child(12) { animation-delay: 2.75s; }
+        .pin-extra:nth-child(13) { animation-delay: 3.5s; }
+        .pin-extra:nth-child(14) { animation-delay: 4.25s; }
+        .pin-extra:nth-child(15) { animation-delay: 5s; }
+        .pin-extra:nth-child(16) { animation-delay: 5.75s; }
+        .pin-extra:nth-child(17) { animation-delay: 6.5s; }
+        .pin-extra:nth-child(18) { animation-delay: 7.25s; }
+        .pin-extra:nth-child(19) { animation-delay: 8s; }
+        .pin-extra:nth-child(20) { animation-delay: 8.75s; }

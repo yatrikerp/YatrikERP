@@ -17,12 +17,12 @@ router.post('/login', async (req, res) => {
 
     if (!identifier || !password) {
       return res.status(400).json({
-        success: false,
+        ok: false,
         message: 'Username/email and password are required'
       });
     }
 
-    // Allow login by either username or email
+    // Get user first, then depot
     const user = await DepotUser.findOne({
       $or: [
         { username: identifier },
@@ -31,16 +31,16 @@ router.post('/login', async (req, res) => {
     }).select('+password');
 
     if (!user) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      return res.status(401).json({ ok: false, message: 'Invalid credentials' });
     }
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      return res.status(401).json({ ok: false, message: 'Invalid credentials' });
     }
 
     if (user.status !== 'active') {
-      return res.status(401).json({ success: false, message: `Account is ${user.status}. Please contact administrator.` });
+      return res.status(401).json({ ok: false, message: `Account is ${user.status}. Please contact administrator.` });
     }
 
     const token = jwt.sign(
@@ -56,43 +56,54 @@ router.post('/login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    const depot = await Depot.findById(user.depotId);
+    // Get depot data and update last login in parallel
+    const [depot] = await Promise.all([
+      Depot.findById(user.depotId).lean(),
+      DepotUser.updateOne(
+        { _id: user._id },
+        { lastLogin: new Date() }
+      )
+    ]);
 
     res.json({
-      success: true,
+      ok: true,
       message: 'Login successful',
-      token,
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role || 'depot_manager',
-        depotId: user.depotId,
-        depotCode: user.depotCode,
-        depotName: user.depotName,
-        permissions: user.permissions,
-        status: user.status,
-        lastLogin: user.lastLogin
-      },
-      depot: depot ? {
-        id: depot._id,
-        depotCode: depot.depotCode,
-        depotName: depot.depotName,
-        location: depot.location,
-        capacity: depot.capacity,
-        status: depot.status
-      } : null
+      data: {
+        token,
+        user: {
+          _id: user._id,
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          name: user.username, // Use username as name for consistency
+          role: user.role || 'depot_manager',
+          depotId: user.depotId,
+          depotCode: user.depotCode,
+          depotName: user.depotName,
+          permissions: user.permissions,
+          status: user.status,
+          lastLogin: new Date()
+        },
+        depot: depot ? {
+          id: depot._id,
+          depotCode: depot.depotCode,
+          depotName: depot.depotName,
+          location: depot.location,
+          capacity: depot.capacity,
+          status: depot.status
+        } : null
+      }
     });
 
   } catch (error) {
     console.error('Depot login error:', error);
     if (error.message === 'Invalid credentials') {
-      return res.status(401).json({ success: false, message: 'Invalid username or password' });
+      return res.status(401).json({ ok: false, message: 'Invalid username or password' });
     }
     if (error.message?.includes('Account is temporarily locked')) {
-      return res.status(423).json({ success: false, message: 'Account is temporarily locked due to too many failed login attempts. Please try again later.' });
+      return res.status(423).json({ ok: false, message: 'Account is temporarily locked due to too many failed login attempts. Please try again later.' });
     }
-    res.status(500).json({ success: false, message: 'Internal server error during login' });
+    res.status(500).json({ ok: false, message: 'Internal server error during login' });
   }
 });
 
@@ -105,14 +116,14 @@ router.get('/profile', authMiddleware, async (req, res) => {
 
     if (!user) {
       return res.status(404).json({
-        success: false,
+        ok: false,
         message: 'User not found'
       });
     }
 
     res.json({
-      success: true,
-      user
+      ok: true,
+      data: { user }
     });
 
   } catch (error) {

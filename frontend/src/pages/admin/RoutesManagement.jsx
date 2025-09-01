@@ -171,51 +171,51 @@ const RoutesManagement = () => {
         },
         {
           id: 6,
-          routeNumber: 'RT006',
-          routeName: 'Kochi - Mumbai Premium',
-          startingPoint: { city: 'Kochi', location: 'Kochi Central Bus Stand, Ernakulam' },
-          endingPoint: { city: 'Mumbai', location: 'Mumbai Central Bus Terminal, Dadar' },
-          totalDistance: 1800,
-          estimatedDuration: 1440,
-          depot: { depotId: 1, depotName: 'Kochi Central Depot', depotLocation: 'Kochi' },
+          routeNumber: 'KL001',
+          routeName: 'Kochi - Thiruvananthapuram Express',
+          startingPoint: { city: 'Kochi', location: 'Kochi Central Bus Terminal, Ernakulam' },
+          endingPoint: { city: 'Thiruvananthapuram', location: 'Thiruvananthapuram Central Bus Terminal' },
+          totalDistance: 220,
+          estimatedDuration: 240,
+          depot: { depotId: 1, depotName: 'Kerala Central Depot', depotLocation: 'Kochi' },
           status: 'active',
           schedules: [
-            { scheduleId: 'SCH8', departureTime: '14:00', arrivalTime: '14:00', frequency: 'daily' }
+            { scheduleId: 'SCH8', departureTime: '08:00', arrivalTime: '12:00', frequency: 'daily' }
           ],
-          baseFare: 2800,
-          features: ['AC', 'WiFi', 'Entertainment', 'Refreshments', 'Wheelchair_Accessible']
+          baseFare: 350,
+          features: ['AC', 'WiFi', 'USB_Charging', 'Refreshments']
         },
         {
           id: 7,
-          routeNumber: 'RT007',
-          routeName: 'Kochi - Delhi Express',
-          startingPoint: { city: 'Kochi', location: 'Kochi Central Bus Stand, Ernakulam' },
-          endingPoint: { city: 'Delhi', location: 'Delhi Central Bus Terminal, Kashmere Gate' },
-          totalDistance: 2500,
-          estimatedDuration: 1920,
-          depot: { depotId: 1, depotName: 'Kochi Central Depot', depotLocation: 'Kochi' },
+          routeNumber: 'KL002',
+          routeName: 'Kozhikode - Kochi Coastal Route',
+          startingPoint: { city: 'Kozhikode', location: 'Kozhikode Central Bus Terminal' },
+          endingPoint: { city: 'Kochi', location: 'Kochi Central Bus Terminal, Ernakulam' },
+          totalDistance: 180,
+          estimatedDuration: 210,
+          depot: { depotId: 1, depotName: 'Kerala Central Depot', depotLocation: 'Kochi' },
           status: 'active',
           schedules: [
-            { scheduleId: 'SCH9', departureTime: '12:00', arrivalTime: '12:00', frequency: 'daily' }
+            { scheduleId: 'SCH9', departureTime: '10:00', arrivalTime: '13:30', frequency: 'daily' }
           ],
-          baseFare: 3500,
-          features: ['AC', 'WiFi', 'Entertainment', 'Refreshments', 'Wheelchair_Accessible']
+          baseFare: 280,
+          features: ['AC', 'WiFi', 'Entertainment']
         },
         {
           id: 8,
-          routeNumber: 'RT008',
-          routeName: 'Kochi - Pune Deluxe',
-          startingPoint: { city: 'Kochi', location: 'Kochi Central Bus Stand, Ernakulam' },
-          endingPoint: { city: 'Pune', location: 'Pune Central Bus Station, Swargate' },
-          totalDistance: 1600,
-          estimatedDuration: 1320,
-          depot: { depotId: 1, depotName: 'Kochi Central Depot', depotLocation: 'Kochi' },
+          routeNumber: 'KL003',
+          routeName: 'Thiruvananthapuram - Kozhikode Mountain Express',
+          startingPoint: { city: 'Thiruvananthapuram', location: 'Thiruvananthapuram Central Bus Terminal' },
+          endingPoint: { city: 'Kozhikode', location: 'Kozhikode Central Bus Terminal' },
+          totalDistance: 380,
+          estimatedDuration: 420,
+          depot: { depotId: 1, depotName: 'Kerala Central Depot', depotLocation: 'Kochi' },
           status: 'active',
           schedules: [
-            { scheduleId: 'SCH10', departureTime: '15:00', arrivalTime: '12:00', frequency: 'daily' }
+            { scheduleId: 'SCH10', departureTime: '06:00', arrivalTime: '13:00', frequency: 'daily' }
           ],
-          baseFare: 2200,
-          features: ['AC', 'WiFi', 'Entertainment', 'Refreshments']
+          baseFare: 550,
+          features: ['AC', 'WiFi', 'USB_Charging', 'Entertainment', 'Refreshments']
         }
       ]);
 
@@ -757,13 +757,13 @@ const RoutesManagement = () => {
             >
               <option value="">From City</option>
               <option value="Kochi">Kochi</option>
-              <option value="Trivandrum">Trivandrum</option>
-              <option value="Bangalore">Bangalore</option>
-              <option value="Chennai">Chennai</option>
-              <option value="Hyderabad">Hyderabad</option>
-              <option value="Mumbai">Mumbai</option>
-              <option value="Delhi">Delhi</option>
-              <option value="Pune">Pune</option>
+              <option value="Thiruvananthapuram">Thiruvananthapuram</option>
+              <option value="Kozhikode">Kozhikode</option>
+              <option value="Alappuzha">Alappuzha</option>
+              <option value="Kollam">Kollam</option>
+              <option value="Thrissur">Thrissur</option>
+              <option value="Kottayam">Kottayam</option>
+              <option value="Palakkad">Palakkad</option>
             </select>
             
             <select
@@ -773,13 +773,13 @@ const RoutesManagement = () => {
             >
               <option value="">To City</option>
               <option value="Kochi">Kochi</option>
-              <option value="Trivandrum">Trivandrum</option>
-              <option value="Bangalore">Bangalore</option>
-              <option value="Chennai">Chennai</option>
-              <option value="Hyderabad">Hyderabad</option>
-              <option value="Mumbai">Mumbai</option>
-              <option value="Delhi">Delhi</option>
-              <option value="Pune">Pune</option>
+              <option value="Thiruvananthapuram">Thiruvananthapuram</option>
+              <option value="Kozhikode">Kozhikode</option>
+              <option value="Alappuzha">Alappuzha</option>
+              <option value="Kollam">Kollam</option>
+              <option value="Thrissur">Thrissur</option>
+              <option value="Kottayam">Kottayam</option>
+              <option value="Palakkad">Palakkad</option>
             </select>
             
             <select

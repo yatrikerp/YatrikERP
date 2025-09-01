@@ -88,6 +88,16 @@ const Login = () => {
       const token = res.data.data?.token || res.data.token;
       
       if (user && token) {
+        // Log user data for debugging
+        console.log('Login successful - User data received:', {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          status: user.status,
+          depotId: user.depotId
+        });
+        
         // Store user data and token
         login(user, token);
         

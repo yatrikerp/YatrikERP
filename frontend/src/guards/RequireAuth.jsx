@@ -15,13 +15,35 @@ export default function RequireAuth({ children, roles }) {
     
     if (!roles || roles.length === 0) return true;
     
-    const userRole = user.role?.toUpperCase();
-    const allowedRoles = roles.map(r => (r || '').toUpperCase());
+    // Normalize user role and allowed roles for comparison
+    const userRole = (user.role || '').toLowerCase().trim();
+    const allowedRoles = roles.map(r => (r || '').toLowerCase().trim());
     
-    const hasRole = allowedRoles.includes(userRole);
+    console.log('RequireAuth - Role check:', {
+      userRole,
+      allowedRoles,
+      userId: user._id,
+      userName: user.name,
+      userEmail: user.email
+    });
+    
+    // Check for exact match or variations
+    const hasRole = allowedRoles.some(allowedRole => {
+      // Handle role variations
+      if (allowedRole === 'admin' && (userRole === 'admin' || userRole === 'administrator')) return true;
+      if (allowedRole === 'depot_manager' && (userRole === 'depot_manager' || userRole === 'depot-manager' || userRole === 'depotmanager')) return true;
+      if (allowedRole === 'conductor' && userRole === 'conductor') return true;
+      if (allowedRole === 'driver' && userRole === 'driver') return true;
+      if (allowedRole === 'passenger' && userRole === 'passenger') return true;
+      
+      // Direct match
+      return userRole === allowedRole;
+    });
     
     if (!hasRole) {
-      console.log(`Access denied: User role ${userRole} not in allowed roles ${allowedRoles.join(', ')}`);
+      console.log(`Access denied: User role "${userRole}" not in allowed roles [${allowedRoles.join(', ')}]`);
+    } else {
+      console.log(`Access granted: User role "${userRole}" matches allowed roles [${allowedRoles.join(', ')}]`);
     }
     
     return hasRole;

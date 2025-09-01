@@ -20,8 +20,29 @@ export const AuthProvider = ({ children }) => {
     // Check if user is logged in from localStorage
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
+    const depotToken = localStorage.getItem('depotToken');
+    const depotUserData = localStorage.getItem('depotUser');
     
-    if (token && userData) {
+    // Check for depot user first, then regular user
+    if (depotToken && depotUserData) {
+      try {
+        const parsedUser = JSON.parse(depotUserData);
+        // Validate depot user data structure
+        if (parsedUser && parsedUser._id && parsedUser.role) {
+          setUser(parsedUser);
+        } else {
+          // Invalid depot user data, clear storage
+          localStorage.removeItem('depotToken');
+          localStorage.removeItem('depotUser');
+          localStorage.removeItem('depotInfo');
+        }
+      } catch (error) {
+        console.error('Error parsing depot user data:', error);
+        localStorage.removeItem('depotToken');
+        localStorage.removeItem('depotUser');
+        localStorage.removeItem('depotInfo');
+      }
+    } else if (token && userData) {
       try {
         const parsedUser = JSON.parse(userData);
         // Validate user data structure
@@ -42,11 +63,11 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const login = useCallback(async (userData, token) => {
+  const login = useCallback(async (userData, token, isDepotUser = false) => {
     if (isLoggingIn) return; // Prevent multiple login calls
     
     setIsLoggingIn(true);
-    console.log('AuthContext.login called:', { userData, token });
+    console.log('AuthContext.login called:', { userData, token, isDepotUser });
     
     try {
       // Validate user data
@@ -54,20 +75,48 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Invalid user data');
       }
       
-      // Normalize role to uppercase
+      // Normalize role to handle various formats
+      let normalizedRole = userData.role;
+      if (typeof normalizedRole === 'string') {
+        normalizedRole = normalizedRole.toLowerCase().trim();
+        
+        // Handle role variations
+        if (normalizedRole === 'administrator') normalizedRole = 'admin';
+        if (normalizedRole === 'depot-manager' || normalizedRole === 'depotmanager') normalizedRole = 'depot_manager';
+      }
+      
       const normalizedUser = {
         ...userData,
-        role: userData.role.toUpperCase()
+        role: normalizedRole
       };
       
+      console.log('AuthContext - Normalized user data:', {
+        originalRole: userData.role,
+        normalizedRole: normalizedUser.role,
+        userId: normalizedUser._id,
+        userName: normalizedUser.name,
+        userEmail: normalizedUser.email,
+        isDepotUser
+      });
+      
+      // Update state immediately for instant UI response
       setUser(normalizedUser);
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(normalizedUser));
+      
+      if (isDepotUser) {
+        // Store depot-specific data
+        await Promise.all([
+          localStorage.setItem('depotToken', token),
+          localStorage.setItem('depotUser', JSON.stringify(normalizedUser))
+        ]);
+      } else {
+        // Store regular user data
+        await Promise.all([
+          localStorage.setItem('token', token),
+          localStorage.setItem('user', JSON.stringify(normalizedUser))
+        ]);
+      }
       
       console.log('AuthContext.login completed, user state updated:', normalizedUser);
-      
-      // Remove artificial delay - not needed
-      // await new Promise(resolve => setTimeout(resolve, 100));
       
     } catch (error) {
       console.error('Login error:', error);
@@ -85,9 +134,12 @@ export const AuthProvider = ({ children }) => {
     // Clear state immediately for instant UI response
     setUser(null);
     
-    // Clear localStorage
+    // Clear localStorage - handle both regular and depot authentication
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('depotToken');
+    localStorage.removeItem('depotUser');
+    localStorage.removeItem('depotInfo');
     
     // Remove artificial delay - not needed
     // await new Promise(resolve => setTimeout(resolve, 100));

@@ -6,6 +6,7 @@ import AppShell from './components/Layout/AppShell';
 import AdminLayout from './components/Admin/AdminLayout';
 import LandingPage from './pages/LandingPage';
 import TripResults from './pages/TripResults';
+import TripSearch from './components/Common/TripSearch';
 import Auth from './pages/Auth';
 import OAuthCallback from './pages/OAuthCallback';
 import ResetPassword from './pages/ResetPassword';
@@ -14,10 +15,12 @@ import Wallet from './pages/Wallet';
 import TripPlanner from './pages/TripPlanner';
 import Booking from './pages/Booking';
 import Ticket from './pages/Ticket';
+import KeralaRoutes from './pages/KeralaRoutes';
 
 import ConductorDashboard from './pages/ConductorDashboard';
 import DriverDashboard from './pages/DriverDashboard';
 import DepotDashboard from './pages/depot/DepotDashboard';
+
 
 // Admin Pages
 import AdminMasterDashboard from './pages/admin/AdminMasterDashboard';
@@ -61,11 +64,13 @@ function App() {
             {/* Public Routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/search-results" element={<TripResults />} />
+            <Route path="/trip-search" element={<TripSearch />} />
           {/* Use unified Auth page for both login and signup */}
           <Route path="/login" element={<Auth initialMode="login" />} />
           <Route path="/signup" element={<Auth initialMode="signup" />} />
           <Route path="/oauth/callback" element={<OAuthCallback />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+
             
             {/* Protected Routes */}
           <Route path="/profile" element={
@@ -96,6 +101,14 @@ function App() {
             <RequireAuth>
               <AppShell>
                 <Booking />
+              </AppShell>
+            </RequireAuth>
+          } />
+
+          <Route path="/kerala-routes" element={
+            <RequireAuth>
+              <AppShell>
+                <KeralaRoutes />
               </AppShell>
             </RequireAuth>
           } />
@@ -133,9 +146,12 @@ function App() {
 
           <Route path="/depot" element={
             <RequireAuth roles={['depot_manager']}>
-                <AppShell>
                 <DepotDashboard />
-                </AppShell>
+              </RequireAuth>
+            } />
+          <Route path="/depot/dashboard" element={
+            <RequireAuth roles={['depot_manager']}>
+                <DepotDashboard />
               </RequireAuth>
             } />
             

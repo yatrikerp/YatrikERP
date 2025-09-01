@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../utils/api';
+import PaymentService from '../utils/paymentService';
 import { 
   CreditCard, 
   TrendingUp, 
@@ -18,7 +19,8 @@ import {
   RefreshCw,
   Shield,
   Zap,
-  Star
+  Star,
+  Loader2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -29,6 +31,9 @@ const Wallet = () => {
   const [transactions, setTransactions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [isAddingMoney, setIsAddingMoney] = useState(false);
+  const [addMoneyAmount, setAddMoneyAmount] = useState('');
+  const [showAddMoneyModal, setShowAddMoneyModal] = useState(false);
 
   // Fetch real wallet data from database
   useEffect(() => {
@@ -93,8 +98,29 @@ const Wallet = () => {
     }
   };
 
+  const handleAddMoney = async () => {
+    if (!addMoneyAmount || addMoneyAmount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    setIsAddingMoney(true);
+    try {
+      await PaymentService.addMoneyToWallet(parseFloat(addMoneyAmount));
+      setShowAddMoneyModal(false);
+      setAddMoneyAmount('');
+      fetchWalletData(); // Refresh wallet data
+      toast.success('Money added successfully!');
+    } catch (error) {
+      console.error('Error adding money:', error);
+      toast.error('Failed to add money. Please try again.');
+    } finally {
+      setIsAddingMoney(false);
+    }
+  };
+
   const quickActions = [
-    { icon: <Plus className="w-6 h-6" />, label: 'Add Money', action: () => console.log('Add Money') },
+    { icon: <Plus className="w-6 h-6" />, label: 'Add Money', action: () => setShowAddMoneyModal(true) },
     { icon: <CreditCard className="w-6 h-6" />, label: 'Cards', action: () => console.log('Cards') },
     { icon: <History className="w-6 h-6" />, label: 'History', action: () => console.log('History') },
     { icon: <Gift className="w-6 h-6" />, label: 'Rewards', action: () => console.log('Rewards') }
@@ -140,13 +166,16 @@ const Wallet = () => {
               {showBalance ? formatCurrency(balance) : '****'}
             </div>
             <div className="flex justify-center space-x-4">
-              <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+              <button 
+                onClick={() => setShowAddMoneyModal(true)}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
                 Add Money
               </button>
               <button className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition-colors">
                 Withdraw
               </button>
-              </div>
+            </div>
               </div>
             </div>
 
@@ -228,6 +257,53 @@ const Wallet = () => {
           )}
         </div>
       </div>
+
+      {/* Add Money Modal */}
+      {showAddMoneyModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Money to Wallet</h3>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Amount (₹)
+              </label>
+              <input
+                type="number"
+                value={addMoneyAmount}
+                onChange={(e) => setAddMoneyAmount(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter amount"
+                min="1"
+                step="1"
+              />
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowAddMoneyModal(false)}
+                className="flex-1 px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddMoney}
+                disabled={isAddingMoney || !addMoneyAmount}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isAddingMoney ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  'Add Money'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

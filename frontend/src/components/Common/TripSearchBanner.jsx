@@ -168,7 +168,7 @@ const TripSearchBanner = () => {
           {errors.date && <div className="text-xs text-red-600 mt-1">{errors.date}</div>}
         </div>
         <div className="md:col-span-1">
-          <button type="submit" disabled={isSearching} className="w-full px-4 py-3 bg-rose-600 text-white rounded-lg font-semibold disabled:opacity-70">
+          <button type="submit" disabled={isSearching} className="w-full px-4 py-3 bg-[#E91E63] text-white rounded-lg font-semibold disabled:opacity-70 hover:bg-[#C2185B] transition-colors">
             {isSearching ? 'Searching…' : 'Search buses'}
           </button>
         </div>

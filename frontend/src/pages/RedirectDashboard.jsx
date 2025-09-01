@@ -15,21 +15,48 @@ export default function RedirectDashboard() {
     }
 
     try {
-      const role = user.role?.toLowerCase() || '';
+      // Normalize role to handle case variations
+      const role = (user.role || '').toLowerCase().trim();
       const email = (user.email || '').toLowerCase();
+      
+      console.log('RedirectDashboard - User data:', { 
+        role, 
+        email, 
+        userId: user._id,
+        userName: user.name 
+      });
+
+      // Check for depot email pattern first
       const depotEmailPattern = /^[a-z0-9]+-depot@yatrik\.com$/; // tvm-depot@yatrik.com
+      
+      let destination = '/pax'; // Default fallback
+      
+      if (role === 'admin' || role === 'administrator') {
+        destination = '/admin';
+        console.log('Redirecting admin user to:', destination);
+      } else if (role === 'depot_manager' || role === 'depot-manager' || role === 'depotmanager') {
+        destination = '/depot';
+        console.log('Redirecting depot manager to:', destination);
+      } else if (role === 'conductor') {
+        destination = '/conductor';
+        console.log('Redirecting conductor to:', destination);
+      } else if (role === 'driver') {
+        destination = '/driver';
+        console.log('Redirecting driver to:', destination);
+      } else if (depotEmailPattern.test(email)) {
+        destination = '/depot';
+        console.log('Redirecting depot user by email pattern to:', destination);
+      } else {
+        destination = '/pax';
+        console.log('Redirecting passenger to:', destination);
+      }
 
-      let destination = '/pax';
-      if (role === 'admin') destination = '/admin';
-      else if (role === 'depot_manager') destination = '/depot';
-      else if (role === 'conductor') destination = '/conductor';
-      else if (role === 'driver') destination = '/driver';
-      else if (depotEmailPattern.test(email)) destination = '/depot';
-      else destination = '/pax';
-
+      console.log(`Final destination: ${destination} for role: ${role}`);
       navigate(destination, { replace: true });
+      
     } catch (error) {
       console.error('Redirect error:', error);
+      console.error('User data that caused error:', user);
       navigate('/pax', { replace: true });
     }
   }, [navigate, user, loading]);

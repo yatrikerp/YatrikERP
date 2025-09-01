@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { Building2, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 const DepotLogin = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -45,9 +47,10 @@ const DepotLogin = () => {
       const data = await response.json();
 
       if (data.success) {
-        // Store depot user token and info
-        localStorage.setItem('depotToken', data.token);
-        localStorage.setItem('depotUser', JSON.stringify(data.user));
+        // Use AuthContext to handle depot login
+        await login(data.user, data.token, true);
+        
+        // Store depot info separately
         localStorage.setItem('depotInfo', JSON.stringify(data.depot));
         
         // Redirect to depot dashboard

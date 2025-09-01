@@ -151,10 +151,13 @@ busSchema.index({ assignedDriver: 1 });
 busSchema.index({ assignedConductor: 1 });
 busSchema.index({ currentTrip: 1 });
 
-// Calculate total capacity before saving
+// Calculate total capacity before saving (only if not explicitly set)
 busSchema.pre('save', function(next) {
-  if (this.capacity) {
-    this.capacity.total = (this.capacity.sleeper || 0) + (this.capacity.seater || 0);
+  if (this.capacity && this.isNew) {
+    // Only auto-calculate if total is not explicitly set or is 0
+    if (!this.capacity.total || this.capacity.total === 0) {
+      this.capacity.total = (this.capacity.sleeper || 0) + (this.capacity.seater || 0);
+    }
   }
   next();
 });

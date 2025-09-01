@@ -34,7 +34,7 @@ const Auth = ({ initialMode = 'login' }) => {
   const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   
-  // Fetch authoritative profile after login to ensure role/depotId are present
+  // Optimized login flow - no extra API calls for depot users
   const fetchProfileAndLogin = async (userFromLogin, token) => {
     try {
       // Ensure subsequent requests include Authorization header
@@ -44,12 +44,15 @@ const Auth = ({ initialMode = 'login' }) => {
       const role = (userFromLogin?.role || '').toLowerCase();
       const isDepot = role === 'depot_manager' || /-depot@yatrik\.com$/.test(email) || /^depot-/.test(email);
 
-      const endpoint = isDepot ? '/api/depot-auth/profile' : '/api/auth/me';
-      const me = await apiFetch(endpoint);
-
+      // For depot users, use the login response directly (no extra API call)
       let finalUser = userFromLogin;
-      if (me?.ok && me.data) {
-        finalUser = me.data.data?.user || me.data.user || me.data;
+      
+      // Only fetch profile for non-depot users (passengers, admin, etc.)
+      if (!isDepot) {
+        const me = await apiFetch('/api/auth/me');
+        if (me?.ok && me.data) {
+          finalUser = me.data.data?.user || me.data.user || me.data;
+        }
       }
 
       // Ensure the user object has the required fields for AuthContext.login
@@ -102,18 +105,33 @@ const Auth = ({ initialMode = 'login' }) => {
     }
   }, [user, navigate, redirectTo]);
 
-  // Preload Google OAuth for instant performance
+  // Preload authentication endpoints for instant performance
   useEffect(() => {
-    const preloadGoogleOAuth = () => {
-      const googleOAuthUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/api/auth/google?next=${encodeURIComponent(redirectTo)}`;
+    const preloadAuthEndpoints = () => {
+      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
-      // Create a hidden link to preload the OAuth endpoint
-      const link = document.createElement('link');
-      link.rel = 'prefetch';
-      link.href = googleOAuthUrl;
-      document.head.appendChild(link);
+      // Preload Google OAuth
+      const googleOAuthUrl = `${baseUrl}/api/auth/google?next=${encodeURIComponent(redirectTo)}`;
+      const googleLink = document.createElement('link');
+      googleLink.rel = 'prefetch';
+      googleLink.href = googleOAuthUrl;
+      document.head.appendChild(googleLink);
       
-      // Also preload the callback route
+      // Preload depot authentication endpoint
+      const depotAuthUrl = `${baseUrl}/api/depot-auth/login`;
+      const depotLink = document.createElement('link');
+      depotLink.rel = 'prefetch';
+      depotLink.href = depotAuthUrl;
+      document.head.appendChild(depotLink);
+      
+      // Preload regular authentication endpoint
+      const authUrl = `${baseUrl}/api/auth/login`;
+      const authLink = document.createElement('link');
+      authLink.rel = 'prefetch';
+      authLink.href = authUrl;
+      document.head.appendChild(authLink);
+      
+      // Preload the callback route
       const callbackLink = document.createElement('link');
       callbackLink.rel = 'prefetch';
       callbackLink.href = '/oauth/callback';
@@ -121,7 +139,7 @@ const Auth = ({ initialMode = 'login' }) => {
     };
 
     // Preload after a short delay to not block initial render
-    const timer = setTimeout(preloadGoogleOAuth, 1000);
+    const timer = setTimeout(preloadAuthEndpoints, 500);
     return () => clearTimeout(timer);
   }, [redirectTo]);
 
@@ -169,7 +187,11 @@ const Auth = ({ initialMode = 'login' }) => {
   const onSubmitLogin = async (e) => {
     e.preventDefault();
     if (!validateLoginForm()) return;
+    
+    // Immediate UI feedback
     setIsLoggingIn(true);
+    toast.success('Signing in...', { duration: 1000 });
+    
     try {
       const email = loginForm.email.trim().toLowerCase();
       // Accept both patterns: code-depot@yatrik.com or depot-code@yatrik.com
@@ -196,7 +218,7 @@ const Auth = ({ initialMode = 'login' }) => {
       console.log('[Auth] Extracted user and token:', { user, token });
       
       if (user && token) {
-        toast.success('Signing in...');
+        // Immediate login without waiting for profile fetch
         await fetchProfileAndLogin(user, token);
       } else {
         console.error('[Auth] Invalid response structure:', res.data);

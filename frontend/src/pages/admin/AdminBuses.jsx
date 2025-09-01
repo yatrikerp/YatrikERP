@@ -92,11 +92,26 @@ const AdminBuses = () => {
       
       if (response.ok) {
         const data = await response.json();
-        setBuses(data.buses || []);
+        // Validate and sanitize bus data
+        const validBuses = (data.buses || []).map(bus => ({
+          ...bus,
+          busNumber: bus.busNumber || 'N/A',
+          registrationNumber: bus.registrationNumber || 'N/A',
+          status: bus.status || 'unknown',
+          depotId: bus.depotId || null,
+          capacity: bus.capacity || { total: 0, seater: 0, sleeper: 0 },
+          busType: bus.busType || 'standard'
+        }));
+        setBuses(validBuses);
+      } else {
+        console.error('Failed to fetch buses:', response.status);
+        toast.error('Failed to fetch buses');
+        setBuses([]);
       }
     } catch (error) {
       console.error('Error fetching buses:', error);
       toast.error('Failed to fetch buses');
+      setBuses([]);
     } finally {
       setLoading(false);
     }
@@ -187,9 +202,14 @@ const AdminBuses = () => {
     }
   };
 
-  const filteredBuses = buses.filter(bus => {
-    const matchesSearch = bus.busNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         bus.registrationNumber.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredBuses = (buses || []).filter(bus => {
+    // Add null checks to prevent toLowerCase errors
+    const busNumber = bus.busNumber || '';
+    const registrationNumber = bus.registrationNumber || '';
+    const searchTermLower = (searchTerm || '').toLowerCase();
+    
+    const matchesSearch = busNumber.toLowerCase().includes(searchTermLower) ||
+                         registrationNumber.toLowerCase().includes(searchTermLower);
     const matchesStatus = statusFilter === 'all' || bus.status === statusFilter;
     const matchesDepot = depotFilter === 'all' || bus.depotId === depotFilter;
     

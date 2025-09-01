@@ -6,9 +6,9 @@ const LiveTrackingMap = ({ trackingData, onTrackBus }) => {
   
   const defaultTracking = {
     busNumber: 'KL-07-AB-1234',
-    route: 'Mumbai → Delhi',
-    currentLocation: 'Pune, Maharashtra',
-    destination: 'Delhi, Delhi',
+    route: 'Kochi → Thiruvananthapuram',
+    currentLocation: 'Alappuzha, Kerala',
+    destination: 'Thiruvananthapuram, Kerala',
     estimatedArrival: '06:30',
     currentSpeed: '65 km/h',
     status: 'on-route',

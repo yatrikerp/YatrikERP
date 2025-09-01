@@ -88,7 +88,7 @@ const Dashboard = () => {
               <div className="w-3 h-3 bg-green-500 rounded-full"></div>
               <div className="flex-1">
                 <p className="font-medium text-gray-900">Trip booked successfully</p>
-                <p className="text-sm text-gray-600">Mumbai to Pune - Tomorrow 8:00 AM</p>
+                <p className="text-sm text-gray-600">Kochi to Thiruvananthapuram - Tomorrow 8:00 AM</p>
               </div>
               <span className="text-sm text-gray-500">2 hours ago</span>
             </div>
@@ -106,7 +106,7 @@ const Dashboard = () => {
               <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
               <div className="flex-1">
                 <p className="font-medium text-gray-900">Trip completed</p>
-                <p className="text-sm text-gray-600">Delhi to Jaipur - Yesterday</p>
+                <p className="text-sm text-gray-600">Kozhikode to Kochi - Yesterday</p>
               </div>
               <span className="text-sm text-gray-500">2 days ago</span>
             </div>

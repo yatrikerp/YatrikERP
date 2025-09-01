@@ -938,17 +938,240 @@ router.get('/routes', async (req, res) => {
   }
 });
 
+// POST /api/admin/routes - Create new route
 router.post('/routes', async (req, res) => {
   try {
-    const route = new Route(req.body);
-    await route.save();
-    
+    const {
+      routeNumber,
+      routeName,
+      startingPoint,
+      endingPoint,
+      intermediateStops,
+      totalDistance,
+      estimatedDuration,
+      baseFare,
+      busType,
+      depotId,
+      status = 'active',
+      amenities = [],
+      operatingHours = {},
+      frequency = {},
+      notes
+    } = req.body;
 
-    
-    res.status(201).json({ message: 'Route created successfully', route });
+    // Validation
+    if (!routeNumber || !routeName || !startingPoint || !endingPoint || !depotId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: routeNumber, routeName, startingPoint, endingPoint, depotId'
+      });
+    }
+
+    // Check if route number already exists
+    const existingRoute = await Route.findOne({ routeNumber });
+    if (existingRoute) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route number already exists'
+      });
+    }
+
+    // Validate depot exists
+    const depot = await Depot.findById(depotId);
+    if (!depot) {
+      return res.status(400).json({
+        success: false,
+        message: 'Depot not found'
+      });
+    }
+
+    // Create route
+    const route = await Route.create({
+      routeNumber,
+      routeName,
+      startingPoint,
+      endingPoint,
+      intermediateStops: intermediateStops || [],
+      totalDistance,
+      estimatedDuration,
+      baseFare: baseFare || calculateBaseFare(totalDistance),
+      busType: busType || 'ac_seater',
+      depotId,
+      status,
+      amenities,
+      operatingHours,
+      frequency,
+      notes,
+      createdBy: req.user._id,
+      popularity: 0
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Route created successfully',
+      data: route
+    });
+
   } catch (error) {
     console.error('Route creation error:', error);
-    res.status(500).json({ error: 'Failed to create route' });
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create route',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/routes - Get all routes with pagination and filters
+router.get('/routes', async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      depotId,
+      busType,
+      search,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    const skip = (page - 1) * limit;
+    const filter = {};
+
+    // Apply filters
+    if (status) filter.status = status;
+    if (depotId) filter.depotId = depotId;
+    if (busType) filter.busType = busType;
+    if (search) {
+      filter.$or = [
+        { routeNumber: { $regex: search, $options: 'i' } },
+        { routeName: { $regex: search, $options: 'i' } },
+        { 'startingPoint.city': { $regex: search, $options: 'i' } },
+        { 'endingPoint.city': { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Build sort object
+    const sort = {};
+    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    const [routes, total] = await Promise.all([
+      Route.find(filter)
+        .populate('depotId', 'depotName location')
+        .sort(sort)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Route.countDocuments(filter)
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        routes,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Routes fetch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch routes',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/admin/routes/:id - Update route
+router.put('/routes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // Remove immutable fields
+    delete updateData.routeNumber;
+    delete updateData.createdBy;
+
+    const route = await Route.findByIdAndUpdate(
+      id,
+      { ...updateData, updatedBy: req.user._id },
+      { new: true, runValidators: true }
+    );
+
+    if (!route) {
+      return res.status(404).json({
+        success: false,
+        message: 'Route not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Route updated successfully',
+      data: route
+    });
+
+  } catch (error) {
+    console.error('Route update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update route',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/admin/routes/:id - Delete route (soft delete)
+router.delete('/routes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if route has active trips
+    const activeTrips = await Trip.countDocuments({
+      routeId: id,
+      status: { $in: ['scheduled', 'running'] }
+    });
+
+    if (activeTrips > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete route with ${activeTrips} active trips`
+      });
+    }
+
+    // Soft delete by updating status
+    const route = await Route.findByIdAndUpdate(
+      id,
+      { status: 'inactive', deletedAt: new Date(), deletedBy: req.user._id },
+      { new: true }
+    );
+
+    if (!route) {
+      return res.status(404).json({
+        success: false,
+        message: 'Route not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Route deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Route deletion error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete route',
+      error: error.message
+    });
   }
 });
 
@@ -1411,87 +1634,319 @@ router.get('/buses/:id', async (req, res) => {
   }
 });
 
-// POST /api/admin/buses
+// POST /api/admin/buses - Add new bus to fleet
 router.post('/buses', async (req, res) => {
   try {
-    const busData = req.body;
-    busData.assignedBy = req.user.id;
+    const {
+      busNumber,
+      registrationNumber,
+      depotId,
+      busType,
+      capacity,
+      amenities,
+      specifications,
+      assignedDriver,
+      assignedConductor,
+      notes
+    } = req.body;
 
-    // Validate bus number and registration uniqueness
-    const existingBus = await Bus.findOne({
-      $or: [
-        { busNumber: busData.busNumber },
-        { registrationNumber: busData.registrationNumber }
-      ]
-    });
-
-    if (existingBus) {
-      return res.status(400).json({ 
-        error: 'Bus number or registration number already exists' 
+    // Validation
+    if (!busNumber || !registrationNumber || !depotId || !busType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: busNumber, registrationNumber, depotId, busType'
       });
     }
 
-    const bus = new Bus(busData);
-    await bus.save();
-
-    res.status(201).json({ 
-      message: 'Bus created successfully', 
-      bus 
+    // Check if bus number or registration already exists
+    const existingBus = await Bus.findOne({
+      $or: [{ busNumber }, { registrationNumber }]
     });
+
+    if (existingBus) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bus number or registration number already exists'
+      });
+    }
+
+    // Validate depot exists
+    const depot = await Depot.findById(depotId);
+    if (!depot) {
+      return res.status(400).json({
+        success: false,
+        message: 'Depot not found'
+      });
+    }
+
+    // Validate driver and conductor if assigned
+    if (assignedDriver) {
+      const driver = await User.findById(assignedDriver);
+      if (!driver || driver.role !== 'driver') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid driver assignment'
+        });
+      }
+    }
+
+    if (assignedConductor) {
+      const conductor = await User.findById(assignedConductor);
+      if (!conductor || conductor.role !== 'conductor') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid conductor assignment'
+        });
+      }
+    }
+
+    // Create bus
+    const bus = await Bus.create({
+      busNumber,
+      registrationNumber,
+      depotId,
+      busType,
+      capacity: capacity || { total: 35, seater: 35 },
+      amenities: amenities || ['ac', 'charging'],
+      specifications: specifications || {},
+      assignedDriver,
+      assignedConductor,
+      assignedBy: req.user._id,
+      notes,
+      status: 'active',
+      fuel: {
+        currentLevel: 100,
+        lastRefuel: new Date(),
+        averageConsumption: 8.5,
+        tankCapacity: 200
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Bus added successfully',
+      data: bus
+    });
+
   } catch (error) {
     console.error('Bus creation error:', error);
-    res.status(500).json({ error: 'Failed to create bus' });
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add bus',
+      error: error.message
+    });
   }
 });
 
-// PUT /api/admin/buses/:id
+// GET /api/admin/buses - Get all buses with pagination and filters
+router.get('/buses', async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      depotId,
+      busType,
+      search,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    const skip = (page - 1) * limit;
+    const filter = {};
+
+    // Apply filters
+    if (status) filter.status = status;
+    if (depotId) filter.depotId = depotId;
+    if (busType) filter.busType = busType;
+    if (search) {
+      filter.$or = [
+        { busNumber: { $regex: search, $options: 'i' } },
+        { registrationNumber: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Build sort object
+    const sort = {};
+    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    const [buses, total] = await Promise.all([
+      Bus.find(filter)
+        .populate('depotId', 'depotName location')
+        .populate('assignedDriver', 'name phone')
+        .populate('assignedConductor', 'name phone')
+        .sort(sort)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Bus.countDocuments(filter)
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        buses,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Buses fetch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch buses',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/admin/buses/:id - Update bus
 router.put('/buses/:id', async (req, res) => {
   try {
-    const busData = req.body;
-    busData.updatedBy = req.user.id;
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // Remove immutable fields
+    delete updateData.busNumber;
+    delete updateData.registrationNumber;
+    delete updateData.assignedBy;
 
     const bus = await Bus.findByIdAndUpdate(
-      req.params.id,
-      busData,
+      id,
+      { ...updateData, updatedBy: req.user._id },
       { new: true, runValidators: true }
     );
 
     if (!bus) {
-      return res.status(404).json({ error: 'Bus not found' });
-    }
-
-    res.json({ 
-      message: 'Bus updated successfully', 
-      bus 
-    });
-  } catch (error) {
-    console.error('Bus update error:', error);
-    res.status(500).json({ error: 'Failed to update bus' });
-  }
-});
-
-// DELETE /api/admin/buses/:id
-router.delete('/buses/:id', async (req, res) => {
-  try {
-    const bus = await Bus.findById(req.params.id);
-    
-    if (!bus) {
-      return res.status(404).json({ error: 'Bus not found' });
-    }
-
-    // Check if bus is currently assigned to a trip
-    if (bus.currentTrip) {
-      return res.status(400).json({ 
-        error: 'Cannot delete bus that is currently assigned to a trip' 
+      return res.status(404).json({
+        success: false,
+        message: 'Bus not found'
       });
     }
 
-    await Bus.findByIdAndDelete(req.params.id);
+    res.json({
+      success: true,
+      message: 'Bus updated successfully',
+      data: bus
+    });
 
-    res.json({ message: 'Bus deleted successfully' });
+  } catch (error) {
+    console.error('Bus update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update bus',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/admin/buses/:id - Delete bus (soft delete)
+router.delete('/buses/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if bus has active trips
+    const activeTrips = await Trip.countDocuments({
+      busId: id,
+      status: { $in: ['scheduled', 'running'] }
+    });
+
+    if (activeTrips > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete bus with ${activeTrips} active trips`
+      });
+    }
+
+    // Soft delete by updating status
+    const bus = await Bus.findByIdAndUpdate(
+      id,
+      { status: 'retired', deletedAt: new Date(), deletedBy: req.user._id },
+      { new: true }
+    );
+
+    if (!bus) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bus not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Bus deleted successfully'
+    });
+
   } catch (error) {
     console.error('Bus deletion error:', error);
-    res.status(500).json({ error: 'Failed to delete bus' });
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete bus',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/admin/buses/:id/assign - Assign driver/conductor to bus
+router.post('/buses/:id/assign', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { driverId, conductorId } = req.body;
+
+    const bus = await Bus.findById(id);
+    if (!bus) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bus not found'
+      });
+    }
+
+    // Validate driver if assigned
+    if (driverId) {
+      const driver = await User.findById(driverId);
+      if (!driver || driver.role !== 'driver') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid driver assignment'
+        });
+      }
+    }
+
+    // Validate conductor if assigned
+    if (conductorId) {
+      const conductor = await User.findById(conductorId);
+      if (!conductor || conductor.role !== 'conductor') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid conductor assignment'
+        });
+      }
+    }
+
+    // Update assignments
+    bus.assignedDriver = driverId || null;
+    bus.assignedConductor = conductorId || null;
+    bus.updatedBy = req.user._id;
+    await bus.save();
+
+    res.json({
+      success: true,
+      message: 'Bus assignment updated successfully',
+      data: bus
+    });
+
+  } catch (error) {
+    console.error('Bus assignment error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update bus assignment',
+      error: error.message
+    });
   }
 });
 
@@ -1561,37 +2016,6 @@ router.get('/buses/realtime', async (req, res) => {
   }
 });
 
-// POST /api/admin/buses/:id/assign-route
-router.post('/buses/:id/assign-route', async (req, res) => {
-  try {
-    const { routeId, driverId, conductorId } = req.body;
-    
-    const bus = await Bus.findById(req.params.id);
-    if (!bus) {
-      return res.status(404).json({ error: 'Bus not found' });
-    }
-
-    // Check if bus is available
-    if (bus.status !== 'active') {
-      return res.status(400).json({ error: 'Bus is not available for assignment' });
-    }
-
-    // Update bus assignment
-    bus.currentTrip = routeId;
-    bus.assignedDriver = driverId;
-    bus.assignedConductor = conductorId;
-    await bus.save();
-
-    res.json({ 
-      message: 'Route assigned successfully', 
-      bus 
-    });
-  } catch (error) {
-    console.error('Route assignment error:', error);
-    res.status(500).json({ error: 'Failed to assign route' });
-  }
-});
-
 // POST /api/admin/buses/:id/maintenance
 router.post('/buses/:id/maintenance', async (req, res) => {
   try {
@@ -1626,5 +2050,12 @@ router.post('/buses/:id/maintenance', async (req, res) => {
     res.status(500).json({ error: 'Failed to add maintenance issue' });
   }
 });
+
+// Helper function to calculate base fare
+function calculateBaseFare(distance) {
+  const baseFare = 100;
+  const perKmRate = 2;
+  return Math.round(baseFare + (distance * perKmRate));
+}
 
 module.exports = router;

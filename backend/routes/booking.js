@@ -58,10 +58,15 @@ router.get('/existing-trips', async (req, res) => {
   }
 });
 
-// GET /api/booking/search - Public trip search (No auth required)
+// GET /api/booking/search - Enhanced trip search with autocomplete
 router.get('/search', async (req, res) => {
   try {
-    const { from, to, date, tripType = 'oneWay', returnDate } = req.query;
+    const { from, to, date, tripType = 'oneWay', returnDate, partial = false } = req.query;
+    
+    // If partial search (autocomplete), return suggestions
+    if (partial === 'true') {
+      return await handlePartialSearch(req, res);
+    }
     
     if (!from || !to || !date) {
       return res.status(400).json({ 
@@ -73,182 +78,181 @@ router.get('/search', async (req, res) => {
 
     console.log('Search request:', { from, to, date, tripType, returnDate });
 
-    // First, try to find trips directly (since admin already has trips)
+    // Enhanced search with multiple matching strategies
     const searchDate = new Date(date);
     searchDate.setHours(0, 0, 0, 0);
     const nextDay = new Date(searchDate);
     nextDay.setDate(nextDay.getDate() + 1);
 
-    // Find trips for the specified date using start/end-of-day range
     const startOfDay = new Date(searchDate);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(searchDate);
     endOfDay.setDate(endOfDay.getDate() + 1);
     endOfDay.setHours(0, 0, 0, 0);
 
+    // Find all active trips for the date
     const trips = await Trip.find({
       serviceDate: { $gte: startOfDay, $lt: endOfDay },
-      // Avoid only-cancelled trips; do not over-restrict status as admin may use custom statuses
       status: { $ne: 'cancelled' }
-    }).populate('routeId').populate('driverId', 'name').populate('conductorId', 'name').lean();
+    }).populate('routeId').populate('driverId', 'name').populate('conductorId', 'name').populate('busId', 'busNumber busType capacity').lean();
 
     console.log('Found trips:', trips.length);
 
-    // Filter trips that match the from/to terms across city, location, and route name
+    // Enhanced matching with fuzzy search and multiple criteria
     const matchingTrips = trips.filter(trip => {
       if (!trip.routeId) return false;
       const route = trip.routeId;
+      
       const fromTerm = String(from || '').toLowerCase();
       const toTerm = String(to || '').toLowerCase();
 
-      const matchPlace = (term) => {
-        if (!term) return false;
-        const sp = route.startingPoint || {};
-        const ep = route.endingPoint || {};
-        const name = (route.routeName || '').toLowerCase();
-        const spCity = (sp.city || '').toLowerCase();
-        const spLoc = (sp.location || '').toLowerCase();
-        const epCity = (ep.city || '').toLowerCase();
-        const epLoc = (ep.location || '').toLowerCase();
-
-        const stops = Array.isArray(route.intermediateStops) ? route.intermediateStops : [];
-        const stopMatch = stops.some(s => {
-          const sCity = (s.city || '').toLowerCase();
-          const sLoc = (s.location || '').toLowerCase();
-          return sCity.includes(term) || sLoc.includes(term);
-        });
-
-        return (
-          name.includes(term) ||
-          spCity.includes(term) || spLoc.includes(term) ||
-          epCity.includes(term) || epLoc.includes(term) ||
-          stopMatch
-        );
+      // Enhanced place matching function
+      const matchPlace = (term, place) => {
+        if (!term || !place) return false;
+        
+        const city = (place.city || '').toLowerCase();
+        const location = (place.location || '').toLowerCase();
+        
+        // Exact match
+        if (city === term || location === term) return true;
+        
+        // Contains match
+        if (city.includes(term) || location.includes(term)) return true;
+        
+        // Partial word match (for autocomplete-like behavior)
+        const cityWords = city.split(' ');
+        const locationWords = location.split(' ');
+        
+        return cityWords.some(word => word.startsWith(term)) || 
+               locationWords.some(word => word.startsWith(term));
       };
 
-      return matchPlace(fromTerm) && matchPlace(toTerm);
+      // Check starting point
+      const fromMatch = matchPlace(fromTerm, route.startingPoint);
+      
+      // Check ending point
+      const toMatch = matchPlace(toTerm, route.endingPoint);
+      
+      // Check intermediate stops
+      const intermediateMatch = route.intermediateStops?.some(stop => 
+        matchPlace(fromTerm, stop) || matchPlace(toTerm, stop)
+      ) || false;
+      
+      // Check route name
+      const routeNameMatch = route.routeName?.toLowerCase().includes(fromTerm) || 
+                            route.routeName?.toLowerCase().includes(toTerm);
+      
+      return (fromMatch || intermediateMatch || routeNameMatch) && 
+             (toMatch || intermediateMatch || routeNameMatch);
     });
 
     console.log('Matching trips:', matchingTrips.length);
 
     if (matchingTrips.length === 0) {
-      // If no trips found, try to find any routes that match (AND the from/to conditions)
-      const routes = await Route.find({
-        $and: [
-          { $or: [
-            { 'startingPoint.city': { $regex: from, $options: 'i' } },
-            { 'startingPoint.location': { $regex: from, $options: 'i' } },
-            { 'endingPoint.city': { $regex: from, $options: 'i' } },
-            { 'endingPoint.location': { $regex: from, $options: 'i' } },
-            { 'intermediateStops.city': { $regex: from, $options: 'i' } },
-            { 'intermediateStops.location': { $regex: from, $options: 'i' } },
-            { 'routeName': { $regex: from, $options: 'i' } }
-          ]},
-          { $or: [
-            { 'startingPoint.city': { $regex: to, $options: 'i' } },
-            { 'startingPoint.location': { $regex: to, $options: 'i' } },
-            { 'endingPoint.city': { $regex: to, $options: 'i' } },
-            { 'endingPoint.location': { $regex: to, $options: 'i' } },
-            { 'intermediateStops.city': { $regex: to, $options: 'i' } },
-            { 'intermediateStops.location': { $regex: to, $options: 'i' } },
-            { 'routeName': { $regex: to, $options: 'i' } }
-          ]}
-        ],
-        status: 'active'
-      }).populate('depot').lean();
-
-      console.log('Found routes:', routes.length);
-
-      if (routes.length === 0) {
-        return res.json({ 
-          ok: true, 
-          data: { trips: [] },
-          message: 'No routes or trips found for the specified cities' 
-        });
-      }
-
-      // Return route suggestions even if no trips exist
-      const routeSuggestions = routes.map(route => ({
-        type: 'route_suggestion',
-        from: route.startingPoint?.city || 'Unknown',
-        to: route.endingPoint?.city || 'Unknown',
-        routeName: route.routeName,
-        distance: route.totalDistance,
-        message: 'Route exists but no trips scheduled for this date'
-      }));
-
+      // Return route suggestions for future reference
+      const routeSuggestions = await getRouteSuggestions(from, to);
+      
       return res.json({ 
         ok: true, 
         data: { 
           trips: [],
           suggestions: routeSuggestions,
-          message: 'Routes found but no trips scheduled for this date' 
+          message: 'No trips found for the specified criteria. Here are some route suggestions.' 
         } 
       });
     }
 
-    // Enhance trip data with route information and calculate fares
+    // Enhance trip data with comprehensive information
     const enhancedTrips = matchingTrips.map(trip => {
       const route = trip.routeId;
+      const bus = trip.busId;
       
-      // Find the correct from and to cities based on search criteria
-      let fromCity = from;
-      let toCity = to;
+      // Find the best matching from and to locations
+      const { fromLocation, toLocation } = findBestLocations(route, from, to);
       
-      // If route has intermediate stops, find the closest matches
-      if (route.intermediateStops && route.intermediateStops.length > 0) {
-        const fromStop = route.intermediateStops.find(stop => 
-          stop.city && stop.city.toLowerCase().includes(from.toLowerCase())
-        ) || route.startingPoint;
-        
-        const toStop = route.intermediateStops.find(stop => 
-          stop.city && stop.city.toLowerCase().includes(to.toLowerCase())
-        ) || route.endingPoint;
-        
-        fromCity = fromStop?.city || from;
-        toCity = toStop?.city || to;
-      } else {
-        fromCity = route.startingPoint?.city || from;
-        toCity = route.endingPoint?.city || to;
-      }
-      
-      // Calculate fare based on distance
-      const fare = calculateFare(route.totalDistance || 100);
+      // Calculate fare with dynamic pricing
+      const baseFare = route.baseFare || calculateFare(route.totalDistance || 100);
+      const dynamicFare = calculateDynamicFare(baseFare, trip.serviceDate, trip.status);
       
       // Calculate arrival time
       const arrivalTime = calculateArrivalTime(trip.startTime, route.totalDistance || 100);
       
-      // Mock seat availability for Phase-0
-      const totalSeats = 35;
-      const availableSeats = Math.floor(Math.random() * 20) + 5; // 5-25 seats available
+      // Get seat availability
+      const seatAvailability = getSeatAvailability(trip, bus);
       
       return {
-        ...trip,
-        from: fromCity,
-        to: toCity,
+        id: trip._id,
+        tripNumber: `TRP${trip._id.toString().slice(-6).toUpperCase()}`,
+        from: fromLocation,
+        to: toLocation,
         departure: trip.startTime,
         arrival: arrivalTime,
-        fare: fare,
-        availableSeats: availableSeats,
-        totalSeats: totalSeats,
-        depot: route.depot?.depotName || 'Central Depot',
-        busType: route.busType || 'AC Sleeper',
-        amenities: ['WiFi', 'USB Charging', 'AC'],
-        routeName: route.routeName || `${fromCity} → ${toCity}`,
+        date: trip.serviceDate,
+        duration: calculateDuration(route.totalDistance || 100),
         distance: route.totalDistance || 100,
-        duration: calculateDuration(route.totalDistance || 100)
+        fare: {
+          base: baseFare,
+          current: dynamicFare,
+          currency: 'INR',
+          discount: baseFare - dynamicFare
+        },
+        bus: {
+          number: bus?.busNumber || 'N/A',
+          type: bus?.busType || 'Standard',
+          capacity: bus?.capacity?.total || 35,
+          amenities: getBusAmenities(bus?.busType || 'standard')
+        },
+        route: {
+          name: route.routeName || `${fromLocation} → ${toLocation}`,
+          number: route.routeNumber || 'N/A',
+          stops: route.intermediateStops?.length || 0
+        },
+        crew: {
+          driver: trip.driverId?.name || 'To be assigned',
+          conductor: trip.conductorId?.name || 'To be assigned'
+        },
+        status: trip.status,
+        seatAvailability,
+        bookingOptions: {
+          canBook: seatAvailability.available > 0,
+          maxSeats: Math.min(seatAvailability.available, 4), // Limit to 4 seats per booking
+          requiresAdvance: isAdvanceBookingRequired(trip.serviceDate)
+        },
+        depot: route.depot?.depotName || 'Central Depot',
+        lastUpdated: trip.updatedAt || trip.createdAt
       };
     });
 
-    // Sort trips by departure time
-    enhancedTrips.sort((a, b) => a.departure.localeCompare(b.departure));
+    // Sort trips by departure time and fare
+    enhancedTrips.sort((a, b) => {
+      // First by departure time
+      const timeComparison = a.departure.localeCompare(b.departure);
+      if (timeComparison !== 0) return timeComparison;
+      
+      // Then by fare (cheapest first)
+      return a.fare.current - b.fare.current;
+    });
 
     res.json({ 
       ok: true, 
       data: { 
         trips: enhancedTrips,
         searchCriteria: { from, to, date, tripType, returnDate },
-        totalFound: enhancedTrips.length
+        totalFound: enhancedTrips.length,
+        searchSummary: {
+          date: date,
+          from: from,
+          to: to,
+          totalTrips: enhancedTrips.length,
+          priceRange: {
+            min: Math.min(...enhancedTrips.map(t => t.fare.current)),
+            max: Math.max(...enhancedTrips.map(t => t.fare.current))
+          },
+          timeRange: {
+            earliest: enhancedTrips[0]?.departure,
+            latest: enhancedTrips[enhancedTrips.length - 1]?.departure
+          }
+        }
       },
       message: `Found ${enhancedTrips.length} trips` 
     });
@@ -263,63 +267,297 @@ router.get('/search', async (req, res) => {
   }
 });
 
-// GET /api/booking/popular-routes - Get popular routes for suggestions
-router.get('/popular-routes', async (req, res) => {
+// GET /api/booking/autocomplete - Enhanced autocomplete for places
+router.get('/autocomplete', async (req, res) => {
   try {
-    // Get routes from active routes
+    const { query, type = 'all' } = req.query;
+    
+    if (!query || query.length < 1) {
+      return res.json({
+        ok: true,
+        data: { suggestions: [] },
+        message: 'Query too short'
+      });
+    }
+
+    const searchTerm = query.toLowerCase();
+    const suggestions = [];
+
+    // Get all active routes
     const routes = await Route.find({ status: 'active' })
-      .sort({ popularity: -1 })
-      .limit(10)
-      .select('startingPoint endingPoint totalDistance baseFare routeName')
+      .populate('depot', 'depotName location')
       .lean();
 
-    // Get routes from existing trips (since admin already has trips)
+    // Get all active trips for additional context
     const trips = await Trip.find({ 
-      status: { $in: ['scheduled', 'boarding', 'running'] },
-      serviceDate: { $gte: new Date() } // Only future trips
+      status: { $in: ['scheduled', 'running'] },
+      serviceDate: { $gte: new Date() }
     }).populate('routeId').lean();
 
-    const routeMap = new Map();
+    const placeMap = new Map();
 
-    // Add routes from routes collection
+    // Process routes
     routes.forEach(route => {
-      const key = `${route.startingPoint?.city}-${route.endingPoint?.city}`;
-      if (!routeMap.has(key)) {
-        routeMap.set(key, {
-          from: route.startingPoint?.city || 'Unknown',
-          to: route.endingPoint?.city || 'Unknown',
-          distance: route.totalDistance,
-          fare: route.baseFare || calculateFare(route.totalDistance || 100),
-          name: route.routeName,
-          source: 'route'
+      // Starting point
+      if (route.startingPoint) {
+        const key = `${route.startingPoint.city}-${route.startingPoint.location}`;
+        if (!placeMap.has(key)) {
+          placeMap.set(key, {
+            city: route.startingPoint.city,
+            location: route.startingPoint.location,
+            type: 'starting_point',
+            routes: [],
+            popularity: 0
+          });
+        }
+        const place = placeMap.get(key);
+        place.routes.push(route.routeName);
+        place.popularity += 1;
+      }
+
+      // Ending point
+      if (route.endingPoint) {
+        const key = `${route.endingPoint.city}-${route.endingPoint.location}`;
+        if (!placeMap.has(key)) {
+          placeMap.set(key, {
+            city: route.endingPoint.city,
+            location: route.endingPoint.location,
+            type: 'ending_point',
+            routes: [],
+            popularity: 0
+          });
+        }
+        const place = placeMap.get(key);
+        place.routes.push(route.routeName);
+        place.popularity += 1;
+      }
+
+      // Intermediate stops
+      if (route.intermediateStops) {
+        route.intermediateStops.forEach(stop => {
+          const key = `${stop.city}-${stop.location}`;
+          if (!placeMap.has(key)) {
+            placeMap.set(key, {
+              city: stop.city,
+              location: stop.location,
+              type: 'intermediate_stop',
+              routes: [],
+              popularity: 0
+            });
+          }
+          const place = placeMap.get(key);
+          place.routes.push(route.routeName);
+          place.popularity += 0.5; // Intermediate stops get lower popularity
         });
       }
     });
 
-    // Add routes from existing trips
+    // Process trips for additional context
     trips.forEach(trip => {
       if (trip.routeId) {
         const route = trip.routeId;
-        const key = `${route.startingPoint?.city}-${route.endingPoint?.city}`;
-        
-        if (!routeMap.has(key)) {
-          routeMap.set(key, {
-            from: route.startingPoint?.city || 'Unknown',
-            to: route.endingPoint?.city || 'Unknown',
-            distance: route.totalDistance || 100,
-            fare: route.baseFare || calculateFare(route.totalDistance || 100),
-            name: route.routeName || `${route.startingPoint?.city} → ${route.endingPoint?.city}`,
-            source: 'trip'
-          });
+        // Add popularity based on active trips
+        if (route.startingPoint) {
+          const key = `${route.startingPoint.city}-${route.startingPoint.location}`;
+          if (placeMap.has(key)) {
+            placeMap.get(key).popularity += 0.3;
+          }
+        }
+        if (route.endingPoint) {
+          const key = `${route.endingPoint.city}-${route.endingPoint.location}`;
+          if (placeMap.has(key)) {
+            placeMap.get(key).popularity += 0.3;
+          }
         }
       }
     });
 
-    const formattedRoutes = Array.from(routeMap.values()).slice(0, 10);
+    // Convert to array and filter by search term
+    const places = Array.from(placeMap.values())
+      .filter(place => {
+        const cityMatch = place.city.toLowerCase().includes(searchTerm);
+        const locationMatch = place.location.toLowerCase().includes(searchTerm);
+        const partialCityMatch = place.city.toLowerCase().split(' ').some(word => word.startsWith(searchTerm));
+        const partialLocationMatch = place.location.toLowerCase().split(' ').some(word => word.startsWith(searchTerm));
+        
+        return cityMatch || locationMatch || partialCityMatch || partialLocationMatch;
+      })
+      .sort((a, b) => {
+        // Sort by relevance and popularity
+        const aRelevance = getRelevanceScore(a, searchTerm);
+        const bRelevance = getRelevanceScore(b, searchTerm);
+        
+        if (aRelevance !== bRelevance) {
+          return bRelevance - aRelevance;
+        }
+        
+        return b.popularity - a.popularity;
+      })
+      .slice(0, 10); // Limit to top 10 suggestions
+
+    // Format suggestions
+    const formattedSuggestions = places.map(place => ({
+      city: place.city,
+      location: place.location,
+      fullName: `${place.city}, ${place.location}`,
+      type: place.type,
+      routes: place.routes.slice(0, 3), // Show max 3 routes
+      totalRoutes: place.routes.length,
+      popularity: place.popularity,
+      searchHint: `${place.city} → ${place.routes[0] || 'Multiple routes'}`
+    }));
 
     res.json({
       ok: true,
-      data: { routes: formattedRoutes },
+      data: { 
+        suggestions: formattedSuggestions,
+        query: searchTerm,
+        totalFound: formattedSuggestions.length
+      },
+      message: `Found ${formattedSuggestions.length} place suggestions`
+    });
+
+  } catch (err) {
+    console.error('Autocomplete error:', err);
+    res.status(500).json({
+      ok: false,
+      code: 'AUTOCOMPLETE_ERROR',
+      message: 'Failed to get autocomplete suggestions'
+    });
+  }
+});
+
+// GET /api/booking/popular-routes - Enhanced popular routes
+router.get('/popular-routes', async (req, res) => {
+  try {
+    const { limit = 10, from, to } = req.query;
+
+    // Get popular routes based on bookings and searches
+    const popularRoutes = await Route.aggregate([
+      { $match: { status: 'active' } },
+      {
+        $lookup: {
+          from: 'trips',
+          localField: '_id',
+          foreignField: 'routeId',
+          as: 'trips'
+        }
+      },
+      {
+        $lookup: {
+          from: 'bookings',
+          localField: 'trips._id',
+          foreignField: 'tripId',
+          as: 'bookings'
+        }
+      },
+      {
+        $addFields: {
+          tripCount: { $size: '$trips' },
+          bookingCount: { $size: '$bookings' },
+          popularity: {
+            $add: [
+              { $multiply: [{ $size: '$trips' }, 2] },
+              { $size: '$bookings' },
+              { $ifNull: ['$popularity', 0] }
+            ]
+          }
+        }
+      },
+      { $sort: { popularity: -1 } },
+      { $limit: parseInt(limit) }
+    ]);
+
+    // Get additional context from active trips
+    const activeTrips = await Trip.find({ 
+      status: { $in: ['scheduled', 'running'] },
+      serviceDate: { $gte: new Date() }
+    }).populate('routeId').lean();
+
+    const routeMap = new Map();
+
+    // Add routes from aggregation
+    popularRoutes.forEach(route => {
+      routeMap.set(route._id.toString(), {
+        id: route._id,
+        routeNumber: route.routeNumber,
+        routeName: route.routeName,
+        from: route.startingPoint?.city || 'Unknown',
+        to: route.endingPoint?.city || 'Unknown',
+        distance: route.totalDistance,
+        baseFare: route.baseFare,
+        busType: route.busType,
+        popularity: route.popularity,
+        tripCount: route.tripCount,
+        bookingCount: route.bookingCount,
+        source: 'aggregation'
+      });
+    });
+
+    // Add routes from active trips
+    activeTrips.forEach(trip => {
+      if (trip.routeId) {
+        const route = trip.routeId;
+        const key = route._id.toString();
+        
+        if (!routeMap.has(key)) {
+          routeMap.set(key, {
+            id: route._id,
+            routeNumber: route.routeNumber,
+            routeName: route.routeName,
+            from: route.startingPoint?.city || 'Unknown',
+            to: route.endingPoint?.city || 'Unknown',
+            distance: route.totalDistance,
+            baseFare: route.baseFare,
+            busType: route.busType,
+            popularity: 1,
+            tripCount: 1,
+            bookingCount: 0,
+            source: 'active_trip'
+          });
+        } else {
+          const existing = routeMap.get(key);
+          existing.tripCount += 1;
+          existing.popularity += 1;
+        }
+      }
+    });
+
+    // Filter by from/to if specified
+    let filteredRoutes = Array.from(routeMap.values());
+    if (from) {
+      filteredRoutes = filteredRoutes.filter(route => 
+        route.from.toLowerCase().includes(from.toLowerCase()) ||
+        route.to.toLowerCase().includes(from.toLowerCase())
+      );
+    }
+    if (to) {
+      filteredRoutes = filteredRoutes.filter(route => 
+        route.from.toLowerCase().includes(to.toLowerCase()) ||
+        route.to.toLowerCase().includes(to.toLowerCase())
+      );
+    }
+
+    // Sort by popularity and add additional info
+    const finalRoutes = filteredRoutes
+      .sort((a, b) => b.popularity - a.popularity)
+      .slice(0, parseInt(limit))
+      .map(route => ({
+        ...route,
+        fare: route.baseFare || calculateFare(route.distance || 100),
+        duration: calculateDuration(route.distance || 100),
+        amenities: getRouteAmenities(route.busType),
+        nextTrip: getNextTripTime(route.id),
+        availability: getRouteAvailability(route.id)
+      }));
+
+    res.json({
+      ok: true,
+      data: { 
+        routes: finalRoutes,
+        total: finalRoutes.length,
+        filters: { from, to, limit }
+      },
       message: 'Popular routes fetched successfully'
     });
 
@@ -729,6 +967,180 @@ router.post('/cancel', authRole(['PASSENGER','ADMIN']), async (req, res) => {
     });
   }
 });
+
+// Helper functions
+async function handlePartialSearch(req, res) {
+  const { from, to } = req.query;
+  
+  if (!from && !to) {
+    return res.json({
+      ok: true,
+      data: { suggestions: [] },
+      message: 'No search terms provided'
+    });
+  }
+
+  // Get autocomplete suggestions for partial search
+  const suggestions = await getAutocompleteSuggestions(from, to);
+  
+  res.json({
+    ok: true,
+    data: { suggestions },
+    message: 'Partial search suggestions'
+  });
+}
+
+async function getRouteSuggestions(from, to) {
+  const routes = await Route.find({
+    $or: [
+      { 'startingPoint.city': { $regex: from, $options: 'i' } },
+      { 'endingPoint.city': { $regex: to, $options: 'i' } },
+      { 'intermediateStops.city': { $regex: from, $options: 'i' } },
+      { 'intermediateStops.city': { $regex: to, $options: 'i' } }
+    ],
+    status: 'active'
+  }).populate('depot').lean();
+
+  return routes.map(route => ({
+    type: 'route_suggestion',
+    from: route.startingPoint?.city || 'Unknown',
+    to: route.endingPoint?.city || 'Unknown',
+    routeName: route.routeName,
+    routeNumber: route.routeNumber,
+    distance: route.totalDistance,
+    baseFare: route.baseFare,
+    depot: route.depot?.depotName || 'Unknown',
+    message: 'Route exists but no trips scheduled for this date'
+  }));
+}
+
+function findBestLocations(route, fromQuery, toQuery) {
+  const fromTerm = fromQuery.toLowerCase();
+  const toTerm = toQuery.toLowerCase();
+  
+  let fromLocation = route.startingPoint?.city || 'Unknown';
+  let toLocation = route.endingPoint?.city || 'Unknown';
+  
+  // Check intermediate stops for better matches
+  if (route.intermediateStops) {
+    route.intermediateStops.forEach(stop => {
+      if (stop.city.toLowerCase().includes(fromTerm)) {
+        fromLocation = stop.city;
+      }
+      if (stop.city.toLowerCase().includes(toTerm)) {
+        toLocation = stop.city;
+      }
+    });
+  }
+  
+  return { fromLocation, toLocation };
+}
+
+function calculateDynamicFare(baseFare, serviceDate, status) {
+  const daysUntilTrip = Math.ceil((new Date(serviceDate) - new Date()) / (1000 * 60 * 60 * 24));
+  
+  let multiplier = 1.0;
+  
+  // Early booking discount
+  if (daysUntilTrip > 7) {
+    multiplier = 0.9; // 10% discount
+  } else if (daysUntilTrip > 3) {
+    multiplier = 0.95; // 5% discount
+  }
+  
+  // Last minute premium
+  if (daysUntilTrip <= 1) {
+    multiplier = 1.2; // 20% premium
+  }
+  
+  return Math.round(baseFare * multiplier);
+}
+
+function getSeatAvailability(trip, bus) {
+  // Mock seat availability for now - in real system, this would query actual bookings
+  const totalSeats = bus?.capacity?.total || 35;
+  const bookedSeats = Math.floor(Math.random() * Math.min(totalSeats * 0.7, 20)); // Max 70% booked
+  const availableSeats = totalSeats - bookedSeats;
+  
+  return {
+    total: totalSeats,
+    available: availableSeats,
+    booked: bookedSeats,
+    percentage: Math.round((availableSeats / totalSeats) * 100)
+  };
+}
+
+function getBusAmenities(busType) {
+  const amenities = {
+    'ac_sleeper': ['AC', 'Sleeper Berths', 'USB Charging', 'WiFi', 'Refreshments'],
+    'ac_seater': ['AC', 'Reclining Seats', 'USB Charging', 'WiFi'],
+    'non_ac_sleeper': ['Sleeper Berths', 'USB Charging', 'Refreshments'],
+    'non_ac_seater': ['Reclining Seats', 'USB Charging'],
+    'volvo': ['AC', 'Premium Seats', 'USB Charging', 'WiFi', 'Entertainment', 'Refreshments'],
+    'mini': ['AC', 'Compact Seats', 'USB Charging']
+  };
+  
+  return amenities[busType] || ['Standard Seats', 'USB Charging'];
+}
+
+function getRouteAmenities(busType) {
+  return getBusAmenities(busType);
+}
+
+function isAdvanceBookingRequired(serviceDate) {
+  const daysUntilTrip = Math.ceil((new Date(serviceDate) - new Date()) / (1000 * 60 * 60 * 24));
+  return daysUntilTrip <= 1; // Same day or next day trips
+}
+
+function getRelevanceScore(place, searchTerm) {
+  let score = 0;
+  
+  // Exact matches get highest score
+  if (place.city.toLowerCase() === searchTerm) score += 100;
+  if (place.location.toLowerCase() === searchTerm) score += 100;
+  
+  // Starts with gets high score
+  if (place.city.toLowerCase().startsWith(searchTerm)) score += 50;
+  if (place.location.toLowerCase().startsWith(searchTerm)) score += 50;
+  
+  // Contains gets medium score
+  if (place.city.toLowerCase().includes(searchTerm)) score += 25;
+  if (place.location.toLowerCase().includes(searchTerm)) score += 25;
+  
+  // Partial word matches get lower score
+  const cityWords = place.city.toLowerCase().split(' ');
+  const locationWords = place.location.toLowerCase().split(' ');
+  
+  cityWords.forEach(word => {
+    if (word.startsWith(searchTerm)) score += 10;
+  });
+  
+  locationWords.forEach(word => {
+    if (word.startsWith(searchTerm)) score += 10;
+  });
+  
+  return score;
+}
+
+async function getAutocompleteSuggestions(from, to) {
+  // This would implement the same logic as the autocomplete endpoint
+  // but for internal use
+  return [];
+}
+
+function getNextTripTime(routeId) {
+  // Mock function - in real system, this would query actual trips
+  return 'Tomorrow 06:00 AM';
+}
+
+function getRouteAvailability(routeId) {
+  // Mock function - in real system, this would check actual availability
+  return {
+    status: 'available',
+    nextTrip: 'Tomorrow',
+    frequency: 'Daily'
+  };
+}
 
 module.exports = router;
 

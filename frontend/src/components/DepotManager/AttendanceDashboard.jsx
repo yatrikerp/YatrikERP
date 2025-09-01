@@ -62,7 +62,7 @@ const AttendanceDashboard = () => {
         overtime: '2h 45m',
         lateArrival: false,
         earlyDeparture: false,
-        notes: 'Completed Mumbai-Pune route successfully',
+        notes: 'Completed Kochi-Thiruvananthapuram route successfully',
         performance: 'excellent',
         lastUpdated: '2024-01-15 18:30'
       },

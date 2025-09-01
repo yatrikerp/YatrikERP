@@ -44,7 +44,7 @@ const LandingPage = () => {
           {/* CTA Buttons */}
           <div className="hero-buttons">
             <button className="btn btn-primary">Sign Up</button>
-            <button className="btn btn-secondary">Book Now</button>
+            <button className="btn btn-primary">Book Now</button>
           </div>
 
           {/* Search Section */}

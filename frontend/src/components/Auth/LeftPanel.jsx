@@ -40,7 +40,7 @@ const LeftPanel = () => {
               <circle 
                 cx="300" 
                 cy="300" 
-                r="250" 
+                r="280" 
                 fill="none"
                 stroke="url(#routeGradient)"
                 strokeWidth="6"
@@ -111,28 +111,28 @@ const LeftPanel = () => {
               <g className="direction-arrows">
                 {/* Arrow 1 - Right */}
                 <path 
-                  d="M 560 300 L 545 285 L 545 315 Z"
+                  d="M 580 300 L 565 285 L 565 315 Z"
                   fill="#E91E63"
                   className="direction-arrow"
                 />
                 
                 {/* Arrow 2 - Top */}
                 <path 
-                  d="M 300 50 L 285 65 L 315 65 Z"
+                  d="M 300 20 L 285 35 L 315 35 Z"
                   fill="#E91E63"
                   className="direction-arrow"
                 />
                 
                 {/* Arrow 3 - Left */}
                 <path 
-                  d="M 40 300 L 55 285 L 55 315 Z"
+                  d="M 20 300 L 35 285 L 35 315 Z"
                   fill="#E91E63"
                   className="direction-arrow"
                 />
                 
                 {/* Arrow 4 - Bottom */}
                 <path 
-                  d="M 300 550 L 285 535 L 315 535 Z"
+                  d="M 300 580 L 285 565 L 315 565 Z"
                   fill="#E91E63"
                   className="direction-arrow"
                 />

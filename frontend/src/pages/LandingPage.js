@@ -60,16 +60,16 @@ const LandingPage = () => {
   };
 
   const popularRoutes = [
-    { from: 'Mumbai', to: 'Pune', frequency: 'Every 30 mins', fare: '₹200' },
-    { from: 'Delhi', to: 'Agra', frequency: 'Every 1 hour', fare: '₹150' },
+    { from: 'Kochi', to: 'Thiruvananthapuram', frequency: 'Every 2 hours', fare: '₹350' },
+    { from: 'Kozhikode', to: 'Kochi', frequency: 'Every 3 hours', fare: '₹280' },
     { from: 'Bangalore', to: 'Mysore', frequency: 'Every 45 mins', fare: '₹180' },
     { from: 'Chennai', to: 'Pondicherry', frequency: 'Every 2 hours', fare: '₹120' },
     { from: 'Hyderabad', to: 'Warangal', frequency: 'Every 1 hour', fare: '₹100' },
   ];
 
   const serviceAlerts = [
-    { type: 'info', message: 'New routes added: Mumbai to Goa, Delhi to Jaipur' },
-    { type: 'warning', message: 'Traffic delays expected on Mumbai-Pune route due to monsoon' },
+    { type: 'info', message: 'New Kerala routes added: Kochi to Thiruvananthapuram, Kozhikode to Kochi' },
+    { type: 'warning', message: 'Monsoon season - expect delays on coastal routes' },
     { type: 'success', message: 'All buses now equipped with free WiFi and charging ports' },
   ];
 

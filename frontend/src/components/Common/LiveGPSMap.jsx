@@ -2,89 +2,78 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Navigation, Radio, Settings, Play, Pause, Maximize2, Minimize2, Layers, Filter } from 'lucide-react';
 import './LiveGPSMap.css';
 
-// India major cities and transport hubs with coordinates
-const INDIA_CITIES = {
-  'Mumbai': { lat: 19.0760, lng: 72.8777, state: 'Maharashtra' },
-  'Delhi': { lat: 28.7041, lng: 77.1025, state: 'Delhi' },
-  'Bangalore': { lat: 12.9716, lng: 77.5946, state: 'Karnataka' },
-  'Hyderabad': { lat: 17.3850, lng: 78.4867, state: 'Telangana' },
-  'Chennai': { lat: 13.0827, lng: 80.2707, state: 'Tamil Nadu' },
-  'Kolkata': { lat: 22.5726, lng: 88.3639, state: 'West Bengal' },
-  'Pune': { lat: 18.5204, lng: 73.8567, state: 'Maharashtra' },
-  'Ahmedabad': { lat: 23.0225, lng: 72.5714, state: 'Gujarat' },
-  'Jaipur': { lat: 26.9124, lng: 75.7873, state: 'Rajasthan' },
-  'Surat': { lat: 21.1702, lng: 72.8311, state: 'Gujarat' },
-  'Lucknow': { lat: 26.8467, lng: 80.9462, state: 'Uttar Pradesh' },
-  'Kanpur': { lat: 26.4499, lng: 80.3319, state: 'Uttar Pradesh' },
-  'Nagpur': { lat: 21.1458, lng: 79.0882, state: 'Maharashtra' },
-  'Indore': { lat: 22.7196, lng: 75.8577, state: 'Madhya Pradesh' },
-  'Thane': { lat: 19.2183, lng: 72.9781, state: 'Maharashtra' },
-  'Bhopal': { lat: 23.2599, lng: 77.4126, state: 'Madhya Pradesh' },
-  'Visakhapatnam': { lat: 17.6868, lng: 83.2185, state: 'Andhra Pradesh' },
-  'Pimpri-Chinchwad': { lat: 18.6298, lng: 73.7997, state: 'Maharashtra' },
-  'Patna': { lat: 25.5941, lng: 85.1376, state: 'Bihar' },
-  'Vadodara': { lat: 22.3072, lng: 73.1812, state: 'Gujarat' }
+// Kerala cities and transport hubs with coordinates
+const KERALA_CITIES = {
+  'Kochi': { lat: 9.9312, lng: 76.2673, state: 'Kerala' },
+  'Thiruvananthapuram': { lat: 8.5241, lng: 76.9366, state: 'Kerala' },
+  'Kozhikode': { lat: 11.2588, lng: 75.7804, state: 'Kerala' },
+  'Alappuzha': { lat: 9.4981, lng: 76.3388, state: 'Kerala' },
+  'Kollam': { lat: 8.8932, lng: 76.6141, state: 'Kerala' },
+  'Thrissur': { lat: 10.5276, lng: 76.2144, state: 'Kerala' },
+  'Kottayam': { lat: 9.5916, lng: 76.5222, state: 'Kerala' },
+  'Palakkad': { lat: 10.7867, lng: 76.6548, state: 'Kerala' },
+  'Ernakulam': { lat: 9.9312, lng: 76.2673, state: 'Kerala' }
 };
 
-// Sample route data for demonstration
-const SAMPLE_ROUTES = [
+// Kerala route data for demonstration
+const KERALA_ROUTES = [
   {
-    id: 'R001',
-    name: 'Mumbai - Pune Express',
-    from: 'Mumbai',
-    to: 'Pune',
-    distance: '148 km',
-    duration: '3h 30m',
+    id: 'KL001',
+    name: 'Kochi - Thiruvananthapuram Express',
+    from: 'Kochi',
+    to: 'Thiruvananthapuram',
+    distance: '220 km',
+    duration: '4h 00m',
     status: 'active',
-    busNumber: 'MH-01-AB-1234',
+    busNumber: 'KL-BUS-001',
     driver: 'Rajesh Kumar',
     conductor: 'Amit Patel',
-    currentLocation: { lat: 19.0760, lng: 72.8777 },
+    currentLocation: { lat: 9.9312, lng: 76.2673 },
     progress: 0,
     speed: 45,
-    eta: '2h 15m',
-    stops: ['Mumbai Central', 'Thane', 'Kalyan', 'Lonavala', 'Pune']
+    eta: '3h 45m',
+    stops: ['Kochi Central', 'Alappuzha', 'Kollam', 'Thiruvananthapuram Central']
   },
   {
-    id: 'R002',
-    name: 'Delhi - Jaipur Highway',
-    from: 'Delhi',
-    to: 'Jaipur',
-    distance: '280 km',
-    duration: '5h 45m',
+    id: 'KL002',
+    name: 'Kozhikode - Kochi Coastal Route',
+    from: 'Kozhikode',
+    to: 'Kochi',
+    distance: '180 km',
+    duration: '3h 30m',
     status: 'active',
-    busNumber: 'DL-02-CD-5678',
+    busNumber: 'KL-BUS-002',
     driver: 'Suresh Singh',
     conductor: 'Vikram Mehta',
-    currentLocation: { lat: 28.7041, lng: 77.1025 },
+    currentLocation: { lat: 11.2588, lng: 75.7804 },
     progress: 25,
     speed: 52,
-    eta: '4h 20m',
-    stops: ['Delhi ISBT', 'Gurgaon', 'Rewari', 'Bhiwadi', 'Jaipur']
+    eta: '2h 45m',
+    stops: ['Kozhikode Central', 'Thrissur', 'Ernakulam', 'Kochi Central']
   },
   {
-    id: 'R003',
-    name: 'Bangalore - Chennai Route',
-    from: 'Bangalore',
-    to: 'Chennai',
-    distance: '350 km',
-    duration: '7h 15m',
+    id: 'KL003',
+    name: 'Thiruvananthapuram - Kozhikode Mountain Express',
+    from: 'Thiruvananthapuram',
+    to: 'Kozhikode',
+    distance: '380 km',
+    duration: '7h 00m',
     status: 'active',
-    busNumber: 'KA-03-EF-9012',
+    busNumber: 'KL-BUS-003',
     driver: 'Krishna Reddy',
     conductor: 'Srinivas Rao',
-    currentLocation: { lat: 12.9716, lng: 77.5946 },
+    currentLocation: { lat: 8.5241, lng: 76.9366 },
     progress: 15,
     speed: 48,
-    eta: '6h 45m',
-    stops: ['Bangalore Central', 'Hosur', 'Krishnagiri', 'Vellore', 'Chennai']
+    eta: '6h 30m',
+    stops: ['Thiruvananthapuram Central', 'Kottayam', 'Thrissur', 'Palakkad', 'Kozhikode Central']
   }
 ];
 
 const LiveGPSMap = ({ isFullScreen, onToggleFullScreen }) => {
   console.log('LiveGPSMap component rendered'); // Debug log
   
-  const [activeRoutes, setActiveRoutes] = useState(SAMPLE_ROUTES);
+  const [activeRoutes, setActiveRoutes] = useState(KERALA_ROUTES);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [isLive, setIsLive] = useState(true);
   const [mapView, setMapView] = useState('satellite'); // satellite, terrain, street

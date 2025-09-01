@@ -41,9 +41,20 @@ const auth = async (req, res, next) => {
       .lean();
     
     if (!user) {
+      console.error('User not found for ID:', payload.userId);
       return res.status(401).json({ 
         success: false, 
-        error: 'User not found' 
+        error: 'User not found. Please log in again.',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+    
+    if (user.status !== 'active') {
+      console.error('User account is not active:', user.status);
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Account is not active. Please contact support.',
+        code: 'ACCOUNT_INACTIVE'
       });
     }
 
