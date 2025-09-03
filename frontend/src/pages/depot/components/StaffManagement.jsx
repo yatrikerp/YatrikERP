@@ -5,8 +5,8 @@ import './StaffManagement.css';
 const StaffManagement = () => {
   const { user } = useAuth();
   const [staff, setStaff] = useState([]);
-  const [drivers, setDrivers] = useState([]);
-  const [conductors, setConductors] = useState([]);
+  const [, setDrivers] = useState([]);
+  const [, setConductors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -59,41 +59,123 @@ const StaffManagement = () => {
   const fetchStaff = async () => {
     try {
       setLoading(true);
+      // Use different endpoints based on user role
+      const userRole = JSON.parse(localStorage.getItem('user') || '{}').role;
+      console.log('User role:', userRole);
+      
+      // For now, use the original endpoints until the new ones are working
+      const driverEndpoint = '/api/driver/all';
+      const conductorEndpoint = '/api/conductor/all';
+      console.log('Using endpoints:', { driverEndpoint, conductorEndpoint });
+      
       const [driversRes, conductorsRes] = await Promise.all([
-        fetch('/api/depot/drivers', {
+        fetch(driverEndpoint, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         }),
-        fetch('/api/depot/conductors', {
+        fetch(conductorEndpoint, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         })
       ]);
 
-      if (driversRes.ok) {
-        const driversData = await driversRes.json();
-        setDrivers(driversData.data.drivers || []);
-        setStats(prev => ({
-          ...prev,
-          totalDrivers: driversData.data.stats?.totalDrivers || 0,
-          activeDrivers: driversData.data.stats?.activeDrivers || 0
-        }));
+      if (!driversRes.ok) {
+        console.error('Driver fetch failed:', driversRes.status, await driversRes.text());
+      }
+      if (!conductorsRes.ok) {
+        console.error('Conductor fetch failed:', conductorsRes.status, await conductorsRes.text());
+      }
+      
+      const driversData = driversRes.ok ? await driversRes.json() : { data: [] };
+      const conductorsData = conductorsRes.ok ? await conductorsRes.json() : { data: [] };
+
+      const driversList = Array.isArray(driversData.data) ? driversData.data : (driversData.data?.drivers || []);
+      const conductorsList = Array.isArray(conductorsData.data) ? conductorsData.data : (conductorsData.data?.conductors || []);
+
+      // Normalize shape and add role to enable filtering
+      const driversMapped = driversList.map(d => ({
+        ...d,
+        role: 'driver',
+        employeeId: d.employeeCode || d.employeeId || d.driverId || '',
+        licenseNumber: d.drivingLicense?.licenseNumber || d.licenseNumber || '',
+        licenseExpiry: d.drivingLicense?.expiryDate || d.licenseExpiry || '',
+        joiningDate: d.joiningDate || d.createdAt
+      }));
+
+      const conductorsMapped = conductorsList.map(c => ({
+        ...c,
+        role: 'conductor',
+        employeeId: c.employeeCode || c.employeeId || c.conductorId || '',
+        licenseNumber: c.licenseNumber || '',
+        licenseExpiry: c.licenseExpiry || '',
+        joiningDate: c.joiningDate || c.createdAt
+      }));
+
+      setDrivers(driversMapped);
+      setConductors(conductorsMapped);
+
+      // Calculate active drivers as those with a duty assigned/active today
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const todayStr = `${yyyy}-${mm}-${dd}`;
+
+      let activeAssignedDriverCount = 0;
+      let activeAssignedConductorCount = 0;
+      try {
+        const tripsQueryParams = new URLSearchParams({ date: todayStr });
+        // If depot is available, scope by depotId for safety (backend already scopes by auth)
+        const depotId = JSON.parse(localStorage.getItem('user') || '{}').depotId || user?.depotId;
+        if (depotId) tripsQueryParams.append('depotId', depotId);
+
+        const dutiesRes = await fetch(`/api/depot/trips?${tripsQueryParams.toString()}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (dutiesRes.ok) {
+          const dutiesJson = await dutiesRes.json();
+          const duties = Array.isArray(dutiesJson.data?.trips) ? dutiesJson.data.trips : (Array.isArray(dutiesJson.data) ? dutiesJson.data : []);
+          const activeStatuses = new Set(['scheduled', 'running', 'in-progress', 'on-break', 'assigned', 'started']);
+          const driverIdsSet = new Set(
+            duties
+              .filter(d => activeStatuses.has(d.status))
+              .map(d => {
+                const drv = d.driverId; // could be id or populated object
+                if (!drv) return null;
+                if (typeof drv === 'string') return drv;
+                if (typeof drv === 'object') return drv._id || drv.id || null;
+                return null;
+              })
+              .filter(Boolean)
+          );
+          activeAssignedDriverCount = driverIdsSet.size;
+
+          const conductorIdsSet = new Set(
+            duties
+              .filter(d => activeStatuses.has(d.status))
+              .map(d => {
+                const cnd = d.conductorId;
+                if (!cnd) return null;
+                if (typeof cnd === 'string') return cnd;
+                if (typeof cnd === 'object') return cnd._id || cnd.id || null;
+                return null;
+              })
+              .filter(Boolean)
+          );
+          activeAssignedConductorCount = conductorIdsSet.size;
+        }
+      } catch (e) {
+        // Fallback silently; keep previous calculation if duty API fails
+        console.warn('Failed to fetch duties for active drivers calc:', e);
       }
 
-      if (conductorsRes.ok) {
-        const conductorsData = await conductorsRes.json();
-        setConductors(conductorsData.data.conductors || []);
-        setStats(prev => ({
-          ...prev,
-          totalConductors: conductorsData.data.stats?.totalConductors || 0,
-          activeConductors: conductorsData.data.stats?.activeConductors || 0
-        }));
-      }
+      setStats(prev => ({
+        ...prev,
+        totalDrivers: driversList.length,
+        activeDrivers: activeAssignedDriverCount,
+        totalConductors: conductorsList.length,
+        activeConductors: activeAssignedConductorCount
+      }));
 
-      // Combine staff for unified view
-      const allStaff = [
-        ...(driversRes.ok ? (await driversRes.json()).data.drivers || [] : []),
-        ...(conductorsRes.ok ? (await conductorsRes.json()).data.conductors || [] : [])
-      ];
-      setStaff(allStaff);
+      setStaff([...driversMapped, ...conductorsMapped]);
     } catch (error) {
       console.error('Error fetching staff:', error);
     } finally {
@@ -104,14 +186,74 @@ const StaffManagement = () => {
   const handleAddStaff = async (e) => {
     e.preventDefault();
     try {
-      const endpoint = formData.role === 'driver' ? '/api/depot/drivers' : '/api/depot/conductors';
+      const endpoint = formData.role === 'driver' ? '/api/driver' : '/api/conductor';
+
+      // Map UI form to backend validation shape
+      const depotId = JSON.parse(localStorage.getItem('user') || '{}').depotId || user?.depotId;
+      const usernameFallback = (formData.email || formData.phone || `${formData.name}`)
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '_')
+        .slice(0, 20);
+      const temporaryPassword = (formData.password && formData.password.length >= 8)
+        ? formData.password
+        : 'TempPass@123';
+
+      // Parse emergency contact from a single-line input like "Name, 9123456789"
+      const parseEmergency = (value) => {
+        if (!value || typeof value !== 'string') return undefined;
+        const digitsMatch = value.match(/([6-9]\d{9})/);
+        const phone = digitsMatch ? digitsMatch[1] : '';
+        const namePart = value.replace(/([6-9]\d{9})/g, '').replace(/[,-]/g, ' ').replace(/\s+/g, ' ').trim();
+        const name = namePart || '';
+        // Only include if both look valid
+        if (name.length >= 2 && /^[6-9]\d{9}$/.test(phone)) {
+          return { name, phone, relationship: '' };
+        }
+        return undefined; // omit to satisfy optional() validator
+      };
+
+      const payloadBase = {
+        name: formData.name,
+        phone: String(formData.phone || '').replace(/\D/g, ''),
+        email: formData.email,
+        employeeCode: formData.employeeId || formData.employeeCode || undefined,
+        username: formData.username || usernameFallback,
+        password: temporaryPassword,
+        depotId,
+        address: formData.address,
+        // Only include emergencyContact if parsable/valid
+        ...(typeof formData.emergencyContact === 'object' && formData.emergencyContact
+          ? { emergencyContact: formData.emergencyContact }
+          : (() => {
+              const ec = parseEmergency(formData.emergencyContact);
+              return ec ? { emergencyContact: ec } : {};
+            })()
+        ),
+        salary: typeof formData.salary === 'object' ? formData.salary : { basic: Number(formData.salary) || 0, allowances: 0, bonus: 0 },
+        status: formData.status || 'active',
+        notes: formData.notes || ''
+      };
+
+      const payload = formData.role === 'driver'
+        ? {
+            ...payloadBase,
+            drivingLicense: {
+              licenseNumber: formData.licenseNumber || 'TEMP000000',
+              type: formData.licenseType || 'LMV',
+              issueDate: formData.licenseIssueDate || new Date().toISOString().slice(0, 10),
+              expiryDate: formData.licenseExpiry || new Date(Date.now() + 365*24*60*60*1000).toISOString().slice(0,10),
+              issuingAuthority: formData.issuingAuthority || 'RTO'
+            }
+          }
+        : payloadBase;
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
 
       if (response.ok) {
@@ -119,8 +261,12 @@ const StaffManagement = () => {
         resetForm();
         fetchStaff();
       } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to add staff member');
+        let error;
+        try { error = await response.json(); } catch { error = {}; }
+        const messages = Array.isArray(error.errors)
+          ? error.errors.map(e => `${e.path || e.param || 'field'}: ${e.msg}`).join('\n')
+          : '';
+        alert(error.message + (messages ? `\n${messages}` : '') || 'Failed to add staff member');
       }
     } catch (error) {
       console.error('Error adding staff:', error);
@@ -131,9 +277,17 @@ const StaffManagement = () => {
   const handleEditStaff = async (e) => {
     e.preventDefault();
     try {
+      const userRole = JSON.parse(localStorage.getItem('user') || '{}').role;
+      
+      // Only admins can edit staff
+      if (userRole !== 'admin') {
+        alert('Only administrators can edit staff members');
+        return;
+      }
+      
       const endpoint = selectedStaff.role === 'driver' ? 
-        `/api/depot/drivers/${selectedStaff._id}` : 
-        `/api/depot/conductors/${selectedStaff._id}`;
+        `/api/driver/${selectedStaff._id}` : 
+        `/api/conductor/${selectedStaff._id}`;
       
       const response = await fetch(endpoint, {
         method: 'PUT',
@@ -160,9 +314,17 @@ const StaffManagement = () => {
 
   const handleDeleteStaff = async () => {
     try {
+      const userRole = JSON.parse(localStorage.getItem('user') || '{}').role;
+      
+      // Only admins can delete staff
+      if (userRole !== 'admin') {
+        alert('Only administrators can delete staff members');
+        return;
+      }
+      
       const endpoint = selectedStaff.role === 'driver' ? 
-        `/api/depot/drivers/${selectedStaff._id}` : 
-        `/api/depot/conductors/${selectedStaff._id}`;
+        `/api/driver/${selectedStaff._id}` : 
+        `/api/conductor/${selectedStaff._id}`;
       
       const response = await fetch(endpoint, {
         method: 'DELETE',
@@ -277,7 +439,7 @@ const StaffManagement = () => {
       <div className="staff-header">
         <div className="header-left">
           <h1>Staff Management</h1>
-          <p>Manage drivers, conductors, and all depot personnel</p>
+          <p>Manage drivers, conductors, and depot personnel</p>
         </div>
         <div className="header-right">
           <button 
@@ -287,10 +449,12 @@ const StaffManagement = () => {
             <svg fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
             </svg>
-            Add Staff Member
+            Add Staff
           </button>
         </div>
       </div>
+
+      {/* Banner removed per request */}
 
       {/* Stats Cards */}
       <div className="staff-stats">
@@ -471,25 +635,29 @@ const StaffManagement = () => {
                 </td>
                 <td>
                   <div className="action-buttons">
-                    <button
-                      className="action-btn view"
-                      onClick={() => openEditModal(staffMember)}
-                      title="View/Edit"
-                    >
-                      <svg fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                        <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                    <button
-                      className="action-btn delete"
-                      onClick={() => openDeleteModal(staffMember)}
-                      title="Delete"
-                    >
-                      <svg fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                    </button>
+                    {JSON.parse(localStorage.getItem('user') || '{}').role === 'admin' && (
+                      <>
+                        <button
+                          className="action-btn view"
+                          onClick={() => openEditModal(staffMember)}
+                          title="View/Edit"
+                        >
+                          <svg fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                            <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                        <button
+                          className="action-btn delete"
+                          onClick={() => openDeleteModal(staffMember)}
+                          title="Delete"
+                        >
+                          <svg fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -916,3 +1084,4 @@ const StaffManagement = () => {
 };
 
 export default StaffManagement;
+

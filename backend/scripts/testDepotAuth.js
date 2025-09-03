@@ -71,3 +71,4 @@ async function testDepotAuth() {
   
   console.log('\n🚀 Depot authentication is ready for testing!');
 }
+

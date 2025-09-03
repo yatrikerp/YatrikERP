@@ -47,11 +47,13 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/depot-auth', require('./routes/depotAuth'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/depot', require('./routes/depot'));
+app.use('/api/driver', require('./routes/driver'));
+app.use('/api/conductor', require('./routes/conductor'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/seats', require('./routes/seats'));
 app.use('/api/tracking', require('./routes/tracking'));
-app.use('/api/booking', require('./routes/bookingNew'));
+app.use('/api/booking', require('./routes/booking'));
 app.use('/api/routes', require('./routes/routes'));
 app.use('/api/status', require('./routes/status'));
 

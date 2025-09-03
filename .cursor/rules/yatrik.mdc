@@ -1,0 +1,55 @@
+---
+description: >
+  Rules for building Yatrik ERP with React (Vite frontend) and Node.js/Express backend.
+  Use only JavaScript (.js, .jsx). No TypeScript.
+
+globs:
+  - "frontend/**"
+  - "backend/**"
+  - "**/*.js"
+  - "**/*.jsx"
+
+alwaysApply: true
+
+rules:
+  # ===== FRONTEND RULES =====
+  - Always use **React + Vite** with plain JavaScript (.js/.jsx).
+  - Styling must use **TailwindCSS**.
+  - Use **React Router v6+** for navigation.
+  - Manage auth/session via **React Context**.
+  - Follow **ERP-style UI**:
+      - Responsive layout (grid/flex)
+      - Dashboard with cards, tables, charts
+      - Minimal, professional theme
+  - Shared components (buttons, inputs, modals) → `frontend/shared-ui/`.
+
+  # ===== BACKEND RULES =====
+  - Always use **Node.js + Express + MongoDB**.
+  - APIs should be RESTful with prefix `/api/v1/...`.
+  - Authentication/Authorization via **JWT + bcrypt**.
+  - Folder structure:
+      - `src/auth/` → login, register, roles
+      - `src/passengers/` → booking, wallet, payments
+      - `src/conductors/` → duty, QR scan
+      - `src/drivers/` → GPS, status updates
+      - `src/depots/` → CRUD routes/trips/fares, crew mgmt
+      - `src/admin/` → global config, feature flags, audit logs
+      - `src/support/` → booking lookup, refunds
+      - `src/utils/` → QR, payments, notifications
+      - `src/db/` → models & schemas
+  - Always use **async/await** + centralized error handler.
+
+  # ===== RBAC =====
+  - Passenger: Search, Book, Pay, Wallet, Trip History.
+  - Conductor: Duty start/end, QR validation, passenger list.
+  - Driver: Duty start, GPS updates, delay status.
+  - Depot Manager: CRUD routes/trips/fares, crew, live dashboard.
+  - Admin: Global system config, audit logs, feature flags.
+  - Support Agent: Booking lookup, refunds.
+
+  # ===== OTHER RULES =====
+  - Generate QR tickets with **qrcode.react** (frontend) + `qrcode` (backend).
+  - Use **Leaflet.js** (preferred) for live bus maps.
+  - Dashboards/analytics → **Recharts or Chart.js**.
+  - All code must be **production-ready, well-commented, and modular**.
+---

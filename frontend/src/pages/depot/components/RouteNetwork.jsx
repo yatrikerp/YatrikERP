@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import './RouteNetwork.css';
+import { apiFetch } from '../../../utils/api';
 
 const RouteNetwork = () => {
   const { user } = useAuth();
@@ -49,16 +50,14 @@ const RouteNetwork = () => {
   const fetchRoutes = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/depot/routes', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setRoutes(data.data.routes || []);
-        setStats(data.data.stats || {});
+      const res = await apiFetch('/api/depot/routes');
+      if (res.ok) {
+        // backend returns transformed array as data; handle both shapes
+        const payload = res.data?.data || res.data;
+        const routes = Array.isArray(payload) ? payload : payload?.routes;
+        const stats = Array.isArray(payload) ? {} : (payload?.stats || {});
+        setRoutes(routes || []);
+        setStats(stats);
       }
     } catch (error) {
       console.error('Error fetching routes:', error);
@@ -70,12 +69,8 @@ const RouteNetwork = () => {
   const handleAddRoute = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('/api/depot/routes', {
+      const response = await apiFetch('/api/depot/routes', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
         body: JSON.stringify(formData)
       });
 
@@ -84,8 +79,7 @@ const RouteNetwork = () => {
         resetForm();
         fetchRoutes();
       } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to add route');
+        alert(response.message || 'Failed to add route');
       }
     } catch (error) {
       console.error('Error adding route:', error);
@@ -96,12 +90,8 @@ const RouteNetwork = () => {
   const handleEditRoute = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`/api/depot/routes/${selectedRoute._id}`, {
+      const response = await apiFetch(`/api/depot/routes/${selectedRoute._id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
         body: JSON.stringify(formData)
       });
 
@@ -110,8 +100,7 @@ const RouteNetwork = () => {
         resetForm();
         fetchRoutes();
       } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to update route');
+        alert(response.message || 'Failed to update route');
       }
     } catch (error) {
       console.error('Error updating route:', error);
@@ -121,11 +110,8 @@ const RouteNetwork = () => {
 
   const handleDeleteRoute = async () => {
     try {
-      const response = await fetch(`/api/depot/routes/${selectedRoute._id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+      const response = await apiFetch(`/api/depot/routes/${selectedRoute._id}`, {
+        method: 'DELETE'
       });
 
       if (response.ok) {
@@ -133,8 +119,7 @@ const RouteNetwork = () => {
         setSelectedRoute(null);
         fetchRoutes();
       } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to delete route');
+        alert(response.message || 'Failed to delete route');
       }
     } catch (error) {
       console.error('Error deleting route:', error);
@@ -376,8 +361,8 @@ const RouteNetwork = () => {
                 </td>
                 <td>
                   <div className="route-endpoints">
-                    <div className="start-point">{route.startingPoint}</div>
-                    <div className="end-point">{route.endingPoint}</div>
+                    <div className="start-point">{route.startingPoint?.city}</div>
+                    <div className="end-point">{route.endingPoint?.city}</div>
                   </div>
                 </td>
                 <td>
@@ -508,7 +493,11 @@ const RouteNetwork = () => {
                   <input
                     type="number"
                     value={formData.totalDistance}
-                    onChange={(e) => setFormData({...formData, totalDistance: parseFloat(e.target.value)})}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      const num = v === '' ? 0 : Number(v);
+                      setFormData({ ...formData, totalDistance: Number.isFinite(num) ? num : 0 });
+                    }}
                     required
                     min="0"
                     step="0.1"
@@ -520,7 +509,11 @@ const RouteNetwork = () => {
                   <input
                     type="number"
                     value={formData.estimatedDuration}
-                    onChange={(e) => setFormData({...formData, estimatedDuration: parseInt(e.target.value)})}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      const num = v === '' ? 0 : parseInt(v, 10);
+                      setFormData({ ...formData, estimatedDuration: Number.isFinite(num) ? num : 0 });
+                    }}
                     required
                     min="0"
                   />
@@ -531,7 +524,11 @@ const RouteNetwork = () => {
                   <input
                     type="number"
                     value={formData.baseFare}
-                    onChange={(e) => setFormData({...formData, baseFare: parseFloat(e.target.value)})}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      const num = v === '' ? 0 : Number(v);
+                      setFormData({ ...formData, baseFare: Number.isFinite(num) ? num : 0 });
+                    }}
                     required
                     min="0"
                     step="0.01"
@@ -595,7 +592,11 @@ const RouteNetwork = () => {
                         type="number"
                         placeholder="Distance from start (km)"
                         value={stop.distance}
-                        onChange={(e) => updateIntermediateStop(index, 'distance', parseFloat(e.target.value))}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          const num = v === '' ? 0 : Number(v);
+                          updateIntermediateStop(index, 'distance', Number.isFinite(num) ? num : 0);
+                        }}
                         min="0"
                         step="0.1"
                       />
@@ -704,7 +705,11 @@ const RouteNetwork = () => {
                   <input
                     type="number"
                     value={formData.totalDistance}
-                    onChange={(e) => setFormData({...formData, totalDistance: parseFloat(e.target.value)})}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      const num = v === '' ? 0 : Number(v);
+                      setFormData({ ...formData, totalDistance: Number.isFinite(num) ? num : 0 });
+                    }}
                     required
                     min="0"
                     step="0.1"
@@ -716,7 +721,11 @@ const RouteNetwork = () => {
                   <input
                     type="number"
                     value={formData.estimatedDuration}
-                    onChange={(e) => setFormData({...formData, estimatedDuration: parseInt(e.target.value)})}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      const num = v === '' ? 0 : parseInt(v, 10);
+                      setFormData({ ...formData, estimatedDuration: Number.isFinite(num) ? num : 0 });
+                    }}
                     required
                     min="0"
                   />
@@ -727,7 +736,11 @@ const RouteNetwork = () => {
                   <input
                     type="number"
                     value={formData.baseFare}
-                    onChange={(e) => setFormData({...formData, baseFare: parseFloat(e.target.value)})}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      const num = v === '' ? 0 : Number(v);
+                      setFormData({ ...formData, baseFare: Number.isFinite(num) ? num : 0 });
+                    }}
                     required
                     min="0"
                     step="0.01"
@@ -791,7 +804,11 @@ const RouteNetwork = () => {
                         type="number"
                         placeholder="Distance from start (km)"
                         value={stop.distance}
-                        onChange={(e) => updateIntermediateStop(index, 'distance', parseFloat(e.target.value))}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          const num = v === '' ? 0 : Number(v);
+                          updateIntermediateStop(index, 'distance', Number.isFinite(num) ? num : 0);
+                        }}
                         min="0"
                         step="0.1"
                       />

@@ -143,7 +143,7 @@ const DepotDashboard = () => {
         return;
       }
 
-        const response = await fetch('/api/depot/dashboard-v2', {
+        const response = await fetch('/api/depot/dashboard', {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -155,16 +155,16 @@ const DepotDashboard = () => {
         console.log('Dashboard data received:', data);
         
         // Update depot stats with proper fallbacks
-        setDepotStats({
+        setDepotStats(prev => ({
+          ...prev,
           totalBuses: data.data?.stats?.totalBuses || 0,
           activeBuses: data.data?.stats?.activeBuses || 0,
           totalRoutes: data.data?.stats?.totalRoutes || 0,
           activeRoutes: data.data?.stats?.activeRoutes || 0,
           totalDrivers: data.data?.stats?.totalDrivers || 0,
           activeDrivers: data.data?.stats?.activeDrivers || 0,
-          totalConductors: data.data?.stats?.totalConductors || 0,
-          activeConductors: data.data?.stats?.activeConductors || 0
-        });
+          todayRevenue: data.data?.stats?.todayRevenue || 0
+        }));
 
         // Update recent trips with proper fallbacks
         setRecentTrips(data.data?.recentTrips || []);
@@ -223,7 +223,7 @@ const DepotDashboard = () => {
       console.error('Refresh failed:', error);
         setLoading(false);
       }
-    };
+  };
 
   useEffect(() => {
 
@@ -250,7 +250,7 @@ const DepotDashboard = () => {
       if (user) {
         try {
           const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
-          const trackingResponse = await fetch('/api/depot/dashboard-v2', {
+          const trackingResponse = await fetch('/api/depot/dashboard', {
             headers: { 
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
@@ -260,7 +260,11 @@ const DepotDashboard = () => {
           if (trackingResponse.ok) {
             const trackingData = await trackingResponse.json();
             setLiveTrackingData(trackingData.data?.liveTracking || []);
-            setDepotStats(trackingData.data?.stats || depotStats);
+            setDepotStats(prev => ({
+              ...prev,
+              ...(trackingData.data?.stats || {}),
+              todayRevenue: trackingData.data?.stats?.todayRevenue || prev.todayRevenue || 0
+            }));
             
             // Update depot info if available
             if (trackingData.data?.depot) {
@@ -608,7 +612,7 @@ const DepotDashboard = () => {
                 <div className="kpi-card">
                     <div className="kpi-content">
                       <div className="kpi-header">
-                        <h3>₹{depotStats.todayRevenue.toLocaleString()}</h3>
+                        <h3>₹{Number(depotStats.todayRevenue || 0).toLocaleString()}</h3>
                         <div className="kpi-trend">
                           <svg className="trend-icon up" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />

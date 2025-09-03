@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const DepotUser = require('../models/DepotUser');
 
 // Simple in-memory cache for user data (in production, use Redis)
 const userCache = new Map();
@@ -36,10 +37,34 @@ const auth = async (req, res, next) => {
     }
 
     // Fetch user from database with minimal fields
-    const user = await User.findById(payload.userId)
+    let user = await User.findById(payload.userId)
       .select('_id name email role status depotId lastLogin')
       .lean();
-    
+
+    // If not a regular user, try DepotUser (depot panel accounts)
+    if (!user) {
+      const depotUser = await DepotUser.findById(payload.userId)
+        .select('_id username email role status depotId lastLogin depotCode depotName permissions')
+        .lean();
+
+      if (depotUser) {
+        // Normalize to common shape used across routes
+        user = {
+          _id: depotUser._id,
+          name: depotUser.username,
+          email: depotUser.email,
+          role: depotUser.role || 'depot_manager',
+          status: depotUser.status,
+          depotId: depotUser.depotId,
+          lastLogin: depotUser.lastLogin,
+          username: depotUser.username,
+          depotCode: depotUser.depotCode,
+          depotName: depotUser.depotName,
+          permissions: depotUser.permissions || []
+        };
+      }
+    }
+
     if (!user) {
       console.error('User not found for ID:', payload.userId);
       return res.status(401).json({ 

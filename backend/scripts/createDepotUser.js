@@ -104,3 +104,4 @@ async function createDepotUser() {
     console.log('   Password: depot123');
   }
 }
+

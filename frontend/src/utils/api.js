@@ -14,7 +14,8 @@ export async function apiFetch(path, options = {}) {
     try { console.warn('[apiFetch] REACT_APP_API_URL not set; using relative URLs with Vite proxy'); } catch {}
     warnedBase = true;
   }
-  const token = localStorage.getItem('token');
+  // Prefer depotToken when present (depot panel), fallback to regular token
+  const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
   
   // Create cache key
   const cacheKey = `${options.method || 'GET'}:${path}:${JSON.stringify(options.body || {})}`;
@@ -56,6 +57,19 @@ export async function apiFetch(path, options = {}) {
     
     if (!res.ok) {
       const message = (data && (data.message || data.error)) || res.statusText;
+      // Central auth failure handling: clear tokens and redirect silently
+      if (res.status === 401 || res.status === 403) {
+        try {
+          localStorage.removeItem('depotToken');
+          localStorage.removeItem('depotUser');
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+        } catch {}
+        // Avoid noisy alerts; rely on routing guard/UX to show login
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
+        }
+      }
       return { ok: false, status: res.status, message, data };
     }
     

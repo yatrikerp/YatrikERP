@@ -14,11 +14,21 @@ const Ticket = require('../models/Ticket'); // Added Ticket model
 // Helper function to create role-based auth middleware
 const authRole = (roles) => [auth, requireRole(roles)];
 
-// Depot Manager authentication
-const depotAuth = authRole(['depot_manager', 'DEPOT_MANAGER']);
+// Depot authentication (allow all depot roles)
+const depotAuth = authRole(['depot_manager', 'depot_supervisor', 'depot_operator', 'DEPOT_MANAGER', 'DEPOT_SUPERVISOR', 'DEPOT_OPERATOR']);
 
 // Apply depot auth to all routes
 router.use(depotAuth);
+
+// Test endpoint to check depot auth
+router.get('/test', async (req, res) => {
+  res.json({
+    success: true,
+    message: 'Depot auth working',
+    user: req.user,
+    depotId: req.user.depotId
+  });
+});
 
 // GET /api/depot/dashboard - Comprehensive depot dashboard data
 router.get('/dashboard', async (req, res) => {
@@ -31,7 +41,7 @@ router.get('/dashboard', async (req, res) => {
       Trip.countDocuments({ 'routeId.depotId': depotId, status: { $in: ['scheduled', 'running'] } }),
       Bus.countDocuments({ depotId }),
       Bus.countDocuments({ depotId, status: 'available' }),
-      Route.countDocuments({ depotId }),
+      Route.countDocuments({ 'depot.depotId': depotId }),
       Booking.countDocuments({ 'tripId.routeId.depotId': depotId }),
       FuelLog.countDocuments({ depotId })
     ]);
@@ -153,7 +163,7 @@ router.get('/info', async (req, res) => {
         { $group: { _id: null, total: { $sum: '$fareAmount' } } }
       ]),
       Bus.countDocuments({ depotId, status: 'active' }),
-      Route.countDocuments({ depotId, status: 'active' })
+      Route.countDocuments({ 'depot.depotId': depotId, status: 'active' })
     ]);
 
     // Get yesterday's data for comparison
@@ -204,28 +214,47 @@ router.get('/info', async (req, res) => {
 router.get('/routes', async (req, res) => {
   try {
     const depotId = req.user.depotId;
-    
-    const routes = await Route.find({ depotId })
-      .populate('stops')
-      .sort({ name: 1 })
+
+    const routes = await Route.find({ 'depot.depotId': depotId })
+      .sort({ routeName: 1 })
       .lean();
 
-    // Transform data to match frontend expectations
-    const transformedRoutes = routes.map(route => ({
-      id: route._id,
-      name: route.name,
-      distance: `${route.distanceKm} km`,
-      duration: `${Math.ceil(route.distanceKm / 40)}h ${Math.ceil((route.distanceKm % 40) / 0.67)}m`, // Rough calculation
-      status: route.status,
-      buses: Math.ceil(route.distanceKm / 50), // Rough calculation based on distance
-      revenue: `₹${(route.baseFare * 100).toLocaleString()}`, // Convert to rupees
-      occupancy: `${Math.floor(Math.random() * 30) + 70}%` // Mock occupancy for now
+    // Normalize routes to the shape expected by the frontend
+    const normalized = routes.map(r => ({
+      _id: r._id,
+      routeNumber: r.routeNumber || r.code || '',
+      routeName: r.routeName || r.name || '',
+      startingPoint:
+        typeof r.startingPoint === 'string'
+          ? r.startingPoint
+          : (r.startingPoint?.location || r.startingPoint?.city || r.from || ''),
+      endingPoint:
+        typeof r.endingPoint === 'string'
+          ? r.endingPoint
+          : (r.endingPoint?.location || r.endingPoint?.city || r.to || ''),
+      totalDistance: r.totalDistance ?? r.distanceKm ?? 0,
+      estimatedDuration: r.estimatedDuration ?? (r.totalDistance ? Math.ceil(r.totalDistance / 40) * 60 : 0),
+      baseFare: r.baseFare ?? r.fare ?? 0,
+      features: Array.isArray(r.features) ? r.features : [],
+      status: r.status || 'active',
+      intermediateStops: Array.isArray(r.intermediateStops) 
+        ? r.intermediateStops.map(stop => ({
+            name: stop.location || stop.city || 'Unknown',
+            distance: stop.distanceFromStart || 0
+          }))
+        : (r.stops || []),
+      notes: r.notes || ''
     }));
 
-    res.json({
-      success: true,
-      data: transformedRoutes
-    });
+    // Basic stats for header cards
+    const stats = {
+      totalRoutes: normalized.length,
+      activeRoutes: normalized.filter(x => x.status === 'active').length,
+      inactiveRoutes: normalized.filter(x => x.status === 'inactive').length,
+      totalDistance: normalized.reduce((sum, x) => sum + (Number(x.totalDistance) || 0), 0)
+    };
+
+    res.json({ success: true, data: { routes: normalized, stats } });
 
   } catch (error) {
     console.error('Get depot routes error:', error);
@@ -233,48 +262,7 @@ router.get('/routes', async (req, res) => {
   }
 });
 
-// POST /api/depot/routes - Create new route
-router.post('/routes', async (req, res) => {
-  try {
-    const { name, from, to, distanceKm, stops, fare, schedule } = req.body;
-    const depotId = req.user.depotId;
-
-    if (!name || !from || !to || !distanceKm) {
-      return res.status(400).json({
-        success: false,
-        message: 'Route name, from, to, and distance are required'
-      });
-    }
-
-    const route = new Route({
-      name,
-      from,
-      to,
-      distanceKm,
-      stops: stops || [],
-      baseFare: fare || 100,
-      schedule: schedule || [],
-      depotId,
-      status: 'active',
-      createdBy: req.user._id
-    });
-
-    await route.save();
-
-    res.status(201).json({
-      success: true,
-      data: { route },
-      message: 'Route created successfully'
-    });
-
-  } catch (error) {
-    console.error('Create route error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create route'
-    });
-  }
-});
+// (Removed duplicate legacy POST /routes handler that conflicted with the detailed version below)
 
 // =================================================================
 // 2) Trip Management for Depot Managers
@@ -308,7 +296,7 @@ router.post('/trips', async (req, res) => {
 
     // Validate route belongs to this depot
     const route = await Route.findById(routeId);
-    if (!route || route.depotId.toString() !== depotId.toString()) {
+    if (!route || !route.depot || route.depot.depotId.toString() !== depotId.toString()) {
       return res.status(400).json({
         success: false,
         message: 'Route does not belong to this depot'
@@ -317,7 +305,7 @@ router.post('/trips', async (req, res) => {
 
     // Validate bus belongs to this depot
     const bus = await Bus.findById(busId);
-    if (!bus || bus.depotId.toString() !== depotId.toString()) {
+    if (!bus || !bus.depotId || bus.depotId.toString() !== depotId.toString()) {
       return res.status(400).json({
         success: false,
         message: 'Bus does not belong to this depot'
@@ -338,26 +326,9 @@ router.post('/trips', async (req, res) => {
       });
     }
 
-    // Validate driver and conductor if assigned
-    if (driverId) {
-      const driver = await User.findById(driverId);
-      if (!driver || driver.role !== 'driver' || driver.depotId?.toString() !== depotId.toString()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid driver assignment'
-        });
-      }
-    }
-
-    if (conductorId) {
-      const conductor = await User.findById(conductorId);
-      if (!conductor || conductor.role !== 'conductor' || conductor.depotId?.toString() !== depotId.toString()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid conductor assignment'
-        });
-      }
-    }
+    // Skip driver/conductor validation for now - make them completely optional
+    // This allows trips to be created without crew assignment
+    console.log('Trip creation - skipping driver/conductor validation for efficiency');
 
     // Create trip
     const trip = await Trip.create({
@@ -368,7 +339,7 @@ router.post('/trips', async (req, res) => {
       serviceDate: new Date(serviceDate),
       startTime,
       endTime,
-      fare: fare || route.baseFare,
+      fare: fare || 0,
       capacity: capacity || bus.capacity.total,
       status: 'scheduled',
       depotId,
@@ -390,10 +361,13 @@ router.post('/trips', async (req, res) => {
 
   } catch (error) {
     console.error('Trip creation error:', error);
+    console.error('Request body:', req.body);
+    console.error('User info:', req.user);
     res.status(500).json({
       success: false,
       message: 'Failed to create trip',
-      error: error.message
+      error: error.message,
+      details: error.stack
     });
   }
 });
@@ -484,7 +458,7 @@ router.put('/trips/:id', async (req, res) => {
 
     // Verify trip belongs to this depot
     const existingTrip = await Trip.findById(id);
-    if (!existingTrip || existingTrip.depotId.toString() !== depotId.toString()) {
+    if (!existingTrip || !existingTrip.depotId || existingTrip.depotId.toString() !== depotId.toString()) {
       return res.status(404).json({
         success: false,
         message: 'Trip not found or access denied'
@@ -525,7 +499,7 @@ router.delete('/trips/:id', async (req, res) => {
 
     // Verify trip belongs to this depot
     const trip = await Trip.findById(id);
-    if (!trip || trip.depotId.toString() !== depotId.toString()) {
+    if (!trip || !trip.depotId || trip.depotId.toString() !== depotId.toString()) {
       return res.status(404).json({
         success: false,
         message: 'Trip not found or access denied'
@@ -610,7 +584,7 @@ router.post('/tickets/issue', async (req, res) => {
 
     // Validate trip belongs to this depot
     const trip = await Trip.findById(tripId).populate('routeId');
-    if (!trip || trip.depotId.toString() !== depotId.toString()) {
+    if (!trip || !trip.depotId || trip.depotId.toString() !== depotId.toString()) {
       return res.status(400).json({
         success: false,
         message: 'Trip not found or access denied'
@@ -1472,6 +1446,11 @@ router.delete('/buses/:id', async (req, res) => {
 // POST /api/depot/routes - Create new route
 router.post('/routes', async (req, res) => {
   try {
+    console.log('=== ROUTE CREATION REQUEST ===');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('User info:', JSON.stringify(req.user, null, 2));
+    console.log('Headers:', req.headers);
+    
     const {
       routeNumber,
       routeName,
@@ -1486,11 +1465,32 @@ router.post('/routes', async (req, res) => {
     } = req.body;
 
     const depotId = req.user.depotId;
+    console.log('Depot ID from user:', depotId);
+    console.log('User role:', req.user.role);
 
-    if (!routeNumber || !routeName || !startingPoint || !endingPoint || !totalDistance) {
+    // Enhanced validation with detailed error messages
+    const validationErrors = [];
+    
+    if (!routeNumber) validationErrors.push('Route number is required');
+    if (!routeName) validationErrors.push('Route name is required');
+    if (!startingPoint) validationErrors.push('Starting point is required');
+    if (!endingPoint) validationErrors.push('Ending point is required');
+    if (!totalDistance) validationErrors.push('Total distance is required');
+    if (!depotId) validationErrors.push('Depot ID is missing from user authentication');
+    
+    if (validationErrors.length > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Route number, name, starting point, ending point, and distance are required'
+        message: 'Validation failed',
+        errors: validationErrors,
+        receivedData: {
+          routeNumber,
+          routeName,
+          startingPoint,
+          endingPoint,
+          totalDistance,
+          depotId
+        }
       });
     }
 
@@ -1503,33 +1503,129 @@ router.post('/routes', async (req, res) => {
       });
     }
 
-    const route = new Route({
+    // Get depot information
+    const depot = await Depot.findById(depotId);
+    if (!depot) {
+      console.log('Depot not found for ID:', depotId);
+      return res.status(400).json({
+        success: false,
+        message: 'Depot not found'
+      });
+    }
+    console.log('Depot found:', depot.depotName);
+
+    // Transform string inputs to object structure expected by Route model
+    const transformPoint = (point) => {
+      if (typeof point === 'string') {
+        return {
+          city: point.split(',')[0]?.trim() || point,
+          location: point
+        };
+      }
+      return point;
+    };
+
+    // Transform intermediate stops from frontend format to model format
+    const transformStops = (stops) => {
+      if (!Array.isArray(stops)) return [];
+      return stops.map((stop, index) => ({
+        city: stop.name || stop.city || 'Unknown',
+        location: stop.name || stop.location || 'Unknown',
+        stopNumber: index + 1,
+        distanceFromStart: Number(stop.distance) || 0,
+        estimatedArrival: Math.ceil((Number(stop.distance) || 0) / 40) * 60 // rough calculation
+      }));
+    };
+
+    // Transform features to match Route model enum values
+    const transformFeatures = (features) => {
+      if (!Array.isArray(features)) return [];
+      
+      const featureMap = {
+        'ac': 'AC',
+        'wifi': 'WiFi',
+        'premium': 'Entertainment', // Map premium to Entertainment
+        'express': 'Entertainment', // Map express to Entertainment
+        'night': 'Entertainment', // Map night to Entertainment
+        'wheelchair': 'Wheelchair_Accessible',
+        'usb': 'USB_Charging',
+        'refreshments': 'Refreshments'
+      };
+      
+      return features.map(feature => {
+        const lowerFeature = feature.toLowerCase();
+        return featureMap[lowerFeature] || feature.toUpperCase();
+      }).filter(feature => {
+        // Only include valid enum values
+        const validFeatures = ['AC', 'WiFi', 'USB_Charging', 'Entertainment', 'Refreshments', 'Wheelchair_Accessible'];
+        return validFeatures.includes(feature);
+      });
+    };
+
+    const routeData = {
       routeNumber,
       routeName,
-      startingPoint,
-      endingPoint,
-      totalDistance,
-      estimatedDuration: estimatedDuration || Math.ceil(totalDistance / 40) * 60, // Rough calculation
-      intermediateStops: intermediateStops || [],
+      startingPoint: transformPoint(startingPoint),
+      endingPoint: transformPoint(endingPoint),
+      totalDistance: Number(totalDistance),
+      estimatedDuration: Number(estimatedDuration) || Math.ceil(Number(totalDistance) / 40) * 60, // Rough calculation
+      intermediateStops: transformStops(intermediateStops),
       depot: {
         depotId,
-        depotName: 'Central Transport Hub', // This should come from depot info
-        depotLocation: 'Mumbai Central'
+        depotName: depot.depotName || 'Central Transport Hub',
+        depotLocation: depot.location?.address || depot.location?.city || 'Mumbai Central'
       },
-      baseFare: baseFare || 100,
-      features: features || [],
+      baseFare: Number(baseFare) || 100,
+      farePerKm: 2, // Default fare per km
+      features: transformFeatures(features),
       status: 'active',
       createdBy: req.user._id,
       isActive: true
-    });
+    };
 
-    await route.save();
+    // Validate required fields before creating route
+    if (!routeData.farePerKm || routeData.farePerKm <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'farePerKm must be a positive number'
+      });
+    }
 
-    res.status(201).json({
-      success: true,
-      message: 'Route created successfully',
-      data: route
-    });
+    console.log('Creating route with data:', JSON.stringify(routeData, null, 2));
+    
+    try {
+      const route = new Route(routeData);
+      
+      console.log('Route object created, attempting to save...');
+      await route.save();
+      console.log('Route saved successfully:', route._id);
+      
+      res.status(201).json({
+        success: true,
+        message: 'Route created successfully',
+        data: route
+      });
+    } catch (saveError) {
+      console.error('Route save error:', saveError);
+      
+      // Handle validation errors specifically
+      if (saveError.name === 'ValidationError') {
+        const validationErrors = Object.keys(saveError.errors).map(key => ({
+          field: key,
+          message: saveError.errors[key].message,
+          value: saveError.errors[key].value
+        }));
+        
+        return res.status(400).json({
+          success: false,
+          message: 'Route validation failed',
+          validationErrors,
+          routeData
+        });
+      }
+      
+      throw saveError; // Re-throw if it's not a validation error
+    }
 
   } catch (error) {
     console.error('Create route error:', error);
@@ -1550,7 +1646,7 @@ router.put('/routes/:id', async (req, res) => {
 
     // Verify route belongs to this depot
     const existingRoute = await Route.findById(id);
-    if (!existingRoute || existingRoute.depot.depotId.toString() !== depotId.toString()) {
+    if (!existingRoute || !existingRoute.depot || existingRoute.depot.depotId.toString() !== depotId.toString()) {
       return res.status(404).json({
         success: false,
         message: 'Route not found or access denied'

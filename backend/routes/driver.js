@@ -807,14 +807,55 @@ router.get('/performance', auth, async (req, res) => {
 
 // Admin/Depot Manager Routes (require proper authorization)
 
-// GET /api/driver/all - Get all drivers (admin/depot manager only)
+// GET /api/driver/depot - Get drivers for current depot (depot manager only)
+router.get('/depot', auth, requireRole(['depot_manager']), async (req, res) => {
+  try {
+    const { status, search } = req.query;
+    const depotId = req.user.depotId;
+    
+    let query = { depotId };
+    
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+    
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { employeeCode: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    const drivers = await Driver.find(query)
+      .select('-password -loginAttempts -lockUntil')
+      .sort({ createdAt: -1 });
+    
+    res.json({
+      success: true,
+      data: drivers
+    });
+  } catch (error) {
+    console.error('Error fetching depot drivers:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// GET /api/driver/all - Get all drivers (admin/depot manager - depot managers see only their depot)
 router.get('/all', auth, requireRole(['admin', 'depot_manager']), async (req, res) => {
   try {
     const { depotId, status, search } = req.query;
     
     let query = {};
     
-    if (depotId) {
+    // If user is depot_manager, only show their depot's drivers
+    if (req.user.role === 'depot_manager') {
+      query.depotId = req.user.depotId;
+    } else if (depotId) {
+      // Admin can filter by specific depot
       query.depotId = depotId;
     }
     
@@ -853,14 +894,40 @@ router.get('/all', auth, requireRole(['admin', 'depot_manager']), async (req, re
 // POST /api/driver - Create new driver (admin/depot manager only)
 router.post('/', auth, requireRole(['admin', 'depot_manager']), validateDriverData, async (req, res) => {
   try {
-    const driverData = req.body;
+    const driverData = { ...req.body };
+
+    // Ensure depotId comes from authenticated user if not provided
+    if (!driverData.depotId && req.user?.depotId) {
+      driverData.depotId = req.user.depotId;
+    }
+
+    // Map license field name from validation (drivingLicense.type) to model (licenseType)
+    if (driverData.drivingLicense) {
+      if (driverData.drivingLicense.type && !driverData.drivingLicense.licenseType) {
+        driverData.drivingLicense.licenseType = driverData.drivingLicense.type;
+        delete driverData.drivingLicense.type;
+      }
+      // Coerce date strings to Date
+      if (driverData.drivingLicense.issueDate)
+        driverData.drivingLicense.issueDate = new Date(driverData.drivingLicense.issueDate);
+      if (driverData.drivingLicense.expiryDate)
+        driverData.drivingLicense.expiryDate = new Date(driverData.drivingLicense.expiryDate);
+    }
+
+    // Generate driverId if missing
+    if (!driverData.driverId) {
+      const code = (driverData.employeeCode || 'DRV').toString().replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      const rnd = Math.random().toString(36).slice(2, 6).toUpperCase();
+      const ts = Date.now().toString().slice(-4);
+      driverData.driverId = `${code}-${ts}${rnd}`.toUpperCase();
+    }
     
     // Hash password
     const saltRounds = 12;
     driverData.password = await bcrypt.hash(driverData.password, saltRounds);
     
     // Set created by
-    driverData.createdBy = req.user.id;
+    driverData.createdBy = req.user?._id || req.user?.id;
     
     const driver = new Driver(driverData);
     await driver.save();
@@ -886,8 +953,8 @@ router.post('/', auth, requireRole(['admin', 'depot_manager']), validateDriverDa
   }
 });
 
-// PUT /api/driver/:id - Update driver (admin/depot manager only)
-router.put('/:id', auth, requireRole(['admin', 'depot_manager']), async (req, res) => {
+// PUT /api/driver/:id - Update driver (admin only)
+router.put('/:id', auth, requireRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -955,8 +1022,8 @@ router.delete('/:id', auth, requireRole(['admin']), async (req, res) => {
   }
 });
 
-// GET /api/driver/license-expiring - Get drivers with expiring licenses (admin/depot manager only)
-router.get('/license-expiring', auth, requireRole(['admin', 'depot_manager']), async (req, res) => {
+// GET /api/driver/license-expiring - Get drivers with expiring licenses (admin only)
+router.get('/license-expiring', auth, requireRole(['admin']), async (req, res) => {
   try {
     const { depotId } = req.query;
     

@@ -734,14 +734,55 @@ router.get('/performance', auth, async (req, res) => {
 
 // Admin/Depot Manager Routes (require proper authorization)
 
-// GET /api/conductor/all - Get all conductors (admin/depot manager only)
+// GET /api/conductor/depot - Get conductors for current depot (depot manager only)
+router.get('/depot', auth, requireRole(['depot_manager']), async (req, res) => {
+  try {
+    const { status, search } = req.query;
+    const depotId = req.user.depotId;
+    
+    let query = { depotId };
+    
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+    
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { employeeCode: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    const conductors = await Conductor.find(query)
+      .select('-password -loginAttempts -lockUntil')
+      .sort({ createdAt: -1 });
+    
+    res.json({
+      success: true,
+      data: conductors
+    });
+  } catch (error) {
+    console.error('Error fetching depot conductors:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// GET /api/conductor/all - Get all conductors (admin/depot manager - depot managers see only their depot)
 router.get('/all', auth, requireRole(['admin', 'depot_manager']), async (req, res) => {
   try {
     const { depotId, status, search } = req.query;
     
     let query = {};
     
-    if (depotId) {
+    // If user is depot_manager, only show their depot's conductors
+    if (req.user.role === 'depot_manager') {
+      query.depotId = req.user.depotId;
+    } else if (depotId) {
+      // Admin can filter by specific depot
       query.depotId = depotId;
     }
     
@@ -779,14 +820,27 @@ router.get('/all', auth, requireRole(['admin', 'depot_manager']), async (req, re
 // POST /api/conductor - Create new conductor (admin/depot manager only)
 router.post('/', auth, requireRole(['admin', 'depot_manager']), validateConductorData, async (req, res) => {
   try {
-    const conductorData = req.body;
+    const conductorData = { ...req.body };
+
+    // Ensure depotId from token if not provided
+    if (!conductorData.depotId && req.user?.depotId) {
+      conductorData.depotId = req.user.depotId;
+    }
+
+    // Generate conductorId if missing
+    if (!conductorData.conductorId) {
+      const code = (conductorData.employeeCode || 'CND').toString().replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      const rnd = Math.random().toString(36).slice(2, 6).toUpperCase();
+      const ts = Date.now().toString().slice(-4);
+      conductorData.conductorId = `${code}-${ts}${rnd}`.toUpperCase();
+    }
     
     // Hash password
     const saltRounds = 12;
     conductorData.password = await bcrypt.hash(conductorData.password, saltRounds);
     
     // Set created by
-    conductorData.createdBy = req.user.id;
+    conductorData.createdBy = req.user?._id || req.user?.id;
     
     const conductor = new Conductor(conductorData);
     await conductor.save();
@@ -812,8 +866,8 @@ router.post('/', auth, requireRole(['admin', 'depot_manager']), validateConducto
   }
 });
 
-// PUT /api/conductor/:id - Update conductor (admin/depot manager only)
-router.put('/:id', auth, requireRole(['admin', 'depot_manager']), async (req, res) => {
+// PUT /api/conductor/:id - Update conductor (admin only)
+router.put('/:id', auth, requireRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;

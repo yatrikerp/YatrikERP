@@ -7,13 +7,21 @@ const tripSchema = new mongoose.Schema({
   conductorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   serviceDate: { type: Date, required: true },
   startTime: { type: String, required: true }, // HH:mm
-  status: { type: String, enum: ['scheduled','running','completed','cancelled'], default: 'scheduled' }
+  endTime: { type: String }, // HH:mm
+  fare: { type: Number, default: 0 },
+  capacity: { type: Number, default: 0 },
+  status: { type: String, enum: ['scheduled','running','completed','cancelled'], default: 'scheduled' },
+  depotId: { type: mongoose.Schema.Types.ObjectId, ref: 'Depot', required: true },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  notes: { type: String }
 }, { timestamps: true });
 
 // Indexes
 tripSchema.index({ routeId: 1 });
 tripSchema.index({ serviceDate: 1 });
 tripSchema.index({ status: 1 });
+tripSchema.index({ depotId: 1 });
+tripSchema.index({ busId: 1 });
 
 // Virtual for trip duration
 // Phase-0 simplified schema

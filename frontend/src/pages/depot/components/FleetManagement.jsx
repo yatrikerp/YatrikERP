@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import SmartNotifications from '../../../components/Common/SmartNotifications';
 import './FleetManagement.css';
+import { apiFetch } from '../../../utils/api';
 
 const FleetManagement = () => {
   const { user } = useAuth();
@@ -77,58 +78,18 @@ const FleetManagement = () => {
   ];
 
   useEffect(() => {
-    checkAuthAndFetchBuses();
+    fetchBuses();
   }, []);
-
-  const checkAuthAndFetchBuses = async () => {
-    const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
-    if (!token) {
-      alert('You are not logged in. Redirecting to login...');
-      window.location.href = '/login';
-      return;
-    }
-    
-    // Test authentication with a simple API call
-    try {
-      const testResponse = await fetch('/api/depot/dashboard', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (testResponse.status === 401) {
-        alert('Your session has expired. Please log in again.');
-        localStorage.removeItem('depotToken');
-        localStorage.removeItem('token');
-        localStorage.removeItem('depotUser');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-        return;
-      }
-      
-      // If auth is good, fetch buses
-      fetchBuses();
-    } catch (error) {
-      console.error('Auth check failed:', error);
-      alert('Authentication failed. Please log in again.');
-      window.location.href = '/login';
-    }
-  };
 
   const fetchBuses = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
-      const response = await fetch('/api/depot/buses', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setBuses(data.data.buses || []);
-        setStats(data.data.stats || {});
+      const res = await apiFetch('/api/depot/buses');
+      if (res.ok) {
+        setBuses(res.data?.data?.buses || []);
+        setStats(res.data?.data?.stats || {});
+      } else {
+        console.error('Failed to load buses:', res.status, res.message);
       }
     } catch (error) {
       console.error('Error fetching buses:', error);
@@ -140,14 +101,6 @@ const FleetManagement = () => {
   const handleAddBus = async (e) => {
     e.preventDefault();
     
-    // Check authentication first
-    const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
-    if (!token) {
-      alert('You are not logged in. Please log in again.');
-      window.location.href = '/login';
-      return;
-    }
-    
     // Validate form data before sending
     if (!formData.busNumber || !formData.registrationNumber || !formData.busType || !formData.capacity.total) {
       alert('Please fill in all required fields: Bus Number, Registration Number, Bus Type, and Total Capacity');
@@ -155,45 +108,19 @@ const FleetManagement = () => {
     }
     
     try {
-      console.log('Adding bus with data:', formData);
-      console.log('Using token:', token ? 'Token present' : 'No token');
-      console.log('Token value:', token ? token.substring(0, 20) + '...' : 'No token');
-      
-      const response = await fetch('/api/depot/buses', {
+      const response = await apiFetch('/api/depot/buses', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
         body: JSON.stringify(formData)
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-      
       if (response.ok) {
-        const result = await response.json();
-        console.log('Success response:', result);
         setShowAddModal(false);
         resetForm();
         fetchBuses();
         alert('Bus added successfully!');
       } else {
-        const error = await response.json();
-        console.error('Add bus error response:', error);
-        console.error('Response status:', response.status);
-        console.error('Response statusText:', response.statusText);
-        
-        // Show more detailed error message
-        let errorMessage = error.message || 'Failed to add bus';
-        if (error.details) {
-          errorMessage += '\n\nDetails: ' + JSON.stringify(error.details, null, 2);
-        }
-        if (error.error) {
-          errorMessage += '\n\nError: ' + error.error;
-        }
-        
-        alert(errorMessage);
+        const err = response.message || 'Failed to add bus';
+        alert(err);
       }
     } catch (error) {
       console.error('Error adding bus:', error);
@@ -204,13 +131,8 @@ const FleetManagement = () => {
   const handleEditBus = async (e) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
-      const response = await fetch(`/api/depot/buses/${selectedBus._id}`, {
+      const response = await apiFetch(`/api/depot/buses/${selectedBus._id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
         body: JSON.stringify(formData)
       });
 
@@ -219,8 +141,7 @@ const FleetManagement = () => {
         resetForm();
         fetchBuses();
       } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to update bus');
+        alert(response.message || 'Failed to update bus');
       }
     } catch (error) {
       console.error('Error updating bus:', error);
@@ -230,12 +151,8 @@ const FleetManagement = () => {
 
   const handleDeleteBus = async () => {
     try {
-      const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
-      const response = await fetch(`/api/depot/buses/${selectedBus._id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await apiFetch(`/api/depot/buses/${selectedBus._id}`, {
+        method: 'DELETE'
       });
 
       if (response.ok) {
@@ -243,8 +160,7 @@ const FleetManagement = () => {
         setSelectedBus(null);
         fetchBuses();
       } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to delete bus');
+        alert(response.message || 'Failed to delete bus');
       }
     } catch (error) {
       console.error('Error deleting bus:', error);
