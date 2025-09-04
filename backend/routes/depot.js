@@ -353,10 +353,54 @@ router.post('/trips', async (req, res) => {
       status: 'assigned'
     });
 
+    // Populate the trip data for response
+    const populatedTrip = await Trip.findById(trip._id)
+      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+      .populate('busId', 'busNumber busType registrationNumber capacity')
+      .populate('driverId', 'name phone licenseNumber')
+      .populate('conductorId', 'name phone employeeId')
+      .lean();
+
+    // Transform the trip data to match frontend expectations
+    const tripServiceDate = new Date(populatedTrip.serviceDate);
+    const departureTime = populatedTrip.startTime ? new Date(tripServiceDate.getFullYear(), tripServiceDate.getMonth(), tripServiceDate.getDate(), 
+      parseInt(populatedTrip.startTime.split(':')[0]), parseInt(populatedTrip.startTime.split(':')[1])) : null;
+    const arrivalTime = populatedTrip.endTime ? new Date(tripServiceDate.getFullYear(), tripServiceDate.getMonth(), tripServiceDate.getDate(), 
+      parseInt(populatedTrip.endTime.split(':')[0]), parseInt(populatedTrip.endTime.split(':')[1])) : null;
+
+    const transformedTrip = {
+      ...populatedTrip,
+      tripNumber: `TRP${populatedTrip._id.toString().slice(-6).toUpperCase()}`,
+      departureTime: departureTime,
+      arrivalTime: arrivalTime,
+      // Ensure route data is properly structured
+      routeId: {
+        ...populatedTrip.routeId,
+        routeName: populatedTrip.routeId?.routeName || 'Unknown Route',
+        routeNumber: populatedTrip.routeId?.routeNumber || 'N/A'
+      },
+      // Ensure bus data is properly structured
+      busId: {
+        ...populatedTrip.busId,
+        busNumber: populatedTrip.busId?.busNumber || 'N/A',
+        busType: populatedTrip.busId?.busType || 'Standard',
+        capacity: populatedTrip.busId?.capacity || { total: 35 }
+      },
+      // Ensure crew data is properly structured
+      driverId: populatedTrip.driverId ? {
+        ...populatedTrip.driverId,
+        name: populatedTrip.driverId.name || 'Unknown Driver'
+      } : null,
+      conductorId: populatedTrip.conductorId ? {
+        ...populatedTrip.conductorId,
+        name: populatedTrip.conductorId.name || 'Unknown Conductor'
+      } : null
+    };
+
     res.status(201).json({
       success: true,
       message: 'Trip created successfully',
-      data: trip
+      data: transformedTrip
     });
 
   } catch (error) {
@@ -415,10 +459,10 @@ router.get('/trips', async (req, res) => {
 
     const [trips, total] = await Promise.all([
       Trip.find(filter)
-        .populate('routeId', 'routeName startingPoint endingPoint')
-        .populate('busId', 'busNumber registrationNumber')
-        .populate('driverId', 'name phone')
-        .populate('conductorId', 'name phone')
+        .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+        .populate('busId', 'busNumber busType registrationNumber capacity')
+        .populate('driverId', 'name phone licenseNumber')
+        .populate('conductorId', 'name phone employeeId')
         .sort(sort)
         .skip(skip)
         .limit(parseInt(limit))
@@ -426,10 +470,49 @@ router.get('/trips', async (req, res) => {
       Trip.countDocuments(filter)
     ]);
 
+    // Transform trips data to match frontend expectations
+    const transformedTrips = trips.map(trip => {
+      // Create proper datetime fields for frontend
+      const serviceDate = new Date(trip.serviceDate);
+      const departureTime = trip.startTime ? new Date(serviceDate.getFullYear(), serviceDate.getMonth(), serviceDate.getDate(), 
+        parseInt(trip.startTime.split(':')[0]), parseInt(trip.startTime.split(':')[1])) : null;
+      const arrivalTime = trip.endTime ? new Date(serviceDate.getFullYear(), serviceDate.getMonth(), serviceDate.getDate(), 
+        parseInt(trip.endTime.split(':')[0]), parseInt(trip.endTime.split(':')[1])) : null;
+
+      return {
+        ...trip,
+        tripNumber: `TRP${trip._id.toString().slice(-6).toUpperCase()}`,
+        departureTime: departureTime,
+        arrivalTime: arrivalTime,
+        // Ensure route data is properly structured
+        routeId: {
+          ...trip.routeId,
+          routeName: trip.routeId?.routeName || 'Unknown Route',
+          routeNumber: trip.routeId?.routeNumber || 'N/A'
+        },
+        // Ensure bus data is properly structured
+        busId: {
+          ...trip.busId,
+          busNumber: trip.busId?.busNumber || 'N/A',
+          busType: trip.busId?.busType || 'Standard',
+          capacity: trip.busId?.capacity || { total: 35 }
+        },
+        // Ensure crew data is properly structured
+        driverId: trip.driverId ? {
+          ...trip.driverId,
+          name: trip.driverId.name || 'Unknown Driver'
+        } : null,
+        conductorId: trip.conductorId ? {
+          ...trip.conductorId,
+          name: trip.conductorId.name || 'Unknown Conductor'
+        } : null
+      };
+    });
+
     res.json({
       success: true,
       data: {
-        trips,
+        trips: transformedTrips,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),

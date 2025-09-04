@@ -54,26 +54,86 @@ const AdminConductors = () => {
     fetchData();
   }, []);
 
-  const fetchData = async () => {
+  // Force refresh depots on component mount
+  useEffect(() => {
+    const fetchDepots = async () => {
+      try {
+        console.log('=== FORCE FETCHING DEPOTS ON MOUNT ===');
+        const response = await fetch('/api/admin/depots', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Depots fetched on mount:', data);
+          setDepots(data.depots || []);
+        } else {
+          console.error('Failed to fetch depots on mount:', response.status);
+        }
+      } catch (error) {
+        console.error('Error fetching depots on mount:', error);
+      }
+    };
+    
+    fetchDepots();
+  }, []);
+
+  const fetchData = async (forceRefresh = false) => {
     try {
       setLoading(true);
+      console.log('=== FRONTEND FETCHING CONDUCTORS ===', forceRefresh ? '(FORCE REFRESH)' : '');
+      
+      // Add cache-busting parameter
+      const timestamp = Date.now();
+      const conductorsUrl = forceRefresh ? `/api/admin/conductors?t=${timestamp}` : '/api/admin/conductors';
+      const depotsUrl = forceRefresh ? `/api/admin/depots?t=${timestamp}` : '/api/admin/depots';
+      
       const [conductorsResponse, depotsResponse] = await Promise.all([
-        fetch('/api/admin/users?role=conductor', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        fetch(conductorsUrl, {
+          headers: { 
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
         }),
-        fetch('/api/admin/depots', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        fetch(depotsUrl, {
+          headers: { 
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
         })
       ]);
 
+      console.log('Conductors response status:', conductorsResponse.status);
+      console.log('Depots response status:', depotsResponse.status);
+
       if (conductorsResponse.ok) {
         const conductorsData = await conductorsResponse.json();
-        setConductors(conductorsData.users || []);
+        console.log('Conductors data received:', conductorsData);
+        console.log('Conductors count:', conductorsData.data?.conductors?.length || 0);
+        setConductors(conductorsData.data?.conductors || []);
+      } else {
+        console.error('Conductors response not ok:', conductorsResponse.status);
+        const errorText = await conductorsResponse.text();
+        console.error('Conductors error response:', errorText);
       }
 
       if (depotsResponse.ok) {
         const depotsData = await depotsResponse.json();
+        console.log('Depots data received:', depotsData);
+        console.log('Depots count:', depotsData.depots?.length || 0);
+        console.log('Depots array:', depotsData.depots);
         setDepots(depotsData.depots || []);
+        
+        // Additional debugging
+        if (depotsData.depots && depotsData.depots.length > 0) {
+          console.log('First depot sample:', depotsData.depots[0]);
+        }
+      } else {
+        console.error('Depots response not ok:', depotsResponse.status);
+        const errorText = await depotsResponse.text();
+        console.error('Depots error response:', errorText);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -101,7 +161,7 @@ const AdminConductors = () => {
         alert('Conductor created successfully');
         setShowCreateModal(false);
         resetConductorForm();
-        fetchData();
+        fetchData(true); // Force refresh
       } else {
         const errorData = await response.json();
         alert(errorData.error || 'Failed to create conductor');
@@ -110,6 +170,11 @@ const AdminConductors = () => {
       console.error('Error creating conductor:', error);
       alert('Error creating conductor');
     }
+  };
+
+  const handleForceRefresh = () => {
+    console.log('=== FORCE REFRESH TRIGGERED ===');
+    fetchData(true);
   };
 
   const handleUpdateConductor = async (e) => {
@@ -225,27 +290,35 @@ const AdminConductors = () => {
   };
 
   const getDepotName = (depotId) => {
+    // Handle both populated depot object and depot ID
+    if (typeof depotId === 'object' && depotId !== null) {
+      return depotId.depotName || 'Unassigned';
+    }
     const depot = depots.find(d => d._id === depotId);
     return depot ? depot.name : 'Unassigned';
   };
 
   const getDepotCode = (depotId) => {
+    // Handle both populated depot object and depot ID
+    if (typeof depotId === 'object' && depotId !== null) {
+      return depotId.depotCode || 'N/A';
+    }
     const depot = depots.find(d => d._id === depotId);
     return depot ? (depot.depotCode || depot.code) : 'N/A';
   };
 
   const exportConductors = () => {
     const csvContent = [
-      ['Name', 'Email', 'Phone', 'Employee ID', 'Depot', 'Joining Date', 'Salary', 'Status'].join(','),
+      ['Name', 'Email', 'Phone', 'Employee ID', 'Depot', 'Joining Date', 'Status', 'Source'].join(','),
       ...conductors.map(conductor => [
         conductor.name,
         conductor.email,
         conductor.phone,
-        conductor.staffDetails?.employeeId || 'N/A',
+        conductor.employeeCode || 'N/A',
         getDepotName(conductor.depotId),
-        conductor.staffDetails?.joiningDate ? new Date(conductor.staffDetails.joiningDate).toLocaleDateString() : 'N/A',
-        conductor.staffDetails?.salary || 'N/A',
-        conductor.status
+        conductor.joiningDate ? new Date(conductor.joiningDate).toLocaleDateString() : 'N/A',
+        conductor.status,
+        conductor.source || 'unknown'
       ].join(','))
     ].join('\n');
 
@@ -264,13 +337,33 @@ const AdminConductors = () => {
       conductor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       conductor.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       conductor.phone.includes(searchTerm) ||
-      (conductor.staffDetails?.employeeId && conductor.staffDetails.employeeId.toLowerCase().includes(searchTerm.toLowerCase()));
+      (conductor.employeeCode && conductor.employeeCode.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const matchesDepot = depotFilter === 'all' || conductor.depotId === depotFilter;
+    const matchesDepot = depotFilter === 'all' || 
+      (typeof conductor.depotId === 'object' && conductor.depotId?._id === depotFilter) ||
+      (typeof conductor.depotId === 'string' && conductor.depotId === depotFilter);
     const matchesStatus = statusFilter === 'all' || conductor.status === statusFilter;
     
     return matchesSearch && matchesDepot && matchesStatus;
   });
+
+  // Debug logging
+  console.log('=== CONDUCTORS FRONTEND DEBUG ===');
+  console.log('conductors state:', conductors);
+  console.log('conductors length:', conductors.length);
+  console.log('filteredConductors length:', filteredConductors.length);
+  console.log('searchTerm:', searchTerm);
+  console.log('depotFilter:', depotFilter);
+  console.log('statusFilter:', statusFilter);
+  console.log('depots state:', depots);
+  console.log('depots length:', depots.length);
+  
+  // Check if depots are loaded
+  if (depots.length === 0) {
+    console.warn('⚠️ No depots loaded! This might be why the dropdown is empty.');
+  } else {
+    console.log('✅ Depots loaded successfully:', depots.map(d => ({ id: d._id, name: d.name })));
+  }
 
   if (loading) {
     return (
@@ -295,6 +388,38 @@ const AdminConductors = () => {
           >
             <Download className="w-4 h-4" />
             <span>Export</span>
+          </button>
+          <button
+            onClick={handleForceRefresh}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Refresh All</span>
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                console.log('=== TESTING COMPREHENSIVE STAFF DEBUG ===');
+                const response = await fetch('/api/admin/debug-all-staff', {
+                  headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (response.ok) {
+                  const data = await response.json();
+                  console.log('Comprehensive staff debug:', data);
+                  alert(`Debug complete! Found ${data.counts.allDrivers} drivers and ${data.counts.allConductors} conductors. Check console for details.`);
+                } else {
+                  console.error('Debug failed:', response.status);
+                  alert(`Debug failed with status ${response.status}`);
+                }
+              } catch (error) {
+                console.error('Debug error:', error);
+                alert('Debug error. Check console for details.');
+              }
+            }}
+            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
+          >
+            <span>Debug All Staff</span>
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
@@ -325,12 +450,20 @@ const AdminConductors = () => {
           <select
             value={depotFilter}
             onChange={(e) => setDepotFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            style={{ minHeight: '40px' }}
           >
-            <option value="all">All Depots</option>
-            {depots.map(depot => (
-              <option key={depot._id} value={depot._id}>{depot.name}</option>
-            ))}
+            <option value="all">All Depots ({depots.length})</option>
+            {depots && depots.length > 0 ? depots.map(depot => {
+              console.log('Rendering depot option:', depot);
+              return (
+                <option key={depot._id} value={depot._id} style={{ padding: '8px', backgroundColor: 'white' }}>
+                  {depot.name || depot.depotName || 'Unknown Depot'}
+                </option>
+              );
+            }) : (
+              <option disabled>No depots available</option>
+            )}
           </select>
           
           <select
@@ -398,11 +531,16 @@ const AdminConductors = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      {conductor.staffDetails?.employeeId || 'N/A'}
+                      {conductor.employeeCode || 'N/A'}
                     </div>
-                    {conductor.staffDetails?.joiningDate && (
+                    {conductor.joiningDate && (
                       <div className="text-sm text-gray-500">
-                        Joined: {new Date(conductor.staffDetails.joiningDate).toLocaleDateString()}
+                        Joined: {new Date(conductor.joiningDate).toLocaleDateString()}
+                      </div>
+                    )}
+                    {conductor.source && (
+                      <div className="text-xs text-blue-600">
+                        Source: {conductor.source}
                       </div>
                     )}
                   </td>

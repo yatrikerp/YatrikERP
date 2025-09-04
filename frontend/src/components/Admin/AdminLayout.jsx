@@ -97,6 +97,12 @@ const AdminLayout = ({ children }) => {
       current: location.pathname === '/admin/system-status'
     },
     {
+      name: 'RBAC',
+      href: '/admin/rbac',
+      icon: Shield,
+      current: location.pathname === '/admin/rbac'
+    },
+    {
       name: 'Reports',
       href: '/admin/reports',
       icon: PieChart,

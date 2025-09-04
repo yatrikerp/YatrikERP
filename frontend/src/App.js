@@ -40,6 +40,9 @@ import AdminSystemStatus from './pages/admin/AdminSystemStatus';
 import AdminBuses from './pages/admin/AdminBuses';
 import AdminConductors from './pages/admin/AdminConductors';
 import AdminDepotManagers from './pages/admin/AdminDepotManagers';
+import AdminRBAC from './pages/admin/AdminRBAC';
+import AdminReports from './pages/admin/AdminReports';
+import AdminSettings from './pages/admin/AdminSettings';
 import AdminTimetable from './pages/admin/AdminTimetable';
 import AdminReservations from './pages/admin/AdminReservations';
 import AdminComplaints from './pages/admin/AdminComplaints';
@@ -203,7 +206,7 @@ function App() {
             </RequireAuth>
           } />
 
-          <Route path="/admin/fare" element={
+          <Route path="/admin/fare-policy" element={
             <RequireAuth roles={['admin']}>
               <AdminLayout>
                 <AdminFarePolicy />
@@ -371,10 +374,34 @@ function App() {
             </RequireAuth>
           } />
 
-          <Route path="/admin/status" element={
+          <Route path="/admin/system-status" element={
             <RequireAuth roles={['admin']}>
               <AdminLayout>
                 <AdminSystemStatus />
+              </AdminLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/admin/rbac" element={
+            <RequireAuth roles={['admin']}>
+              <AdminLayout>
+                <AdminRBAC />
+              </AdminLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/admin/reports" element={
+            <RequireAuth roles={['admin']}>
+              <AdminLayout>
+                <AdminReports />
+              </AdminLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/admin/settings" element={
+            <RequireAuth roles={['admin']}>
+              <AdminLayout>
+                <AdminSettings />
               </AdminLayout>
             </RequireAuth>
           } />

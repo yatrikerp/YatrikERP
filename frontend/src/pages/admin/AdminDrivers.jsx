@@ -57,26 +57,92 @@ const AdminDrivers = () => {
     fetchData();
   }, []);
 
-  const fetchData = async () => {
+  // Force refresh depots on component mount
+  useEffect(() => {
+    const fetchDepots = async () => {
+      try {
+        console.log('=== FORCE FETCHING DEPOTS ON MOUNT ===');
+        const response = await fetch('/api/admin/depots', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Depots fetched on mount:', data);
+          setDepots(data.depots || []);
+        } else {
+          console.error('Failed to fetch depots on mount:', response.status);
+        }
+      } catch (error) {
+        console.error('Error fetching depots on mount:', error);
+      }
+    };
+    
+    fetchDepots();
+  }, []);
+
+  const fetchData = async (forceRefresh = false) => {
     try {
       setLoading(true);
+      console.log('=== FRONTEND FETCHING DRIVERS ===', forceRefresh ? '(FORCE REFRESH)' : '');
+      
+      // Add cache-busting parameter
+      const timestamp = Date.now();
+      const driversUrl = forceRefresh ? `/api/admin/drivers?t=${timestamp}` : '/api/admin/drivers';
+      const depotsUrl = forceRefresh ? `/api/admin/depots?t=${timestamp}` : '/api/admin/depots';
+      
       const [driversResponse, depotsResponse] = await Promise.all([
-        fetch('/api/admin/users?role=driver', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        fetch(driversUrl, {
+          headers: { 
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
         }),
-        fetch('/api/admin/depots', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        fetch(depotsUrl, {
+          headers: { 
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
         })
       ]);
 
+      console.log('Drivers response status:', driversResponse.status);
+      console.log('Depots response status:', depotsResponse.status);
+
       if (driversResponse.ok) {
         const driversData = await driversResponse.json();
-        setDrivers(driversData.users || []);
+        console.log('Drivers data received:', driversData);
+        console.log('Drivers count:', driversData.data?.drivers?.length || 0);
+        console.log('Full response structure:', JSON.stringify(driversData, null, 2));
+        setDrivers(driversData.data?.drivers || []);
+        
+        // Additional debugging
+        if (driversData.data?.drivers?.length > 0) {
+          console.log('First driver sample:', driversData.data.drivers[0]);
+        }
+      } else {
+        console.error('Drivers response not ok:', driversResponse.status);
+        const errorText = await driversResponse.text();
+        console.error('Drivers error response:', errorText);
       }
 
       if (depotsResponse.ok) {
         const depotsData = await depotsResponse.json();
+        console.log('Depots data received:', depotsData);
+        console.log('Depots count:', depotsData.depots?.length || 0);
+        console.log('Depots array:', depotsData.depots);
         setDepots(depotsData.depots || []);
+        
+        // Additional debugging
+        if (depotsData.depots && depotsData.depots.length > 0) {
+          console.log('First depot sample:', depotsData.depots[0]);
+        }
+      } else {
+        console.error('Depots response not ok:', depotsResponse.status);
+        const errorText = await depotsResponse.text();
+        console.error('Depots error response:', errorText);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -104,7 +170,7 @@ const AdminDrivers = () => {
         alert('Driver created successfully');
         setShowCreateModal(false);
         resetDriverForm();
-        fetchData();
+        fetchData(true); // Force refresh
       } else {
         const errorData = await response.json();
         alert(errorData.error || 'Failed to create driver');
@@ -114,6 +180,13 @@ const AdminDrivers = () => {
       alert('Error creating driver');
     }
   };
+
+  const handleForceRefresh = () => {
+    console.log('=== FORCE REFRESH TRIGGERED ===');
+    fetchData(true);
+  };
+
+
 
   const handleUpdateDriver = async (e) => {
     e.preventDefault();
@@ -232,11 +305,19 @@ const AdminDrivers = () => {
   };
 
   const getDepotName = (depotId) => {
+    // Handle both populated depot object and depot ID
+    if (typeof depotId === 'object' && depotId !== null) {
+      return depotId.depotName || 'Unassigned';
+    }
     const depot = depots.find(d => d._id === depotId);
     return depot ? depot.name : 'Unassigned';
   };
 
   const getDepotCode = (depotId) => {
+    // Handle both populated depot object and depot ID
+    if (typeof depotId === 'object' && depotId !== null) {
+      return depotId.depotCode || 'N/A';
+    }
     const depot = depots.find(d => d._id === depotId);
     return depot ? (depot.depotCode || depot.code) : 'N/A';
   };
@@ -269,11 +350,11 @@ const AdminDrivers = () => {
         driver.name,
         driver.email,
         driver.phone,
-        driver.staffDetails?.employeeId || 'N/A',
+        driver.employeeCode || 'N/A',
         getDepotName(driver.depotId),
-        driver.staffDetails?.licenseNumber || 'N/A',
+        driver.drivingLicense?.licenseNumber || 'N/A',
         driver.staffDetails?.licenseExpiry ? new Date(driver.staffDetails.licenseExpiry).toLocaleDateString() : 'N/A',
-        driver.staffDetails?.joiningDate ? new Date(driver.staffDetails.joiningDate).toLocaleDateString() : 'N/A',
+        driver.joiningDate ? new Date(driver.joiningDate).toLocaleDateString() : 'N/A',
         driver.staffDetails?.salary || 'N/A',
         driver.status
       ].join(','))
@@ -294,14 +375,34 @@ const AdminDrivers = () => {
       driver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       driver.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       driver.phone.includes(searchTerm) ||
-      (driver.staffDetails?.employeeId && driver.staffDetails.employeeId.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (driver.staffDetails?.licenseNumber && driver.staffDetails.licenseNumber.toLowerCase().includes(searchTerm.toLowerCase()));
+      (driver.employeeCode && driver.employeeCode.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (driver.drivingLicense?.licenseNumber && driver.drivingLicense.licenseNumber.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const matchesDepot = depotFilter === 'all' || driver.depotId === depotFilter;
+    const matchesDepot = depotFilter === 'all' || 
+      (typeof driver.depotId === 'object' && driver.depotId?._id === depotFilter) ||
+      (typeof driver.depotId === 'string' && driver.depotId === depotFilter);
     const matchesStatus = statusFilter === 'all' || driver.status === statusFilter;
     
     return matchesSearch && matchesDepot && matchesStatus;
   });
+
+  // Debug logging
+  console.log('=== FRONTEND DEBUG ===');
+  console.log('drivers state:', drivers);
+  console.log('drivers length:', drivers.length);
+  console.log('filteredDrivers length:', filteredDrivers.length);
+  console.log('searchTerm:', searchTerm);
+  console.log('depotFilter:', depotFilter);
+  console.log('statusFilter:', statusFilter);
+  console.log('depots state:', depots);
+  console.log('depots length:', depots.length);
+  
+  // Check if depots are loaded
+  if (depots.length === 0) {
+    console.warn('⚠️ No depots loaded! This might be why the dropdown is empty.');
+  } else {
+    console.log('✅ Depots loaded successfully:', depots.map(d => ({ id: d._id, name: d.name })));
+  }
 
   if (loading) {
     return (
@@ -326,6 +427,38 @@ const AdminDrivers = () => {
           >
             <Download className="w-4 h-4" />
             <span>Export</span>
+          </button>
+          <button
+            onClick={handleForceRefresh}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Refresh All</span>
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                console.log('=== TESTING COMPREHENSIVE STAFF DEBUG ===');
+                const response = await fetch('/api/admin/debug-all-staff', {
+                  headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (response.ok) {
+                  const data = await response.json();
+                  console.log('Comprehensive staff debug:', data);
+                  alert(`Debug complete! Found ${data.counts.allDrivers} drivers and ${data.counts.allConductors} conductors. Check console for details.`);
+                } else {
+                  console.error('Debug failed:', response.status);
+                  alert(`Debug failed with status ${response.status}`);
+                }
+              } catch (error) {
+                console.error('Debug error:', error);
+                alert('Debug error. Check console for details.');
+              }
+            }}
+            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
+          >
+            <span>Debug All Staff</span>
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
@@ -356,12 +489,20 @@ const AdminDrivers = () => {
           <select
             value={depotFilter}
             onChange={(e) => setDepotFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            style={{ minHeight: '40px' }}
           >
-            <option value="all">All Depots</option>
-            {depots.map(depot => (
-              <option key={depot._id} value={depot._id}>{depot.name}</option>
-            ))}
+            <option value="all">All Depots ({depots.length})</option>
+            {depots && depots.length > 0 ? depots.map(depot => {
+              console.log('Rendering depot option:', depot);
+              return (
+                <option key={depot._id} value={depot._id} style={{ padding: '8px', backgroundColor: 'white' }}>
+                  {depot.name || depot.depotName || 'Unknown Depot'}
+                </option>
+              );
+            }) : (
+              <option disabled>No depots available</option>
+            )}
           </select>
           
           <select
@@ -416,7 +557,7 @@ const AdminDrivers = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredDrivers.map((driver) => {
-                const licenseStatus = getLicenseStatus(driver.staffDetails?.licenseExpiry);
+                const licenseStatus = getLicenseStatus(driver.drivingLicense?.licenseExpiry);
                 const LicenseIcon = licenseStatus.icon;
                 
                 return (
@@ -436,11 +577,11 @@ const AdminDrivers = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {driver.staffDetails?.employeeId || 'N/A'}
+                        {driver.employeeCode || 'N/A'}
                       </div>
-                      {driver.staffDetails?.joiningDate && (
+                      {driver.joiningDate && (
                         <div className="text-sm text-gray-500">
-                          Joined: {new Date(driver.staffDetails.joiningDate).toLocaleDateString()}
+                          Joined: {new Date(driver.joiningDate).toLocaleDateString()}
                         </div>
                       )}
                     </td>
@@ -460,13 +601,13 @@ const AdminDrivers = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="space-y-1">
                         <div className="text-sm font-medium text-gray-900">
-                          {driver.staffDetails?.licenseNumber || 'N/A'}
+                          {driver.drivingLicense?.licenseNumber || 'N/A'}
                         </div>
-                        {driver.staffDetails?.licenseExpiry && (
+                        {driver.drivingLicense?.licenseExpiry && (
                           <div className="flex items-center space-x-1">
                             <LicenseIcon className={`w-4 h-4 ${licenseStatus.color}`} />
                             <span className={`text-sm ${licenseStatus.color}`}>
-                              {new Date(driver.staffDetails.licenseExpiry).toLocaleDateString()}
+                              {new Date(driver.drivingLicense.licenseExpiry).toLocaleDateString()}
                             </span>
                           </div>
                         )}
