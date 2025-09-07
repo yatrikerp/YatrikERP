@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiFetch, clearApiCache } from '../../utils/api';
 import { 
   Plus, 
   Search, 
@@ -64,19 +65,67 @@ const AdminDepots = () => {
     fetchData();
   }, [showInactiveDepots]);
 
-  const fetchData = async () => {
+  // Real-time polling every 30s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchData(true);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [showInactiveDepots]);
+
+  const fetchData = async (isAuto = false) => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      if (!token) { console.error('❌ No authentication token found'); alert('Authentication token missing. Please login again.'); return; }
-      const [depotsResponse, usersResponse] = await Promise.all([
-        fetch(`/api/admin/depots?showAll=${showInactiveDepots}`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('/api/admin/users', { headers: { 'Authorization': `Bearer ${token}` } })
+      if (!isAuto) clearApiCache();
+      const ts = Date.now();
+      const [depotsRes, usersRes] = await Promise.all([
+        apiFetch(`/api/admin/depots?showAll=${showInactiveDepots}&_=${ts}`),
+        apiFetch(`/api/admin/users?_=${ts}`)
       ]);
-      if (depotsResponse.ok) { const depotsData = await depotsResponse.json(); setDepots(depotsData.depots || []); }
-      if (usersResponse.ok) { const usersData = await usersResponse.json(); setUsers(usersData.users || []); }
+
+      // Normalize depots
+      if (depotsRes?.ok) {
+        const depotsData = depotsRes.data || {};
+        const raw = depotsData.depots || depotsData.data?.depots || [];
+        const normalized = (raw || []).map(d => ({
+          _id: d._id || d.id,
+          code: d.code || d.depotCode || '',
+          name: d.name || d.depotName || d.code || 'Depot',
+          address: d.address || d.location || {},
+          contact: d.contact || {},
+          manager: d.manager || d.createdBy || null,
+          capacity: d.capacity || { buses: 0, staff: 0 },
+          status: d.status || 'active',
+          createdAt: d.createdAt
+        }));
+        setDepots(normalized);
+      } else {
+        setDepots([]);
+      }
+
+      // Normalize users
+      if (usersRes?.ok) {
+        const usersData = usersRes.data || {};
+        const rawUsers = usersData.users || usersData.data?.users || [];
+        const normalizedUsers = (rawUsers || []).map(u => ({
+          _id: u._id || u.id,
+          name: u.name || u.fullName || 'Unnamed',
+          email: u.email || '',
+          phone: u.phone || '',
+          role: u.role || 'user',
+          depotId: u.depotId || (typeof u.depot === 'object' ? u.depot?._id : u.depot) || null,
+          status: u.status || 'active'
+        }));
+        setUsers(normalizedUsers);
+      } else {
+        setUsers([]);
+      }
     } catch (error) { console.error('❌ Error fetching data:', error); alert('Network error while fetching data. Please check your connection.'); }
     finally { setLoading(false); }
+  };
+
+  const handleManualRefresh = () => {
+    fetchData();
   };
 
   const handleCreateDepot = async (e) => {
@@ -550,6 +599,12 @@ const AdminDepots = () => {
 
       {/* Depot List */}
       <div className="space-y-4">
+        <div className="flex items-center justify-end">
+          <button onClick={handleManualRefresh} className="px-3 py-2 text-sm bg-gray-100 rounded hover:bg-gray-200 flex items-center space-x-2">
+            <RefreshCw className="w-4 h-4" />
+            <span>Refresh</span>
+          </button>
+        </div>
         {depots
           .filter(depot => 
             !searchTerm || 

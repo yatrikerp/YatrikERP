@@ -8,6 +8,7 @@ const Ticket = () => {
   const { pnr: pnrParam } = useParams();
   const [params] = useSearchParams();
   const pnr = pnrParam || params.get('pnr');
+  const bookingId = params.get('bookingId');
   const [ticket, setTicket] = useState(null);
   const [eta, setEta] = useState(null);
   const tripId = ticket?.tripId || null;
@@ -16,13 +17,18 @@ const Ticket = () => {
   useEffect(() => {
     let mounted = true;
     async function load() {
-      if (!pnr) return;
-      // Phase-0: assume an endpoint could return ticket by pnr in future; here we mock
-      // setTicket({ pnr, tripId: 'realTrip', qrPayload: `YatrikERP|PNR:${pnr}`, expiresAt: new Date(Date.now()+3600000).toISOString() });
+      // If we have bookingId but not PNR yet, generate a simple QR payload
+      if (bookingId && !pnr) {
+        setTicket({ pnr: bookingId, tripId: null, qrPayload: `YatrikERP|BOOKING:${bookingId}` });
+        return;
+      }
+      if (pnr) {
+        setTicket({ pnr, tripId: null, qrPayload: `YatrikERP|PNR:${pnr}` });
+      }
     }
     load();
     return () => { mounted = false; };
-  }, [pnr]);
+  }, [pnr, bookingId]);
 
   useEffect(() => {
     let timer;
@@ -44,16 +50,16 @@ const Ticket = () => {
     <div className="max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Ticket</h1>
       <div className="bg-white rounded-lg shadow p-5">
-        {pnr ? (
+        {pnr || bookingId ? (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <p className="text-sm text-gray-500">PNR</p>
-              <p className="text-xl font-semibold">{pnr}</p>
+              <p className="text-xl font-semibold">{pnr || bookingId}</p>
               <div className="mt-2 text-sm text-gray-600 flex items-center gap-2">Live position {liveDot}</div>
               {eta && <p className="mt-2 text-sm text-gray-600">ETA: {eta.etaMinutes} min</p>}
             </div>
             <div className="shrink-0">
-              <QRCode value={`GoBus|PNR:${pnr}`} size={140} includeMargin={false} />
+              <QRCode value={`GoBus|PNR:${pnr || bookingId}`} size={140} includeMargin={false} />
             </div>
           </div>
         ) : (

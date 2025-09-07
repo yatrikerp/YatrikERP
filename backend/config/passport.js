@@ -18,13 +18,14 @@ passport.deserializeUser(async (id, done) => {
   }
 });
 
-// Google OAuth Strategy
-passport.use(new GoogleStrategy({
-  clientID: oauthConfig.google.clientID,
-  clientSecret: oauthConfig.google.clientSecret,
-  callbackURL: oauthConfig.google.callbackURL,
-  scope: oauthConfig.google.scope
-}, async (accessToken, refreshToken, profile, done) => {
+// Google OAuth Strategy (only if credentials are provided)
+if (oauthConfig.google.clientID && oauthConfig.google.clientSecret) {
+  passport.use(new GoogleStrategy({
+    clientID: oauthConfig.google.clientID,
+    clientSecret: oauthConfig.google.clientSecret,
+    callbackURL: oauthConfig.google.callbackURL,
+    scope: oauthConfig.google.scope
+  }, async (accessToken, refreshToken, profile, done) => {
   try {
     // Check if user already exists
     let user = await User.findOne({ 
@@ -63,7 +64,8 @@ passport.use(new GoogleStrategy({
     console.error('Google OAuth error:', error);
     return done(error, null);
   }
-}));
+  }));
+}
 
 module.exports = passport;
 

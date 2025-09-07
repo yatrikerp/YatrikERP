@@ -1,11 +1,35 @@
 /* Modern Admin Dashboard - Clean Design */
 .admin-dashboard {
-  height: 100vh;
+  min-height: 100vh;
   width: 100%;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: flex;
+  position: relative;
+  box-sizing: border-box;
+}
+
+/* Prevent zooming and improve mobile experience */
+.admin-dashboard * {
+  box-sizing: border-box;
+}
+
+/* Ensure proper scaling on mobile devices */
+@media screen and (max-width: 768px) {
+  .admin-dashboard {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  
+  /* Prevent horizontal scrolling */
+  .admin-dashboard,
+  .main-content,
+  .dashboard-content {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
 }
 
 .admin-loading {
@@ -245,7 +269,9 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 /* Top Bar */
@@ -573,9 +599,11 @@
 /* Dashboard Content */
 .dashboard-content {
   flex: 1;
-  padding: 24px 32px;
+  padding: 20px 24px;
   overflow-y: auto;
   background: transparent;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* Dashboard Header */
@@ -591,6 +619,31 @@
   align-items: center;
   position: relative;
   overflow: hidden;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.notification-btn {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 8px;
+  padding: 0.75rem;
+  color: #3b82f6;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-btn:hover {
+  background: rgba(59, 130, 246, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
 .dashboard-header::before {
@@ -1258,6 +1311,14 @@
     grid-template-columns: 1fr;
     height: auto;
   }
+  
+  .dashboard-content {
+    padding: 16px 20px;
+  }
+  
+  .dashboard-header {
+    padding: 20px 24px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -1266,14 +1327,18 @@
   }
   
   .dashboard-content {
-    padding: 16px 20px;
+    padding: 12px 16px;
   }
   
   .top-bar {
-    padding: 12px 20px;
+    padding: 12px 16px;
+    height: 70px;
   }
   
-
+  .search-section {
+    width: 280px;
+    padding: 10px 16px;
+  }
   
   .header-actions {
     flex-wrap: wrap;
@@ -1281,10 +1346,10 @@
   }
   
   .action-btn {
-    padding: 12px 16px;
+    padding: 8px 12px;
     font-size: 11px;
-    min-width: 90px;
-    min-height: 60px;
+    min-width: 80px;
+    min-height: 40px;
   }
   
   .kpi-grid {
@@ -1296,6 +1361,15 @@
     gap: 16px;
     text-align: center;
   }
+  
+  .dashboard-header {
+    padding: 16px 20px;
+    margin-bottom: 20px;
+  }
+  
+  .header-left h1 {
+    font-size: 24px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1304,29 +1378,52 @@
   }
   
   .dashboard-content {
-    padding: 12px 16px;
+    padding: 8px 12px;
   }
   
   .top-bar {
-    padding: 8px 16px;
-    height: 64px;
+    padding: 8px 12px;
+    height: 60px;
   }
   
-
+  .search-section {
+    width: 200px;
+    padding: 8px 12px;
+  }
   
   .status-indicators {
     display: none;
   }
   
   .header-left h1 {
-    font-size: 24px;
+    font-size: 20px;
   }
   
   .welcome-section {
-    padding: 16px 20px;
+    padding: 12px 16px;
   }
   
   .welcome-left h2 {
+    font-size: 18px;
+  }
+  
+  .dashboard-header {
+    padding: 12px 16px;
+    margin-bottom: 16px;
+  }
+  
+  .action-btn {
+    padding: 6px 10px;
+    font-size: 10px;
+    min-width: 70px;
+    min-height: 35px;
+  }
+  
+  .kpi-card {
+    padding: 16px;
+  }
+  
+  .kpi-header h3 {
     font-size: 20px;
   }
 }

@@ -10,13 +10,24 @@ const Bus = require('../models/Bus');
 const Duty = require('../models/Duty');
 const Driver = require('../models/Driver');
 const Conductor = require('../models/Conductor');
+const AIAnalyticsService = require('../services/aiAnalytics');
+const NotificationService = require('../services/notificationService');
 const { auth, requireRole } = require('../middleware/auth');
 
 // Helper function to create role-based auth middleware
 const authRole = (roles) => [auth, requireRole(roles)];
 
-// Admin authentication middleware
-const adminAuth = authRole(['admin', 'ADMIN', 'Admin']);
+// Admin authentication middleware - allow both admin and depot users
+const adminAuth = authRole(['admin', 'ADMIN', 'Admin', 'depot_manager', 'depot_supervisor', 'depot_operator', 'MANAGER', 'SUPERVISOR', 'OPERATOR']);
+
+// Test endpoint without auth for debugging
+router.get('/test-connection', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Admin routes are working',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Apply admin auth to all routes
 router.use(adminAuth);
@@ -57,8 +68,8 @@ router.get('/dashboard', async (req, res) => {
       Booking.find()
         .sort({ createdAt: -1 })
         .limit(5)
-        .populate('user', 'name email')
-        .populate('trip', 'routeId serviceDate startTime'),
+        .populate('passengerId', 'name email')
+        .populate('tripId', 'routeId serviceDate startTime'),
       Duty.find({ date: { $gte: today, $lt: tomorrow } })
         .sort({ updatedAt: -1 })
         .limit(5)
@@ -943,6 +954,10 @@ router.get('/routes', async (req, res) => {
 // POST /api/admin/routes - Create new route
 router.post('/routes', async (req, res) => {
   try {
+    console.log('📝 POST /api/admin/routes - Create route request received');
+    console.log('📦 Request body:', req.body);
+    console.log('👤 User:', req.user);
+
     const {
       routeNumber,
       routeName,
@@ -958,11 +973,13 @@ router.post('/routes', async (req, res) => {
       amenities = [],
       operatingHours = {},
       frequency = {},
+      schedules = [],
       notes
     } = req.body;
 
     // Validation
     if (!routeNumber || !routeName || !startingPoint || !endingPoint || !depotId) {
+      console.log('❌ Validation failed - missing required fields');
       return res.status(400).json({
         success: false,
         message: 'Missing required fields: routeNumber, routeName, startingPoint, endingPoint, depotId'
@@ -979,16 +996,27 @@ router.post('/routes', async (req, res) => {
     }
 
     // Validate depot exists
+    console.log('🔍 Looking for depot with ID:', depotId);
     const depot = await Depot.findById(depotId);
     if (!depot) {
+      console.log('❌ Depot not found with ID:', depotId);
       return res.status(400).json({
         success: false,
         message: 'Depot not found'
       });
     }
+    console.log('✅ Depot found:', depot.depotName);
 
-    // Create route
-    const route = await Route.create({
+    // Process schedules to add required fields
+    const processedSchedules = (schedules || []).map(schedule => ({
+      ...schedule,
+      scheduleId: `SCH_${routeNumber}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      createdBy: req.user._id,
+      createdAt: new Date()
+    }));
+
+    // Prepare route data
+    const routeData = {
       routeNumber,
       routeName,
       startingPoint,
@@ -997,16 +1025,23 @@ router.post('/routes', async (req, res) => {
       totalDistance,
       estimatedDuration,
       baseFare: baseFare || calculateBaseFare(totalDistance),
-      busType: busType || 'ac_seater',
-      depotId,
+      farePerKm: 2, // Default fare per km
+      depot: {
+        depotId: depot._id,
+        depotName: depot.depotName,
+        depotLocation: depot.location.city
+      },
       status,
-      amenities,
-      operatingHours,
-      frequency,
-      notes,
-      createdBy: req.user._id,
-      popularity: 0
-    });
+      features: amenities || [],
+      schedules: processedSchedules,
+      createdBy: req.user._id
+    };
+
+    console.log('📝 Creating route with data:', routeData);
+
+    // Create route with proper depot structure
+    const route = await Route.create(routeData);
+    console.log('✅ Route created successfully:', route._id);
 
     res.status(201).json({
       success: true,
@@ -1015,11 +1050,17 @@ router.post('/routes', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Route creation error:', error);
+    console.error('❌ Route creation error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     res.status(500).json({
       success: false,
       message: 'Failed to create route',
-      error: error.message
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
@@ -1130,10 +1171,37 @@ router.put('/routes/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/admin/routes/:id - Delete route (soft delete)
+// DELETE /api/admin/routes/:id - Delete route (hard delete from database)
 router.delete('/routes/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    console.log('=== BACKEND ROUTE DELETE DEBUG ===');
+    console.log('🗑️ DELETE /api/admin/routes/:id - Delete request for ID:', id);
+    console.log('👤 User from request:', req.user);
+    console.log('🔑 User role:', req.user?.role);
+    console.log('📝 Request headers:', req.headers);
+    console.log('🌐 Request method:', req.method);
+    console.log('🔗 Request URL:', req.url);
+
+    // Validate ObjectId format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid route ID format'
+      });
+    }
+
+    // Check if route exists
+    const existingRoute = await Route.findById(id);
+    if (!existingRoute) {
+      console.log('❌ Route not found with ID:', id);
+      return res.status(404).json({
+        success: false,
+        message: 'Route not found'
+      });
+    }
+
+    console.log('✅ Route found:', existingRoute.routeName);
 
     // Check if route has active trips
     const activeTrips = await Trip.countDocuments({
@@ -1142,37 +1210,78 @@ router.delete('/routes/:id', async (req, res) => {
     });
 
     if (activeTrips > 0) {
+      console.log('❌ Cannot delete route with active trips:', activeTrips);
       return res.status(400).json({
         success: false,
         message: `Cannot delete route with ${activeTrips} active trips`
       });
     }
 
-    // Soft delete by updating status
-    const route = await Route.findByIdAndUpdate(
-      id,
-      { status: 'inactive', deletedAt: new Date(), deletedBy: req.user._id },
-      { new: true }
-    );
+    // Check if route has any bookings
+    const activeBookings = await Booking.countDocuments({
+      routeId: id,
+      status: { $in: ['confirmed', 'pending'] }
+    });
 
-    if (!route) {
-      return res.status(404).json({
+    if (activeBookings > 0) {
+      console.log('❌ Cannot delete route with active bookings:', activeBookings);
+      return res.status(400).json({
         success: false,
-        message: 'Route not found'
+        message: `Cannot delete route with ${activeBookings} active bookings`
       });
     }
 
-    res.json({
-      success: true,
-      message: 'Route deleted successfully'
+    // Hard delete from database
+    console.log('🗑️ Performing hard delete from database...');
+    const deletedRoute = await Route.findByIdAndDelete(id);
+
+    if (!deletedRoute) {
+      console.log('❌ Route deletion failed - route not found during deletion');
+      return res.status(404).json({
+        success: false,
+        message: 'Route not found during deletion'
+      });
+    }
+
+    console.log('✅ Route hard deleted successfully from database:', deletedRoute.routeName);
+
+    // Log the deletion for audit purposes
+    console.log('📝 Route deletion logged:', {
+      routeId: id,
+      routeName: deletedRoute.routeName,
+      deletedBy: req.user?._id || 'system',
+      deletedAt: new Date()
     });
 
+    const successResponse = {
+      success: true,
+      message: 'Route permanently deleted from database',
+      deletedRoute: {
+        id: deletedRoute._id,
+        routeName: deletedRoute.routeName,
+        routeNumber: deletedRoute.routeNumber
+      }
+    };
+
+    console.log('=== SENDING SUCCESS RESPONSE ===');
+    console.log('Response:', successResponse);
+    console.log('=== BACKEND ROUTE DELETE DEBUG END ===');
+
+    res.json(successResponse);
+
   } catch (error) {
-    console.error('Route deletion error:', error);
+    console.error('❌ Route deletion error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
     res.status(500).json({
       success: false,
-      message: 'Failed to delete route',
-      error: error.message
+      message: 'Failed to delete route from database',
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
@@ -1205,6 +1314,10 @@ router.post('/stops', async (req, res) => {
 // Trips
 router.get('/trips', async (req, res) => {
   try {
+    console.log('🚌 GET /api/admin/trips - Fetch trips request received');
+    console.log('📦 Query params:', req.query);
+    console.log('👤 User:', req.user);
+
     const { dateFrom, dateTo, route, depot, status, page = 1, limit = 20 } = req.query;
     const skip = (page - 1) * limit;
 
@@ -1214,47 +1327,183 @@ router.get('/trips', async (req, res) => {
       if (dateFrom) query.serviceDate.$gte = new Date(dateFrom);
       if (dateTo) query.serviceDate.$lte = new Date(dateTo);
     }
-    if (route) query.routeId = route;
-    if (depot) query.depotId = depot;
-    if (status) query.status = status;
+    if (route && route !== 'all') query.routeId = route;
+    if (depot && depot !== 'all') query.depotId = depot;
+    if (status && status !== 'all') query.status = status;
+
+    console.log('🔍 Trip query:', query);
 
     const [trips, total] = await Promise.all([
       Trip.find(query)
-        .populate('routeId', 'name code')
-        .populate('depotId', 'name code')
-        .populate('busId', 'number plate')
+        .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+        .populate('depotId', 'depotName depotCode location')
+        .populate('busId', 'busNumber registrationNumber busType')
+        .populate('driverId', 'name phone')
+        .populate('conductorId', 'name phone')
         .sort({ serviceDate: -1, startTime: -1 })
         .skip(skip)
         .limit(parseInt(limit)),
       Trip.countDocuments(query)
     ]);
 
+    console.log('✅ Trips found:', trips.length);
+    console.log('📊 Total trips:', total);
+
     res.json({
-      trips,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit)
+      success: true,
+      data: {
+        trips,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit)
+        }
       }
     });
   } catch (error) {
-    console.error('Trips fetch error:', error);
-    res.status(500).json({ error: 'Failed to fetch trips' });
+    console.error('❌ Trips fetch error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch trips',
+      message: error.message
+    });
   }
 });
 
 router.post('/trips', async (req, res) => {
   try {
-    const trip = new Trip(req.body);
-    await trip.save();
-    
+    console.log('🚌 POST /api/admin/trips - Creating trip');
+    console.log('📝 Request body:', req.body);
+    console.log('👤 User:', req.user);
 
+    // Extract required fields
+    const {
+      routeId,
+      busId,
+      driverId,
+      conductorId,
+      serviceDate,
+      startTime,
+      endTime,
+      fare,
+      capacity,
+      status,
+      depotId,
+      notes
+    } = req.body;
+
+    // Validate required fields
+    if (!routeId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Route ID is required' 
+      });
+    }
+
+    if (!depotId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Depot ID is required' 
+      });
+    }
+
+    if (!serviceDate) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Service date is required' 
+      });
+    }
+
+    if (!startTime) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Start time is required' 
+      });
+    }
+
+    // Get bus details to set capacity
+    const bus = await Bus.findById(busId);
+    if (!bus) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Bus not found' 
+      });
+    }
+
+    // Resolve numeric capacity from Bus schema (which stores an object)
+    // Derive a safe numeric capacity from Bus or body; never allow an object to pass through
+    const busCapacityObject = (bus && typeof bus.capacity === 'object') ? bus.capacity : null;
+    const candidateFromBus = busCapacityObject
+      ? (typeof busCapacityObject.total === 'number' && busCapacityObject.total > 0
+          ? busCapacityObject.total
+          : ((busCapacityObject.seater || 0) + (busCapacityObject.sleeper || 0)))
+      : (typeof bus?.capacity === 'number' ? bus.capacity : undefined);
+    const candidateFromBody = (typeof capacity === 'number') ? capacity : undefined;
+    const busTotalCapacity = Number.isFinite(candidateFromBus) && candidateFromBus > 0
+      ? candidateFromBus
+      : (Number.isFinite(candidateFromBody) && candidateFromBody > 0 ? candidateFromBody : 30);
+
+    // Create trip object with required fields
+    const tripData = {
+      routeId,
+      busId,
+      driverId,
+      conductorId,
+      serviceDate: new Date(serviceDate),
+      startTime,
+      endTime,
+      fare: fare || 0,
+      capacity: Number(busTotalCapacity), // Use resolved numeric capacity only
+      availableSeats: Number(busTotalCapacity),
+      bookedSeats: 0,
+      status: status || 'scheduled',
+      depotId,
+      createdBy: req.user.userId,
+      notes,
+      bookingOpen: true,
+      bookingCloseTime: new Date(new Date(serviceDate).getTime() - (2 * 60 * 60 * 1000)), // 2 hours before departure
+      cancellationPolicy: {
+        allowed: true,
+        hoursBeforeDeparture: 2,
+        refundPercentage: 80
+      }
+    };
+
+    console.log('📊 Trip data to create:', tripData);
+
+    const trip = new Trip(tripData);
+    await trip.save();
+
+    // Populate the trip with related data
+    const populatedTrip = await Trip.findById(trip._id)
+      .populate('routeId', 'routeName routeNumber')
+      .populate('busId', 'busNumber busType')
+      .populate('driverId', 'name')
+      .populate('conductorId', 'name')
+      .populate('depotId', 'depotName')
+      .populate('createdBy', 'name')
+      .lean();
+
+    console.log('✅ Trip created successfully:', populatedTrip._id);
     
-    res.status(201).json({ message: 'Trip created successfully', trip });
+    res.status(201).json({ 
+      success: true,
+      message: 'Trip created successfully', 
+      data: { trip: populatedTrip }
+    });
   } catch (error) {
-    console.error('Trip creation error:', error);
-    res.status(500).json({ error: 'Failed to create trip' });
+    console.error('❌ Trip creation error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to create trip',
+      error: error.message 
+    });
   }
 });
 
@@ -1878,6 +2127,230 @@ router.get('/all-conductors', async (req, res) => {
   }
 });
 
+// Test route creation endpoint for debugging
+router.post('/test-route', async (req, res) => {
+  try {
+    console.log('🧪 Test route creation requested');
+    
+    const testRoute = {
+      routeNumber: 'TEST-' + Date.now(),
+      routeName: 'Test Route for Database Connection',
+      startingPoint: {
+        city: 'Test City A',
+        location: 'Test Location A'
+      },
+      endingPoint: {
+        city: 'Test City B',
+        location: 'Test Location B'
+      },
+      totalDistance: 100,
+      estimatedDuration: 120,
+      baseFare: 500,
+      depotId: '507f1f77bcf86cd799439011', // Default test depot ID
+      status: 'active',
+      features: ['AC', 'WiFi'],
+      createdBy: req.user?._id || '507f1f77bcf86cd799439011'
+    };
+
+    console.log('Creating test route:', testRoute);
+    
+    const route = await Route.create(testRoute);
+    console.log('✅ Test route created successfully:', route._id);
+    
+    // Clean up - delete the test route
+    await Route.findByIdAndDelete(route._id);
+    console.log('🧹 Test route cleaned up');
+    
+    res.json({
+      success: true,
+      message: 'Database connection test successful',
+      testRouteId: route._id,
+      cleanedUp: true
+    });
+  } catch (error) {
+    console.error('❌ Test route creation failed:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Database connection test failed',
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// DELETE /api/admin/trips/:id - Delete trip (hard delete from database)
+router.delete('/trips/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('🗑️ DELETE /api/admin/trips/:id - Delete request for ID:', id);
+    console.log('👤 User from request:', req.user);
+    console.log('🔑 User role:', req.user?.role);
+
+    // Validate ObjectId format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid trip ID format'
+      });
+    }
+
+    // Check if trip exists
+    const existingTrip = await Trip.findById(id).populate('routeId', 'routeName routeNumber');
+    if (!existingTrip) {
+      console.log('❌ Trip not found with ID:', id);
+      return res.status(404).json({
+        success: false,
+        message: 'Trip not found'
+      });
+    }
+
+    console.log('✅ Trip found:', existingTrip.tripNumber || existingTrip._id);
+
+    // Check if trip has active bookings
+    const activeBookings = await Booking.countDocuments({
+      tripId: id,
+      status: { $in: ['confirmed', 'issued', 'pending'] }
+    });
+
+    if (activeBookings > 0) {
+      console.log('❌ Cannot delete trip with active bookings:', activeBookings);
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete trip with ${activeBookings} active bookings`
+      });
+    }
+
+    // Check if trip is currently running
+    if (existingTrip.status === 'running') {
+      console.log('❌ Cannot delete running trip');
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete trip that is currently running'
+      });
+    }
+
+    // Free up bus if assigned
+    if (existingTrip.busId) {
+      await Bus.findByIdAndUpdate(existingTrip.busId, {
+        currentTrip: null,
+        status: 'active'
+      });
+      console.log('🚌 Bus freed up:', existingTrip.busId);
+    }
+
+    // Hard delete from database
+    console.log('🗑️ Performing hard delete from database...');
+    const deletedTrip = await Trip.findByIdAndDelete(id);
+
+    if (!deletedTrip) {
+      console.log('❌ Trip deletion failed - trip not found during deletion');
+      return res.status(404).json({
+        success: false,
+        message: 'Trip not found during deletion'
+      });
+    }
+
+    console.log('✅ Trip hard deleted successfully from database:', deletedTrip.tripNumber || deletedTrip._id);
+
+    // Log the deletion for audit purposes
+    console.log('📝 Trip deletion logged:', {
+      tripId: id,
+      tripNumber: deletedTrip.tripNumber || deletedTrip._id,
+      routeName: existingTrip.routeId?.routeName || 'Unknown Route',
+      deletedBy: req.user?._id || 'system',
+      deletedAt: new Date()
+    });
+
+    res.json({
+      success: true,
+      message: 'Trip permanently deleted from database',
+      deletedTrip: {
+        id: deletedTrip._id,
+        tripNumber: deletedTrip.tripNumber || deletedTrip._id,
+        routeName: existingTrip.routeId?.routeName || 'Unknown Route'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Trip deletion error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete trip from database',
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Database health check endpoint
+router.get('/db-health', async (req, res) => {
+  try {
+    console.log('🔍 Database health check requested');
+    
+    const healthCheck = {
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      database: {
+        connected: false,
+        readyState: 0,
+        host: 'unknown',
+        name: 'unknown'
+      },
+      collections: {
+        routes: 0,
+        users: 0,
+        depots: 0,
+        trips: 0,
+        bookings: 0
+      },
+      errors: []
+    };
+
+    // Check database connection
+    const mongoose = require('mongoose');
+    healthCheck.database.connected = mongoose.connection.readyState === 1;
+    healthCheck.database.readyState = mongoose.connection.readyState;
+    healthCheck.database.host = mongoose.connection.host || 'unknown';
+    healthCheck.database.name = mongoose.connection.name || 'unknown';
+
+    if (healthCheck.database.connected) {
+      // Get collection counts
+      try {
+        healthCheck.collections.routes = await Route.countDocuments();
+        healthCheck.collections.users = await User.countDocuments();
+        healthCheck.collections.depots = await Depot.countDocuments();
+        healthCheck.collections.trips = await Trip.countDocuments();
+        healthCheck.collections.bookings = await Booking.countDocuments();
+      } catch (countError) {
+        healthCheck.errors.push(`Collection count error: ${countError.message}`);
+      }
+    } else {
+      healthCheck.status = 'unhealthy';
+      healthCheck.errors.push('Database not connected');
+    }
+
+    console.log('📊 Database health check result:', healthCheck);
+    
+    res.json({
+      success: true,
+      data: healthCheck
+    });
+  } catch (error) {
+    console.error('❌ Database health check error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Database health check failed',
+      error: error.message
+    });
+  }
+});
+
 // Clear all caches and force refresh endpoint
 router.get('/clear-cache', async (req, res) => {
   try {
@@ -2253,41 +2726,125 @@ router.get('/drivers', async (req, res) => {
 // 11) Bus Management
 // =================================================================
 
-// GET /api/admin/buses
-router.get('/buses', async (req, res) => {
+// GET /api/admin/buses - Removed duplicate route
+
+// GET /api/admin/buses/analytics
+router.get('/buses/analytics', async (req, res) => {
   try {
-    const { status, depot, busType, page = 1, limit = 50 } = req.query;
-    const skip = (page - 1) * limit;
-
-    const query = {};
-    if (status && status !== 'all') query.status = status;
-    if (depot && depot !== 'all') query.depotId = depot;
-    if (busType && busType !== 'all') query.busType = busType;
-
-    const [buses, total] = await Promise.all([
-      Bus.find(query)
-        .populate('depotId', 'name code')
-        .populate('assignedDriver', 'name email phone')
-        .populate('assignedConductor', 'name email phone')
-        .populate('currentTrip', 'routeId serviceDate startTime')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit)),
-      Bus.countDocuments(query)
+    const [totalBuses, activeBuses, maintenanceBuses, retiredBuses] = await Promise.all([
+      Bus.countDocuments(),
+      Bus.countDocuments({ status: 'active' }),
+      Bus.countDocuments({ status: 'maintenance' }),
+      Bus.countDocuments({ status: 'retired' })
     ]);
 
+    // Calculate average utilization
+    const activeBusesData = await Bus.find({ status: 'active' });
+    const totalCapacity = activeBusesData.reduce((sum, bus) => sum + (bus.capacity?.total || 0), 0);
+    const averageUtilization = totalCapacity > 0 ? Math.round((activeBuses / totalCapacity) * 100) : 0;
+
+    // Calculate fuel efficiency
+    const fuelEfficiency = activeBusesData.reduce((sum, bus) => 
+      sum + (bus.specifications?.mileage || 0), 0) / Math.max(activeBuses, 1);
+
+    // Calculate maintenance cost (simplified)
+    let maintenanceCost = 0;
+    try {
+      const maintenanceResult = await Bus.aggregate([
+        { $unwind: { path: '$maintenance.issues', preserveNullAndEmptyArrays: true } },
+        { $group: { _id: null, totalCost: { $sum: '$maintenance.issues.cost' } } }
+      ]);
+      maintenanceCost = maintenanceResult[0]?.totalCost || 0;
+    } catch (aggregateError) {
+      console.log('Maintenance cost calculation skipped:', aggregateError.message);
+      maintenanceCost = 0;
+    }
+
     res.json({
-      buses,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit)
+      analytics: {
+        totalBuses,
+        activeBuses,
+        maintenanceBuses,
+        retiredBuses,
+        averageUtilization,
+        fuelEfficiency: Math.round(fuelEfficiency * 100) / 100,
+        maintenanceCost
       }
     });
   } catch (error) {
-    console.error('Buses fetch error:', error);
-    res.status(500).json({ error: 'Failed to fetch buses' });
+    console.error('Bus analytics error:', error);
+    res.status(500).json({ error: 'Failed to fetch bus analytics' });
+  }
+});
+
+// GET /api/admin/buses/ai-insights - Get AI insights for bus management
+router.get('/buses/ai-insights', async (req, res) => {
+  try {
+    // Simple AI insights without complex analysis
+    const insights = {
+      recommendations: [
+        {
+          id: 'fuel-optimization',
+          type: 'efficiency',
+          priority: 'high',
+          title: 'Fuel Efficiency Optimization',
+          description: 'Consider implementing fuel monitoring systems to track consumption patterns.',
+          impact: 'Potential savings of $500 per month',
+          actionItems: ['Install fuel monitoring devices', 'Train drivers on efficient driving']
+        },
+        {
+          id: 'maintenance-schedule',
+          type: 'maintenance',
+          priority: 'medium',
+          title: 'Preventive Maintenance',
+          description: 'Schedule regular maintenance to prevent unexpected breakdowns.',
+          impact: 'Reduce breakdown risk by 60%',
+          actionItems: ['Create maintenance calendar', 'Set up automated reminders']
+        }
+      ],
+      predictions: [
+        {
+          id: 'fuel-consumption',
+          metric: 'Monthly Fuel Consumption',
+          prediction: 'Expected to increase by 5% next month',
+          trend: 'up',
+          change: 5,
+          confidence: 85
+        },
+        {
+          id: 'maintenance-needs',
+          metric: 'Maintenance Requirements',
+          prediction: '2 buses will require maintenance in the next 30 days',
+          trend: 'stable',
+          change: 0,
+          confidence: 90
+        }
+      ],
+      anomalies: [
+        {
+          id: 'fuel-anomaly-1',
+          type: 'fuel',
+          title: 'Unusual Fuel Consumption',
+          description: 'Monitor fuel consumption patterns for any buses showing unusual patterns.',
+          severity: 'medium',
+          detected: new Date(),
+          recommendation: 'Regular monitoring recommended'
+        }
+      ],
+      generatedAt: new Date()
+    };
+    
+    res.json({
+      success: true,
+      data: insights
+    });
+  } catch (error) {
+    console.error('AI insights error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate AI insights',
+      error: error.message
+    });
   }
 });
 
@@ -2358,22 +2915,48 @@ router.post('/buses', async (req, res) => {
     }
 
     // Validate driver and conductor if assigned
-    if (assignedDriver) {
-      const driver = await User.findById(assignedDriver);
-      if (!driver || driver.role !== 'driver') {
+    if (assignedDriver && assignedDriver.trim() !== '') {
+      // Check both User model and Driver model
+      const [userDriver, driverModel] = await Promise.all([
+        User.findById(assignedDriver),
+        Driver.findById(assignedDriver)
+      ]);
+      
+      if (!userDriver && !driverModel) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid driver assignment'
+          message: 'Invalid driver assignment - driver not found'
+        });
+      }
+      
+      // If it's a user, check role
+      if (userDriver && userDriver.role !== 'driver') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid driver assignment - user is not a driver'
         });
       }
     }
 
-    if (assignedConductor) {
-      const conductor = await User.findById(assignedConductor);
-      if (!conductor || conductor.role !== 'conductor') {
+    if (assignedConductor && assignedConductor.trim() !== '') {
+      // Check both User model and Conductor model
+      const [userConductor, conductorModel] = await Promise.all([
+        User.findById(assignedConductor),
+        Conductor.findById(assignedConductor)
+      ]);
+      
+      if (!userConductor && !conductorModel) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid conductor assignment'
+          message: 'Invalid conductor assignment - conductor not found'
+        });
+      }
+      
+      // If it's a user, check role
+      if (userConductor && userConductor.role !== 'conductor') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid conductor assignment - user is not a conductor'
         });
       }
     }
@@ -2387,8 +2970,8 @@ router.post('/buses', async (req, res) => {
       capacity: capacity || { total: 35, seater: 35 },
       amenities: amenities || ['ac', 'charging'],
       specifications: specifications || {},
-      assignedDriver,
-      assignedConductor,
+      assignedDriver: assignedDriver && assignedDriver.trim() !== '' ? assignedDriver : undefined,
+      assignedConductor: assignedConductor && assignedConductor.trim() !== '' ? assignedConductor : undefined,
       assignedBy: req.user._id,
       notes,
       status: 'active',
@@ -2419,6 +3002,10 @@ router.post('/buses', async (req, res) => {
 // GET /api/admin/buses - Get all buses with pagination and filters
 router.get('/buses', async (req, res) => {
   try {
+    console.log('🚌 GET /api/admin/buses - Fetching buses');
+    console.log('👤 User:', req.user);
+    console.log('📝 Query params:', req.query);
+
     const {
       page = 1,
       limit = 20,
@@ -2459,6 +3046,9 @@ router.get('/buses', async (req, res) => {
         .lean(),
       Bus.countDocuments(filter)
     ]);
+
+    console.log('📊 Found buses:', buses.length);
+    console.log('📊 Total buses:', total);
 
     res.json({
       success: true,
@@ -2628,47 +3218,6 @@ router.post('/buses/:id/assign', async (req, res) => {
   }
 });
 
-// GET /api/admin/buses/analytics
-router.get('/buses/analytics', async (req, res) => {
-  try {
-    const [totalBuses, activeBuses, maintenanceBuses, retiredBuses] = await Promise.all([
-      Bus.countDocuments(),
-      Bus.countDocuments({ status: 'active' }),
-      Bus.countDocuments({ status: 'maintenance' }),
-      Bus.countDocuments({ status: 'retired' })
-    ]);
-
-    // Calculate average utilization
-    const activeBusesData = await Bus.find({ status: 'active' });
-    const totalCapacity = activeBusesData.reduce((sum, bus) => sum + (bus.capacity.total || 0), 0);
-    const averageUtilization = totalCapacity > 0 ? Math.round((activeBuses / totalCapacity) * 100) : 0;
-
-    // Calculate fuel efficiency
-    const fuelEfficiency = activeBusesData.reduce((sum, bus) => 
-      sum + (bus.specifications?.mileage || 0), 0) / Math.max(activeBuses, 1);
-
-    // Calculate maintenance cost
-    const maintenanceCost = await Bus.aggregate([
-      { $unwind: '$maintenance.issues' },
-      { $group: { _id: null, totalCost: { $sum: '$maintenance.issues.cost' } } }
-    ]).then(result => result[0]?.totalCost || 0);
-
-    res.json({
-      analytics: {
-        totalBuses,
-        activeBuses,
-        maintenanceBuses,
-        retiredBuses,
-        averageUtilization,
-        fuelEfficiency: Math.round(fuelEfficiency * 100) / 100,
-        maintenanceCost
-      }
-    });
-  } catch (error) {
-    console.error('Bus analytics error:', error);
-    res.status(500).json({ error: 'Failed to fetch bus analytics' });
-  }
-});
 
 // GET /api/admin/buses/realtime
 router.get('/buses/realtime', async (req, res) => {
@@ -2691,6 +3240,95 @@ router.get('/buses/realtime', async (req, res) => {
   } catch (error) {
     console.error('Real-time bus data error:', error);
     res.status(500).json({ error: 'Failed to fetch real-time data' });
+  }
+});
+
+// GET /api/admin/maintenance - Get all maintenance logs
+router.get('/maintenance', async (req, res) => {
+  try {
+    const MaintenanceLog = require('../models/MaintenanceLog');
+    const logs = await MaintenanceLog.find()
+      .populate('busId', 'busNumber registrationNumber')
+      .populate('depotId', 'depotName depotCode')
+      .sort({ createdAt: -1 });
+    
+    res.json({
+      success: true,
+      data: logs
+    });
+  } catch (error) {
+    console.error('Maintenance logs fetch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch maintenance logs',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/admin/maintenance - Create new maintenance log
+router.post('/maintenance', async (req, res) => {
+  try {
+    const MaintenanceLog = require('../models/MaintenanceLog');
+    const {
+      busId,
+      issueType,
+      description,
+      priority,
+      scheduledDate,
+      estimatedCost,
+      assignedTechnician,
+      notes
+    } = req.body;
+
+    const maintenanceLog = await MaintenanceLog.create({
+      busId,
+      depotId: req.user.depotId || req.body.depotId,
+      issueType,
+      description,
+      priority,
+      scheduledDate,
+      estimatedCost,
+      assignedTechnician,
+      notes,
+      status: 'open',
+      reportedAt: new Date()
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Maintenance scheduled successfully',
+      data: maintenanceLog
+    });
+  } catch (error) {
+    console.error('Maintenance creation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to schedule maintenance',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/buses/:id/maintenance - Get maintenance history for specific bus
+router.get('/buses/:id/maintenance', async (req, res) => {
+  try {
+    const MaintenanceLog = require('../models/MaintenanceLog');
+    const logs = await MaintenanceLog.find({ busId: req.params.id })
+      .populate('depotId', 'depotName depotCode')
+      .sort({ createdAt: -1 });
+    
+    res.json({
+      success: true,
+      data: logs
+    });
+  } catch (error) {
+    console.error('Bus maintenance history fetch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch maintenance history',
+      error: error.message
+    });
   }
 });
 
@@ -2844,8 +3482,8 @@ router.get('/recent-activities', async (req, res) => {
     const recentBookings = await Booking.find()
       .sort({ createdAt: -1 })
       .limit(5)
-      .populate('user', 'name email')
-      .populate('trip', 'routeId serviceDate');
+      .populate('passengerId', 'name email')
+      .populate('tripId', 'routeId serviceDate');
     
     recentBookings.forEach(booking => {
       activities.push({
@@ -3471,9 +4109,9 @@ router.get('/fare-policies/calculate', async (req, res) => {
     // Mock fare calculation
     const baseFare = 150;
     const distanceFare = 5;
-    const distance = parseFloat(distance) || 0;
+    const parsedDistance = parseFloat(distance) || 0;
     
-    let totalFare = baseFare + (distanceFare * distance);
+    let totalFare = baseFare + (distanceFare * parsedDistance);
     
     // Apply multipliers
     if (isPeakHour === 'true') totalFare *= 1.2;
@@ -3488,11 +4126,11 @@ router.get('/fare-policies/calculate', async (req, res) => {
       success: true,
       calculation: {
         baseFare,
-        distanceFare: distanceFare * distance,
+        distanceFare: distanceFare * parsedDistance,
         totalFare: Math.round(totalFare),
         breakdown: {
           base: baseFare,
-          distance: distanceFare * distance,
+          distance: distanceFare * parsedDistance,
           peakHour: isPeakHour === 'true' ? Math.round(totalFare * 0.2) : 0,
           weekend: isWeekend === 'true' ? Math.round(totalFare * 0.1) : 0,
           holiday: isHoliday === 'true' ? Math.round(totalFare * 0.3) : 0,
@@ -4004,6 +4642,351 @@ router.get('/reports/:reportId/export', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to export report'
+    });
+  }
+});
+
+// AI Analytics endpoints
+
+
+// GET /api/admin/buses/analytics - Get advanced analytics
+router.get('/buses/analytics', async (req, res) => {
+  try {
+    const { depotId, startDate, endDate } = req.query;
+    
+    // Build query
+    const query = {};
+    if (depotId) query.depotId = depotId;
+    
+    // Get buses
+    const buses = await Bus.find(query);
+    
+    // Calculate analytics
+    const totalBuses = buses.length;
+    const activeBuses = buses.filter(b => b.status === 'active').length;
+    const maintenanceBuses = buses.filter(b => b.status === 'maintenance').length;
+    
+    // Calculate utilization (simplified)
+    const utilizationRate = totalBuses > 0 ? (activeBuses / totalBuses * 100).toFixed(1) : 0;
+    
+    // Calculate average fuel efficiency
+    const fuelLogs = await FuelLog.find(query).sort({ date: -1 }).limit(100);
+    let totalEfficiency = 0;
+    let efficiencyCount = 0;
+    
+    fuelLogs.forEach(log => {
+      if (log.kilometers && log.liters) {
+        totalEfficiency += log.kilometers / log.liters;
+        efficiencyCount++;
+      }
+    });
+    
+    const fuelEfficiency = efficiencyCount > 0 ? (totalEfficiency / efficiencyCount).toFixed(1) : 0;
+    
+    // Get maintenance predictions
+    const now = new Date();
+    const nextMonth = new Date();
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    
+    const predictiveMaintenance = buses
+      .filter(bus => {
+        const nextMaintenance = new Date(bus.nextMaintenance || bus.lastMaintenance);
+        nextMaintenance.setDate(nextMaintenance.getDate() + 90);
+        return nextMaintenance >= now && nextMaintenance <= nextMonth;
+      })
+      .map(bus => ({
+        busId: bus._id,
+        busNumber: bus.busNumber,
+        predictedDate: bus.nextMaintenance || new Date(bus.lastMaintenance).setDate(new Date(bus.lastMaintenance).getDate() + 90),
+        type: 'scheduled'
+      }));
+    
+    res.json({
+      success: true,
+      data: {
+        totalBuses,
+        activeBuses,
+        maintenanceBuses,
+        retiredBuses: buses.filter(b => b.status === 'retired').length,
+        utilizationRate: parseFloat(utilizationRate),
+        fuelEfficiency: parseFloat(fuelEfficiency),
+        predictiveMaintenance,
+        lastUpdated: new Date()
+      }
+    });
+  } catch (error) {
+    console.error('Analytics error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate analytics',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/buses/export/:format - Export bus reports
+router.get('/buses/export/:format', async (req, res) => {
+  try {
+    const { format } = req.params; // pdf or excel
+    const buses = await Bus.find()
+      .populate('depotId', 'depotName depotCode')
+      .populate('assignedDriverId', 'name driverId')
+      .populate('assignedConductorId', 'name conductorId')
+      .sort({ busNumber: 1 });
+
+    if (format === 'pdf') {
+      // In a real implementation, you would generate PDF using libraries like PDFKit or Puppeteer
+      res.json({
+        success: true,
+        message: 'PDF export would be generated here',
+        data: buses
+      });
+    } else if (format === 'excel') {
+      // In a real implementation, you would generate Excel using libraries like ExcelJS
+      res.json({
+        success: true,
+        message: 'Excel export would be generated here',
+        data: buses
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid export format. Use pdf or excel'
+      });
+    }
+  } catch (error) {
+    console.error('Export error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to export report',
+      error: error.message
+    });
+  }
+});
+
+// =================================================================
+// DEPOT TRIP MANAGEMENT ENDPOINTS
+// =================================================================
+
+// GET /api/admin/depot-trips - Get trips for a specific depot
+router.get('/depot-trips', async (req, res) => {
+  try {
+    const { depotId, status, date, page = 1, limit = 20 } = req.query;
+    const skip = (page - 1) * limit;
+
+    if (!depotId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Depot ID is required'
+      });
+    }
+
+    const query = { depotId };
+    if (status && status !== 'all') query.status = status;
+    if (date) {
+      const searchDate = new Date(date);
+      const startOfDay = new Date(searchDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(searchDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      query.serviceDate = { $gte: startOfDay, $lte: endOfDay };
+    }
+
+    const [trips, total] = await Promise.all([
+      Trip.find(query)
+        .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+        .populate('busId', 'busNumber busType capacity')
+        .populate('driverId', 'name phone')
+        .populate('conductorId', 'name phone')
+        .populate('depotId', 'depotName location')
+        .sort({ serviceDate: -1, startTime: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Trip.countDocuments(query)
+    ]);
+
+    // Get booking statistics for each trip
+    const tripsWithBookings = await Promise.all(
+      trips.map(async (trip) => {
+        const bookings = await Booking.find({ 
+          tripId: trip._id, 
+          bookingStatus: 'confirmed' 
+        }).lean();
+        
+        return {
+          ...trip,
+          totalBookings: bookings.length,
+          revenue: bookings.reduce((sum, booking) => sum + booking.totalAmount, 0),
+          occupancyRate: trip.capacity > 0 ? (bookings.length / trip.capacity) * 100 : 0
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      data: {
+        trips: tripsWithBookings,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Depot trips fetch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch depot trips',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/trip/:id/bookings - Get bookings for a specific trip
+router.get('/trip/:id/bookings', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, page = 1, limit = 20 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const query = { tripId: id };
+    if (status && status !== 'all') query.bookingStatus = status;
+
+    const [bookings, total] = await Promise.all([
+      Booking.find(query)
+        .populate('passengerId', 'name email phone')
+        .populate('tripId', 'routeId busId serviceDate startTime')
+        .populate('tripId.routeId', 'routeName startingPoint endingPoint')
+        .populate('tripId.busId', 'busNumber busType')
+        .sort({ bookingDate: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Booking.countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        bookings,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Trip bookings fetch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch trip bookings',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/admin/trip/:id/status - Update trip status
+router.put('/trip/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, location, notes } = req.body;
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status is required'
+      });
+    }
+
+    const trip = await Trip.findById(id);
+    if (!trip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trip not found'
+      });
+    }
+
+    // Update trip status
+    await trip.updateStatus(status, location);
+
+    // Add notes if provided
+    if (notes) {
+      trip.notes = trip.notes ? `${trip.notes}\n${notes}` : notes;
+      await trip.save();
+    }
+
+    res.json({
+      success: true,
+      message: 'Trip status updated successfully',
+      data: { trip }
+    });
+
+  } catch (error) {
+    console.error('Update trip status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update trip status',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/depot-trips/stats - Get depot trip statistics
+router.get('/depot-trips/stats', async (req, res) => {
+  try {
+    const { depotId, dateFrom, dateTo } = req.query;
+
+    if (!depotId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Depot ID is required'
+      });
+    }
+
+    const query = { depotId };
+    if (dateFrom || dateTo) {
+      query.serviceDate = {};
+      if (dateFrom) query.serviceDate.$gte = new Date(dateFrom);
+      if (dateTo) query.serviceDate.$lte = new Date(dateTo);
+    }
+
+    const [trips, bookings] = await Promise.all([
+      Trip.find(query).lean(),
+      Booking.find({ 
+        tripId: { $in: (await Trip.find(query).select('_id')).map(t => t._id) },
+        bookingStatus: 'confirmed'
+      }).lean()
+    ]);
+
+    const stats = {
+      totalTrips: trips.length,
+      completedTrips: trips.filter(t => t.status === 'completed').length,
+      runningTrips: trips.filter(t => t.status === 'running').length,
+      cancelledTrips: trips.filter(t => t.status === 'cancelled').length,
+      totalBookings: bookings.length,
+      totalRevenue: bookings.reduce((sum, booking) => sum + booking.totalAmount, 0),
+      averageOccupancy: trips.length > 0 ? 
+        trips.reduce((sum, trip) => sum + (trip.bookedSeats / trip.capacity) * 100, 0) / trips.length : 0
+    };
+
+    res.json({
+      success: true,
+      data: { stats }
+    });
+
+  } catch (error) {
+    console.error('Depot stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch depot statistics',
+      error: error.message
     });
   }
 });

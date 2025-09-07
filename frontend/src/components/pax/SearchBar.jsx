@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Calendar, Bus } from 'lucide-react';
 
 const SearchBar = ({ onSearch }) => {
+  const navigate = useNavigate();
   const [fromCity, setFromCity] = useState('');
   const [toCity, setToCity] = useState('');
   const [date, setDate] = useState('');
@@ -15,7 +17,19 @@ const SearchBar = ({ onSearch }) => {
 
   const handleSearch = () => {
     if (fromCity && toCity && date) {
-      onSearch({ fromCity, toCity, date });
+      // Navigate to search results page
+      const queryParams = new URLSearchParams({
+        from: fromCity,
+        to: toCity,
+        date: date,
+        tripType: 'oneWay'
+      });
+      navigate(`/search-results?${queryParams.toString()}`);
+      
+      // Also call the onSearch callback if provided
+      if (onSearch) {
+        onSearch({ fromCity, toCity, date });
+      }
     }
   };
 

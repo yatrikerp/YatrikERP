@@ -62,7 +62,7 @@ const AdminMasterDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/dashboard', {
+      const response = await fetch('http://localhost:5000/api/admin/dashboard', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -92,7 +92,7 @@ const AdminMasterDashboard = () => {
   const fetchRecentActivities = async () => {
     try {
       console.log('🔄 Fetching recent activities...');
-      const response = await fetch('/api/admin/recent-activities', {
+      const response = await fetch('http://localhost:5000/api/admin/recent-activities', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }

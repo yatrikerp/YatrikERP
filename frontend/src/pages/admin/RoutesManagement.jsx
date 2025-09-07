@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiFetch, clearApiCache } from '../../utils/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, 
@@ -25,9 +26,13 @@ const RoutesManagement = () => {
   const [routes, setRoutes] = useState([]);
   const [depots, setDepots] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deletingRouteId, setDeletingRouteId] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState(null);
+  const [editingRoute, setEditingRoute] = useState(null);
   const [filters, setFilters] = useState({
     fromCity: '',
     toCity: '',
@@ -82,194 +87,118 @@ const RoutesManagement = () => {
     timeSlots: []
   });
 
-  // Real data for demonstration
+  // Helper function to normalize route data from database
+  const normalizeRoutes = (routesRaw) => {
+    return (routesRaw || []).map((r) => {
+      const depotRef = r.depotId || r.depot || null;
+      const depotId = depotRef && typeof depotRef === 'object' ? (depotRef._id || depotRef.depotId || depotRef.id) : depotRef || '';
+      const depotName = depotRef && typeof depotRef === 'object' ? (depotRef.name || depotRef.depotName || depotRef.code || 'Depot') : '';
+      const depotLocation = depotRef && typeof depotRef === 'object' ? (depotRef.location?.city || depotRef.city || '') : '';
+
+      const sp = r.startingPoint;
+      const ep = r.endingPoint;
+      const startingPoint = typeof sp === 'object' ? { city: sp.city || sp.location || sp.name || '', location: sp.location || '' } : { city: sp || '', location: '' };
+      const endingPoint = typeof ep === 'object' ? { city: ep.city || ep.location || ep.name || '', location: ep.location || '' } : { city: ep || '', location: '' };
+      const schedules = Array.isArray(r.schedules)
+        ? r.schedules.map((s, idx) => ({
+            scheduleId: s.scheduleId || s._id || `SCH${idx}`,
+            departureTime: s.departureTime || s.departure || s.startTime || '',
+            arrivalTime: s.arrivalTime || s.arrival || s.endTime || '',
+            frequency: s.frequency || s.recurrence || 'daily'
+          }))
+        : [];
+
+      return {
+        id: r._id || r.id,
+        routeNumber: r.routeNumber || r.code || '',
+        routeName: r.routeName || r.name || '',
+        startingPoint,
+        endingPoint,
+        totalDistance: Number(r.totalDistance ?? 0),
+        estimatedDuration: Number(r.estimatedDuration ?? 0),
+        baseFare: Number(r.baseFare ?? 0),
+        depot: { depotId, depotName, depotLocation },
+        status: r.status || 'active',
+        schedules,
+        features: Array.isArray(r.features) ? r.features : []
+      };
+    });
+  };
+
+  // Helper function to reload routes from database
+  const reloadRoutes = async () => {
+    try {
+      const routesRes = await apiFetch('/api/admin/routes');
+      const routesRaw = (routesRes?.data?.routes || routesRes?.data?.data?.routes || routesRes?.data || []);
+      const normalizedRoutes = normalizeRoutes(routesRaw);
+      setRoutes(normalizedRoutes);
+      console.log('Routes reloaded from database:', normalizedRoutes);
+    } catch (error) {
+      console.error('Error reloading routes:', error);
+      window.alert('Failed to reload routes from database');
+    }
+  };
+
+  // Load live data
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      setRoutes([
-        {
-          id: 1,
-          routeNumber: 'RT001',
-          routeName: 'Kochi - Trivandrum Express',
-          startingPoint: { city: 'Kochi', location: 'Kochi Central Bus Stand, Ernakulam' },
-          endingPoint: { city: 'Trivandrum', location: 'Thiruvananthapuram Central Bus Station' },
-          totalDistance: 200,
-          estimatedDuration: 240,
-          depot: { depotId: 1, depotName: 'Kochi Central Depot', depotLocation: 'Kochi' },
-          status: 'active',
-          schedules: [
-            { scheduleId: 'SCH1', departureTime: '06:00', arrivalTime: '10:00', frequency: 'daily' },
-            { scheduleId: 'SCH2', departureTime: '14:00', arrivalTime: '18:00', frequency: 'daily' },
-            { scheduleId: 'SCH3', departureTime: '22:00', arrivalTime: '02:00', frequency: 'daily' }
-          ],
-          baseFare: 450,
-          features: ['AC', 'WiFi', 'USB_Charging', 'Entertainment']
-        },
-        {
-          id: 2,
-          routeNumber: 'RT002',
-          routeName: 'Kochi - Bangalore Premium',
-          startingPoint: { city: 'Kochi', location: 'Kochi Airport Bus Terminal' },
-          endingPoint: { city: 'Bangalore', location: 'Bangalore Central Bus Station, Majestic' },
-          totalDistance: 600,
-          estimatedDuration: 480,
-          depot: { depotId: 2, depotName: 'Kochi Airport Depot', depotLocation: 'Kochi' },
-          status: 'active',
-          schedules: [
-            { scheduleId: 'SCH4', departureTime: '20:00', arrivalTime: '04:00', frequency: 'daily' }
-          ],
-          baseFare: 1200,
-          features: ['AC', 'WiFi', 'Entertainment', 'Refreshments', 'Wheelchair_Accessible']
-        },
-        {
-          id: 3,
-          routeNumber: 'RT003',
-          routeName: 'Kochi - Chennai Express',
-          startingPoint: { city: 'Kochi', location: 'Kochi Central Bus Stand, Ernakulam' },
-          endingPoint: { city: 'Chennai', location: 'Chennai Central Bus Terminal, Koyambedu' },
-          totalDistance: 750,
-          estimatedDuration: 600,
-          depot: { depotId: 1, depotName: 'Kochi Central Depot', depotLocation: 'Kochi' },
-          status: 'active',
-          schedules: [
-            { scheduleId: 'SCH5', departureTime: '18:00', arrivalTime: '06:00', frequency: 'daily' }
-          ],
-          baseFare: 1500,
-          features: ['AC', 'WiFi', 'USB_Charging']
-        },
-        {
-          id: 4,
-          routeNumber: 'RT004',
-          routeName: 'Kochi - Hyderabad Deluxe',
-          startingPoint: { city: 'Kochi', location: 'Kochi Central Bus Stand, Ernakulam' },
-          endingPoint: { city: 'Hyderabad', location: 'Hyderabad Central Bus Station, Dilsukhnagar' },
-          totalDistance: 900,
-          estimatedDuration: 720,
-          depot: { depotId: 1, depotName: 'Kochi Central Depot', depotLocation: 'Kochi' },
-          status: 'active',
-          schedules: [
-            { scheduleId: 'SCH6', departureTime: '16:00', arrivalTime: '08:00', frequency: 'daily' }
-          ],
-          baseFare: 1800,
-          features: ['AC', 'WiFi', 'Entertainment', 'Refreshments']
-        },
-        {
-          id: 5,
-          routeNumber: 'RT005',
-          routeName: 'Trivandrum - Bangalore Express',
-          startingPoint: { city: 'Trivandrum', location: 'Thiruvananthapuram Central Bus Station' },
-          endingPoint: { city: 'Bangalore', location: 'Bangalore Central Bus Station, Majestic' },
-          totalDistance: 650,
-          estimatedDuration: 540,
-          depot: { depotId: 3, depotName: 'Trivandrum Central Depot', depotLocation: 'Trivandrum' },
-          status: 'active',
-          schedules: [
-            { scheduleId: 'SCH7', departureTime: '19:00', arrivalTime: '04:00', frequency: 'daily' }
-          ],
-          baseFare: 1300,
-          features: ['AC', 'WiFi', 'USB_Charging']
-        },
-        {
-          id: 6,
-          routeNumber: 'KL001',
-          routeName: 'Kochi - Thiruvananthapuram Express',
-          startingPoint: { city: 'Kochi', location: 'Kochi Central Bus Terminal, Ernakulam' },
-          endingPoint: { city: 'Thiruvananthapuram', location: 'Thiruvananthapuram Central Bus Terminal' },
-          totalDistance: 220,
-          estimatedDuration: 240,
-          depot: { depotId: 1, depotName: 'Kerala Central Depot', depotLocation: 'Kochi' },
-          status: 'active',
-          schedules: [
-            { scheduleId: 'SCH8', departureTime: '08:00', arrivalTime: '12:00', frequency: 'daily' }
-          ],
-          baseFare: 350,
-          features: ['AC', 'WiFi', 'USB_Charging', 'Refreshments']
-        },
-        {
-          id: 7,
-          routeNumber: 'KL002',
-          routeName: 'Kozhikode - Kochi Coastal Route',
-          startingPoint: { city: 'Kozhikode', location: 'Kozhikode Central Bus Terminal' },
-          endingPoint: { city: 'Kochi', location: 'Kochi Central Bus Terminal, Ernakulam' },
-          totalDistance: 180,
-          estimatedDuration: 210,
-          depot: { depotId: 1, depotName: 'Kerala Central Depot', depotLocation: 'Kochi' },
-          status: 'active',
-          schedules: [
-            { scheduleId: 'SCH9', departureTime: '10:00', arrivalTime: '13:30', frequency: 'daily' }
-          ],
-          baseFare: 280,
-          features: ['AC', 'WiFi', 'Entertainment']
-        },
-        {
-          id: 8,
-          routeNumber: 'KL003',
-          routeName: 'Thiruvananthapuram - Kozhikode Mountain Express',
-          startingPoint: { city: 'Thiruvananthapuram', location: 'Thiruvananthapuram Central Bus Terminal' },
-          endingPoint: { city: 'Kozhikode', location: 'Kozhikode Central Bus Terminal' },
-          totalDistance: 380,
-          estimatedDuration: 420,
-          depot: { depotId: 1, depotName: 'Kerala Central Depot', depotLocation: 'Kochi' },
-          status: 'active',
-          schedules: [
-            { scheduleId: 'SCH10', departureTime: '06:00', arrivalTime: '13:00', frequency: 'daily' }
-          ],
-          baseFare: 550,
-          features: ['AC', 'WiFi', 'USB_Charging', 'Entertainment', 'Refreshments']
-        }
-      ]);
+    const load = async () => {
+      try {
+        setLoading(true);
+        clearApiCache();
+        const [routesRes, depotsRes] = await Promise.all([
+          apiFetch('/api/admin/routes?limit=500&_=' + Date.now()),
+          apiFetch('/api/admin/depots?showAll=true&_=' + Date.now())
+        ]);
 
-      setDepots([
-        {
-          id: 1,
-          depotCode: 'KCD001',
-          depotName: 'Kochi Central Depot',
-          location: { city: 'Kochi', state: 'Kerala' },
-          capacity: { totalBuses: 85, availableBuses: 65, maintenanceBuses: 8 },
-          status: 'active'
-        },
-        {
-          id: 2,
-          depotCode: 'KAD001',
-          depotName: 'Kochi Airport Depot',
-          location: { city: 'Kochi', state: 'Kerala' },
-          capacity: { totalBuses: 45, availableBuses: 35, maintenanceBuses: 4 },
-          status: 'active'
-        },
-        {
-          id: 3,
-          depotCode: 'TCD001',
-          depotName: 'Trivandrum Central Depot',
-          location: { city: 'Trivandrum', state: 'Kerala' },
-          capacity: { totalBuses: 60, availableBuses: 48, maintenanceBuses: 6 },
-          status: 'active'
-        },
-        {
-          id: 4,
-          depotCode: 'KLD001',
-          depotName: 'Kozhikode Central Depot',
-          location: { city: 'Kozhikode', state: 'Kerala' },
-          capacity: { totalBuses: 40, availableBuses: 32, maintenanceBuses: 3 },
-          status: 'active'
-        },
-        {
-          id: 5,
-          depotCode: 'TCD002',
-          depotName: 'Thrissur Central Depot',
-          location: { city: 'Thrissur', state: 'Kerala' },
-          capacity: { totalBuses: 35, availableBuses: 28, maintenanceBuses: 3 },
-          status: 'active'
-        }
-      ]);
+        const routesRaw = (routesRes?.data?.routes || routesRes?.data?.data?.routes || routesRes?.data || []);
+        const normalizedRoutes = normalizeRoutes(routesRaw);
+        setRoutes(normalizedRoutes);
 
+        const depotsRaw = (depotsRes?.data?.depots || depotsRes?.data?.data?.depots || depotsRes?.data || []);
+        console.log('Raw depots data:', depotsRaw);
+        
+        const normalizedDepots = (depotsRaw || []).map((d) => ({
+          id: d._id || d.id,
+          depotCode: d.depotCode || d.code || '',
+          depotName: d.depotName || d.name || 'Unknown Depot',
+          location: { 
+            city: d.location?.city || d.address?.city || 'Unknown City',
+            state: d.location?.state || d.address?.state || '',
+            address: d.location?.address || d.address?.address || ''
+          },
+          capacity: d.capacity || { totalBuses: 0, availableBuses: 0, maintenanceBuses: 0 },
+          status: d.status || 'active'
+        }));
+
+        console.log('Normalized depots:', normalizedDepots);
+        setDepots(normalizedDepots);
+      } catch (e) {
+        console.error('Failed to load routes/depots', e);
+        setRoutes([]);
+        setDepots([]);
+        
+        // Show error message to user
+        window.alert('Failed to load depot data. Please refresh the page and try again.');
+      } finally {
       setLoading(false);
-    }, 1000);
+      }
+    };
+    load();
   }, []);
 
   // Handle route input changes
   const handleRouteInputChange = (e) => {
     const { name, value } = e.target;
     setNewRoute(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  // Handle edit route input changes
+  const handleEditRouteInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditingRoute(prev => ({
       ...prev,
       [name]: value
     }));
@@ -286,8 +215,19 @@ const RoutesManagement = () => {
     }));
   };
 
+  // Handle edit feature checkbox changes
+  const handleEditFeatureChange = (e) => {
+    const { value, checked } = e.target;
+    setEditingRoute(prev => ({
+      ...prev,
+      features: checked 
+        ? [...prev.features, value]
+        : prev.features.filter(f => f !== value)
+    }));
+  };
+
   // Handle route creation
-  const handleCreateRoute = (e) => {
+  const handleCreateRoute = async (e) => {
     e.preventDefault();
     
     // Validate required fields
@@ -297,69 +237,267 @@ const RoutesManagement = () => {
     }
 
     // Find the selected depot
-    const selectedDepot = depots.find(d => d.id === parseInt(newRoute.depotId));
+    console.log('Selected depot ID:', newRoute.depotId);
+    console.log('Available depots:', depots);
+    
+    const selectedDepot = depots.find(d => d.id === newRoute.depotId || d.id === parseInt(newRoute.depotId));
+    console.log('Found depot:', selectedDepot);
+    
     if (!selectedDepot) {
       window.alert('Please select a valid depot');
       return;
     }
 
-    // Create new route object
-    const newRouteData = {
-      id: routes.length + 1, // Generate new ID
-      routeNumber: newRoute.routeNumber,
-      routeName: newRoute.routeName,
-      startingPoint: {
-        city: newRoute.startingCity,
-        location: newRoute.startingLocation
-      },
-      endingPoint: {
-        city: newRoute.endingCity,
-        location: newRoute.endingLocation
-      },
-      totalDistance: parseInt(newRoute.totalDistance),
-      estimatedDuration: parseInt(newRoute.estimatedDuration),
-      depot: {
-        depotId: parseInt(newRoute.depotId),
-        depotName: selectedDepot.depotName,
-        depotLocation: selectedDepot.location.city
-      },
-      status: 'active',
-      schedules: [{
-        scheduleId: `SCH${routes.length + 1}`,
-        departureTime: newRoute.departureTime,
-        arrivalTime: newRoute.arrivalTime,
-        frequency: newRoute.frequency
-      }],
-      baseFare: parseInt(newRoute.baseFare),
-      features: newRoute.features
-    };
+    try {
+      setLoading(true);
+      
+      // Prepare route data for API
+      const routeData = {
+        routeNumber: newRoute.routeNumber,
+        routeName: newRoute.routeName,
+        startingPoint: {
+          city: newRoute.startingCity,
+          location: newRoute.startingLocation
+        },
+        endingPoint: {
+          city: newRoute.endingCity,
+          location: newRoute.endingLocation
+        },
+        totalDistance: parseInt(newRoute.totalDistance),
+        estimatedDuration: parseInt(newRoute.estimatedDuration),
+        baseFare: parseInt(newRoute.baseFare),
+        depotId: selectedDepot.id,
+        status: 'active',
+        features: newRoute.features,
+        schedules: [{
+          departureTime: newRoute.departureTime,
+          arrivalTime: newRoute.arrivalTime,
+          frequency: newRoute.frequency || 'daily'
+        }]
+      };
 
-    // Add to routes array
-    setRoutes(prev => [...prev, newRouteData]);
+      console.log('Creating route with data:', routeData);
 
-    // Reset form
-    setNewRoute({
-      routeNumber: '',
-      routeName: '',
-      startingCity: '',
-      startingLocation: '',
-      endingCity: '',
-      endingLocation: '',
-      totalDistance: '',
-      estimatedDuration: '',
-      baseFare: '',
-      depotId: '',
-      features: [],
-      departureTime: '',
-      arrivalTime: '',
-      frequency: ''
+      // Call API to create route
+      const response = await apiFetch('/api/admin/routes', {
+        method: 'POST',
+        body: JSON.stringify(routeData)
+      });
+
+      console.log('Create route response:', response);
+
+      if (response.ok && response.data?.success) {
+        // Reload routes from database
+        await reloadRoutes();
+
+        // Reset form
+        setNewRoute({
+          routeNumber: '',
+          routeName: '',
+          startingCity: '',
+          startingLocation: '',
+          endingCity: '',
+          endingLocation: '',
+          totalDistance: '',
+          estimatedDuration: '',
+          baseFare: '',
+          depotId: '',
+          features: [],
+          departureTime: '',
+          arrivalTime: '',
+          frequency: ''
+        });
+
+        // Close modal
+        setShowCreateModal(false);
+
+        // Show success message
+        window.alert('Route created successfully!');
+      } else {
+        const errorMessage = response.data?.message || response.message || 'Failed to create route';
+        window.alert(errorMessage);
+      }
+    } catch (error) {
+      console.error('Error creating route:', error);
+      window.alert('Failed to create route. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle route editing
+  const handleEditRoute = (route) => {
+    setEditingRoute({
+      id: route.id,
+      routeNumber: route.routeNumber,
+      routeName: route.routeName,
+      startingCity: route.startingPoint.city,
+      startingLocation: route.startingPoint.location,
+      endingCity: route.endingPoint.city,
+      endingLocation: route.endingPoint.location,
+      totalDistance: route.totalDistance.toString(),
+      estimatedDuration: route.estimatedDuration.toString(),
+      baseFare: route.baseFare.toString(),
+      depotId: route.depot.depotId.toString(),
+      features: route.features || [],
+      status: route.status
     });
+    setShowEditModal(true);
+  };
 
-    // Close modal
-    setShowCreateModal(false);
+  // Handle route update
+  const handleUpdateRoute = async (e) => {
+    e.preventDefault();
+    
+    // Validate required fields
+    if (!editingRoute.routeNumber || !editingRoute.routeName || !editingRoute.depotId) {
+      window.alert('Please fill in all required fields');
+      return;
+    }
 
-    // Show success message
-    window.alert('Route created successfully!');
+    // Find the selected depot
+    console.log('Edit - Selected depot ID:', editingRoute.depotId);
+    console.log('Edit - Available depots:', depots);
+    
+    const selectedDepot = depots.find(d => d.id === editingRoute.depotId || d.id === parseInt(editingRoute.depotId));
+    console.log('Edit - Found depot:', selectedDepot);
+    
+    if (!selectedDepot) {
+      window.alert('Please select a valid depot');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Prepare route data for API
+      const routeData = {
+        routeName: editingRoute.routeName,
+        startingPoint: {
+          city: editingRoute.startingCity,
+          location: editingRoute.startingLocation
+        },
+        endingPoint: {
+          city: editingRoute.endingCity,
+          location: editingRoute.endingLocation
+        },
+        totalDistance: parseInt(editingRoute.totalDistance),
+        estimatedDuration: parseInt(editingRoute.estimatedDuration),
+        baseFare: parseInt(editingRoute.baseFare),
+        depotId: selectedDepot.id,
+        status: editingRoute.status,
+        features: editingRoute.features
+      };
+
+      console.log('Updating route with data:', routeData);
+
+      // Call API to update route
+      const response = await apiFetch(`/api/admin/routes/${editingRoute.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(routeData)
+      });
+
+      console.log('Update route response:', response);
+
+      if (response.ok && response.data?.success) {
+        // Reload routes from database
+        await reloadRoutes();
+
+        // Reset form and close modal
+        setEditingRoute(null);
+        setShowEditModal(false);
+
+        // Show success message
+        window.alert('Route updated successfully!');
+      } else {
+        const errorMessage = response.data?.message || response.message || 'Failed to update route';
+        window.alert(errorMessage);
+      }
+    } catch (error) {
+      console.error('Error updating route:', error);
+      window.alert('Failed to update route. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle route deletion
+  const handleDeleteRoute = async (routeId) => {
+    const route = routes.find(r => r.id === routeId);
+    const routeName = route ? route.routeName : 'this route';
+    
+    if (window.confirm(`Are you sure you want to delete "${routeName}"? This will permanently remove the route from the database and cannot be undone.`)) {
+      // Set deleting state for visual feedback
+      setDeletingRouteId(routeId);
+      
+      // INSTANT UI UPDATE - Remove route immediately from the UI
+      const originalRoutes = [...routes];
+      setRoutes(prevRoutes => prevRoutes.filter(r => r.id !== routeId));
+      
+      try {
+        console.log('🗑️ Deleting route:', routeName);
+        
+        // Call API to delete route in background
+        const response = await apiFetch(`/api/admin/routes/${routeId}`, {
+          method: 'DELETE'
+        });
+
+        if (response.ok && response.data?.success) {
+          console.log('✅ Route deleted successfully from database');
+          // Route already removed from UI, no need to reload
+        } else {
+          console.error('❌ Route deletion failed, restoring UI');
+          // Restore the route if deletion failed
+          setRoutes(originalRoutes);
+          const errorMessage = response.data?.message || response.message || 'Unknown error';
+          window.alert(`Failed to delete route: ${errorMessage}`);
+        }
+      } catch (error) {
+        console.error('❌ Route deletion error, restoring UI:', error);
+        // Restore the route if deletion failed
+        setRoutes(originalRoutes);
+        window.alert(`Failed to delete route: ${error.message || 'Please try again'}`);
+      } finally {
+        // Clear deleting state
+        setDeletingRouteId(null);
+      }
+    }
+  };
+
+  // Handle route status toggle
+  const handleToggleRouteStatus = async (routeId) => {
+    try {
+      setLoading(true);
+      
+      const route = routes.find(r => r.id === routeId);
+      if (!route) return;
+      
+      const newStatus = route.status === 'active' ? 'inactive' : 'active';
+      
+      console.log('Toggling route status:', routeId, 'to', newStatus);
+
+      // Call API to update route status
+      const response = await apiFetch(`/api/admin/routes/${routeId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      console.log('Toggle status response:', response);
+
+      if (response.ok && response.data?.success) {
+        // Reload routes from database
+        await reloadRoutes();
+        window.alert(`Route ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully!`);
+      } else {
+        const errorMessage = response.data?.message || response.message || 'Failed to update route status';
+        window.alert(errorMessage);
+      }
+    } catch (error) {
+      console.error('Error toggling route status:', error);
+      window.alert('Failed to update route status. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Handle schedule input changes
@@ -533,7 +671,7 @@ const RoutesManagement = () => {
     const [arrHour, arrMin] = arrival.split(':').map(Number);
     
     const depMinutes = depHour * 60 + depMin;
-    const arrMinutes = arrHour * 60 + arrMin;
+    let arrMinutes = arrHour * 60 + arrMin;
     
     // Handle overnight journeys (arrival next day)
     if (arrMinutes <= depMinutes) {
@@ -652,80 +790,87 @@ const RoutesManagement = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-3">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Routes Management</h1>
-            <p className="text-gray-600 mt-2">Manage bus routes and depot scheduling</p>
+            <h1 className="text-xl font-bold text-gray-900">Routes Management</h1>
+            <p className="text-sm text-gray-600">Manage bus routes and depot scheduling</p>
           </div>
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
             <button
               onClick={() => setShowCreateModal(true)}
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg flex items-center hover:bg-blue-700 transition-colors"
+              className="bg-blue-600 text-white px-3 py-2 rounded-lg flex items-center hover:bg-blue-700 transition-colors text-sm"
             >
-              <Plus className="w-5 h-5 mr-2" />
+              <Plus className="w-4 h-4 mr-1" />
               Create Route
             </button>
-            <button
-              onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-              className="bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              {viewMode === 'grid' ? 'List View' : 'Grid View'}
-            </button>
+             <button
+               onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+               className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+             >
+               {viewMode === 'grid' ? 'List View' : 'Grid View'}
+             </button>
+             <button
+               onClick={reloadRoutes}
+               disabled={loading}
+               className="bg-green-100 text-green-700 px-3 py-2 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50 text-sm"
+             >
+               {loading ? 'Refreshing...' : 'Refresh Data'}
+             </button>
           </div>
         </div>
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <AnimatedCard className="p-6" delay={0}>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <AnimatedCard className="p-3" delay={0}>
           <div className="flex items-center">
-            <div className="p-3 bg-blue-100 rounded-lg mr-4">
-              <Route className="w-8 h-8 text-blue-600" />
+            <div className="p-2 bg-blue-100 rounded-lg mr-3">
+              <Route className="w-5 h-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Total Routes</p>
-              <p className="text-2xl font-bold text-gray-900">{routes.length}</p>
+              <p className="text-xs text-gray-600">Total Routes</p>
+              <p className="text-lg font-bold text-gray-900">{routes.length}</p>
             </div>
           </div>
         </AnimatedCard>
 
-        <AnimatedCard className="p-6" delay={1}>
+        <AnimatedCard className="p-3" delay={1}>
           <div className="flex items-center">
-            <div className="p-3 bg-green-100 rounded-lg mr-4">
-              <Building className="w-8 h-8 text-green-600" />
+            <div className="p-2 bg-green-100 rounded-lg mr-3">
+              <Building className="w-5 h-5 text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Active Depots</p>
-              <p className="text-2xl font-bold text-gray-900">{depots.filter(d => d.status === 'active').length}</p>
+              <p className="text-xs text-gray-600">Active Depots</p>
+              <p className="text-lg font-bold text-gray-900">{depots.filter(d => d.status === 'active').length}</p>
             </div>
           </div>
         </AnimatedCard>
 
-        <AnimatedCard className="p-6" delay={2}>
+        <AnimatedCard className="p-3" delay={2}>
           <div className="flex items-center">
-            <div className="p-3 bg-purple-100 rounded-lg mr-4">
-              <Clock className="w-8 h-8 text-purple-600" />
+            <div className="p-2 bg-purple-100 rounded-lg mr-3">
+              <Clock className="w-5 h-5 text-purple-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Total Schedules</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-xs text-gray-600">Total Schedules</p>
+              <p className="text-lg font-bold text-gray-900">
                 {routes.reduce((sum, route) => sum + route.schedules.length, 0)}
               </p>
             </div>
           </div>
         </AnimatedCard>
 
-        <AnimatedCard className="p-6" delay={3}>
+        <AnimatedCard className="p-3" delay={3}>
           <div className="flex items-center">
-            <div className="p-3 bg-orange-100 rounded-lg mr-4">
-              <Bus className="w-8 h-8 text-orange-600" />
+            <div className="p-2 bg-orange-100 rounded-lg mr-3">
+              <Bus className="w-5 h-5 text-orange-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Available Buses</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-xs text-gray-600">Available Buses</p>
+              <p className="text-lg font-bold text-gray-900">
                 {depots.reduce((sum, depot) => sum + depot.capacity.availableBuses, 0)}
               </p>
             </div>
@@ -734,26 +879,26 @@ const RoutesManagement = () => {
       </div>
 
       {/* Filters and Search */}
-      <GlassCard className="p-6 mb-8">
-        <div className="flex flex-col lg:flex-row gap-4">
+      <GlassCard className="p-3 mb-4">
+        <div className="flex flex-col lg:flex-row gap-2">
           <div className="flex-1">
             <div className="relative">
-              <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Search className="w-4 h-4 absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search routes by name or number..."
+                placeholder="Search routes..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
             </div>
           </div>
           
-          <div className="flex gap-4">
+          <div className="flex gap-2">
             <select
               value={filters.fromCity}
               onChange={(e) => setFilters({ ...filters, fromCity: e.target.value })}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             >
               <option value="">From City</option>
               <option value="Kochi">Kochi</option>
@@ -769,7 +914,7 @@ const RoutesManagement = () => {
             <select
               value={filters.toCity}
               onChange={(e) => setFilters({ ...filters, toCity: e.target.value })}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             >
               <option value="">To City</option>
               <option value="Kochi">Kochi</option>
@@ -785,7 +930,7 @@ const RoutesManagement = () => {
             <select
               value={filters.depotId}
               onChange={(e) => setFilters({ ...filters, depotId: e.target.value })}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             >
               <option value="">All Depots</option>
               {depots.map(depot => (
@@ -796,7 +941,7 @@ const RoutesManagement = () => {
             <select
               value={filters.status}
               onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             >
               <option value="">All Status</option>
               <option value="active">Active</option>
@@ -809,82 +954,117 @@ const RoutesManagement = () => {
       </GlassCard>
 
       {/* Routes Grid/List */}
-      <div className="space-y-6">
+      <div className="space-y-4">
         {viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredRoutes.map((route, index) => (
-              <AnimatedCard key={route.id} delay={index} className="p-6">
-                <div className="flex items-start justify-between mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <AnimatePresence>
+              {filteredRoutes.map((route, index) => (
+                <motion.div
+                  key={route.id}
+                  initial={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <AnimatedCard delay={index} className="p-4">
+                <div className="flex items-start justify-between mb-3">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">{route.routeName}</h3>
-                    <p className="text-sm text-gray-500">{route.routeNumber}</p>
+                    <h3 className="text-sm font-semibold text-gray-900">{route.routeName}</h3>
+                    <p className="text-xs text-gray-500">{route.routeNumber}</p>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-1">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(route.status)}`}>
                       {getStatusIcon(route.status)} {route.status}
                     </span>
                     <button className="p-1 hover:bg-gray-100 rounded">
-                      <MoreVertical className="w-4 h-4 text-gray-500" />
+                      <MoreVertical className="w-3 h-3 text-gray-500" />
                     </button>
                   </div>
                 </div>
 
-                <div className="space-y-3 mb-4">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <MapPin className="w-4 h-4 mr-2" />
+                <div className="space-y-2 mb-3">
+                  <div className="flex items-center text-xs text-gray-600">
+                    <MapPin className="w-3 h-3 mr-1" />
                     <span>{route.startingPoint.city} → {route.endingPoint.city}</span>
                   </div>
                   
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Route className="w-4 h-4 mr-2" />
+                  <div className="flex items-center text-xs text-gray-600">
+                    <Route className="w-3 h-3 mr-1" />
                     <span>{route.totalDistance} km • {Math.floor(route.estimatedDuration / 60)}h {route.estimatedDuration % 60}m</span>
                   </div>
                   
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Building className="w-4 h-4 mr-2" />
+                  <div className="flex items-center text-xs text-gray-600">
+                    <Building className="w-3 h-3 mr-1" />
                     <span>{route.depot.depotName}</span>
                   </div>
                   
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Clock className="w-4 h-4 mr-2" />
+                  <div className="flex items-center text-xs text-gray-600">
+                    <Clock className="w-3 h-3 mr-1" />
                     <span>{route.schedules.length} schedules</span>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between mb-4">
-                  <div className="text-lg font-bold text-blue-600">₹{route.baseFare}</div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm font-bold text-blue-600">₹{route.baseFare}</div>
                   <div className="flex space-x-1">
-                    {route.features.slice(0, 3).map((feature, idx) => (
-                      <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                    {route.features.slice(0, 2).map((feature, idx) => (
+                      <span key={idx} className="px-1 py-1 bg-gray-100 text-gray-600 text-xs rounded">
                         {feature}
                       </span>
                     ))}
-                    {route.features.length > 3 && (
-                      <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
-                        +{route.features.length - 3}
+                    {route.features.length > 2 && (
+                      <span className="px-1 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                        +{route.features.length - 2}
                       </span>
                     )}
                   </div>
                 </div>
 
-                <div className="flex space-x-2">
+                <div className="grid grid-cols-2 gap-1">
                   <button
                     onClick={() => {
                       setSelectedRoute(route);
                       setShowScheduleModal(true);
                     }}
-                    className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                    className="bg-blue-100 text-blue-700 py-1 px-2 rounded text-xs hover:bg-blue-200 transition-colors"
                   >
-                    <Calendar className="w-4 h-4 mr-1 inline" />
+                    <Calendar className="w-3 h-3 mr-1 inline" />
                     Schedule
                   </button>
-                  <button className="flex-1 bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors text-sm">
-                    <Edit className="w-4 h-4 mr-1 inline" />
-                    Edit
+                   <button 
+                     onClick={() => handleEditRoute(route)}
+                     disabled={loading}
+                     className="bg-gray-100 text-gray-700 py-1 px-2 rounded text-xs hover:bg-gray-200 transition-colors disabled:opacity-50"
+                   >
+                     <Edit className="w-3 h-3 mr-1 inline" />
+                     {loading ? 'Loading...' : 'Edit'}
+                   </button>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-1 mt-1">
+                  <button
+                    onClick={() => handleToggleRouteStatus(route.id)}
+                    disabled={loading}
+                    className={`py-1 px-2 rounded text-xs transition-colors disabled:opacity-50 ${
+                      route.status === 'active' 
+                        ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                        : 'bg-green-100 text-green-700 hover:bg-green-200'
+                    }`}
+                  >
+                    {loading ? 'Updating...' : (route.status === 'active' ? 'Deactivate' : 'Activate')}
                   </button>
+                   <button
+                     onClick={() => handleDeleteRoute(route.id)}
+                     disabled={loading || deletingRouteId === route.id}
+                     className="bg-red-100 text-red-700 py-1 px-2 rounded hover:bg-red-200 transition-colors text-xs disabled:opacity-50"
+                   >
+                     <Trash2 className="w-3 h-3 mr-1 inline" />
+                     {deletingRouteId === route.id ? 'Deleting...' : 'Delete'}
+                   </button>
                 </div>
               </AnimatedCard>
-            ))}
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow">
@@ -938,11 +1118,36 @@ const RoutesManagement = () => {
                               setShowScheduleModal(true);
                             }}
                             className="text-blue-600 hover:text-blue-900"
+                            title="Manage Schedules"
                           >
-                            Schedule
+                            <Calendar className="w-4 h-4" />
                           </button>
-                          <button className="text-gray-600 hover:text-gray-900">Edit</button>
-                          <button className="text-red-600 hover:text-red-900">Delete</button>
+                          <button 
+                            onClick={() => handleEditRoute(route)}
+                            className="text-gray-600 hover:text-gray-900"
+                            title="Edit Route"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleToggleRouteStatus(route.id)}
+                            className={`${
+                              route.status === 'active' 
+                                ? 'text-red-600 hover:text-red-900' 
+                                : 'text-green-600 hover:text-green-900'
+                            }`}
+                            title={route.status === 'active' ? 'Deactivate Route' : 'Activate Route'}
+                          >
+                            {route.status === 'active' ? '⏸️' : '▶️'}
+                          </button>
+                          <button
+                            onClick={() => handleDeleteRoute(route.id)}
+                            disabled={deletingRouteId === route.id}
+                            className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                            title={deletingRouteId === route.id ? 'Deleting...' : 'Delete Route'}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1099,8 +1304,11 @@ const RoutesManagement = () => {
                   onChange={handleRouteInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
+                  disabled={loading}
                 >
-                  <option value="">Select a depot</option>
+                  <option value="">
+                    {loading ? 'Loading depots...' : 'Select a depot'}
+                  </option>
                   {depots.map(depot => (
                     <option key={depot.id} value={depot.id}>
                       {depot.depotName} - {depot.location.city}
@@ -1189,6 +1397,229 @@ const RoutesManagement = () => {
                   className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   Create Route
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Route Modal */}
+      {showEditModal && editingRoute && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold">Edit Route</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <form onSubmit={handleUpdateRoute} className="space-y-6">
+              {/* Basic Route Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Route Number *</label>
+                  <input
+                    type="text"
+                    name="routeNumber"
+                    value={editingRoute.routeNumber}
+                    onChange={handleEditRouteInputChange}
+                    placeholder="e.g., RT009"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Route Name *</label>
+                  <input
+                    type="text"
+                    name="routeName"
+                    value={editingRoute.routeName}
+                    onChange={handleEditRouteInputChange}
+                    placeholder="e.g., Kochi - Goa Express"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Starting Point */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Starting City *</label>
+                  <input
+                    type="text"
+                    name="startingCity"
+                    value={editingRoute.startingCity}
+                    onChange={handleEditRouteInputChange}
+                    placeholder="e.g., Kochi"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Starting Location *</label>
+                  <input
+                    type="text"
+                    name="startingLocation"
+                    value={editingRoute.startingLocation}
+                    onChange={handleEditRouteInputChange}
+                    placeholder="e.g., Kochi Central Bus Stand"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Ending Point */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Ending City *</label>
+                  <input
+                    type="text"
+                    name="endingCity"
+                    value={editingRoute.endingCity}
+                    onChange={handleEditRouteInputChange}
+                    placeholder="e.g., Goa"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Ending Location *</label>
+                  <input
+                    type="text"
+                    name="endingLocation"
+                    value={editingRoute.endingLocation}
+                    onChange={handleEditRouteInputChange}
+                    placeholder="e.g., Goa Central Bus Station"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Route Details */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Total Distance (km) *</label>
+                  <input
+                    type="number"
+                    name="totalDistance"
+                    value={editingRoute.totalDistance}
+                    onChange={handleEditRouteInputChange}
+                    placeholder="e.g., 250"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Estimated Duration (minutes) *</label>
+                  <input
+                    type="number"
+                    name="estimatedDuration"
+                    value={editingRoute.estimatedDuration}
+                    onChange={handleEditRouteInputChange}
+                    placeholder="e.g., 300"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Base Fare (₹) *</label>
+                  <input
+                    type="number"
+                    name="baseFare"
+                    value={editingRoute.baseFare}
+                    onChange={handleEditRouteInputChange}
+                    placeholder="e.g., 500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Depot Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Assigned Depot *</label>
+                <select
+                  name="depotId"
+                  value={editingRoute.depotId}
+                  onChange={handleEditRouteInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                  disabled={loading}
+                >
+                  <option value="">
+                    {loading ? 'Loading depots...' : 'Select Depot'}
+                  </option>
+                  {depots.map(depot => (
+                    <option key={depot.id} value={depot.id}>
+                      {depot.depotName} - {depot.location.city}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                <select
+                  name="status"
+                  value={editingRoute.status}
+                  onChange={handleEditRouteInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="maintenance">Maintenance</option>
+                </select>
+              </div>
+
+              {/* Features */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Route Features</label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {['AC', 'Non-AC', 'Sleeper', 'Semi-Sleeper', 'WiFi', 'Charging', 'TV', 'Refreshments'].map(feature => (
+                    <label key={feature} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        value={feature}
+                        checked={editingRoute.features.includes(feature)}
+                        onChange={handleEditFeatureChange}
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-700">{feature}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex justify-end space-x-4 pt-6 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  Update Route
                 </button>
               </div>
             </form>

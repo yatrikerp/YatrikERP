@@ -6,6 +6,7 @@ import {
   CheckCircle, Zap, Heart, Eye, BookOpen, Route, TrendingUp, Grid, List
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { apiFetch } from '../utils/api';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 import './TripResults.css';
 
@@ -17,7 +18,7 @@ const TripResults = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [sortBy, setSortBy] = useState('departure');
-  const [viewMode, setViewMode] = useState('grid'); // grid or list
+  const [viewMode, setViewMode] = useState('list'); // grid or list
   const [filters, setFilters] = useState({
     busType: [],
     departureTime: [],
@@ -26,80 +27,12 @@ const TripResults = () => {
     priceRange: [0, 1000]
   });
 
-  const from = searchParams.get('from');
-  const to = searchParams.get('to');
+  const from = searchParams.get('from') || '';
+  const to = searchParams.get('to') || '';
   const date = searchParams.get('date');
   const tripType = searchParams.get('tripType') || 'oneWay';
 
-  // Mock Kerala routes data for demonstration
-  const mockKeralaTrips = useMemo(() => [
-    {
-      id: 'KL001_001',
-      routeName: 'Kochi - Thiruvananthapuram Express',
-      routeNumber: 'KL001',
-      from: 'Kochi',
-      to: 'Thiruvananthapuram',
-      departure: '08:00',
-      arrival: '12:00',
-      duration: '4h 00m',
-      fare: 350,
-      busType: 'AC Sleeper',
-      operator: 'Kerala State Road Transport Corporation (KSRTC)',
-      rating: 4.5,
-      reviews: 234,
-      availableSeats: 12,
-      totalSeats: 45,
-      amenities: ['WiFi', 'USB Charging', 'AC', 'Water Bottle'],
-      features: ['Live Tracking', 'Premium Service', 'New Bus'],
-      busNumber: 'KL-BUS-001',
-      status: 'available',
-      popular: true
-    },
-    {
-      id: 'KL001_002',
-      routeName: 'Kochi - Thiruvananthapuram Express',
-      routeNumber: 'KL001',
-      from: 'Kochi',
-      to: 'Thiruvananthapuram',
-      departure: '14:00',
-      arrival: '18:00',
-      duration: '4h 00m',
-      fare: 350,
-      busType: 'AC Seater',
-      operator: 'Kerala Express',
-      rating: 4.3,
-      reviews: 189,
-      availableSeats: 8,
-      totalSeats: 40,
-      amenities: ['WiFi', 'AC', 'Entertainment'],
-      features: ['Live Tracking', 'High Rated'],
-      busNumber: 'KL-BUS-002',
-      status: 'available',
-      popular: false
-    },
-    {
-      id: 'KL001_003',
-      routeName: 'Kochi - Thiruvananthapuram Express',
-      routeNumber: 'KL001',
-      from: 'Kochi',
-      to: 'Thiruvananthapuram',
-      departure: '20:00',
-      arrival: '00:00',
-      duration: '4h 00m',
-      fare: 380,
-      busType: 'AC Sleeper',
-      operator: 'Kerala Fast Track',
-      rating: 4.7,
-      reviews: 156,
-      availableSeats: 15,
-      totalSeats: 45,
-      amenities: ['WiFi', 'USB Charging', 'AC', 'Blanket', 'Pillow'],
-      features: ['Live Tracking', 'Premium Service', 'Single Seats'],
-      busNumber: 'KL-BUS-003',
-      status: 'available',
-      popular: true
-    }
-  ], []);
+  // No mock data - using live database data only
 
   useEffect(() => {
     searchTrips();
@@ -110,19 +43,96 @@ const TripResults = () => {
       setLoading(true);
       setError('');
 
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // If from/to provided, use city search; else list all trips for the date
+      let res;
+      if (from && to) {
+        // Try search-proxy first, then fallback to POST search
+        res = await apiFetch(`/api/booking/search-proxy?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&date=${encodeURIComponent(date)}`);
+        
+        if (!res.ok && res.status === 404) {
+          res = await apiFetch('/api/booking/search', {
+            method: 'POST',
+            body: JSON.stringify({ from, to, departureDate: date, passengers: 1 })
+          });
+        }
+      } else {
+        // List all trips for the date
+        res = await apiFetch(`/api/booking/list?date=${encodeURIComponent(date)}`);
+        
+        if (!res.ok && res.status === 404) {
+          res = await apiFetch('/api/booking/search', {
+            method: 'POST',
+            body: JSON.stringify({ departureDate: date, passengers: 1 })
+          });
+        }
+      }
+      if (res.ok) {
+        const payload = res.data;
+        const rawTrips = Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload?.data?.trips) ? payload.data.trips : (Array.isArray(payload?.trips) ? payload.trips : []));
 
-      // Check if the search matches our Kerala routes
-      const isKeralaRoute = (from?.toLowerCase().includes('kochi') || from?.toLowerCase().includes('thiruvananthapuram')) &&
-                           (to?.toLowerCase().includes('kochi') || to?.toLowerCase().includes('thiruvananthapuram'));
+        // Normalize trips coming from admin/depot so UI is consistent
+        const normalized = rawTrips.map((t, idx) => {
+          const route = t.routeId || t.route || {};
+          const bus = t.busId || t.bus || {};
+          const operator = t.operator || bus.operatorName || bus.operator || '';
+          const startingPoint = route.startingPoint || route.from || {};
+          const endingPoint = route.endingPoint || route.to || {};
 
-      if (isKeralaRoute) {
-        setTrips(mockKeralaTrips);
+          const fromCity = typeof startingPoint === 'string' ? startingPoint : (startingPoint.city || startingPoint.location || startingPoint.name || from);
+          const toCity = typeof endingPoint === 'string' ? endingPoint : (endingPoint.city || endingPoint.location || endingPoint.name || to);
+
+          const dep = t.startTime || t.departureTime || t.departure || '';
+          const arr = t.endTime || t.arrivalTime || t.arrival || '';
+          const toHHMM = (time) => {
+            if (!time) return '';
+            if (typeof time === 'string' && time.length >= 4) {
+              return time.slice(0,5);
+            }
+            return time;
+          };
+
+          const duration = (() => {
+            if (t.duration) return t.duration;
+            // estimate if we have HH:MM strings
+            const d = toHHMM(dep);
+            const a = toHHMM(arr);
+            if (d && a && d.includes(':') && a.includes(':')) {
+              const [dh, dm] = d.split(':').map(Number);
+              const [ah, am] = a.split(':').map(Number);
+              let minutes = (ah * 60 + am) - (dh * 60 + dm);
+              if (minutes < 0) minutes += 24 * 60;
+              const h = Math.floor(minutes / 60);
+              const m = minutes % 60;
+              return `${h}h ${m.toString().padStart(2, '0')}m`;
+            }
+            return '';
+          })();
+
+          return {
+            id: t._id || t.id || String(idx),
+            routeName: route.routeName || route.name || `${fromCity} → ${toCity}`,
+            routeNumber: route.routeNumber || route.code || route.number || '',
+            from: fromCity,
+            to: toCity,
+            departure: toHHMM(dep),
+            arrival: toHHMM(arr),
+            duration,
+            busType: bus.busType || t.busType || '',
+            operator,
+            amenities: Array.isArray(bus.amenities) ? bus.amenities : (Array.isArray(t.amenities) ? t.amenities : []),
+            features: Array.isArray(route.features) ? route.features : (Array.isArray(t.features) ? t.features : []),
+            fare: Number(t.fare || t.baseFare || t.pricing?.baseFare || 0),
+            availableSeats: Number(t.availableSeats || t.seatsAvailable || bus.availableSeats || 0),
+            rating: typeof t.rating === 'number' ? t.rating : undefined,
+            reviews: typeof t.reviews === 'number' ? t.reviews : undefined
+          };
+        });
+
+        setTrips(normalized);
         setError('');
       } else {
         setTrips([]);
-        setError('No routes found for the specified cities. Please try different cities or dates.');
+        setError(res.message || 'No routes found for the specified cities. Please try different cities or dates.');
       }
     } catch (error) {
       console.error('Search error:', error);
@@ -138,11 +148,14 @@ const TripResults = () => {
   };
 
   const handleBookNow = (trip) => {
+    // Store trip data in sessionStorage for seat selection page
+    sessionStorage.setItem('selectedTrip', JSON.stringify(trip));
+    
     if (!user) {
-      navigate(`/login?next=/search-results?${searchParams.toString()}`);
+      navigate(`/login?next=/seat-selection/${trip.id}`);
       return;
     }
-    navigate(`/booking?tripId=${trip.id}&from=${trip.from}&to=${trip.to}&date=${date}`);
+    navigate(`/seat-selection/${trip.id}`);
   };
 
   const filteredAndSortedTrips = useMemo(() => {
@@ -269,15 +282,14 @@ const TripResults = () => {
 
       {/* Error State */}
       {error && (
-        <div className="error-container">
-          <AlertCircle className="w-8 h-8 text-red-500" />
-          <div className="error-content">
-            <h3>No buses found</h3>
-            <p>{error}</p>
-            <button onClick={handleRetry} className="retry-button">
-              <RefreshCw className="w-4 h-4" />
-              Try Again
-            </button>
+        <div className="results-content">
+          <div className="empty-state">
+            <div className="empty-hero">
+              <AlertCircle className="w-10 h-10" color="#E91E63" />
+            </div>
+            <div className="empty-title">No trips found for your selection</div>
+            <div className="empty-text">{error || 'Try a nearby city pair or choose another date. Make sure trips are scheduled and booking is open.'}</div>
+            <button onClick={handleRetry} className="empty-cta">Refresh Results</button>
           </div>
         </div>
       )}
@@ -311,30 +323,33 @@ const TripResults = () => {
                         }}
                       />
                       {type}
-                  </label>
+                    </label>
                   ))}
                 </div>
               </div>
             </div>
             <div className="filters-right">
-                  <select 
-                    value={sortBy} 
-                    onChange={(e) => setSortBy(e.target.value)}
+              <select 
+                value={sortBy} 
+                onChange={(e) => setSortBy(e.target.value)}
                 className="sort-select"
               >
                 <option value="departure">Sort by Departure</option>
                 <option value="price">Sort by Price</option>
                 <option value="rating">Sort by Rating</option>
                 <option value="duration">Sort by Duration</option>
-                  </select>
-                </div>
-              </div>
-
-          {/* Results Count */}
-          <div className="results-count">
-            <p>{filteredAndSortedTrips.length} buses found</p>
-            <span className="search-stats">50,000+ searches on this route last month</span>
+              </select>
             </div>
+          </div>
+
+          {/* Toolbar + Count */}
+          <div className="results-toolbar">
+            <div className="pill-group">
+              <button className={`pill ${viewMode==='list'?'active':''}`} onClick={()=>setViewMode('list')}>List</button>
+              <button className={`pill ${viewMode==='grid'?'active':''}`} onClick={()=>setViewMode('grid')}>Grid</button>
+            </div>
+            <div className="results-count"><p>{filteredAndSortedTrips.length} trips</p></div>
+          </div>
 
           {/* Trip Cards */}
           <div className={`trips-grid ${viewMode}`}>
@@ -343,56 +358,64 @@ const TripResults = () => {
                 <div className="trip-header">
                   <div className="trip-route">
                     <h3>{trip.routeName}</h3>
-                    <span className="route-number">{trip.routeNumber}</span>
-              </div>
-                  <div className="trip-rating">
-                    <Star className="w-4 h-4 fill-current" />
-                    <span>{trip.rating}</span>
-                    <span className="reviews">({trip.reviews})</span>
-                              </div>
-                            </div>
-                            
+                    {trip.routeNumber && <span className="route-number">{trip.routeNumber}</span>}
+                  </div>
+                  {typeof trip.rating === 'number' && (
+                    <div className="trip-rating">
+                      <Star className="w-4 h-4 fill-current" />
+                      <span>{trip.rating}</span>
+                      {typeof trip.reviews === 'number' && (
+                        <span className="reviews">({trip.reviews})</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                
                 <div className="trip-details">
                   <div className="time-details">
                     <div className="departure">
                       <span className="time">{trip.departure}</span>
                       <span className="city">{trip.from}</span>
-                              </div>
+                    </div>
                     <div className="duration">
                       <Route className="w-4 h-4" />
                       <span>{trip.duration}</span>
-                            </div>
+                    </div>
                     <div className="arrival">
                       <span className="time">{trip.arrival}</span>
                       <span className="city">{trip.to}</span>
-                          </div>
-                        </div>
+                    </div>
+                  </div>
 
                   <div className="bus-info">
                     <div className="bus-type">
-                      {getBusTypeIcon(trip.busType)}
-                      <span>{trip.busType}</span>
-                            </div>
-                    <div className="operator">{trip.operator}</div>
-                        </div>
+                      {getBusTypeIcon(trip.busType || '')}
+                      <span>{trip.busType || '—'}</span>
+                    </div>
+                    {trip.operator && <div className="operator">{trip.operator}</div>}
+                  </div>
 
-                  <div className="amenities">
-                    {trip.amenities.slice(0, 3).map((amenity, index) => (
-                      <span key={index} className="amenity">
-                        {getAmenityIcon(amenity)}
-                              {amenity}
-                            </span>
-                          ))}
-                        </div>
+                  {Array.isArray(trip.amenities) && trip.amenities.length > 0 && (
+                    <div className="amenities">
+                      {trip.amenities.slice(0, 3).map((amenity, index) => (
+                        <span key={index} className="amenity">
+                          {getAmenityIcon(amenity)}
+                          {amenity}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
-                  <div className="features">
-                    {trip.features.map((feature, index) => (
-                      <span key={index} className="feature-badge">
-                        {feature}
-                      </span>
-                    ))}
-                          </div>
-                        </div>
+                  {Array.isArray(trip.features) && trip.features.length > 0 && (
+                    <div className="features">
+                      {trip.features.map((feature, index) => (
+                        <span key={index} className="feature-badge">
+                          {feature}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 <div className="trip-footer">
                   <div className="price-section">
@@ -402,18 +425,13 @@ const TripResults = () => {
                   <button
                     onClick={() => handleBookNow(trip)}
                     className="book-button"
+                    aria-label="Select seats for this trip"
+                    title="Select seats"
                   >
                     <BookOpen className="w-4 h-4" />
-                    Book Now
+                    Select Seats
                   </button>
                 </div>
-
-                {trip.popular && (
-                  <div className="popular-badge">
-                    <TrendingUp className="w-3 h-3" />
-                    Popular
-                  </div>
-                )}
               </div>
             ))}
           </div>

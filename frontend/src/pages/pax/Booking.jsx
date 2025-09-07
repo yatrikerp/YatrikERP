@@ -8,20 +8,34 @@ const PaxBooking = () => {
   const [fare, setFare] = useState(null);
   const [bookingId, setBookingId] = useState(null);
   const [stopId, setStopId] = useState('board-1');
+  const [dropId, setDropId] = useState('drop-1');
   const [seatNo, setSeatNo] = useState('U11');
   const [step, setStep] = useState(1); // 1 seat/pickup, 2 traveller, 3 payment
   const [travellers, setTravellers] = useState([{ name: '', age: '', gender: '' }]);
 
   async function createBooking(){
-    const res = await apiFetch('/api/booking', { method: 'POST', body: JSON.stringify({ tripId, stopId, seatNo }) });
-    if (res.ok) { setFare(res.data.data?.fare || res.data.fare); setBookingId(res.data.data?.bookingId || res.data.bookingId); }
+    // Create a booking in pending payment using simpler bookings API
+    const res = await apiFetch('/api/bookings/create', { 
+      method: 'POST', 
+      body: JSON.stringify({ 
+        tripId, 
+        seatNo, 
+        boardingStopId: stopId, 
+        destinationStopId: dropId,
+        passengerDetails: travellers?.[0] || {}
+      }) 
+    });
+    if (res.ok) { 
+      setFare(res.data.data?.amount || res.data.amount); 
+      setBookingId(res.data.data?.bookingId || res.data.bookingId); 
+    }
   }
 
   async function confirm(){
-    const res = await apiFetch('/api/booking/confirm', { method: 'POST', body: JSON.stringify({ bookingId }) });
+    if (!bookingId) return;
+    const res = await apiFetch(`/api/booking/${bookingId}/confirm`, { method: 'PUT', body: JSON.stringify({ method: 'upi', status: 'paid' }) });
     if (res.ok) {
-      const pnr = res.data.data?.ticket?.pnr || res.data.ticket?.pnr;
-      navigate(`/pax/ticket/${pnr}?pnr=${pnr}`);
+      navigate(`/ticket?bookingId=${bookingId}`);
     }
   }
 
@@ -47,9 +61,9 @@ const PaxBooking = () => {
               <option value="board-1">Boarding At Central Bus Station</option>
               <option value="board-2">Boarding At City Depot</option>
             </select>
-            <select className="w-full border rounded-lg px-3 py-2 mt-3">
-              <option>Drop At Silk Board</option>
-              <option>Drop At City Center</option>
+            <select value={dropId} onChange={e=>setDropId(e.target.value)} className="w-full border rounded-lg px-3 py-2 mt-3">
+              <option value="drop-1">Drop At Silk Board</option>
+              <option value="drop-2">Drop At City Center</option>
             </select>
             <div className="mt-4 text-sm text-gray-600">Selected: {seatNo}</div>
           </div>

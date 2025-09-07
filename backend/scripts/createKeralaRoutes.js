@@ -90,6 +90,44 @@ const keralaRoutes = [
   },
   {
     routeNumber: 'KL003',
+    routeName: 'Kochi - Idukki Hill Station Express',
+    startingPoint: {
+      city: 'Kochi',
+      location: 'Kochi Central Bus Station',
+      coordinates: { latitude: 9.9312, longitude: 76.2673 }
+    },
+    endingPoint: {
+      city: 'Idukki',
+      location: 'Idukki Bus Station',
+      coordinates: { latitude: 9.8497, longitude: 76.9681 }
+    },
+    totalDistance: 120,
+    estimatedDuration: 180, // 3 hours
+    intermediateStops: [
+      {
+        city: 'Kothamangalam',
+        location: 'Kothamangalam Bus Station',
+        stopNumber: 1,
+        distanceFromStart: 40,
+        estimatedArrival: 50,
+        coordinates: { latitude: 10.0652, longitude: 76.6304 }
+      },
+      {
+        city: 'Munnar',
+        location: 'Munnar Bus Station',
+        stopNumber: 2,
+        distanceFromStart: 80,
+        estimatedArrival: 120,
+        coordinates: { latitude: 10.0889, longitude: 77.0595 }
+      }
+    ],
+    baseFare: 250,
+    farePerKm: 2.0,
+    features: ['AC', 'WiFi', 'USB_Charging', 'Refreshments'],
+    status: 'active'
+  },
+  {
+    routeNumber: 'KL004',
     routeName: 'Thiruvananthapuram - Kozhikode Mountain Express',
     startingPoint: {
       city: 'Thiruvananthapuram',
@@ -270,7 +308,7 @@ const createRoutes = async () => {
     const buses = await createSampleBuses(depot._id);
 
     // Clear existing routes
-    await Route.deleteMany({ routeNumber: { $in: ['KL001', 'KL002', 'KL003'] } });
+    await Route.deleteMany({ routeNumber: { $in: ['KL001', 'KL002', 'KL003', 'KL004'] } });
     console.log('Cleared existing Kerala routes');
 
     // Create routes

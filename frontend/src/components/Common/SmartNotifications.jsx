@@ -17,17 +17,23 @@ const SmartNotifications = ({ userRole = 'passenger' }) => {
 
   const fetchNotifications = async () => {
     try {
+      // Check for depot token first, then regular token
+      const depotToken = localStorage.getItem('depotToken');
       const token = localStorage.getItem('token');
-      if (!token) return;
+      const authToken = depotToken || token;
+      
+      if (!authToken) return;
 
       const response = await fetch('/api/notifications', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${authToken}` }
       });
 
       if (response.ok) {
         const data = await response.json();
-        setNotifications(data.notifications || []);
-        setUnreadCount(data.notifications?.filter(n => !n.read).length || 0);
+        setNotifications(data.data?.notifications || data.notifications || []);
+        setUnreadCount((data.data?.notifications || data.notifications || []).filter(n => n.status === 'unread').length || 0);
+      } else {
+        console.log('Failed to fetch notifications:', response.status, response.statusText);
       }
     } catch (error) {
       console.log('Failed to fetch notifications:', error);
@@ -36,18 +42,22 @@ const SmartNotifications = ({ userRole = 'passenger' }) => {
 
   const markAsRead = async (notificationId) => {
     try {
+      // Check for depot token first, then regular token
+      const depotToken = localStorage.getItem('depotToken');
       const token = localStorage.getItem('token');
-      if (!token) return;
+      const authToken = depotToken || token;
+      
+      if (!authToken) return;
 
       const response = await fetch(`/api/notifications/${notificationId}/read`, {
         method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${authToken}` }
       });
 
       if (response.ok) {
         setNotifications(prev => 
           prev.map(n => 
-            n.id === notificationId ? { ...n, read: true } : n
+            n._id === notificationId ? { ...n, status: 'read' } : n
           )
         );
         setUnreadCount(prev => Math.max(0, prev - 1));

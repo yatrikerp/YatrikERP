@@ -37,8 +37,8 @@ const SearchCard = ({ onSearchResults, showResults = false }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.from || !formData.to || !formData.journeyDate) {
-      toast.error('Please fill all required fields');
+    if (!formData.journeyDate) {
+      toast.error('Please select the journey date');
       return;
     }
 
@@ -46,11 +46,12 @@ const SearchCard = ({ onSearchResults, showResults = false }) => {
     
     try {
       const queryParams = new URLSearchParams({
-        from: formData.from,
-        to: formData.to,
         date: formData.journeyDate,
         tripType: tripType
       });
+
+      if (formData.from) queryParams.set('from', formData.from);
+      if (formData.to) queryParams.set('to', formData.to);
 
       if (tripType === 'roundTrip' && formData.returnDate) {
         queryParams.append('returnDate', formData.returnDate);
@@ -67,19 +68,7 @@ const SearchCard = ({ onSearchResults, showResults = false }) => {
     }
   };
 
-  const handleCitySelect = (city, field) => {
-    setFormData(prev => ({ ...prev, [field]: city }));
-  };
-
-  const formatTime = (time) => {
-    if (!time) return '';
-    return time.length === 5 ? time : time.slice(0, 5);
-  };
-
-  const formatDuration = (duration) => {
-    if (!duration) return '';
-    return duration;
-  };
+  // Removed unused helpers to satisfy linter
 
   return (
     <div className="searchCard">

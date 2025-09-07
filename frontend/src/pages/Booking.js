@@ -40,10 +40,11 @@ const Booking = () => {
   const [bookingStep, setBookingStep] = useState(1);
   const [bookingData, setBookingData] = useState(null);
   const [tickets, setTickets] = useState([]);
+  const [progress, setProgress] = useState(20);
 
   useEffect(() => {
     if (!selectedRoute) {
-      navigate('/kerala-routes');
+      navigate('/search-results');
       return;
     }
     
@@ -51,6 +52,11 @@ const Booking = () => {
       fetchTrips();
     }
   }, [selectedRoute, selectedDate]);
+
+  useEffect(() => {
+    // simple progress indicator by step
+    setProgress(20 * bookingStep);
+  }, [bookingStep]);
 
   const fetchTrips = async () => {
     try {
@@ -206,11 +212,11 @@ const Booking = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-gray-800">Select Your Trip</h2>
         <button
-          onClick={() => navigate('/kerala-routes')}
+          onClick={() => navigate('/search-results')}
           className="flex items-center space-x-2 text-gray-600 hover:text-gray-800"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Routes</span>
+          <span>Back to Search</span>
         </button>
       </div>
 
@@ -240,9 +246,12 @@ const Booking = () => {
                 <div className="flex items-center gap-2 mb-2">
                   <Bus className="w-5 h-5 text-pink-500" />
                   <span className="font-semibold">{trip.busType}</span>
-                  <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
-                    {trip.status}
-                  </span>
+                  {trip.isNew && (
+                    <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">New Bus</span>
+                  )}
+                  {trip.hasToilet && (
+                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">Toilet</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-4 text-sm text-gray-600">
                   <div className="flex items-center gap-1">
@@ -573,7 +582,7 @@ const Booking = () => {
           Go to Dashboard
         </button>
         <button
-          onClick={() => navigate('/kerala-routes')}
+          onClick={() => navigate('/search-results')}
           className="flex-1 bg-pink-600 text-white py-2 px-4 rounded-lg hover:bg-pink-700"
         >
           Book Another Trip
@@ -582,9 +591,30 @@ const Booking = () => {
     </div>
   );
 
+  const StickySummary = () => (
+    selectedTrip && selectedSeats.length > 0 ? (
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg p-4">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="text-sm text-gray-700">
+            {selectedSeats.length} seat(s) selected • Total ₹{calculateTotalAmount()}
+          </div>
+          <button
+            onClick={() => setBookingStep(3)}
+            className="px-6 py-2 bg-pink-600 text-white rounded-lg"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    ) : null
+  );
+
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Book Tickets</h1>
+      <h1 className="text-3xl font-bold text-gray-900 mb-2">Book Tickets</h1>
+      <div className="w-full h-1 bg-gray-200 rounded-full mb-6">
+        <div className="h-1 bg-pink-500 rounded-full transition-all" style={{ width: `${progress}%` }} />
+      </div>
       
       {/* Progress Steps */}
       <div className="flex items-center justify-center mb-8">
@@ -653,6 +683,7 @@ const Booking = () => {
         {bookingStep === 4 && renderPaymentStep()}
         {bookingStep === 5 && renderTicketConfirmation()}
       </div>
+      <StickySummary />
     </div>
   );
 };

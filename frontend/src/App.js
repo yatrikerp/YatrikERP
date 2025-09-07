@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
+import QueryProvider from './providers/QueryProvider';
 import RequireAuth from './guards/RequireAuth';
 import AppShell from './components/Layout/AppShell';
 import AdminLayout from './components/Admin/AdminLayout';
@@ -14,8 +16,11 @@ import Profile from './pages/Profile';
 import Wallet from './pages/Wallet';
 import TripPlanner from './pages/TripPlanner';
 import Booking from './pages/Booking';
+import SeatSelection from './pages/SeatSelection';
+import PassengerDetails from './pages/PassengerDetails';
+import BoardingSelection from './pages/BoardingSelection';
+import Payment from './pages/Payment';
 import Ticket from './pages/Ticket';
-import KeralaRoutes from './pages/KeralaRoutes';
 
 import ConductorDashboard from './pages/ConductorDashboard';
 import DriverDashboard from './pages/DriverDashboard';
@@ -38,6 +43,9 @@ import AdminDrivers from './pages/admin/AdminDrivers';
 import AdminPassengers from './pages/admin/AdminPassengers';
 import AdminSystemStatus from './pages/admin/AdminSystemStatus';
 import AdminBuses from './pages/admin/AdminBuses';
+import EnhancedBusManagement from './pages/admin/EnhancedBusManagement';
+import BusManagementFallback from './pages/admin/BusManagementFallback';
+import BusManagementPage from './pages/admin/BusManagementPage';
 import AdminConductors from './pages/admin/AdminConductors';
 import AdminDepotManagers from './pages/admin/AdminDepotManagers';
 import AdminRBAC from './pages/admin/AdminRBAC';
@@ -61,7 +69,9 @@ import './index.css';
 
 function App() {
   return (
-    <AuthProvider>
+    <>
+    <QueryProvider>
+      <AuthProvider>
       <Router>
           <Routes>
             {/* Public Routes */}
@@ -108,11 +118,27 @@ function App() {
             </RequireAuth>
           } />
 
-          <Route path="/kerala-routes" element={
+          <Route path="/seat-selection/:tripId" element={
             <RequireAuth>
-              <AppShell>
-                <KeralaRoutes />
-              </AppShell>
+              <SeatSelection />
+            </RequireAuth>
+          } />
+
+          <Route path="/passenger-details" element={
+            <RequireAuth>
+              <PassengerDetails />
+            </RequireAuth>
+          } />
+
+          <Route path="/boarding-selection" element={
+            <RequireAuth>
+              <BoardingSelection />
+            </RequireAuth>
+          } />
+
+          <Route path="/payment" element={
+            <RequireAuth>
+              <Payment />
             </RequireAuth>
           } />
 
@@ -297,6 +323,30 @@ function App() {
           <Route path="/admin/buses" element={
             <RequireAuth roles={['admin']}>
               <AdminLayout>
+                <BusManagementPage />
+              </AdminLayout>
+            </RequireAuth>
+          } />
+          
+          <Route path="/admin/buses/modern" element={
+            <RequireAuth roles={['admin']}>
+              <AdminLayout>
+                <BusManagementPage />
+              </AdminLayout>
+            </RequireAuth>
+          } />
+          
+          <Route path="/admin/buses/enhanced" element={
+            <RequireAuth roles={['admin']}>
+              <AdminLayout>
+                <EnhancedBusManagement />
+              </AdminLayout>
+            </RequireAuth>
+          } />
+          
+          <Route path="/admin/buses/legacy" element={
+            <RequireAuth roles={['admin']}>
+              <AdminLayout>
                 <AdminBuses />
               </AdminLayout>
             </RequireAuth>
@@ -409,6 +459,32 @@ function App() {
         </Routes>
       </Router>
     </AuthProvider>
+    </QueryProvider>
+    <Toaster
+      position="top-right"
+      toastOptions={{
+        duration: 4000,
+        style: {
+          background: '#363636',
+          color: '#fff',
+        },
+        success: {
+          duration: 3000,
+          style: {
+            background: '#059669',
+            color: '#fff',
+          },
+        },
+        error: {
+          duration: 5000,
+          style: {
+            background: '#dc2626',
+            color: '#fff',
+          },
+        },
+      }}
+    />
+    </>
   );
 }
 

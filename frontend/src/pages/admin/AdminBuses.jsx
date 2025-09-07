@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { apiFetch, clearApiCache } from '../../utils/api';
 import { 
   Bus, 
   Plus, 
@@ -44,6 +45,9 @@ const AdminBuses = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [depotFilter, setDepotFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedBus, setSelectedBus] = useState(null);
@@ -81,30 +85,57 @@ const AdminBuses = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Debounce search input
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  // Refetch buses on filters/pagination change
+  useEffect(() => {
+    fetchBuses();
+  }, [statusFilter, depotFilter, debouncedSearch, page, limit]);
+
   const fetchBuses = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/buses', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const params = new URLSearchParams();
+      if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
+      if (depotFilter && depotFilter !== 'all') params.set('depotId', depotFilter);
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      params.set('page', String(page));
+      params.set('limit', String(limit));
+
+      const response = await apiFetch('/api/admin/buses?' + params.toString());
       
-      if (response.ok) {
-        const data = await response.json();
+      if (response?.ok) {
+        const data = response.data || {};
+        const payload = data.buses ? { buses: data.buses, pagination: data.pagination } : (data.data || {});
+        const { buses: incoming = [], pagination } = payload;
         // Validate and sanitize bus data
-        const validBuses = (data.buses || []).map(bus => ({
-          ...bus,
-          busNumber: bus.busNumber || 'N/A',
-          registrationNumber: bus.registrationNumber || 'N/A',
-          status: bus.status || 'unknown',
-          depotId: bus.depotId || null,
-          capacity: bus.capacity || { total: 0, seater: 0, sleeper: 0 },
-          busType: bus.busType || 'standard'
-        }));
+        const validBuses = (incoming || []).map(bus => {
+          const depotRef = bus.depotId;
+          const normalizedDepotId = depotRef && typeof depotRef === 'object' ? depotRef._id : depotRef || null;
+          const normalizedDepotName = depotRef && typeof depotRef === 'object' ? (depotRef.name || depotRef.depotName || depotRef.code || 'Unknown') : undefined;
+          return {
+            ...bus,
+            busNumber: bus.busNumber || 'N/A',
+            registrationNumber: bus.registrationNumber || 'N/A',
+            status: bus.status || 'unknown',
+            depotId: normalizedDepotId,
+            depotName: normalizedDepotName,
+            capacity: bus.capacity || { total: 0, seater: 0, sleeper: 0 },
+            busType: bus.busType || 'standard'
+          };
+        });
         setBuses(validBuses);
+        if (pagination) {
+          // server provides total/pages
+          // keep page within bounds if needed
+          if (page > (pagination.pages || page)) setPage(1);
+        }
       } else {
-        console.error('Failed to fetch buses:', response.status);
+        console.error('Failed to fetch buses:', response?.status);
         toast.error('Failed to fetch buses');
         setBuses([]);
       }
@@ -119,15 +150,19 @@ const AdminBuses = () => {
 
   const fetchDepots = async () => {
     try {
-      const response = await fetch('/api/admin/depots', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      // Ensure fresh list that matches Depot Management (includes inactive)
+      clearApiCache();
+      const response = await apiFetch(`/api/admin/depots?showAll=true&_=${Date.now()}`);
       
-      if (response.ok) {
-        const data = await response.json();
-        setDepots(data.depots || []);
+      if (response?.ok) {
+        const data = response.data || {};
+        const list = data.depots || data.data?.depots || [];
+        const normalized = list.map(d => ({
+          ...d,
+          _id: d._id || d.id,
+          name: d.name || d.depotName || d.code || 'Depot'
+        }));
+        setDepots(normalized);
       }
     } catch (error) {
       console.error('Error fetching depots:', error);
@@ -136,16 +171,39 @@ const AdminBuses = () => {
 
   const fetchDrivers = async () => {
     try {
-      const response = await fetch('/api/admin/drivers', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setDrivers(data.drivers || []);
+      const response = await apiFetch('/api/admin/all-drivers');
+      let normalized = [];
+      if (response?.ok) {
+        const data = response.data || {};
+        const raw = data.drivers || data.data?.drivers || data?.data || [];
+        normalized = (raw || []).map(d => ({
+          _id: d._id || d.id,
+          name: d.name || d.fullName || d.employeeName || 'Unnamed',
+          phone: d.phone || d.mobile || '',
+          email: d.email || '',
+          status: d.status || 'active',
+          depotId: d.depotId || (typeof d.depot === 'object' ? d.depot?._id : d.depot) || null
+        }));
       }
+      if (!normalized.length) {
+        const alt = await apiFetch('/api/admin/drivers');
+        if (alt?.ok) {
+          const data = alt.data || {};
+          const raw = data.drivers || data.data?.drivers || data?.data || [];
+          normalized = (raw || []).map(d => ({
+            _id: d._id || d.id,
+            name: d.name || d.fullName || d.employeeName || 'Unnamed',
+            phone: d.phone || d.mobile || '',
+            email: d.email || '',
+            status: d.status || 'active',
+            depotId: d.depotId || (typeof d.depot === 'object' ? d.depot?._id : d.depot) || null
+          }));
+        }
+      }
+      if (!normalized.length) {
+        try { toast.warning('No drivers returned from API'); } catch {}
+      }
+      setDrivers(normalized);
     } catch (error) {
       console.error('Error fetching drivers:', error);
     }
@@ -153,16 +211,24 @@ const AdminBuses = () => {
 
   const fetchConductors = async () => {
     try {
-      const response = await fetch('/api/admin/conductors', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setConductors(data.conductors || []);
+      const response = await apiFetch('/api/admin/conductors');
+      let normalized = [];
+      if (response?.ok) {
+        const data = response.data || {};
+        const raw = data.conductors || data.data?.conductors || data?.data || [];
+        normalized = (raw || []).map(c => ({
+          _id: c._id || c.id,
+          name: c.name || c.fullName || c.employeeName || 'Unnamed',
+          phone: c.phone || c.mobile || '',
+          email: c.email || '',
+          status: c.status || 'active',
+          depotId: c.depotId || (typeof c.depot === 'object' ? c.depot?._id : c.depot) || null
+        }));
       }
+      if (!normalized.length) {
+        try { toast.warning('No conductors returned from API'); } catch {}
+      }
+      setConductors(normalized);
     } catch (error) {
       console.error('Error fetching conductors:', error);
     }
@@ -170,15 +236,11 @@ const AdminBuses = () => {
 
   const fetchAnalytics = async () => {
     try {
-      const response = await fetch('/api/admin/buses/analytics', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const response = await apiFetch('/api/admin/buses/analytics');
       
-      if (response.ok) {
-        const data = await response.json();
-        setAnalytics(data.analytics || {});
+      if (response?.ok) {
+        const data = response.data || {};
+        setAnalytics(data.analytics || data.data?.analytics || {});
       }
     } catch (error) {
       console.error('Error fetching analytics:', error);
@@ -187,34 +249,18 @@ const AdminBuses = () => {
 
   const fetchRealTimeData = async () => {
     try {
-      const response = await fetch('/api/admin/buses/realtime', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const response = await apiFetch('/api/admin/buses/realtime');
       
-      if (response.ok) {
-        const data = await response.json();
-        setRealTimeData(data.realTimeData || {});
+      if (response?.ok) {
+        const data = response.data || {};
+        setRealTimeData(data.realTimeData || data.data?.realTimeData || {});
       }
     } catch (error) {
       console.error('Error fetching real-time data:', error);
     }
   };
 
-  const filteredBuses = (buses || []).filter(bus => {
-    // Add null checks to prevent toLowerCase errors
-    const busNumber = bus.busNumber || '';
-    const registrationNumber = bus.registrationNumber || '';
-    const searchTermLower = (searchTerm || '').toLowerCase();
-    
-    const matchesSearch = busNumber.toLowerCase().includes(searchTermLower) ||
-                         registrationNumber.toLowerCase().includes(searchTermLower);
-    const matchesStatus = statusFilter === 'all' || bus.status === statusFilter;
-    const matchesDepot = depotFilter === 'all' || bus.depotId === depotFilter;
-    
-    return matchesSearch && matchesStatus && matchesDepot;
-  });
+  const filteredBuses = useMemo(() => buses || [], [buses]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -297,7 +343,7 @@ const AdminBuses = () => {
           </div>
           <div className="flex items-center space-x-2">
             <MapPin className="w-4 h-4 text-gray-400" />
-            <span className="text-sm text-gray-600">{depots.find(d => d._id === bus.depotId)?.name || 'Unknown'}</span>
+            <span className="text-sm text-gray-600">{bus.depotName || depots.find(d => d._id === bus.depotId)?.name || 'Unknown'}</span>
           </div>
           <div className="flex items-center space-x-2">
             <Fuel className="w-4 h-4 text-gray-400" />
@@ -433,6 +479,16 @@ const AdminBuses = () => {
             <RefreshCw className="w-4 h-4" />
             <span>Refresh</span>
           </button>
+          <div className="hidden md:flex items-center space-x-2 text-sm text-gray-500">
+            <span>Page</span>
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} className="px-2 py-1 border rounded">-</button>
+            <span className="min-w-[2ch] text-center">{page}</span>
+            <button onClick={() => setPage(p => p + 1)} className="px-2 py-1 border rounded">+</button>
+            <span>Rows</span>
+            <select value={limit} onChange={e => setLimit(parseInt(e.target.value) || 20)} className="border rounded px-2 py-1">
+              {[10,20,50,100].map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
           <button
             onClick={() => setShowAddModal(true)}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"

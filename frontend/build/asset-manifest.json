@@ -1,0 +1,17 @@
+{
+  "files": {
+    "main.css": "/static/css/main.d4f40f05.css",
+    "main.js": "/static/js/main.3ae2ae8f.js",
+    "static/js/451.c297c937.chunk.js": "/static/js/451.c297c937.chunk.js",
+    "static/media/hero-bus.png": "/static/media/hero-bus.7cb677ed76bcc5c368c8.png",
+    "static/media/login.png": "/static/media/login.d12f956a2bd94717dd0a.png",
+    "index.html": "/index.html",
+    "main.d4f40f05.css.map": "/static/css/main.d4f40f05.css.map",
+    "main.3ae2ae8f.js.map": "/static/js/main.3ae2ae8f.js.map",
+    "451.c297c937.chunk.js.map": "/static/js/451.c297c937.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.d4f40f05.css",
+    "static/js/main.3ae2ae8f.js"
+  ]
+}

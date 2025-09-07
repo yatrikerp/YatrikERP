@@ -1,10 +1,14 @@
 import React from 'react';
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
+import BusScheduling from '../components/Common/BusScheduling';
 
 const AdminDashboard = () => {
+  const { user } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeSection, setActiveSection] = useState('users');
 
   useEffect(() => {
     (async () => {
@@ -19,10 +23,40 @@ const AdminDashboard = () => {
     if (res.ok) setUsers(u => u.map(x => x._id === id ? { ...x, role } : x));
   }
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="bg-white rounded-2xl shadow p-6">
-        <h1 className="text-2xl font-bold mb-4">Admin – User Management</h1>
-        {loading ? <p className="text-gray-600">Loading...</p> : (
+    <div className="min-h-screen bg-gray-50">
+      {/* Navigation */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="px-6 py-4">
+          <nav className="flex space-x-8">
+            <button
+              onClick={() => setActiveSection('users')}
+              className={`px-3 py-2 rounded-md text-sm font-medium ${
+                activeSection === 'users'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              User Management
+            </button>
+            <button
+              onClick={() => setActiveSection('scheduling')}
+              className={`px-3 py-2 rounded-md text-sm font-medium ${
+                activeSection === 'scheduling'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Bus Scheduling
+            </button>
+          </nav>
+        </div>
+      </div>
+
+      <div className="p-6">
+        {activeSection === 'users' && (
+          <div className="bg-white rounded-2xl shadow p-6">
+            <h1 className="text-2xl font-bold mb-4">Admin – User Management</h1>
+            {loading ? <p className="text-gray-600">Loading...</p> : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
@@ -53,6 +87,12 @@ const AdminDashboard = () => {
               </tbody>
             </table>
           </div>
+        )}
+          </div>
+        )}
+
+        {activeSection === 'scheduling' && (
+          <BusScheduling user={user} depotId={user?.depotId} />
         )}
       </div>
     </div>

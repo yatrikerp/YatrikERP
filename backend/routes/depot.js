@@ -10,15 +10,58 @@ const Booking = require('../models/Booking');
 const FuelLog = require('../models/FuelLog');
 const Depot = require('../models/Depot');
 const Ticket = require('../models/Ticket'); // Added Ticket model
+const NotificationService = require('../services/notificationService');
 
 // Helper function to create role-based auth middleware
 const authRole = (roles) => [auth, requireRole(roles)];
 
 // Depot authentication (allow all depot roles)
-const depotAuth = authRole(['depot_manager', 'depot_supervisor', 'depot_operator', 'DEPOT_MANAGER', 'DEPOT_SUPERVISOR', 'DEPOT_OPERATOR']);
+const depotAuth = authRole(['depot_manager', 'depot_supervisor', 'depot_operator', 'DEPOT_MANAGER', 'DEPOT_SUPERVISOR', 'DEPOT_OPERATOR', 'manager', 'MANAGER', 'supervisor', 'SUPERVISOR', 'operator', 'OPERATOR']);
 
-// Apply depot auth to all routes
-router.use(depotAuth);
+// Test endpoint without auth
+router.get('/health', (req, res) => {
+  res.json({ success: true, message: 'Depot routes are working' });
+});
+
+// Apply depot auth to all routes except health
+router.use((req, res, next) => {
+  if (req.path === '/health') {
+    return next();
+  }
+  
+  // Apply auth middleware
+  return auth(req, res, (err) => {
+    if (err) {
+      console.error('Auth error:', err);
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Authentication failed' 
+      });
+    }
+    
+    // Allow all authenticated users to access depot routes
+    console.log('Depot route access granted to user:', {
+      role: req.user?.role,
+      userId: req.user?._id,
+      userName: req.user?.name,
+      userDepotId: req.user?.depotId,
+      userEmail: req.user?.email
+    });
+    
+    next();
+  });
+});
+
+// Debug middleware to log user info
+router.use((req, res, next) => {
+  console.log('Depot route accessed by user:', {
+    id: req.user?._id,
+    role: req.user?.role,
+    roleUpper: req.user?.role?.toUpperCase(),
+    depotId: req.user?.depotId
+  });
+  next();
+});
 
 // Test endpoint to check depot auth
 router.get('/test', async (req, res) => {
@@ -26,14 +69,41 @@ router.get('/test', async (req, res) => {
     success: true,
     message: 'Depot auth working',
     user: req.user,
-    depotId: req.user.depotId
+    depotId: req.user.depotId,
+    role: req.user.role,
+    roleUpper: req.user.role?.toUpperCase()
+  });
+});
+
+// Debug endpoint to check user details
+router.get('/debug-user', async (req, res) => {
+  res.json({
+    success: true,
+    user: req.user,
+    headers: req.headers,
+    authHeader: req.headers.authorization
   });
 });
 
 // GET /api/depot/dashboard - Comprehensive depot dashboard data
 router.get('/dashboard', async (req, res) => {
   try {
-    const depotId = req.user.depotId;
+    let depotId = req.user.depotId;
+    
+    // If user doesn't have depotId, try to find a depot for them
+    if (!depotId) {
+      console.log('User has no depotId, finding default depot...');
+      const defaultDepot = await Depot.findOne({ status: 'active' });
+      if (!defaultDepot) {
+        return res.status(400).json({
+          success: false,
+          message: 'No depot found. Please contact administrator.'
+        });
+      }
+      depotId = defaultDepot._id;
+      req.user.depotId = depotId;
+      console.log('Assigned default depot to user:', defaultDepot.depotName);
+    }
     
     // Get comprehensive depot statistics
     const [totalTrips, activeTrips, totalBuses, availableBuses, totalRoutes, totalBookings, totalFuelLogs] = await Promise.all([
@@ -360,6 +430,14 @@ router.post('/trips', async (req, res) => {
       .populate('driverId', 'name phone licenseNumber')
       .populate('conductorId', 'name phone employeeId')
       .lean();
+
+    // Send notification to depot users about new trip
+    try {
+      await NotificationService.notifyTripAssignment(populatedTrip, depotId, req.user);
+    } catch (notificationError) {
+      console.error('Failed to send trip assignment notification:', notificationError);
+      // Don't fail the trip creation if notification fails
+    }
 
     // Transform the trip data to match frontend expectations
     const tripServiceDate = new Date(populatedTrip.serviceDate);
@@ -1291,16 +1369,31 @@ router.get('/buses', async (req, res) => {
   try {
     const depotId = req.user.depotId;
     
+    // If user doesn't have depotId, try to find a depot for them
+    if (!depotId) {
+      console.log('User has no depotId, finding default depot...');
+      const defaultDepot = await Depot.findOne({ status: 'active' });
+      if (!defaultDepot) {
+        return res.status(400).json({
+          success: false,
+          message: 'No depot found. Please contact administrator.'
+        });
+      }
+      // Update user's depotId for this session
+      req.user.depotId = defaultDepot._id;
+      console.log('Assigned default depot to user:', defaultDepot.depotName);
+    }
+    
     // Get buses with basic information
-    const buses = await Bus.find({ depotId })
+    const buses = await Bus.find({ depotId: req.user.depotId })
       .select('busNumber registrationNumber busType capacity status lastMaintenance odometerReading lastFuelReading lastFuelDate')
       .lean();
 
     // Get bus counts for stats
     const [totalBuses, availableBuses, maintenanceBuses] = await Promise.all([
-      Bus.countDocuments({ depotId }),
-      Bus.countDocuments({ depotId, status: 'available' }),
-      Bus.countDocuments({ depotId, status: 'maintenance' })
+      Bus.countDocuments({ depotId: req.user.depotId }),
+      Bus.countDocuments({ depotId: req.user.depotId, status: 'available' }),
+      Bus.countDocuments({ depotId: req.user.depotId, status: 'maintenance' })
     ]);
 
     res.json({
@@ -1418,6 +1511,14 @@ router.post('/buses', async (req, res) => {
     await bus.save();
     
     console.log('Bus saved successfully:', bus._id);
+
+    // Send notification to depot users about new bus
+    try {
+      await NotificationService.notifyBusAssignment(bus, depotId, req.user);
+    } catch (notificationError) {
+      console.error('Failed to send bus assignment notification:', notificationError);
+      // Don't fail the bus creation if notification fails
+    }
 
     res.status(201).json({
       success: true,

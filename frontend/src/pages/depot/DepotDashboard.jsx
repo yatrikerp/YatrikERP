@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { Bell } from 'lucide-react';
 import SmartNotifications from '../../components/Common/SmartNotifications';
+import NotificationCenter from '../../components/Common/NotificationCenter';
+import BusScheduling from '../../components/Common/BusScheduling';
+import BookingSystem from '../../components/Common/BookingSystem';
+import BookingManagement from '../../components/Common/BookingManagement';
 import FleetManagement from './components/FleetManagement';
 import RouteNetwork from './components/RouteNetwork';
 import TripManagement from './components/TripManagement';
@@ -24,6 +29,7 @@ const DepotDashboard = () => {
     manager: ''
   });
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [showNotificationCenter, setShowNotificationCenter] = useState(false);
   const [recentTrips, setRecentTrips] = useState([]);
   const [liveTrackingData, setLiveTrackingData] = useState([]);
   const [systemHealth, setSystemHealth] = useState({
@@ -136,8 +142,19 @@ const DepotDashboard = () => {
       }
 
       // Fetch dashboard data
-      const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
-      if (!token) {
+      const depotToken = localStorage.getItem('depotToken');
+      const token = localStorage.getItem('token');
+      const authToken = depotToken || token;
+      
+      console.log('DepotDashboard - Authentication check:', {
+        depotToken: !!depotToken,
+        token: !!token,
+        authToken: !!authToken,
+        user: user,
+        userRole: user?.role
+      });
+      
+      if (!authToken) {
         console.error('No authentication token found');
         setLoading(false);
         return;
@@ -145,14 +162,20 @@ const DepotDashboard = () => {
 
         const response = await fetch('/api/depot/dashboard', {
         headers: { 
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         }
         });
 
+        console.log('DepotDashboard - API Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok
+        });
+        
         if (response.ok) {
           const data = await response.json();
-        console.log('Dashboard data received:', data);
+          console.log('Dashboard data received:', data);
         
         // Update depot stats with proper fallbacks
         setDepotStats(prev => ({
@@ -186,7 +209,12 @@ const DepotDashboard = () => {
         localStorage.setItem('depotInfo', JSON.stringify(updatedDepotInfo));
         
       } else {
-        console.error('Failed to fetch dashboard data:', response.status, response.statusText);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to fetch dashboard data:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
         // Set default depot info if API fails
         const defaultDepotInfo = {
           name: 'Yatrik Depot',
@@ -223,6 +251,38 @@ const DepotDashboard = () => {
       console.error('Refresh failed:', error);
         setLoading(false);
       }
+  };
+
+  const handleBookingComplete = (bookingData) => {
+    console.log('Booking completed:', bookingData);
+    // You can add additional logic here like showing a success message
+    // or refreshing the booking management section
+  };
+
+  const createSampleBookings = async () => {
+    try {
+      const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
+      const response = await fetch('/api/booking/create-sample', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ depotId: user?.depotId })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert(`Sample bookings created successfully! Created ${result.data.count} bookings.`);
+        // Refresh the page to show the new bookings
+        window.location.reload();
+      } else {
+        alert(`Error: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('Error creating sample bookings:', error);
+      alert('Error creating sample bookings. Please try again.');
+    }
   };
 
   useEffect(() => {
@@ -360,6 +420,36 @@ const DepotDashboard = () => {
                     <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
                   </svg>
               <span>Staff Management</span>
+                </li>
+
+                <li 
+              className={`nav-item ${activeSection === 'scheduling' ? 'active' : ''}`}
+                  onClick={() => setActiveSection('scheduling')}
+                >
+              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                  </svg>
+              <span>Bus Scheduling</span>
+                </li>
+
+                <li 
+              className={`nav-item ${activeSection === 'booking-system' ? 'active' : ''}`}
+                  onClick={() => setActiveSection('booking-system')}
+                >
+              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm2 6a2 2 0 114 0 2 2 0 01-4 0zm8 0a2 2 0 114 0 2 2 0 01-4 0z" clipRule="evenodd" />
+                  </svg>
+              <span>New Booking</span>
+                </li>
+
+                <li 
+              className={`nav-item ${activeSection === 'booking-management' ? 'active' : ''}`}
+                  onClick={() => setActiveSection('booking-management')}
+                >
+              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                  </svg>
+              <span>Booking Management</span>
                 </li>
 
                 <li 
@@ -529,6 +619,15 @@ const DepotDashboard = () => {
                     <h1>{depotInfo.name || 'Yatrik Depot'} Dashboard</h1>
                     <p>Welcome back, {depotInfo.manager || user?.name || 'Depot Manager'}! Here's your depot overview.</p>
                   </div>
+                  <div className="header-right">
+                    <button 
+                      className="notification-btn"
+                      onClick={() => setShowNotificationCenter(true)}
+                      title="Notifications"
+                    >
+                      <Bell size={20} />
+                    </button>
+                  </div>
                   <div className="action-buttons-container">
                     <button className="action-btn blue" onClick={() => setActiveSection('buses')}>
                       <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
@@ -554,6 +653,18 @@ const DepotDashboard = () => {
                         <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
                       </svg>
                       Reports
+                    </button>
+                  </div>
+                  <div style={{ marginTop: '16px', textAlign: 'center' }}>
+                    <button 
+                      className="action-btn" 
+                      onClick={createSampleBookings}
+                      style={{ background: '#E91E63', color: 'white', padding: '12px 24px', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                    >
+                      <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20" style={{ width: '16px', height: '16px', marginRight: '8px' }}>
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                      </svg>
+                      Create Sample Bookings (For Testing)
                     </button>
                   </div>
                 </div>
@@ -799,8 +910,23 @@ const DepotDashboard = () => {
 
             {/* Staff Management Section */}
             {activeSection === 'crew' && <StaffManagement />}
+
+            {/* Bus Scheduling Section */}
+            {activeSection === 'scheduling' && <BusScheduling depotId={user?.depotId} />}
+
+            {/* New Booking Section */}
+            {activeSection === 'booking-system' && <BookingSystem user={user} onBookingComplete={handleBookingComplete} />}
+
+            {/* Booking Management Section */}
+            {activeSection === 'booking-management' && <BookingManagement depotId={user?.depotId} user={user} />}
         </div>
       </div>
+
+      {/* Notification Center */}
+      <NotificationCenter 
+        isOpen={showNotificationCenter}
+        onClose={() => setShowNotificationCenter(false)}
+      />
     </div>
   );
 };

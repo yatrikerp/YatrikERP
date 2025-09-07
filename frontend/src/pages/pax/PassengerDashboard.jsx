@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { User, LogOut, Settings, CreditCard } from 'lucide-react';
+import { User, LogOut, Settings, CreditCard, Bus } from 'lucide-react';
+import { apiFetch } from '../../utils/api';
 
 // Import all the new components
 import SearchBar from '../../components/pax/SearchBar';
@@ -15,37 +17,85 @@ import StatsRow from '../../components/pax/StatsRow';
 
 const PassengerDashboard = () => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [nextTrip, setNextTrip] = useState(null);
   const [notifications, setNotifications] = useState([]);
+  const [bookings, setBookings] = useState([]);
 
-  // Mock data for demonstration
+  // Load user's bookings and derive nextTrip
   useEffect(() => {
-    // Simulate fetching next trip data
-    setNextTrip({
-      id: 1,
-      busNumber: 'KL-07-AB-1234',
-      route: 'Kochi → Thiruvananthapuram',
-      seatNo: '18',
-      departureTime: '14:30',
-      date: 'Dec 15, 2024',
-      status: 'on-time'
-    });
-  }, []);
+    async function load() {
+      if (!user?._id) return;
+      const res = await apiFetch(`/api/booking-auth/user/${user._id}?limit=20&page=1`);
+      if (res.ok) {
+        const items = res.data.data?.items || res.data.data?.bookings || res.data.bookings || [];
+        // Normalize bookings to UpcomingTripsList shape
+        const normalized = items.map((b, idx) => {
+          const trip = b.trip || b.tripId || {};
+          const route = b.route || b.routeId || {};
+          const bus = b.bus || b.busId || {};
+          const journey = b.journey || {};
+          const startingPoint = route.startingPoint?.name || journey.from || route.startingPoint?.city || '';
+          const endingPoint = route.endingPoint?.name || journey.to || route.endingPoint?.city || '';
+          const routeName = route.routeName || `${startingPoint} → ${endingPoint}`;
+          const departureTime = trip.startTime || journey.departureTime || journey.departure || '';
+          const arrivalTime = trip.endTime || journey.arrivalTime || journey.arrival || '';
+          const serviceDate = trip.serviceDate || journey.departureDate || b.serviceDate || Date.now();
+          const seat = (Array.isArray(b.seats) && b.seats[0]?.seatNumber) || b.seatNo || '-';
+          const price = b.totalAmount || b.amount || b.fareAmount || 0;
+          const boardingPoint = journey.boardingPoint || b.boardingStop?.name || b.boardingStopId || startingPoint;
+          const destinationPoint = journey.destinationPoint || b.destinationStop?.name || b.destinationStopId || endingPoint;
+          const status = b.status || 'confirmed';
+          return {
+            id: b._id || idx,
+            tripId: trip.tripNumber || trip._id || b.tripId || 'TRIP',
+            route: routeName,
+            busNumber: bus.busNumber || bus.registrationNumber || '-',
+            seatNo: seat,
+            departureTime,
+            arrivalTime,
+            date: new Date(serviceDate).toDateString(),
+            status,
+            price,
+            boardingPoint,
+            destinationPoint
+          };
+        });
+        setBookings(normalized);
+        // Compute next upcoming trip by date
+        const upcoming = [...normalized]
+          .filter(t => t.status !== 'cancelled')
+          .sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+        if (upcoming) setNextTrip(upcoming);
+      }
+    }
+    load();
+  }, [user]);
 
   const handleSearch = (searchData) => {
     console.log('Search initiated:', searchData);
     // Implement search functionality
   };
 
+  const handleBookNow = () => {
+    const today = new Date().toISOString().split('T')[0];
+    navigate(`/search-results?date=${today}&tripType=oneWay`);
+  };
+
   const handleViewTicket = (trip) => {
     console.log('View ticket for:', trip);
-    // Implement ticket viewing
+    // Navigate to ticket page with booking ID
+    if (trip.id) {
+      navigate(`/ticket?bookingId=${trip.id}`);
+    }
   };
 
   const handleTrackBus = (trip) => {
     console.log('Track bus for:', trip);
-    // Implement bus tracking
+    // Implement bus tracking - could navigate to a tracking page
+    // For now, just show an alert
+    alert(`Tracking bus ${trip.busNumber} for trip ${trip.tripId}`);
   };
 
   const handleShowQRPass = () => {
@@ -179,6 +229,20 @@ const PassengerDashboard = () => {
         {/* Hero Section - Trip Search */}
         <div className="mb-12">
           <SearchBar onSearch={handleSearch} />
+          
+          {/* Quick Book Now Button */}
+          <div className="text-center mt-6">
+            <button
+              onClick={handleBookNow}
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-700 text-white px-8 py-3 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+            >
+              <Bus className="w-5 h-5" />
+              Book Now - View All Available Trips
+            </button>
+            <p className="text-sm text-gray-600 mt-2">
+              See all available trips for today and book instantly
+            </p>
+          </div>
         </div>
 
         {/* Stats Row */}
@@ -214,6 +278,7 @@ const PassengerDashboard = () => {
           {/* Left Column - Upcoming Trips */}
           <div className="xl:col-span-2">
             <UpcomingTripsList 
+              tripsData={bookings}
               onViewTrip={handleViewTrip}
               onCancelTrip={handleCancelTrip}
               onTrackTrip={handleTrackBus}

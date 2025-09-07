@@ -22,6 +22,11 @@ const FleetManagement = () => {
     activeBuses: 0
   });
 
+  // Staff data
+  const [drivers, setDrivers] = useState([]);
+  const [conductors, setConductors] = useState([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+
   // Form states
   const [formData, setFormData] = useState({
     busNumber: '',
@@ -47,6 +52,8 @@ const FleetManagement = () => {
       width: 0,
       height: 0
     },
+    assignedDriver: '',
+    assignedConductor: '',
     notes: ''
   });
 
@@ -79,11 +86,49 @@ const FleetManagement = () => {
 
   useEffect(() => {
     fetchBuses();
+    fetchStaffData();
   }, []);
+
+  const fetchStaffData = async () => {
+    setLoadingStaff(true);
+    try {
+      // Fetch drivers and conductors from admin API
+      const [driversResponse, conductorsResponse] = await Promise.all([
+        apiFetch('/api/admin/all-drivers'),
+        apiFetch('/api/admin/all-conductors')
+      ]);
+
+      if (driversResponse && Array.isArray(driversResponse)) {
+        setDrivers(driversResponse);
+      } else if (driversResponse?.data && Array.isArray(driversResponse.data)) {
+        setDrivers(driversResponse.data);
+      }
+
+      if (conductorsResponse && Array.isArray(conductorsResponse)) {
+        setConductors(conductorsResponse);
+      } else if (conductorsResponse?.data && Array.isArray(conductorsResponse.data)) {
+        setConductors(conductorsResponse.data);
+      }
+    } catch (error) {
+      console.error('Error fetching staff data:', error);
+    } finally {
+      setLoadingStaff(false);
+    }
+  };
 
   const fetchBuses = async () => {
     try {
       setLoading(true);
+      
+      // Debug: Check what token is being used
+      const depotToken = localStorage.getItem('depotToken');
+      const token = localStorage.getItem('token');
+      console.log('Debug - Tokens available:', {
+        depotToken: !!depotToken,
+        token: !!token,
+        user: user
+      });
+      
       const res = await apiFetch('/api/depot/buses');
       if (res.ok) {
         setBuses(res.data?.data?.buses || []);
@@ -193,6 +238,8 @@ const FleetManagement = () => {
         width: 0,
         height: 0
       },
+      assignedDriver: '',
+      assignedConductor: '',
       notes: ''
     });
   };
@@ -640,6 +687,45 @@ const FleetManagement = () => {
                         <option key={type.value} value={type.value}>{type.label}</option>
                       ))}
                     </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-section">
+                <h3>Staff Assignment</h3>
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label>Assigned Driver</label>
+                    <select
+                      value={formData.assignedDriver}
+                      onChange={(e) => setFormData({...formData, assignedDriver: e.target.value})}
+                      disabled={loadingStaff}
+                    >
+                      <option value="">Select Driver</option>
+                      {drivers.map(driver => (
+                        <option key={driver._id} value={driver._id}>
+                          {driver.name} ({driver.driverId}) - {driver.drivingLicense?.licenseType || 'N/A'}
+                        </option>
+                      ))}
+                    </select>
+                    {loadingStaff && <div className="text-sm text-gray-500">Loading drivers...</div>}
+                  </div>
+
+                  <div className="form-group">
+                    <label>Assigned Conductor</label>
+                    <select
+                      value={formData.assignedConductor}
+                      onChange={(e) => setFormData({...formData, assignedConductor: e.target.value})}
+                      disabled={loadingStaff}
+                    >
+                      <option value="">Select Conductor</option>
+                      {conductors.map(conductor => (
+                        <option key={conductor._id} value={conductor._id}>
+                          {conductor.name} ({conductor.conductorId}) - {conductor.badgeNumber || 'N/A'}
+                        </option>
+                      ))}
+                    </select>
+                    {loadingStaff && <div className="text-sm text-gray-500">Loading conductors...</div>}
                   </div>
                 </div>
               </div>

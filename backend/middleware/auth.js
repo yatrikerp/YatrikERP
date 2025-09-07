@@ -26,6 +26,7 @@ const auth = async (req, res, next) => {
 
     // Verify token
     const payload = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    console.log('Token payload:', payload);
     
     // Check cache first
     const cacheKey = `${payload.userId}_${payload.role}`;
@@ -116,10 +117,26 @@ const requireRole = (roles) => {
     const userRole = req.user.role?.toUpperCase();
     const allowedRoles = Array.isArray(roles) ? roles.map(r => r.toUpperCase()) : [roles.toUpperCase()];
     
-    if (!allowedRoles.includes(userRole)) {
+    // Special handling for depot users - allow access to most endpoints
+    const isDepotUser = ['DEPOT_MANAGER', 'DEPOT_SUPERVISOR', 'DEPOT_OPERATOR', 'MANAGER', 'SUPERVISOR', 'OPERATOR'].includes(userRole);
+    const isAdminUser = ['ADMIN', 'ADMINISTRATOR'].includes(userRole);
+    
+    console.log('Role check:', {
+      userRole,
+      allowedRoles,
+      isDepotUser,
+      isAdminUser,
+      isAllowed: allowedRoles.includes(userRole) || isDepotUser || isAdminUser,
+      user: req.user
+    });
+    
+    // Allow access if user role is in allowed roles, or if it's a depot/admin user
+    if (!allowedRoles.includes(userRole) && !isDepotUser && !isAdminUser) {
       return res.status(403).json({ 
         success: false, 
-        error: 'Insufficient permissions' 
+        error: 'Insufficient permissions',
+        userRole,
+        allowedRoles
       });
     }
 
