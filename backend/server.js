@@ -146,10 +146,9 @@ app.use('/api/conductor', require('./routes/conductor'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/seats', require('./routes/seats'));
 app.use('/api/tracking', require('./routes/tracking'));
-app.use('/api/trips', require('./routes/trips'));
-app.use('/api/booking', require('./routes/booking-public'));
-app.use('/api/booking-auth', require('./routes/booking'));
+app.use('/api/booking', require('./routes/booking'));
 app.use('/api/routes', require('./routes/routes'));
+app.use('/api/trips', require('./routes/trips'));
 app.use('/api/status', require('./routes/status'));
 
 // Health check endpoint

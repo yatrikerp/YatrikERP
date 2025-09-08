@@ -283,11 +283,6 @@ class BookingService {
   // Get bookings by user
   static async getBookingsByUser(userId, options = {}) {
     try {
-      // Validate userId
-      if (!userId) {
-        throw new Error('User ID is required');
-      }
-
       const { status, limit = 20, page = 1 } = options;
       const query = { createdBy: userId };
       
@@ -307,7 +302,7 @@ class BookingService {
       const total = await Booking.countDocuments(query);
 
       return {
-        bookings: bookings || [],
+        bookings,
         pagination: {
           currentPage: parseInt(page),
           totalPages: Math.ceil(total / limit),
@@ -376,52 +371,39 @@ class BookingService {
     try {
       const { from, to, departureDate, passengers = 1 } = searchData;
 
-      // Build query for date filter
-      const dateQuery = {};
+      const query = {
+        status: 'scheduled',
+        'routeId.startingPoint.city': { $regex: from, $options: 'i' },
+        'routeId.endingPoint.city': { $regex: to, $options: 'i' }
+      };
+
+      // Add date filter if provided
       if (departureDate) {
         const searchDate = new Date(departureDate);
         const startOfDay = new Date(searchDate.setHours(0, 0, 0, 0));
         const endOfDay = new Date(searchDate.setHours(23, 59, 59, 999));
         
-        dateQuery.serviceDate = {
+        query.serviceDate = {
           $gte: startOfDay,
           $lte: endOfDay
         };
       }
 
-      // Find all trips for the date first
-      let trips = await Trip.find({
-        status: 'scheduled',
-        bookingOpen: true,
-        ...dateQuery
-      })
+      const trips = await Trip.find(query)
         .populate('routeId', 'routeName routeNumber startingPoint endingPoint distance duration')
         .populate('busId', 'busNumber busType capacity amenities')
         .populate('depotId', 'depotName location')
         .sort({ startTime: 1 });
 
-      // Filter trips by from/to after population
-      trips = trips.filter(trip => {
-        const route = trip.routeId;
-        if (!route) return false;
-        
-        const fromMatch = route.startingPoint?.city?.toLowerCase().includes(from.toLowerCase()) ||
-                         route.startingPoint?.name?.toLowerCase().includes(from.toLowerCase());
-        const toMatch = route.endingPoint?.city?.toLowerCase().includes(to.toLowerCase()) ||
-                       route.endingPoint?.name?.toLowerCase().includes(to.toLowerCase());
-        
-        return fromMatch && toMatch;
-      });
-
       // Filter trips with available seats
       const availableTrips = [];
       for (const trip of trips) {
-        const availableSeats = trip.availableSeats || trip.capacity || 30;
-        if (availableSeats >= passengers) {
+        const availableSeats = await this.getAvailableSeats(trip._id, departureDate);
+        if (availableSeats.length >= passengers) {
           availableTrips.push({
             ...trip.toObject(),
-            availableSeats: availableSeats,
-            fare: trip.fare || trip.baseFare || 100
+            availableSeats: availableSeats.length,
+            fare: trip.baseFare || 100
           });
         }
       }

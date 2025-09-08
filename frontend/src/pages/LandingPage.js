@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Bus, Clock, MapPin, Phone, Star } from 'lucide-react';
@@ -10,6 +10,7 @@ import ServiceAlerts from '../components/LandingPage/ServiceAlerts';
 import SearchCard from '../components/SearchCard/SearchCard';
 import AnimatedMapPanel from '../components/Common/AnimatedMapPanel';
 import AnimatedStats from '../components/pax/AnimatedStats';
+import KeralaDestinationsShowcase from '../components/pax/KeralaDestinationsShowcase';
 import ManageBookingPanel from '../components/pax/ManageBookingPanel';
 import StatusCheckPanel from '../components/pax/StatusCheckPanel';
 import CancellationPolicyPanel from '../components/pax/CancellationPolicyPanel';
@@ -25,44 +26,46 @@ const LandingPage = () => {
   const { user } = useAuth();
 
   const handleBookNow = () => {
-    const today = new Date().toISOString().split('T')[0];
-    navigate(`/search-results?date=${encodeURIComponent(today)}&tripType=oneWay`);
-  };
-
-  const [popularRoutes, setPopularRoutes] = useState([]);
-
-  // Fetch popular routes from API
-  useEffect(() => {
-    fetchPopularRoutes();
-  }, []);
-
-  const fetchPopularRoutes = async () => {
-    try {
-      // Public routes list; filter to those with some availability signal (schedules or assigned buses)
-      const response = await fetch('/api/routes?status=active&limit=50');
-      if (response.ok) {
-        const data = await response.json();
-        const items = Array.isArray(data?.data) ? data.data : [];
-        const available = items.filter(r => {
-          const hasSchedules = Array.isArray(r.schedules) && r.schedules.length > 0;
-          const hasAssigned = Array.isArray(r.assignedBuses) && r.assignedBuses.length > 0;
-          return hasSchedules || hasAssigned;
-        });
-        const routes = available.slice(0, 6).map(r => ({
-          from: r?.startingPoint?.city || r?.startingPoint?.name || '—',
-          to: r?.endingPoint?.city || r?.endingPoint?.name || '—',
-          frequency: Array.isArray(r.schedules) ? `${r.schedules.length} schedules` : 'Available',
-          fare: 'Dynamic'
-        }));
-        setPopularRoutes(routes);
-      } else {
-        setPopularRoutes([]);
-      }
-    } catch (error) {
-      console.error('Failed to fetch popular routes:', error);
-      setPopularRoutes([]);
+    console.log('handleBookNow called:', { user, hasUser: !!user });
+    
+    if (!user) {
+      console.log('No user, redirecting to login');
+      navigate('/login?next=/pax');
+      return;
+    }
+    
+    const role = (user.role || 'passenger').toUpperCase();
+    console.log('User role:', role);
+    
+    // Send each role to its own dashboard; only passengers to pax
+    if (role === 'PASSENGER') {
+      console.log('Redirecting to /pax');
+      navigate('/pax');
+    } else if (role === 'ADMIN') {
+      console.log('Redirecting to /admin');
+      navigate('/admin');
+    } else if (role === 'CONDUCTOR') {
+      console.log('Redirecting to /conductor');
+      navigate('/conductor');
+    } else if (role === 'DRIVER') {
+      console.log('Redirecting to /driver');
+      navigate('/driver');
+    } else if (role === 'DEPOT_MANAGER') {
+      console.log('Redirecting to /depot');
+      navigate('/depot');
+    } else {
+      console.log('Redirecting to /dashboard');
+      navigate('/dashboard');
     }
   };
+
+  const popularRoutes = [
+    { from: 'Kochi', to: 'Thiruvananthapuram', frequency: 'Every 2 hours', fare: '₹350' },
+    { from: 'Kozhikode', to: 'Kochi', frequency: 'Every 3 hours', fare: '₹280' },
+    { from: 'Bangalore', to: 'Mysore', frequency: 'Every 45 mins', fare: '₹180' },
+    { from: 'Chennai', to: 'Pondicherry', frequency: 'Every 2 hours', fare: '₹120' },
+    { from: 'Hyderabad', to: 'Warangal', frequency: 'Every 1 hour', fare: '₹100' },
+  ];
 
   const serviceAlerts = [
     { type: 'info', message: 'New Kerala routes added: Kochi to Thiruvananthapuram, Kozhikode to Kochi' },

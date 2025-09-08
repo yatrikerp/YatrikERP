@@ -164,6 +164,22 @@ router.get('/depot/:depotId', async (req, res) => {
   }
 });
 
+// Public: get unique cities for search
+router.get('/cities', async (req, res) => {
+  try {
+    const routes = await Route.find({ isActive: true }).select('startingPoint. city endingPoint.city').lean();
+    const set = new Set();
+    routes.forEach(r => {
+      if (r.startingPoint?.city) set.add(r.startingPoint.city);
+      if (r.endingPoint?.city) set.add(r.endingPoint.city);
+    });
+    const cities = Array.from(set).sort((a, b) => a.localeCompare(b));
+    res.json({ success: true, data: { cities } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to load cities' });
+  }
+});
+
 // Create new route (admin only)
 router.post('/', authRole(['admin', 'manager']), async (req, res) => {
   try {

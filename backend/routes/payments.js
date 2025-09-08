@@ -4,27 +4,15 @@ const Razorpay = require('razorpay');
 const { auth, requireRole } = require('../middleware/auth');
 const crypto = require('crypto');
 
-// Initialize Razorpay (only if credentials are provided)
-let razorpay = null;
-if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
-  razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET
-  });
-} else {
-  console.warn('⚠️ Razorpay credentials not provided. Payment features will be disabled.');
-}
+// Initialize Razorpay
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET
+});
 
 // Create payment order
 router.post('/create-order', auth, async (req, res) => {
   try {
-    if (!razorpay) {
-      return res.status(503).json({
-        success: false,
-        message: 'Payment service is not configured. Please contact support.'
-      });
-    }
-
     const { amount, currency = 'INR', bookingId, passengerId } = req.body;
 
     if (!amount || !bookingId || !passengerId) {
@@ -68,13 +56,6 @@ router.post('/create-order', auth, async (req, res) => {
 // Verify payment signature
 router.post('/verify-payment', auth, async (req, res) => {
   try {
-    if (!razorpay) {
-      return res.status(503).json({
-        success: false,
-        message: 'Payment service is not configured. Please contact support.'
-      });
-    }
-
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, bookingId } = req.body;
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {

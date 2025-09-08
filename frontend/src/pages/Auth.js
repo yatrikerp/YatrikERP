@@ -110,28 +110,17 @@ const Auth = ({ initialMode = 'login' }) => {
     const preloadAuthEndpoints = () => {
       const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
-      // Preload Google OAuth
+      // Preload Google OAuth (safe GET endpoint)
       const googleOAuthUrl = `${baseUrl}/api/auth/google?next=${encodeURIComponent(redirectTo)}`;
       const googleLink = document.createElement('link');
       googleLink.rel = 'prefetch';
       googleLink.href = googleOAuthUrl;
       document.head.appendChild(googleLink);
       
-      // Preload depot authentication endpoint
-      const depotAuthUrl = `${baseUrl}/api/depot-auth/login`;
-      const depotLink = document.createElement('link');
-      depotLink.rel = 'prefetch';
-      depotLink.href = depotAuthUrl;
-      document.head.appendChild(depotLink);
+      // Remove prefetching POST-only login endpoints to avoid 404s
+      // Previously appended prefetch links for /api/depot-auth/login and /api/auth/login
       
-      // Preload regular authentication endpoint
-      const authUrl = `${baseUrl}/api/auth/login`;
-      const authLink = document.createElement('link');
-      authLink.rel = 'prefetch';
-      authLink.href = authUrl;
-      document.head.appendChild(authLink);
-      
-      // Preload the callback route
+      // Preload the callback route (frontend route)
       const callbackLink = document.createElement('link');
       callbackLink.rel = 'prefetch';
       callbackLink.href = '/oauth/callback';
@@ -198,7 +187,7 @@ const Auth = ({ initialMode = 'login' }) => {
       const isDepotEmail = /^([a-z0-9]+-depot|depot-[a-z0-9]+)@yatrik\.com$/i.test(email);
       const url = isDepotEmail ? '/api/depot-auth/login' : '/api/auth/login';
       const body = isDepotEmail
-        ? { username: email, password: loginForm.password }
+        ? { email: email, password: loginForm.password }
         : { email, password: loginForm.password };
 
       console.log('[Auth] Login attempt:', { email, isDepotEmail, url, body });

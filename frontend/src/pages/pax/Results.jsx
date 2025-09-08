@@ -11,8 +11,13 @@ const PaxResults = () => {
 
   useEffect(() => {
     async function load(){
-      const qs = params.toString();
-      const res = await apiFetch(`/api/trips/search?${qs}`);
+      const raw = Object.fromEntries(params.entries());
+      const mapped = new URLSearchParams({
+        from: raw.from || raw.fromCity || '',
+        to: raw.to || raw.toCity || '',
+        date: raw.date || ''
+      });
+      const res = await apiFetch(`/api/trips/search?${mapped.toString()}`);
       if (res.ok) setTrips(res.data.data?.trips || res.data.trips || []);
     }
     load();

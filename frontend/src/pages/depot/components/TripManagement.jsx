@@ -118,19 +118,19 @@ const TripManagement = () => {
       setLoading(true);
       const [tripsRes, busesRes, routesRes, driversRes, conductorsRes] = await Promise.all([
         fetch('/api/depot/trips', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('depotToken') || localStorage.getItem('token')}` }
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         }),
         fetch('/api/depot/buses', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('depotToken') || localStorage.getItem('token')}` }
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         }),
         fetch('/api/depot/routes', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('depotToken') || localStorage.getItem('token')}` }
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         }),
         fetch('/api/driver/all', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('depotToken') || localStorage.getItem('token')}` }
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         }),
         fetch('/api/conductor/all', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('depotToken') || localStorage.getItem('token')}` }
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         })
       ]);
 
@@ -237,7 +237,7 @@ const TripManagement = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('depotToken') || localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify(payload)
       });
@@ -321,7 +321,7 @@ const TripManagement = () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('depotToken') || localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify(payload)
       });
@@ -379,7 +379,7 @@ const TripManagement = () => {
       const response = await fetch(`/api/depot/trips/${selectedTrip._id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('depotToken') || localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
 
@@ -418,7 +418,7 @@ const TripManagement = () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('depotToken') || localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({ status: 'cancelled' })
       });
@@ -451,7 +451,7 @@ const TripManagement = () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('depotToken') || localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({ status: newStatus })
       });
@@ -609,7 +609,7 @@ const TripManagement = () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('depotToken') || localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({ [field]: formattedValue })
       });
@@ -654,7 +654,7 @@ const TripManagement = () => {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('depotToken') || localStorage.getItem('token')}`
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
           },
           body: JSON.stringify({ status: newStatus })
         })

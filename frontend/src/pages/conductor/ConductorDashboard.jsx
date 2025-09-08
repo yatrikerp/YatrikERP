@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import SmartNotifications from '../../components/Common/SmartNotifications';
 import './conductor.modern.css';
+import QRScanner from '../../components/QRScanner.jsx';
+import { apiFetch } from '../../utils/api';
 
 const ConductorDashboard = () => {
   const { user, logout } = useAuth();
@@ -31,6 +33,12 @@ const ConductorDashboard = () => {
   const [lastUpdated, setLastUpdated] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSection, setActiveSection] = useState('dashboard');
+  const [currentTrip, setCurrentTrip] = useState(null);
+  const [passengers, setPassengers] = useState([]);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [dutyActive, setDutyActive] = useState(false);
+  const primaryTeal = '#0088A9';
+  const accentCoral = '#FF6B35';
 
   const handleLogout = async () => {
     try {
@@ -55,7 +63,7 @@ const ConductorDashboard = () => {
       const token = localStorage.getItem('conductorToken') || localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch('/api/conductor/info', {
+      const response = await fetch('/api/conductor/profile', {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -80,6 +88,58 @@ const ConductorDashboard = () => {
       }
     } catch (error) {
       console.error('Error fetching conductor info:', error);
+    }
+  };
+
+  const fetchCurrentTrip = async () => {
+    const res = await apiFetch('/api/conductor/duties/current', { method: 'GET' });
+    if (res.ok) {
+      setCurrentTrip(res.data || null);
+      if (res.data?._id) {
+        await fetchPassengers(null);
+      } else {
+        setPassengers([]);
+      }
+    }
+  };
+
+  const fetchPassengers = async (tripId) => {
+    if (!tripId) return;
+    const res = await apiFetch(`/api/conductor/trips/${tripId}/passengers`, { method: 'GET' });
+    if (res.ok) {
+      setPassengers(res.data?.passengers || res.data || []);
+    }
+  };
+
+  const handleValidateTicket = async (ticketId) => {
+    if (!ticketId) return;
+    // No matching backend endpoint; placeholder for future integration
+    await fetchCurrentTrip();
+  };
+
+  const handleMarkVacant = async (seatNo) => {
+    // No matching backend endpoint; placeholder for future integration
+    await fetchCurrentTrip();
+  };
+
+  const startDuty = async () => {
+    const dutyId = currentTrip?._id;
+    if (!dutyId) return;
+    const res = await apiFetch(`/api/conductor/duties/${dutyId}/start`, { method: 'POST', body: JSON.stringify({}) });
+    if (res.ok) {
+      setDutyActive(true);
+      await fetchCurrentTrip();
+    }
+  };
+
+  const endDuty = async () => {
+    const dutyId = currentTrip?._id;
+    if (!dutyId) return;
+    const res = await apiFetch(`/api/conductor/duties/${dutyId}/end`, { method: 'POST', body: JSON.stringify({}) });
+    if (res.ok) {
+      setDutyActive(false);
+      setCurrentTrip(null);
+      setPassengers([]);
     }
   };
 
@@ -117,6 +177,7 @@ const ConductorDashboard = () => {
       setLoading(true);
       await fetchConductorInfo();
       await fetchTicketData();
+      await fetchCurrentTrip();
       setLastUpdated(new Date().toLocaleTimeString());
       setLoading(false);
     } catch (error) {
@@ -189,6 +250,7 @@ const ConductorDashboard = () => {
 
         await fetchConductorInfo();
         await fetchTicketData();
+        await fetchCurrentTrip();
         setLoading(false);
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -201,6 +263,7 @@ const ConductorDashboard = () => {
     const interval = setInterval(async () => {
       setLastUpdated(new Date().toLocaleTimeString());
       await fetchTicketData();
+      await fetchCurrentTrip();
     }, 30000);
 
     return () => clearInterval(interval);
@@ -564,6 +627,42 @@ const ConductorDashboard = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Current Trip Card */}
+              <div className="trip-card" style={{
+                background: 'rgba(255,255,255,0.1)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                borderRadius: '1rem',
+                border: '1px solid rgba(255,255,255,0.2)',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+                padding: '16px',
+                marginTop: '16px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3 style={{ margin: 0, color: primaryTeal }}>Current Trip</h3>
+                    {currentTrip ? (
+                      <p style={{ marginTop: 6 }}>
+                        {currentTrip.origin || currentTrip.from} → {currentTrip.destination || currentTrip.to} • Status: {currentTrip.status || 'Assigned'}
+                      </p>
+                    ) : (
+                      <p style={{ marginTop: 6 }}>No active trip assigned</p>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="action-btn" style={{
+                      background: `linear-gradient(90deg, ${primaryTeal}, ${accentCoral})`,
+                      color: '#fff'
+                    }} onClick={() => setIsScannerOpen(true)}>Approve via QR Scan</button>
+                    {!dutyActive ? (
+                      <button className="action-btn" style={{ background: `linear-gradient(90deg, ${primaryTeal}, #00bcd4)`, color: '#fff' }} onClick={startDuty}>Start Duty</button>
+                    ) : (
+                      <button className="action-btn" style={{ background: `linear-gradient(90deg, ${accentCoral}, #ff9966)`, color: '#fff' }} onClick={endDuty}>End Duty</button>
+                    )}
+                  </div>
+                </div>
+              </div>
             </>
           )}
 
@@ -577,7 +676,53 @@ const ConductorDashboard = () => {
           {activeSection === 'passengers' && (
             <div className="passengers-section">
               <h2>Passenger Management</h2>
-              <p>Passenger information and management will be displayed here.</p>
+              <div style={{
+                overflowX: 'auto',
+                marginTop: 12,
+                borderRadius: '12px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.08)'
+              }}>
+                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
+                  <thead>
+                    <tr style={{ background: 'linear-gradient(90deg, rgba(0,136,169,0.15), rgba(255,107,53,0.15))' }}>
+                      <th style={{ textAlign: 'left', padding: '12px 16px' }}>Name</th>
+                      <th style={{ textAlign: 'left', padding: '12px 16px' }}>Seat</th>
+                      <th style={{ textAlign: 'left', padding: '12px 16px' }}>Ticket</th>
+                      <th style={{ textAlign: 'left', padding: '12px 16px' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {passengers.map((p, idx) => (
+                      <tr key={p.id || p.ticketId || idx} style={{ background: 'rgba(255,255,255,0.7)' }} className="hover:glow-row">
+                        <td style={{ padding: '12px 16px' }}>{p.name || p.passengerName || 'Passenger'}</td>
+                        <td style={{ padding: '12px 16px' }}>{p.seatNo || p.seat || '-'}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          {(p.ticketStatus || p.status) === 'valid' || p.valid ? '✅ Valid' : '❌ Pending'}
+                        </td>
+                        <td style={{ padding: '12px 16px', display: 'flex', gap: 8 }}>
+                          {((p.ticketStatus || p.status) !== 'valid' && !p.valid) && (
+                            <button
+                              onClick={() => handleValidateTicket(p.ticketId || p.id)}
+                              className="action-btn"
+                              style={{ background: `linear-gradient(90deg, ${primaryTeal}, ${accentCoral})`, color: '#fff' }}
+                            >Approve</button>
+                          )}
+                          <button
+                            onClick={() => handleMarkVacant(p.seatNo || p.seat)}
+                            className="action-btn"
+                            style={{ background: `linear-gradient(90deg, #6c757d, #95a5a6)`, color: '#fff' }}
+                          >Mark Vacant</button>
+                        </td>
+                      </tr>
+                    ))}
+                    {passengers.length === 0 && (
+                      <tr>
+                        <td colSpan="4" style={{ padding: '16px', textAlign: 'center', color: '#64748b' }}>No passengers to show</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
@@ -603,9 +748,27 @@ const ConductorDashboard = () => {
           )}
         </div>
       </div>
+      {isScannerOpen && (
+        <QRScanner
+          onScan={(data) => {
+            const ticketId = data?.ticketId || data?.id || data?.raw;
+            if (ticketId) {
+              handleValidateTicket(ticketId);
+            }
+            setIsScannerOpen(false);
+          }}
+          onClose={() => setIsScannerOpen(false)}
+        />
+      )}
     </div>
   );
 };
 
 export default ConductorDashboard;
+
+// Inline modal render at end to avoid layout rewrites
+// We conditionally render QRScanner when isScannerOpen is true
+// This must be outside the main return; in React, we cannot render here.
+// Instead, include it inside main return near root container.
+
 

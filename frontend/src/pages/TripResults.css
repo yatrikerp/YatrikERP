@@ -1,7 +1,7 @@
 /* Trip Results Page - Modern Design */
 .trip-results-container {
   min-height: 100vh;
-  background: linear-gradient(180deg, #F7F9FB 0%, #EDF2F7 100%);
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
@@ -60,7 +60,7 @@
 .search-info h1 {
   font-size: 1.875rem;
   font-weight: 700;
-  color: #0A2540;
+  color: #1e293b;
   margin-bottom: 0.5rem;
 }
 
@@ -249,34 +249,6 @@
   grid-template-columns: 1fr;
 }
 
-/* Premium toolbar */
-.results-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.pill-group {
-  display: flex;
-  gap: .5rem;
-}
-
-.pill {
-  padding: .4rem .9rem;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  color: #0A2540;
-  border-radius: 999px;
-  font-size: .85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all .2s ease;
-}
-
-.pill:hover { box-shadow: 0 1px 8px rgba(10,37,64,.08); transform: translateY(-1px); }
-.pill.active { border-color: #E91E63; color: #E91E63; background: #FFF5F8; }
-
 /* Trip Card */
 .trip-card {
   background: white;
@@ -455,7 +427,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
-  background: linear-gradient(135deg, #E91E63 0%, #FF4081 100%);
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: white;
   border: none;
   border-radius: 0.75rem;
@@ -466,36 +438,7 @@
 
 .book-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(233, 30, 99, 0.28);
-}
-
-/* Premium empty state */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 50vh;
-  gap: 1rem;
-}
-
-.empty-hero {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: radial-gradient(100% 100% at 50% 0%, #FFF 0%, #F7F9FB 60%, #EDF2F7 100%);
-  display: grid;
-  place-items: center;
-  box-shadow: inset 0 -2px 8px rgba(10,37,64,.06), 0 8px 24px rgba(10,37,64,.08);
-}
-
-.empty-title { font-size: 1.35rem; font-weight: 800; color: #0A2540; }
-.empty-text { color: #58708A; max-width: 560px; text-align: center; }
-.empty-cta {
-  padding: .75rem 1.25rem;
-  border-radius: .75rem;
-  background: linear-gradient(135deg, #E91E63 0%, #FF4081 100%);
-  color: #fff; font-weight: 700; border: none; cursor: pointer;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
 /* Popular Badge */

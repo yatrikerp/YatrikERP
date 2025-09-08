@@ -63,9 +63,10 @@ const AdminUsers = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      const token = localStorage.getItem('token') || localStorage.getItem('depotToken');
       const response = await fetch('/api/admin/users', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': token ? `Bearer ${token}` : ''
         }
       });
       
@@ -112,11 +113,12 @@ const AdminUsers = () => {
   const handleCreateUser = async (e) => {
     e.preventDefault();
     try {
+      const token = localStorage.getItem('token') || localStorage.getItem('depotToken');
       const response = await fetch('/api/admin/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': token ? `Bearer ${token}` : ''
         },
         body: JSON.stringify(userForm)
       });
@@ -142,11 +144,12 @@ const AdminUsers = () => {
   const handleUpdateUser = async (e) => {
     e.preventDefault();
     try {
+      const token = localStorage.getItem('token') || localStorage.getItem('depotToken');
       const response = await fetch(`/api/admin/users/${editingUser._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': token ? `Bearer ${token}` : ''
         },
         body: JSON.stringify(userForm)
       });
@@ -170,10 +173,11 @@ const AdminUsers = () => {
     if (!userToDelete) return;
 
     try {
+      const token = localStorage.getItem('token') || localStorage.getItem('depotToken');
       const response = await fetch(`/api/admin/users/${userToDelete._id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': token ? `Bearer ${token}` : ''
         }
       });
 

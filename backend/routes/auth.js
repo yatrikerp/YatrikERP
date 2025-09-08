@@ -4,6 +4,9 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const passport = require('passport');
 const User = require('../models/User');
+const DepotUser = require('../models/DepotUser');
+const Driver = require('../models/Driver');
+const Conductor = require('../models/Conductor');
 const { sendEmail } = require('../config/email');
 const { validateRegistrationEmail, validateProfileUpdateEmail } = require('../middleware/emailValidation');
 const { userValidations, handleValidationErrors } = require('../middleware/validation');
@@ -22,12 +25,15 @@ router.post('/register', userValidations.register, handleValidationErrors, valid
       });
     }
 
+    // Hash password before saving
+    const hashedPassword = await bcrypt.hash(password, 12);
+    
     // Create user
     const user = new User({ 
       name, 
       email, 
       phone, 
-      password, 
+      password: hashedPassword, 
       role,
       authProvider: 'local' // Ensure authProvider is set for validation
     });
@@ -56,107 +62,34 @@ router.post('/register', userValidations.register, handleValidationErrors, valid
 });
 
 // POST /api/auth/login
-router.post('/login', userValidations.login, handleValidationErrors, async (req, res) => {
-  try {
-    const { email, password } = req.body;
+router.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ message: "Missing fields" });
 
-    // Add validation
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        error: 'Email and password are required'
-      });
-    }
+  const user = await User.findOne({ email }).select('+password');
+  if (!user || !user.password) return res.status(400).json({ message: "Invalid email" });
 
-    // Remove artificial delay - it's not needed for security
-    // await new Promise(resolve => setTimeout(resolve, 200));
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) return res.status(400).json({ message: "Invalid password" });
 
-    // Optimize database query - only select necessary fields
-    const user = await User.findOne({ email })
-      .select('+password name role status depotId lastLogin loginAttempts lockUntil')
-      .lean(); // Use lean() for better performance
-    
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid credentials'
-      });
-    }
-
-    // Check if account is locked
-    if (user.lockUntil && user.lockUntil > Date.now()) {
-      return res.status(423).json({
-        success: false,
-        error: 'Account is temporarily locked due to too many failed attempts'
-      });
-    }
-
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      // Increment failed login attempts - use updateOne for better performance
-      await User.updateOne(
-        { _id: user._id },
-        { 
-          $inc: { loginAttempts: 1 },
-          $set: { 
-            lockUntil: user.loginAttempts + 1 >= 5 ? Date.now() + 2 * 60 * 60 * 1000 : undefined 
-          }
-        }
-      );
-      
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid credentials'
-      });
-    }
-
-    // Reset login attempts and update last login in single operation
-    await User.updateOne(
-      { _id: user._id },
-      { 
-        $set: { 
-          loginAttempts: 0, 
-          lockUntil: undefined,
-          lastLogin: new Date()
-        }
-      }
-    );
-
-    // Generate token with role information
-    const token = jwt.sign(
-      { 
-        userId: user._id, 
-        role: (user.role || 'passenger').toUpperCase(), 
-        name: user.name, 
-        email: email 
-      },
-      process.env.JWT_SECRET || 'secret',
-      { expiresIn: '7d' }
-    );
-
-    // Prepare user data (remove sensitive information)
-    const userData = {
-      _id: user._id,
-      name: user.name,
-      email: email,
-      role: (user.role || 'passenger').toUpperCase(), // Ensure role is uppercase for consistency
-      status: user.status,
-      depotId: user.depotId,
-      lastLogin: new Date()
-    };
-
-    res.json({
-      success: true,
-      data: { user: userData, token }
-    });
-
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Login failed. Please try again.'
-    });
+  // Optional: block logins for inactive accounts
+  if (user.status && user.status !== 'active') {
+    return res.status(403).json({ message: 'Account is not active' });
   }
+
+  const token = jwt.sign(
+    {
+      userId: user._id,
+      role: (user.role || 'passenger').toUpperCase(),
+      name: user.name,
+      email: user.email
+    },
+    process.env.JWT_SECRET || 'secret',
+    { expiresIn: '7d' }
+  );
+
+  const { password: _removed, ...safeUser } = user.toObject();
+  res.json({ token, user: safeUser });
 });
 
 // POST /api/auth/forgot-password
@@ -423,3 +356,69 @@ router.get('/microsoft/callback', passport.authenticate('microsoft', { failureRe
 });
 
 module.exports = router;
+ 
+// Unified role-based login
+// POST /api/auth/role-login
+// Body: { role: 'admin'|'passenger'|'depot'|'driver'|'conductor', username/email/phone, password }
+router.post('/role-login', async (req, res) => {
+  try {
+    const { role, username, email, phone, password } = req.body;
+    if (!role || !password) return res.status(400).json({ success: false, message: 'Role and password are required' });
+
+    const normalizedRole = String(role).toLowerCase();
+
+    if (normalizedRole === 'admin' || normalizedRole === 'passenger' || normalizedRole === 'user') {
+      const identifier = (email || phone || username || '').toString().trim().toLowerCase();
+      if (!identifier) return res.status(400).json({ success: false, message: 'Email/phone required' });
+      const user = await User.findOne({ $or: [{ email: identifier }, { phone: identifier }] }).select('+password');
+      if (!user) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      const ok = await bcrypt.compare(password, user.password);
+      if (!ok) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      if (user.status && user.status !== 'active') return res.status(403).json({ success: false, message: 'Account is not active' });
+      const token = jwt.sign({ userId: user._id, role: (user.role || 'passenger').toUpperCase(), name: user.name, email: user.email }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+      const { password: _pw, ...safe } = user.toObject();
+      return res.json({ success: true, token, user: safe });
+    }
+
+    if (normalizedRole === 'depot' || normalizedRole === 'depot_manager' || normalizedRole === 'depot-supervisor' || normalizedRole === 'depot-operator') {
+      const identifier = (username || email || '').toString().trim().toLowerCase();
+      if (!identifier) return res.status(400).json({ success: false, message: 'Username/email required' });
+      const user = await DepotUser.findOne({ $or: [{ username: identifier }, { email: identifier }] }).select('+password');
+      if (!user) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      const ok = await bcrypt.compare(password, user.password);
+      if (!ok) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      if (user.status !== 'active') return res.status(403).json({ success: false, message: `Account is ${user.status}` });
+      const token = jwt.sign({ userId: user._id, username: user.username, role: (user.role || 'depot_manager').toUpperCase(), depotId: user.depotId, depotCode: user.depotCode, permissions: user.permissions }, process.env.JWT_SECRET || 'secret', { expiresIn: '24h' });
+      return res.json({ success: true, token, user: { _id: user._id, username: user.username, email: user.email, name: user.username, role: user.role || 'depot_manager', depotId: user.depotId, depotCode: user.depotCode, depotName: user.depotName, permissions: user.permissions, status: user.status, lastLogin: new Date() } });
+    }
+
+    if (normalizedRole === 'driver') {
+      const identifier = (username || '').toString().trim();
+      if (!identifier) return res.status(400).json({ success: false, message: 'Username required' });
+      const driver = await Driver.findOne({ username: identifier }).select('+password');
+      if (!driver) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      const ok = await bcrypt.compare(password, driver.password);
+      if (!ok) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      if (driver.status !== 'active') return res.status(403).json({ success: false, message: 'Account is not active' });
+      const token = jwt.sign({ driverId: driver._id, username: driver.username, depotId: driver.depotId, role: 'DRIVER' }, process.env.JWT_SECRET || 'secret', { expiresIn: '12h' });
+      return res.json({ success: true, token, user: { _id: driver._id, name: driver.name, username: driver.username, role: 'driver', depotId: driver.depotId } });
+    }
+
+    if (normalizedRole === 'conductor') {
+      const identifier = (username || '').toString().trim();
+      if (!identifier) return res.status(400).json({ success: false, message: 'Username required' });
+      const conductor = await Conductor.findOne({ username: identifier }).select('+password');
+      if (!conductor) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      const ok = await bcrypt.compare(password, conductor.password);
+      if (!ok) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      if (conductor.status !== 'active') return res.status(403).json({ success: false, message: 'Account is not active' });
+      const token = jwt.sign({ conductorId: conductor._id, username: conductor.username, depotId: conductor.depotId, role: 'CONDUCTOR' }, process.env.JWT_SECRET || 'secret', { expiresIn: '12h' });
+      return res.json({ success: true, token, user: { _id: conductor._id, name: conductor.name, username: conductor.username, role: 'conductor', depotId: conductor.depotId } });
+    }
+
+    return res.status(400).json({ success: false, message: 'Unsupported role' });
+  } catch (error) {
+    console.error('Role login error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});

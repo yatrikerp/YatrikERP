@@ -16,14 +16,11 @@ import Profile from './pages/Profile';
 import Wallet from './pages/Wallet';
 import TripPlanner from './pages/TripPlanner';
 import Booking from './pages/Booking';
-import SeatSelection from './pages/SeatSelection';
-import PassengerDetails from './pages/PassengerDetails';
-import BoardingSelection from './pages/BoardingSelection';
-import Payment from './pages/Payment';
 import Ticket from './pages/Ticket';
+import KeralaRoutes from './pages/KeralaRoutes';
 
-import ConductorDashboard from './pages/ConductorDashboard';
-import DriverDashboard from './pages/DriverDashboard';
+import ConductorDashboard from './pages/conductor/ConductorDashboard.jsx';
+import DriverDashboard from './pages/driver/DriverDashboard.jsx';
 import DepotDashboard from './pages/depot/DepotDashboard';
 
 
@@ -118,27 +115,11 @@ function App() {
             </RequireAuth>
           } />
 
-          <Route path="/seat-selection/:tripId" element={
+          <Route path="/kerala-routes" element={
             <RequireAuth>
-              <SeatSelection />
-            </RequireAuth>
-          } />
-
-          <Route path="/passenger-details" element={
-            <RequireAuth>
-              <PassengerDetails />
-            </RequireAuth>
-          } />
-
-          <Route path="/boarding-selection" element={
-            <RequireAuth>
-              <BoardingSelection />
-            </RequireAuth>
-          } />
-
-          <Route path="/payment" element={
-            <RequireAuth>
-              <Payment />
+              <AppShell>
+                <KeralaRoutes />
+              </AppShell>
             </RequireAuth>
           } />
 

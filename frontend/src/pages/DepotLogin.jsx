@@ -7,7 +7,7 @@ const DepotLogin = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [formData, setFormData] = useState({
-    username: '',
+    email: '',
     password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -27,7 +27,7 @@ const DepotLogin = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.username || !formData.password) {
+    if (!formData.email || !formData.password) {
       setError('Please fill in all fields');
       return;
     }

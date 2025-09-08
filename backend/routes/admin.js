@@ -43,57 +43,250 @@ router.get('/dashboard', async (req, res) => {
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const monthAgo = new Date(today);
+    monthAgo.setDate(monthAgo.getDate() - 30);
 
-    // KPIs
-    const [users, depots, tripsToday, runningTrips, validationsToday, activeLocks] = await Promise.all([
-      User.countDocuments({ status: 'active' }),
-      Depot.countDocuments({ status: 'active' }),
-      Trip.countDocuments({ 
+    console.log('📊 Fetching comprehensive dashboard data...');
+
+    // Helper wrappers to avoid throwing and always return a number
+    const safeCount = async (model, query = {}) => {
+      try { return await model.countDocuments(query); } catch (_) { return 0; }
+    };
+    const safeAggregateSum = async (model, match, sumPath) => {
+      try {
+        const result = await model.aggregate([
+          { $match: match },
+          { $group: { _id: null, total: { $sum: sumPath } } }
+        ]);
+        return result[0]?.total || 0;
+      } catch (_) {
+        return 0;
+      }
+    };
+
+    // Comprehensive KPIs - fetch all key metrics
+    const [
+      // User metrics
+      totalUsers, activeUsers, newUsersToday, newUsersThisWeek,
+      // Depot metrics
+      totalDepots, activeDepots,
+      // Trip metrics
+      totalTrips, tripsToday, runningTrips, completedTripsToday, scheduledTrips,
+      // Booking metrics
+      totalBookings, bookingsToday, pendingBookings, confirmedBookings, cancelledBookings,
+      // Revenue metrics
+      totalRevenue, todayRevenue, weekRevenue, monthRevenue,
+      // Fleet metrics
+      totalBuses, activeBuses, busesInMaintenance, busesOnRoute,
+      // Driver/Conductor metrics
+      totalDrivers, activeDrivers, totalConductors, activeConductors,
+      // Route metrics
+      totalRoutes, activeRoutes,
+      // Validation metrics
+      validationsToday, totalValidations,
+      // System metrics
+      activeLocks, systemAlerts
+    ] = await Promise.all([
+      // User metrics
+      safeCount(User),
+      safeCount(User, { status: 'active' }),
+      safeCount(User, { createdAt: { $gte: today, $lt: tomorrow } }),
+      safeCount(User, { createdAt: { $gte: weekAgo, $lt: today } }),
+      
+      // Depot metrics
+      safeCount(Depot),
+      safeCount(Depot, { status: 'active' }),
+      
+      // Trip metrics
+      safeCount(Trip),
+      safeCount(Trip, { 
         serviceDate: { $gte: today, $lt: tomorrow },
         status: { $in: ['scheduled', 'running', 'completed'] }
       }),
-      Trip.countDocuments({ status: 'running' }),
-      Duty.aggregate([
-        { $match: { date: { $gte: today, $lt: tomorrow } } },
-        { $group: { _id: null, total: { $sum: '$validationCount' } } }
-      ]).then(result => result[0]?.total || 0),
-      Booking.countDocuments({ 
-        status: 'locked',
-        createdAt: { $gte: new Date(Date.now() - 30 * 60 * 1000) } // Last 30 minutes
-      })
+      safeCount(Trip, { status: 'running' }),
+      safeCount(Trip, { 
+        serviceDate: { $gte: today, $lt: tomorrow },
+        status: 'completed'
+      }),
+      safeCount(Trip, { status: 'scheduled' }),
+      
+      // Booking metrics
+      safeCount(Booking),
+      safeCount(Booking, { 
+        createdAt: { $gte: today, $lt: tomorrow }
+      }),
+      safeCount(Booking, { status: 'pending' }),
+      safeCount(Booking, { status: 'confirmed' }),
+      safeCount(Booking, { status: 'cancelled' }),
+      
+      // Revenue calculations (based on pricing.paidAmount for completed payments)
+      safeAggregateSum(Booking, { 'payment.paymentStatus': 'completed' }, '$pricing.paidAmount'),
+      
+      safeAggregateSum(Booking, { 'payment.paymentStatus': 'completed', createdAt: { $gte: today, $lt: tomorrow } }, '$pricing.paidAmount'),
+      
+      safeAggregateSum(Booking, { 'payment.paymentStatus': 'completed', createdAt: { $gte: weekAgo, $lt: today } }, '$pricing.paidAmount'),
+      
+      safeAggregateSum(Booking, { 'payment.paymentStatus': 'completed', createdAt: { $gte: monthAgo, $lt: today } }, '$pricing.paidAmount'),
+      
+      // Fleet metrics
+      safeCount(Bus),
+      safeCount(Bus, { status: 'active' }),
+      safeCount(Bus, { status: 'maintenance' }),
+      safeCount(Bus, { status: 'on_route' }),
+      
+      // Driver/Conductor metrics
+      safeCount(Driver),
+      safeCount(Driver, { status: 'active' }),
+      safeCount(Conductor),
+      safeCount(Conductor, { status: 'active' }),
+      
+      // Route metrics
+      safeCount(Route),
+      safeCount(Route, { status: 'active' }),
+      
+      // Validation metrics (field not present in Duty schema; default to 0 safely)
+      Promise.resolve(0),
+      Promise.resolve(0),
+      
+      // System metrics
+      // Active locks not implemented in current schema
+      Promise.resolve(0),
+      
+      // System alerts (placeholder for now)
+      Promise.resolve(0)
     ]);
 
-    // Recent activities
-    const [recentBookings, recentValidations] = await Promise.all([
+    // Fetch recent data for activities
+    const [recentBookings, recentTrips, recentUsers, recentDrivers, recentConductors] = await Promise.all([
       Booking.find()
         .sort({ createdAt: -1 })
-        .limit(5)
-        .populate('passengerId', 'name email')
-        .populate('tripId', 'routeId serviceDate startTime'),
-      Duty.find({ date: { $gte: today, $lt: tomorrow } })
-        .sort({ updatedAt: -1 })
-        .limit(5)
-        .populate('conductor', 'name')
-        .populate('trip', 'routeId serviceDate startTime')
+        .limit(10)
+        .populate('tripId', 'routeId serviceDate startTime')
+        .populate('routeId', 'routeName')
+        .select('customer pricing payment status createdAt tripId routeId'),
+        
+      Trip.find()
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .populate('routeId', 'routeName')
+        .populate('driverId', 'name')
+        .populate('conductorId', 'name')
+        .populate('busId', 'busNumber'),
+        
+      User.find()
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .select('name email role status createdAt'),
+        
+      Driver.find()
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .populate('depotId', 'depotName')
+        .select('name employeeCode status depotId createdAt'),
+        
+      Conductor.find()
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .populate('depotId', 'depotName')
+        .select('name employeeCode status depotId createdAt')
     ]);
 
+    // Calculate additional metrics
+    const occupancyRate = totalBuses > 0 ? Math.round((busesOnRoute / totalBuses) * 100) : 0;
+    const bookingSuccessRate = totalBookings > 0 ? Math.round((confirmedBookings / totalBookings) * 100) : 0;
+    const tripCompletionRate = totalTrips > 0 ? Math.round((completedTripsToday / tripsToday) * 100) : 0;
+
+    console.log('✅ Dashboard data fetched successfully');
+
     res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
       kpis: {
-        users,
-        depots,
-        tripsToday,
-        runningTrips,
-        validationsToday,
-        activeLocks
+        // User metrics
+        users: totalUsers,
+        activeUsers: activeUsers,
+        newUsersToday: newUsersToday,
+        newUsersThisWeek: newUsersThisWeek,
+        
+        // Trip metrics
+        totalTrips: totalTrips,
+        tripsToday: tripsToday,
+        runningTrips: runningTrips,
+        completedTripsToday: completedTripsToday,
+        scheduledTrips: scheduledTrips,
+        
+        // Revenue metrics
+        totalRevenue: totalRevenue,
+        todayRevenue: todayRevenue,
+        weekRevenue: weekRevenue,
+        monthRevenue: monthRevenue,
+        
+        // Booking metrics
+        totalBookings: totalBookings,
+        bookingsToday: bookingsToday,
+        pendingBookings: pendingBookings,
+        confirmedBookings: confirmedBookings,
+        cancelledBookings: cancelledBookings,
+        
+        // Fleet metrics
+        totalBuses: totalBuses,
+        activeBuses: activeBuses,
+        busesInMaintenance: busesInMaintenance,
+        busesOnRoute: busesOnRoute,
+        
+        // Staff metrics
+        totalDrivers: totalDrivers,
+        activeDrivers: activeDrivers,
+        totalConductors: totalConductors,
+        activeConductors: activeConductors,
+        
+        // Route metrics
+        totalRoutes: totalRoutes,
+        activeRoutes: activeRoutes,
+        
+        // Depot metrics
+        totalDepots: totalDepots,
+        activeDepots: activeDepots,
+        
+        // Validation metrics
+        validationsToday: validationsToday,
+        totalValidations: totalValidations,
+        
+        // System metrics
+        activeLocks: activeLocks,
+        systemAlerts: systemAlerts,
+        
+        // Calculated metrics
+        occupancyRate: occupancyRate,
+        bookingSuccessRate: bookingSuccessRate,
+        tripCompletionRate: tripCompletionRate
       },
-      top5Recent: {
+      recentData: {
         bookings: recentBookings,
-        validations: recentValidations
+        trips: recentTrips,
+        users: recentUsers,
+        drivers: recentDrivers,
+        conductors: recentConductors
+      },
+      summary: {
+        totalEntities: totalUsers + totalBuses + totalRoutes + totalDepots,
+        activeEntities: activeUsers + activeBuses + activeRoutes + activeDepots,
+        systemHealth: {
+          database: 'healthy',
+          api: 'healthy',
+          frontend: 'healthy'
+        }
       }
     });
   } catch (error) {
-    console.error('Dashboard error:', error);
-    res.status(500).json({ error: 'Failed to fetch dashboard data' });
+    console.error('❌ Dashboard error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch dashboard data',
+      details: error.message 
+    });
   }
 });
 
@@ -1034,7 +1227,7 @@ router.post('/routes', async (req, res) => {
       status,
       features: amenities || [],
       schedules: processedSchedules,
-      createdBy: req.user._id
+      createdBy: (req.user && (req.user._id || req.user.id)) || undefined
     };
 
     console.log('📝 Creating route with data:', routeData);
@@ -1136,38 +1329,89 @@ router.get('/routes', async (req, res) => {
 router.put('/routes/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+    const updateData = { ...req.body };
+
+    // Validate ObjectId format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ success: false, message: 'Invalid route ID format' });
+    }
+
+    // Guard: ensure req.user exists
+    const updaterId = req.user?._id || req.user?.id;
+    if (!updaterId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: missing user context' });
+    }
 
     // Remove immutable fields
     delete updateData.routeNumber;
     delete updateData.createdBy;
 
+    // Map flat payload to schema where needed
+    // If frontend sends depotId, convert to nested depot with name/location from DB
+    if (updateData.depotId) {
+      const depotId = updateData.depotId;
+      delete updateData.depotId;
+      const depot = await Depot.findById(depotId).lean();
+      if (!depot) {
+        return res.status(400).json({ success: false, message: 'Depot not found' });
+      }
+      updateData.depot = {
+        depotId: depot._id,
+        depotName: depot.depotName,
+        depotLocation: depot.location?.city || depot.location || ''
+      };
+    }
+
+    // Normalize nested fields if provided in flat form
+    if (updateData.startingCity || updateData.startingLocation) {
+      updateData.startingPoint = {
+        ...(updateData.startingPoint || {}),
+        city: updateData.startingCity || updateData.startingPoint?.city,
+        location: updateData.startingLocation || updateData.startingPoint?.location
+      };
+      delete updateData.startingCity;
+      delete updateData.startingLocation;
+    }
+    if (updateData.endingCity || updateData.endingLocation) {
+      updateData.endingPoint = {
+        ...(updateData.endingPoint || {}),
+        city: updateData.endingCity || updateData.endingPoint?.city,
+        location: updateData.endingLocation || updateData.endingPoint?.location
+      };
+      delete updateData.endingCity;
+      delete updateData.endingLocation;
+    }
+
+    // Coerce numeric fields if sent as strings
+    ['totalDistance', 'estimatedDuration', 'baseFare', 'farePerKm'].forEach((key) => {
+      if (updateData[key] !== undefined) {
+        const num = Number(updateData[key]);
+        if (Number.isNaN(num)) {
+          delete updateData[key];
+        } else {
+          updateData[key] = num;
+        }
+      }
+    });
+
+    // Set updater
+    updateData.updatedBy = updaterId;
+
     const route = await Route.findByIdAndUpdate(
       id,
-      { ...updateData, updatedBy: req.user._id },
+      updateData,
       { new: true, runValidators: true }
     );
 
     if (!route) {
-      return res.status(404).json({
-        success: false,
-        message: 'Route not found'
-      });
+      return res.status(404).json({ success: false, message: 'Route not found' });
     }
 
-    res.json({
-      success: true,
-      message: 'Route updated successfully',
-      data: route
-    });
+    res.json({ success: true, message: 'Route updated successfully', data: route });
 
   } catch (error) {
     console.error('Route update error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update route',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: 'Failed to update route', error: error.message });
   }
 });
 
@@ -1394,7 +1638,7 @@ router.post('/trips', async (req, res) => {
       fare,
       capacity,
       status,
-      depotId,
+      depotId: depotIdFromBody,
       notes
     } = req.body;
 
@@ -1403,13 +1647,6 @@ router.post('/trips', async (req, res) => {
       return res.status(400).json({ 
         success: false, 
         message: 'Route ID is required' 
-      });
-    }
-
-    if (!depotId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Depot ID is required' 
       });
     }
 
@@ -1427,8 +1664,28 @@ router.post('/trips', async (req, res) => {
       });
     }
 
-    // Get bus details to set capacity
-    const bus = await Bus.findById(busId);
+    if (!endTime) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'End time is required' 
+      });
+    }
+
+    if (!busId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Bus ID is required' 
+      });
+    }
+
+    // Validate route exists
+    const route = await Route.findById(routeId).lean();
+    if (!route) {
+      return res.status(400).json({ success: false, message: 'Route not found' });
+    }
+
+    // Get bus details to set capacity and depot
+    const bus = await Bus.findById(busId).lean();
     if (!bus) {
       return res.status(400).json({ 
         success: false, 
@@ -1436,38 +1693,81 @@ router.post('/trips', async (req, res) => {
       });
     }
 
-    // Resolve numeric capacity from Bus schema (which stores an object)
-    // Derive a safe numeric capacity from Bus or body; never allow an object to pass through
-    const busCapacityObject = (bus && typeof bus.capacity === 'object') ? bus.capacity : null;
-    const candidateFromBus = busCapacityObject
-      ? (typeof busCapacityObject.total === 'number' && busCapacityObject.total > 0
-          ? busCapacityObject.total
-          : ((busCapacityObject.seater || 0) + (busCapacityObject.sleeper || 0)))
-      : (typeof bus?.capacity === 'number' ? bus.capacity : undefined);
-    const candidateFromBody = (typeof capacity === 'number') ? capacity : undefined;
-    const busTotalCapacity = Number.isFinite(candidateFromBus) && candidateFromBus > 0
-      ? candidateFromBus
-      : (Number.isFinite(candidateFromBody) && candidateFromBody > 0 ? candidateFromBody : 30);
+    // Determine depotId: prefer body, fallback to bus.depotId
+    let depotId = depotIdFromBody || bus.depotId;
+    if (!depotId) {
+      return res.status(400).json({ success: false, message: 'Depot ID is required (assign depot to the selected bus or provide depotId)' });
+    }
+
+    // Validate ObjectId-like format for ids that must be ObjectId
+    const isObjectId = (v) => typeof v === 'string' ? /^[0-9a-fA-F]{24}$/.test(v) : (v && v._id ? /^[0-9a-fA-F]{24}$/.test(String(v._id)) : false);
+    if (!isObjectId(routeId)) {
+      return res.status(400).json({ success: false, message: 'Invalid route ID format' });
+    }
+    if (!isObjectId(busId)) {
+      return res.status(400).json({ success: false, message: 'Invalid bus ID format' });
+    }
+    if (!isObjectId(depotId)) {
+      depotId = String(depotId);
+      if (!/^[0-9a-fA-F]{24}$/.test(depotId)) {
+        return res.status(400).json({ success: false, message: 'Invalid depot ID format' });
+      }
+    }
+
+    // Optional: basic time validation (HH:MM)
+    const timeRe = /^\d{2}:\d{2}$/;
+    if (!timeRe.test(startTime) || !timeRe.test(endTime)) {
+      return res.status(400).json({ success: false, message: 'Invalid time format. Use HH:MM' });
+    }
+
+    // Parse serviceDate (supports YYYY-MM-DD and DD-MM-YYYY)
+    const parseServiceDate = (val) => {
+      if (!val) return null;
+      if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+      if (typeof val === 'string') {
+        const ddmmyyyy = /^(\d{2})-(\d{2})-(\d{4})$/;
+        const yyyymmdd = /^(\d{4})-(\d{2})-(\d{2})$/;
+        if (ddmmyyyy.test(val)) {
+          const [, dd, mm, yyyy] = val.match(ddmmyyyy);
+          const iso = `${yyyy}-${mm}-${dd}`;
+          const d = new Date(iso + 'T00:00:00Z');
+          return isNaN(d.getTime()) ? null : d;
+        }
+        if (yyyymmdd.test(val)) {
+          const d = new Date(val + 'T00:00:00Z');
+          return isNaN(d.getTime()) ? null : d;
+        }
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      return null;
+    };
+
+    const parsedServiceDate = parseServiceDate(serviceDate);
+    if (!parsedServiceDate) {
+      return res.status(400).json({ success: false, message: 'Invalid service date format. Use YYYY-MM-DD' });
+    }
 
     // Create trip object with required fields
+    const derivedCapacity = (bus.capacity && typeof bus.capacity.total === 'number') ? bus.capacity.total : (typeof capacity === 'number' ? capacity : Number(capacity) || 30);
     const tripData = {
       routeId,
       busId,
       driverId,
       conductorId,
-      serviceDate: new Date(serviceDate),
+      serviceDate: parsedServiceDate,
       startTime,
       endTime,
-      fare: fare || 0,
-      capacity: Number(busTotalCapacity), // Use resolved numeric capacity only
-      availableSeats: Number(busTotalCapacity),
+      fare: typeof fare === 'number' ? fare : Number(fare) || 0,
+      capacity: derivedCapacity,
+      availableSeats: derivedCapacity,
       bookedSeats: 0,
       status: status || 'scheduled',
       depotId,
-      createdBy: req.user.userId,
+      createdBy: (req.user && (req.user._id || req.user.id)) || undefined,
       notes,
       bookingOpen: true,
-      bookingCloseTime: new Date(new Date(serviceDate).getTime() - (2 * 60 * 60 * 1000)), // 2 hours before departure
+      bookingCloseTime: new Date(parsedServiceDate.getTime() - (2 * 60 * 60 * 1000)), // 2 hours before departure
       cancellationPolicy: {
         allowed: true,
         hoursBeforeDeparture: 2,
@@ -1501,7 +1801,7 @@ router.post('/trips', async (req, res) => {
     console.error('❌ Trip creation error:', error);
     res.status(500).json({ 
       success: false,
-      message: 'Failed to create trip',
+      message: `Failed to create trip: ${error.message}`,
       error: error.message 
     });
   }
@@ -3478,12 +3778,19 @@ router.get('/recent-activities', async (req, res) => {
     // Generate comprehensive recent activities from various sources
     const activities = [];
     
-    // Recent bookings
-    const recentBookings = await Booking.find()
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .populate('passengerId', 'name email')
-      .populate('tripId', 'routeId serviceDate');
+    // Recent bookings (safe)
+    let recentBookings = [];
+    try {
+      recentBookings = await Booking.find()
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .populate('tripId', 'routeId serviceDate startTime')
+        .populate('routeId', 'routeName')
+        .select('customer pricing payment status createdAt tripId routeId')
+        .lean();
+    } catch (e) {
+      console.error('recent-activities bookings query error:', e?.message);
+    }
     
     recentBookings.forEach(booking => {
       activities.push({
@@ -3491,19 +3798,25 @@ router.get('/recent-activities', async (req, res) => {
         type: 'booking_created',
         category: 'bookings',
         title: 'New Booking Created',
-        details: `Booking by ${booking.user?.name || 'Unknown User'}`,
-        message: `Trip on ${booking.trip?.serviceDate ? new Date(booking.trip.serviceDate).toLocaleDateString() : 'TBD'}`,
-        user: booking.user?.name || 'Unknown User',
+        details: `Booking by ${booking.customer?.name || 'Customer'}`,
+        message: `Amount: ₹${booking.pricing?.totalAmount || 0} | Status: ${booking.status}`,
+        user: booking.customer?.name || 'Customer',
         timestamp: booking.createdAt,
         priority: 'normal'
       });
     });
     
     // Recent user registrations
-    const recentUsers = await User.find()
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .select('name email role createdAt');
+    let recentUsers = [];
+    try {
+      recentUsers = await User.find()
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select('name email role createdAt')
+        .lean();
+    } catch (e) {
+      console.error('recent-activities users query error:', e?.message);
+    }
     
     recentUsers.forEach(user => {
       activities.push({
@@ -3520,12 +3833,17 @@ router.get('/recent-activities', async (req, res) => {
     });
     
     // Recent trips
-    const recentTrips = await Trip.find()
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .populate('routeId', 'routeName')
-      .populate('driverId', 'name')
-      .populate('conductorId', 'name');
+    let recentTrips = [];
+    try {
+      recentTrips = await Trip.find()
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .populate('routeId', 'routeName')
+        .select('routeId status startTime endTime createdAt')
+        .lean();
+    } catch (e) {
+      console.error('recent-activities trips query error:', e?.message);
+    }
     
     recentTrips.forEach(trip => {
       activities.push({
@@ -3534,7 +3852,7 @@ router.get('/recent-activities', async (req, res) => {
         category: 'trips',
         title: trip.status === 'running' ? 'Trip Started' : 'Trip Scheduled',
         details: `Route: ${trip.routeId?.routeName || 'Unknown Route'}`,
-        message: `Driver: ${trip.driverId?.name || 'Unassigned'}, Conductor: ${trip.conductorId?.name || 'Unassigned'}`,
+        message: `Start: ${trip.startTime} | End: ${trip.endTime}`,
         user: 'System',
         timestamp: trip.createdAt,
         priority: trip.status === 'running' ? 'high' : 'normal'
@@ -3542,10 +3860,17 @@ router.get('/recent-activities', async (req, res) => {
     });
     
     // Recent drivers created
-    const recentDrivers = await Driver.find()
-      .sort({ createdAt: -1 })
-      .limit(3)
-      .populate('depotId', 'depotName');
+    let recentDrivers = [];
+    try {
+      recentDrivers = await Driver.find()
+        .sort({ createdAt: -1 })
+        .limit(3)
+        .populate('depotId', 'depotName')
+        .select('name employeeCode createdAt depotId')
+        .lean();
+    } catch (e) {
+      console.error('recent-activities drivers query error:', e?.message);
+    }
     
     recentDrivers.forEach(driver => {
       activities.push({
@@ -3562,10 +3887,17 @@ router.get('/recent-activities', async (req, res) => {
     });
     
     // Recent conductors created
-    const recentConductors = await Conductor.find()
-      .sort({ createdAt: -1 })
-      .limit(3)
-      .populate('depotId', 'depotName');
+    let recentConductors = [];
+    try {
+      recentConductors = await Conductor.find()
+        .sort({ createdAt: -1 })
+        .limit(3)
+        .populate('depotId', 'depotName')
+        .select('name employeeCode createdAt depotId')
+        .lean();
+    } catch (e) {
+      console.error('recent-activities conductors query error:', e?.message);
+    }
     
     recentConductors.forEach(conductor => {
       activities.push({

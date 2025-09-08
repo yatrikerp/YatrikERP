@@ -816,6 +816,7 @@ const TripModal = ({ title, trip, routes, buses, drivers, conductors, onClose, o
   console.log('🚌 TripModal: Available buses:', availableBuses);
   console.log('🚌 TripModal: First bus structure:', availableBuses[0]);
 
+
   const validateForm = () => {
     const newErrors = {};
     
@@ -863,6 +864,7 @@ const TripModal = ({ title, trip, routes, buses, drivers, conductors, onClose, o
       });
     } catch (error) {
       console.error('Error saving trip:', error);
+      toast.error('Failed to save trip: ' + (error.message || 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -1059,6 +1061,7 @@ const TripModal = ({ title, trip, routes, buses, drivers, conductors, onClose, o
               {errors.endTime && <p className="text-red-500 text-xs mt-1">{errors.endTime}</p>}
             </div>
           </div>
+
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">

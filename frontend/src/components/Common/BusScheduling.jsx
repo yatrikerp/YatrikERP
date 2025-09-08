@@ -336,24 +336,7 @@ const BusScheduling = ({ depotId, user }) => {
         </div>
       </div>
 
-      {/* Debug Information */}
-      <div className="debug-info" style={{ 
-        background: '#f0f0f0', 
-        padding: '10px', 
-        margin: '10px 0', 
-        borderRadius: '5px',
-        fontSize: '12px'
-      }}>
-        <strong>Debug Info:</strong><br/>
-        Buses: {buses.length} items - {Array.isArray(buses) ? 'Array' : typeof buses}<br/>
-        Routes: {routes.length} items - {Array.isArray(routes) ? 'Array' : typeof routes}<br/>
-        Drivers: {drivers.length} items - {Array.isArray(drivers) ? 'Array' : typeof drivers}<br/>
-        Conductors: {conductors.length} items - {Array.isArray(conductors) ? 'Array' : typeof conductors}<br/>
-        <details>
-          <summary>Raw Data</summary>
-          <pre style={{fontSize: '10px', maxHeight: '200px', overflow: 'auto'}}>{JSON.stringify({buses, routes, drivers, conductors}, null, 2)}</pre>
-        </details>
-      </div>
+      
 
       <div className="scheduling-filters">
         <div className="filter-group">

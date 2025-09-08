@@ -11,29 +11,77 @@ import {
   MapPin,
   Clock,
   CheckCircle,
-  XCircle,
-  Eye,
   Plus,
   RefreshCw,
   BarChart3,
-  PieChart,
   LineChart,
   UserCheck,
   UserCog
 } from 'lucide-react';
-import { toast } from 'react-hot-toast';
+
+import { apiFetch } from '../../utils/api';
 
 
 const AdminMasterDashboard = () => {
   const [stats, setStats] = useState({
-    totalUsers: 0,
+    // User metrics
+    users: 0,
     activeUsers: 0,
+    newUsersToday: 0,
+    newUsersThisWeek: 0,
+    
+    // Trip metrics
     totalTrips: 0,
+    tripsToday: 0,
     runningTrips: 0,
+    completedTripsToday: 0,
+    scheduledTrips: 0,
+    
+    // Revenue metrics
     totalRevenue: 0,
     todayRevenue: 0,
+    weekRevenue: 0,
+    monthRevenue: 0,
+    
+    // Booking metrics
     totalBookings: 0,
-    pendingBookings: 0
+    bookingsToday: 0,
+    pendingBookings: 0,
+    confirmedBookings: 0,
+    cancelledBookings: 0,
+    
+    // Fleet metrics
+    totalBuses: 0,
+    activeBuses: 0,
+    busesInMaintenance: 0,
+    busesOnRoute: 0,
+    
+    // Staff metrics
+    totalDrivers: 0,
+    activeDrivers: 0,
+    totalConductors: 0,
+    activeConductors: 0,
+    
+    // Route metrics
+    totalRoutes: 0,
+    activeRoutes: 0,
+    
+    // Depot metrics
+    totalDepots: 0,
+    activeDepots: 0,
+    
+    // Validation metrics
+    validationsToday: 0,
+    totalValidations: 0,
+    
+    // System metrics
+    activeLocks: 0,
+    systemAlerts: 0,
+    
+    // Calculated metrics
+    occupancyRate: 0,
+    bookingSuccessRate: 0,
+    tripCompletionRate: 0
   });
   const [recentActivities, setRecentActivities] = useState([]);
   const [systemHealth, setSystemHealth] = useState({
@@ -62,28 +110,85 @@ const AdminMasterDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5000/api/admin/dashboard', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const res = await apiFetch('/api/admin/dashboard');
       
-      if (response.ok) {
-        const data = await response.json();
+      if (res.ok) {
+        const data = res.data;
+        console.log('📊 Dashboard data received:', data);
+        
+        // Update all stats with comprehensive data
         setStats({
-          totalUsers: data.kpis?.users || 0,
-          activeUsers: data.kpis?.users || 0,
-          totalTrips: data.kpis?.tripsToday || 0,
+          // User metrics
+          users: data.kpis?.users || 0,
+          activeUsers: data.kpis?.activeUsers || 0,
+          newUsersToday: data.kpis?.newUsersToday || 0,
+          newUsersThisWeek: data.kpis?.newUsersThisWeek || 0,
+          
+          // Trip metrics
+          totalTrips: data.kpis?.totalTrips || 0,
+          tripsToday: data.kpis?.tripsToday || 0,
           runningTrips: data.kpis?.runningTrips || 0,
+          completedTripsToday: data.kpis?.completedTripsToday || 0,
+          scheduledTrips: data.kpis?.scheduledTrips || 0,
+          
+          // Revenue metrics
           totalRevenue: data.kpis?.totalRevenue || 0,
           todayRevenue: data.kpis?.todayRevenue || 0,
+          weekRevenue: data.kpis?.weekRevenue || 0,
+          monthRevenue: data.kpis?.monthRevenue || 0,
+          
+          // Booking metrics
           totalBookings: data.kpis?.totalBookings || 0,
-          pendingBookings: data.kpis?.pendingBookings || 0
+          bookingsToday: data.kpis?.bookingsToday || 0,
+          pendingBookings: data.kpis?.pendingBookings || 0,
+          confirmedBookings: data.kpis?.confirmedBookings || 0,
+          cancelledBookings: data.kpis?.cancelledBookings || 0,
+          
+          // Fleet metrics
+          totalBuses: data.kpis?.totalBuses || 0,
+          activeBuses: data.kpis?.activeBuses || 0,
+          busesInMaintenance: data.kpis?.busesInMaintenance || 0,
+          busesOnRoute: data.kpis?.busesOnRoute || 0,
+          
+          // Staff metrics
+          totalDrivers: data.kpis?.totalDrivers || 0,
+          activeDrivers: data.kpis?.activeDrivers || 0,
+          totalConductors: data.kpis?.totalConductors || 0,
+          activeConductors: data.kpis?.activeConductors || 0,
+          
+          // Route metrics
+          totalRoutes: data.kpis?.totalRoutes || 0,
+          activeRoutes: data.kpis?.activeRoutes || 0,
+          
+          // Depot metrics
+          totalDepots: data.kpis?.totalDepots || 0,
+          activeDepots: data.kpis?.activeDepots || 0,
+          
+          // Validation metrics
+          validationsToday: data.kpis?.validationsToday || 0,
+          totalValidations: data.kpis?.totalValidations || 0,
+          
+          // System metrics
+          activeLocks: data.kpis?.activeLocks || 0,
+          systemAlerts: data.kpis?.systemAlerts || 0,
+          
+          // Calculated metrics
+          occupancyRate: data.kpis?.occupancyRate || 0,
+          bookingSuccessRate: data.kpis?.bookingSuccessRate || 0,
+          tripCompletionRate: data.kpis?.tripCompletionRate || 0
         });
-        setRecentActivities(data.top5Recent?.bookings || []);
+        
+        // Update system health from summary
+        if (data?.summary?.systemHealth) {
+          setSystemHealth(data.summary.systemHealth);
+        }
+        
+        console.log('✅ Dashboard stats updated successfully');
+      } else {
+        console.error('❌ Dashboard API error:', res.status, res.message);
       }
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      console.error('💥 Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
     }
@@ -92,23 +197,17 @@ const AdminMasterDashboard = () => {
   const fetchRecentActivities = async () => {
     try {
       console.log('🔄 Fetching recent activities...');
-      const response = await fetch('http://localhost:5000/api/admin/recent-activities', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const res = await apiFetch('/api/admin/recent-activities');
       
-      console.log('📡 Recent activities response status:', response.status);
+      console.log('📡 Recent activities response status:', res.status);
       
-      if (response.ok) {
-        const data = await response.json();
+      if (res.ok) {
+        const data = res.data;
         console.log('📊 Recent activities data:', data);
         setRecentActivities(data.activities || []);
         console.log('✅ Recent activities updated:', data.activities?.length || 0, 'activities');
       } else {
-        console.error('❌ Recent activities failed:', response.status);
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
+        console.error('❌ Recent activities failed:', res.status, res.message);
       }
     } catch (error) {
       console.error('💥 Error fetching recent activities:', error);
@@ -252,41 +351,39 @@ const AdminMasterDashboard = () => {
         </div>
       </div>
 
-      {/* Key Metrics */}
+      {/* Key Metrics - Primary KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Total Users"
-          value={stats.totalUsers.toLocaleString()}
+          value={stats.users.toLocaleString()}
           icon={Users}
           color="bg-blue-500"
-          change={12}
-          subtitle="Active accounts"
+          subtitle={`${stats.activeUsers} active, ${stats.newUsersToday} new today`}
         />
         <StatCard
           title="Running Trips"
           value={stats.runningTrips}
           icon={Bus}
           color="bg-green-500"
-          change={8}
-          subtitle="Currently active"
+          subtitle={`${stats.tripsToday} today, ${stats.completedTripsToday} completed`}
         />
         <StatCard
           title="Today's Revenue"
           value={`₹${stats.todayRevenue.toLocaleString()}`}
           icon={DollarSign}
           color="bg-yellow-500"
-          change={15}
-          subtitle="Daily earnings"
+          subtitle={`₹${stats.weekRevenue.toLocaleString()} this week`}
         />
         <StatCard
           title="Pending Bookings"
           value={stats.pendingBookings}
           icon={AlertTriangle}
           color="bg-red-500"
-          change={-5}
-          subtitle="Awaiting confirmation"
+          subtitle={`${stats.bookingsToday} bookings today`}
         />
       </div>
+
+      
 
       {/* Charts and Analytics */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

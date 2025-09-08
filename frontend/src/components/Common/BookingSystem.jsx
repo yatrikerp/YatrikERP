@@ -17,8 +17,6 @@ const BookingSystem = ({ user, onBookingComplete }) => {
   const [bookingData, setBookingData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [sort, setSort] = useState('price');
-  const [showSkeleton, setShowSkeleton] = useState(false);
 
   // Step 1: Search trips
   const handleSearch = async () => {
@@ -28,7 +26,6 @@ const BookingSystem = ({ user, onBookingComplete }) => {
     }
 
     setLoading(true);
-    setShowSkeleton(true);
     setError('');
 
     try {
@@ -44,14 +41,7 @@ const BookingSystem = ({ user, onBookingComplete }) => {
       const result = await response.json();
 
       if (result.success) {
-        let trips = Array.isArray(result.data.trips) ? result.data.trips : [];
-        // Basic sort
-        trips = trips.sort((a, b) => {
-          if (sort === 'price') return (a.fare || 0) - (b.fare || 0);
-          if (sort === 'departure') return String(a.startTime || '').localeCompare(String(b.startTime || ''));
-          return 0;
-        });
-        setSearchResults(trips);
+        setSearchResults(result.data.trips);
         setCurrentStep(2);
       } else {
         setError(result.message || 'Failed to search trips');
@@ -60,7 +50,6 @@ const BookingSystem = ({ user, onBookingComplete }) => {
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);
-      setShowSkeleton(false);
     }
   };
 
@@ -233,24 +222,8 @@ const BookingSystem = ({ user, onBookingComplete }) => {
   const renderStep2 = () => (
     <div className="booking-step">
       <h2>Select Bus</h2>
-      <div className="toolbar">
-        <div className="sort">
-          <label>Sort by</label>
-          <select value={sort} onChange={(e) => setSort(e.target.value)}>
-            <option value="price">Lowest Price</option>
-            <option value="departure">Departure Time</option>
-          </select>
-        </div>
-      </div>
       <div className="search-results">
-        {showSkeleton && (
-          <>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="trip-card skeleton" />
-            ))}
-          </>
-        )}
-        {!showSkeleton && searchResults.map((trip, index) => (
+        {searchResults.map((trip, index) => (
           <div key={index} className="trip-card">
             <div className="trip-header">
               <div className="trip-info">
@@ -276,12 +249,6 @@ const BookingSystem = ({ user, onBookingComplete }) => {
                 <Users className="detail-icon" />
                 <span>{trip.availableSeats} seats available</span>
               </div>
-            </div>
-
-            <div className="chip-row">
-              {(trip.busId?.amenities || []).slice(0,4).map((a, i) => (
-                <span key={i} className="chip">{a}</span>
-              ))}
             </div>
 
             <div className="trip-actions">

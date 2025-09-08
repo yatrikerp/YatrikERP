@@ -13,90 +13,11 @@ const authRole = (roles) => [auth, requireRole(roles)];
 // Allow both admin and depot users to access booking routes
 const bookingAuth = authRole(['admin', 'depot_manager', 'depot_supervisor', 'depot_operator', 'MANAGER', 'SUPERVISOR', 'OPERATOR', 'passenger']);
 
-// ===== PUBLIC ROUTES (NO AUTH REQUIRED) =====
-router.get('/cities', async (req, res) => {
-  try {
-    const routes = await Route.find({ status: 'active' })
-      .select('startingPoint.city endingPoint.city')
-      .lean();
-
-    const cities = new Set();
-    
-    routes.forEach(route => {
-      if (route.startingPoint?.city) {
-        cities.add(route.startingPoint.city);
-      }
-      if (route.endingPoint?.city) {
-        cities.add(route.endingPoint.city);
-      }
-    });
-
-    const citiesList = Array.from(cities).sort();
-
-    res.json({
-      success: true,
-      data: {
-        cities: citiesList,
-        count: citiesList.length
-      }
-    });
-
-  } catch (error) {
-    console.error('Get cities error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch cities',
-      error: error.message
-    });
-  }
-});
-
-// Public search endpoint (no auth required)
-router.post('/search', async (req, res) => {
-  try {
-    const { from, to, departureDate, passengers = 1 } = req.body;
-
-    if (!from || !to || !departureDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'From, to, and departure date are required'
-      });
-    }
-
-    const trips = await BookingService.searchTrips({
-      from,
-      to,
-      departureDate,
-      passengers
-    });
-
-    res.json({
-      success: true,
-      data: {
-        trips,
-        searchCriteria: {
-          from,
-          to,
-          departureDate,
-          passengers
-        }
-      }
-    });
-
-  } catch (error) {
-    console.error('Search trips error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to search trips',
-      error: error.message
-    });
-  }
-});
-
-// ===== AUTHENTICATED ROUTES (AUTH REQUIRED) =====
+// Apply auth to all routes
+router.use(bookingAuth);
 
 // Test endpoint to create sample bookings (for development only)
-router.post('/create-sample', bookingAuth, async (req, res) => {
+router.post('/create-sample', async (req, res) => {
   try {
     const { depotId } = req.body;
     
@@ -202,7 +123,7 @@ router.post('/create-sample', bookingAuth, async (req, res) => {
     const createdBookings = [];
     for (const bookingData of sampleBookings) {
       const booking = new Booking(bookingData);
-    await booking.save();
+      await booking.save();
       createdBookings.push(booking);
     }
 
@@ -225,6 +146,47 @@ router.post('/create-sample', bookingAuth, async (req, res) => {
   }
 });
 
+// POST /api/booking/search - Search trips for booking
+router.post('/search', async (req, res) => {
+  try {
+    const { from, to, departureDate, passengers = 1 } = req.body;
+
+    if (!from || !to || !departureDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'From, to, and departure date are required'
+      });
+    }
+
+    const trips = await BookingService.searchTrips({
+      from,
+      to,
+      departureDate,
+      passengers
+    });
+
+    res.json({
+      success: true,
+      data: {
+        trips,
+        searchCriteria: {
+          from,
+          to,
+          departureDate,
+          passengers
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Search trips error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to search trips',
+      error: error.message
+    });
+  }
+});
 
 // GET /api/booking/seats/:tripId - Get available seats for a trip
 router.get('/seats/:tripId', async (req, res) => {
@@ -347,7 +309,7 @@ router.put('/:id/confirm', async (req, res) => {
   } catch (error) {
     console.error('Confirm booking error:', error);
     res.status(500).json({
-        success: false,
+      success: false,
       message: 'Failed to confirm booking',
       error: error.message
     });
@@ -384,14 +346,6 @@ router.get('/user/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const { status, limit = 20, page = 1 } = req.query;
-
-    // Check if user is authenticated
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication required'
-      });
-    }
 
     // Check if user has access
     if (req.user.role === 'passenger' && req.user._id.toString() !== userId) {
