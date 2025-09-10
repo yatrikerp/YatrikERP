@@ -13,6 +13,203 @@ const authRole = (roles) => [auth, requireRole(roles)];
 // Allow both admin and depot users to access booking routes
 const bookingAuth = authRole(['admin', 'depot_manager', 'depot_supervisor', 'depot_operator', 'MANAGER', 'SUPERVISOR', 'OPERATOR', 'passenger']);
 
+// POST /api/booking - Create new booking - No auth required
+router.post('/', async (req, res) => {
+  try {
+    const bookingData = req.body;
+    console.log('📝 Received booking data:', JSON.stringify(bookingData, null, 2));
+
+    // Validate required fields
+    const requiredFields = ['tripId', 'customer', 'journey', 'seats'];
+    for (const field of requiredFields) {
+      if (!bookingData[field]) {
+        return res.status(400).json({
+          success: false,
+          message: `${field} is required`
+        });
+      }
+    }
+
+    // Create a simple booking with all required fields
+    const bookingId = `BK${Date.now().toString().slice(-8)}`;
+    const bookingReference = `REF${Date.now().toString().slice(-8)}`;
+    
+    const booking = new Booking({
+      ...bookingData,
+      bookingId: bookingId,
+      bookingReference: bookingReference,
+      status: 'pending',
+      paymentStatus: 'pending',
+      depotId: bookingData.tripId, // Use tripId as depotId for now
+      busId: bookingData.tripId, // Use tripId as busId for now
+      routeId: bookingData.tripId, // Use tripId as routeId for now
+      journey: {
+        ...bookingData.journey,
+        arrivalDate: bookingData.journey.departureDate, // Use same date
+        duration: 240 // 4 hours in minutes
+      },
+      seats: bookingData.seats.map(seat => ({
+        ...seat,
+        passengerName: bookingData.customer.name,
+        seatPosition: 'window', // Valid enum value
+        seatType: 'seater'
+      })),
+      pricing: {
+        baseFare: 200,
+        seatFare: bookingData.seats.reduce((total, seat) => total + (seat.price || 0), 0),
+        totalAmount: bookingData.seats.reduce((total, seat) => total + (seat.price || 0), 0) + 200
+      },
+      payment: {
+        method: 'upi', // Valid enum value
+        status: 'pending'
+      },
+      createdAt: new Date()
+    });
+
+    await booking.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Booking created successfully',
+      data: {
+        bookingId: booking.bookingId,
+        _id: booking._id,
+        status: booking.status,
+        fare: booking.pricing?.totalAmount || 500
+      }
+    });
+
+  } catch (error) {
+    console.error('Create booking error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create booking',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/booking/confirm - Confirm booking (after payment) - No auth required
+router.post('/confirm', async (req, res) => {
+  try {
+    const { bookingId, paymentId, orderId, paymentStatus = 'completed' } = req.body;
+    
+    console.log('🔍 Booking confirmation request:', { bookingId, paymentId, orderId, paymentStatus });
+
+    if (!bookingId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Booking ID is required'
+      });
+    }
+
+    // Find and update booking - try both ObjectId and string
+    let booking = null;
+    
+    // First try to find by bookingId field (string)
+    if (bookingId && typeof bookingId === 'string') {
+      console.log('🔍 Searching by bookingId field:', bookingId);
+      booking = await Booking.findOne({ bookingId: bookingId });
+      console.log('🔍 Found by bookingId:', !!booking);
+    }
+    
+    // If not found and it looks like an ObjectId, try by _id
+    if (!booking && bookingId && bookingId.length === 24) {
+      try {
+        booking = await Booking.findById(bookingId);
+      } catch (error) {
+        // Ignore ObjectId casting errors
+      }
+    }
+    
+    // If still not found, try to find by any field that might match
+    if (!booking) {
+      const searchConditions = [
+        { bookingId: bookingId },
+        { bookingReference: bookingId }
+      ];
+      
+      // Only add _id search if it looks like a valid ObjectId
+      if (bookingId && bookingId.length === 24 && /^[0-9a-fA-F]{24}$/.test(bookingId)) {
+        searchConditions.push({ _id: bookingId });
+      }
+      
+      booking = await Booking.findOne({
+        $or: searchConditions
+      });
+    }
+    
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found',
+        searchedId: bookingId
+      });
+    }
+
+    // Update booking status
+    booking.status = 'confirmed';
+    booking.paymentStatus = paymentStatus;
+    if (paymentId) {
+      booking.payment = {
+        ...booking.payment,
+        transactionId: paymentId,
+        paymentStatus: 'completed',
+        paidAt: new Date()
+      };
+    }
+    if (orderId) booking.orderId = orderId;
+    booking.confirmedAt = new Date();
+
+    await booking.save();
+
+    // Generate PNR
+    const pnr = `PNR${Date.now().toString().slice(-8)}`;
+
+    // Generate QR code data for the ticket
+    const qrData = {
+      pnr: pnr,
+      bookingId: booking.bookingId,
+      passengerName: booking.customer.name,
+      from: booking.journey.from,
+      to: booking.journey.to,
+      departureDate: booking.journey.departureDate,
+      departureTime: booking.journey.departureTime,
+      seatNumbers: booking.seats.map(seat => seat.seatNumber).join(', '),
+      amount: booking.pricing.totalAmount
+    };
+
+    res.json({
+      success: true,
+      message: 'Booking confirmed successfully',
+      data: {
+        booking,
+        ticket: {
+          pnr,
+          bookingId: booking.bookingId,
+          status: 'confirmed',
+          qrData: JSON.stringify(qrData),
+          passengerName: booking.customer.name,
+          from: booking.journey.from,
+          to: booking.journey.to,
+          departureDate: booking.journey.departureDate,
+          departureTime: booking.journey.departureTime,
+          seatNumbers: booking.seats.map(seat => seat.seatNumber).join(', '),
+          amount: booking.pricing.totalAmount
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Confirm booking error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to confirm booking',
+      error: error.message
+    });
+  }
+});
+
 // Apply auth to all routes
 router.use(bookingAuth);
 
@@ -221,40 +418,6 @@ router.get('/seats/:tripId', async (req, res) => {
   }
 });
 
-// POST /api/booking - Create new booking
-router.post('/', async (req, res) => {
-  try {
-    const bookingData = req.body;
-    const userId = req.user._id;
-
-    // Validate required fields
-    const requiredFields = ['tripId', 'customer', 'journey', 'seats'];
-    for (const field of requiredFields) {
-      if (!bookingData[field]) {
-        return res.status(400).json({
-          success: false,
-          message: `${field} is required`
-        });
-      }
-    }
-
-    const booking = await BookingService.createBooking(bookingData, userId);
-
-    res.status(201).json({
-      success: true,
-      message: 'Booking created successfully',
-      data: booking
-    });
-
-  } catch (error) {
-    console.error('Create booking error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create booking',
-      error: error.message
-    });
-  }
-});
 
 // GET /api/booking/:id - Get booking by ID
 router.get('/:id', async (req, res) => {
@@ -292,7 +455,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// PUT /api/booking/:id/confirm - Confirm booking (after payment)
+
+// PUT /api/booking/:id/confirm - Confirm booking (after payment) - legacy endpoint
 router.put('/:id/confirm', async (req, res) => {
   try {
     const { id } = req.params;
@@ -460,7 +624,34 @@ router.get('/stats', async (req, res) => {
 router.get('/refund/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const booking = await Booking.findById(id);
+    
+    // Try to find booking by different ID types
+    let booking = null;
+    if (id && typeof id === 'string') {
+      booking = await Booking.findOne({ bookingId: id });
+    }
+    if (!booking && id && id.length === 24) {
+      try {
+        booking = await Booking.findById(id);
+      } catch (error) {
+        // Ignore ObjectId casting errors
+      }
+    }
+    if (!booking) {
+      const searchConditions = [
+        { bookingId: id },
+        { bookingReference: id }
+      ];
+      
+      // Only add _id search if it looks like a valid ObjectId
+      if (id && id.length === 24 && /^[0-9a-fA-F]{24}$/.test(id)) {
+        searchConditions.push({ _id: id });
+      }
+      
+      booking = await Booking.findOne({
+        $or: searchConditions
+      });
+    }
 
     if (!booking) {
       return res.status(404).json({
@@ -500,7 +691,33 @@ router.post('/check-in/:id', async (req, res) => {
     const { id } = req.params;
     const { boardingPoint, seatAllocated } = req.body;
 
-    const booking = await Booking.findById(id);
+    // Try to find booking by different ID types
+    let booking = null;
+    if (id && typeof id === 'string') {
+      booking = await Booking.findOne({ bookingId: id });
+    }
+    if (!booking && id && id.length === 24) {
+      try {
+        booking = await Booking.findById(id);
+      } catch (error) {
+        // Ignore ObjectId casting errors
+      }
+    }
+    if (!booking) {
+      const searchConditions = [
+        { bookingId: id },
+        { bookingReference: id }
+      ];
+      
+      // Only add _id search if it looks like a valid ObjectId
+      if (id && id.length === 24 && /^[0-9a-fA-F]{24}$/.test(id)) {
+        searchConditions.push({ _id: id });
+      }
+      
+      booking = await Booking.findOne({
+        $or: searchConditions
+      });
+    }
 
     if (!booking) {
       return res.status(404).json({

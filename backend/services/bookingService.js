@@ -97,6 +97,19 @@ class BookingService {
   // Generate seat layout based on bus configuration
   static generateSeatLayout(seatLayout) {
     const seats = [];
+    
+    // Handle case where seatLayout is undefined or null
+    if (!seatLayout) {
+      // Default seat layout for buses without specific layout
+      for (let row = 1; row <= 12; row++) {
+        for (let seat = 1; seat <= 4; seat++) {
+          const seatNumber = `${row}${String.fromCharCode(64 + seat)}`;
+          seats.push(seatNumber);
+        }
+      }
+      return seats;
+    }
+    
     const { rows, seatsPerRow, totalSeats, layout } = seatLayout;
 
     if (layout === '2+2') {
@@ -139,7 +152,7 @@ class BookingService {
   // Calculate pricing for booking
   static async calculatePricing(bookingData, trip) {
     try {
-      const baseFare = trip.baseFare || 100; // Default base fare
+      const baseFare = trip.fare || 100; // Use trip fare instead of baseFare
       const seatFare = bookingData.seats.reduce((total, seat) => total + (seat.price || 0), 0);
       
       // Calculate taxes (GST 18%)

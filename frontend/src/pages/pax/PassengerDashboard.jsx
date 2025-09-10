@@ -6,6 +6,7 @@ import { apiFetch } from '../../utils/api';
 
 // Import all the new components
 import SearchBar from '../../components/pax/SearchBar';
+import EnhancedSearchBar from '../../components/pax/EnhancedSearchBar';
 import NextTripCard from '../../components/pax/NextTripCard';
 import WalletCard from '../../components/pax/WalletCard';
 import RefundCard from '../../components/pax/RefundCard';
@@ -59,10 +60,12 @@ const PassengerDashboard = () => {
   }, []);
 
   const handleSearch = (searchData) => {
+    console.log('🔍 Search data received:', searchData);
     const params = new URLSearchParams();
     if (searchData.fromCity) params.set('fromCity', searchData.fromCity);
     if (searchData.toCity) params.set('toCity', searchData.toCity);
-    if (searchData.date) params.set('date', searchData.date);
+    if (searchData.journeyDate) params.set('date', searchData.journeyDate);
+    console.log('🔍 Navigation URL:', `/pax/results?${params.toString()}`);
     navigate(`/pax/results?${params.toString()}`);
   };
 
@@ -206,7 +209,7 @@ const PassengerDashboard = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Hero Section - Trip Search */}
         <div className="mb-12">
-          <SearchBar onSearch={handleSearch} />
+          <EnhancedSearchBar onSearch={handleSearch} />
         </div>
 
         {/* Recently Updated Routes */}

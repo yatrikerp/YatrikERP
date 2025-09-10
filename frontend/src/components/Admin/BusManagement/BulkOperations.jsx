@@ -1,431 +1,479 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  CheckSquare, Square, ChevronDown, Users, MapPin, Wrench,
-  Trash2, Download, Upload, Settings, AlertTriangle, X,
-  Check, Loader2, FileText, Calendar, Fuel
+import { 
+  X, Users, Wrench, Fuel, MapPin, Settings, Download, Upload,
+  AlertTriangle, CheckCircle, Clock, Star, Zap, Shield
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
-const BulkOperations = ({
-  selectedBuses = [],
-  totalBuses = 0,
-  onSelectAll,
-  onDeselectAll,
-  onBulkUpdate,
-  onBulkDelete,
-  onBulkAssign,
-  onBulkExport,
-  isLoading = false,
-  depots = [],
-  drivers = [],
-  conductors = []
+const BulkOperations = ({ 
+  selectedBuses = [], 
+  onClose, 
+  onAction 
 }) => {
-  const [showBulkMenu, setShowBulkMenu] = useState(false);
-  const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
-  const [showBulkUpdateModal, setShowBulkUpdateModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  
-  const [bulkAssignData, setBulkAssignData] = useState({
-    depotId: '',
-    driverId: '',
-    conductorId: '',
-    status: ''
-  });
+  const [selectedAction, setSelectedAction] = useState('');
+  const [actionData, setActionData] = useState({});
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const [bulkUpdateData, setBulkUpdateData] = useState({
-    status: '',
-    depotId: '',
-    maintenanceDate: '',
-    notes: ''
-  });
+  const bulkActions = [
+    {
+      id: 'status_update',
+      title: 'Update Status',
+      description: 'Change status of selected buses',
+      icon: Settings,
+      color: 'blue',
+      fields: [
+        {
+          name: 'status',
+          type: 'select',
+          label: 'New Status',
+          options: [
+            { value: 'active', label: 'Active' },
+            { value: 'maintenance', label: 'Maintenance' },
+            { value: 'suspended', label: 'Suspended' },
+            { value: 'retired', label: 'Retired' }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'assign_driver',
+      title: 'Assign Driver',
+      description: 'Assign driver to selected buses',
+      icon: Users,
+      color: 'green',
+      fields: [
+        {
+          name: 'driverId',
+          type: 'select',
+          label: 'Select Driver',
+          options: [
+            { value: 'driver1', label: 'John Doe' },
+            { value: 'driver2', label: 'Jane Smith' },
+            { value: 'driver3', label: 'Mike Johnson' }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'assign_conductor',
+      title: 'Assign Conductor',
+      description: 'Assign conductor to selected buses',
+      icon: Users,
+      color: 'purple',
+      fields: [
+        {
+          name: 'conductorId',
+          type: 'select',
+          label: 'Select Conductor',
+          options: [
+            { value: 'conductor1', label: 'Alice Brown' },
+            { value: 'conductor2', label: 'Bob Wilson' },
+            { value: 'conductor3', label: 'Carol Davis' }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'schedule_maintenance',
+      title: 'Schedule Maintenance',
+      description: 'Schedule maintenance for selected buses',
+      icon: Wrench,
+      color: 'yellow',
+      fields: [
+        {
+          name: 'maintenanceType',
+          type: 'select',
+          label: 'Maintenance Type',
+          options: [
+            { value: 'routine', label: 'Routine Service' },
+            { value: 'repair', label: 'Repair' },
+            { value: 'inspection', label: 'Inspection' }
+          ]
+        },
+        {
+          name: 'scheduledDate',
+          type: 'date',
+          label: 'Scheduled Date'
+        },
+        {
+          name: 'notes',
+          type: 'textarea',
+          label: 'Notes (Optional)',
+          placeholder: 'Additional notes for maintenance...'
+        }
+      ]
+    },
+    {
+      id: 'update_fuel',
+      title: 'Update Fuel Level',
+      description: 'Update fuel level for selected buses',
+      icon: Fuel,
+      color: 'orange',
+      fields: [
+        {
+          name: 'fuelLevel',
+          type: 'number',
+          label: 'Fuel Level (%)',
+          min: 0,
+          max: 100
+        },
+        {
+          name: 'refuelDate',
+          type: 'datetime-local',
+          label: 'Refuel Date & Time'
+        }
+      ]
+    },
+    {
+      id: 'update_location',
+      title: 'Update Location',
+      description: 'Update current location of selected buses',
+      icon: MapPin,
+      color: 'indigo',
+      fields: [
+        {
+          name: 'latitude',
+          type: 'number',
+          label: 'Latitude',
+          step: 'any'
+        },
+        {
+          name: 'longitude',
+          type: 'number',
+          label: 'Longitude',
+          step: 'any'
+        },
+        {
+          name: 'stopName',
+          type: 'text',
+          label: 'Stop Name',
+          placeholder: 'Current stop or location name'
+        }
+      ]
+    },
+    {
+      id: 'export_data',
+      title: 'Export Data',
+      description: 'Export selected buses data',
+      icon: Download,
+      color: 'gray',
+      fields: [
+        {
+          name: 'format',
+          type: 'select',
+          label: 'Export Format',
+          options: [
+            { value: 'csv', label: 'CSV' },
+            { value: 'excel', label: 'Excel' },
+            { value: 'pdf', label: 'PDF' }
+          ]
+        },
+        {
+          name: 'includeDetails',
+          type: 'checkbox',
+          label: 'Include detailed information'
+        }
+      ]
+    },
+    {
+      id: 'performance_analysis',
+      title: 'Performance Analysis',
+      description: 'Generate performance report for selected buses',
+      icon: BarChart3,
+      color: 'teal',
+      fields: [
+        {
+          name: 'reportType',
+          type: 'select',
+          label: 'Report Type',
+          options: [
+            { value: 'summary', label: 'Summary Report' },
+            { value: 'detailed', label: 'Detailed Report' },
+            { value: 'comparison', label: 'Comparison Report' }
+          ]
+        },
+        {
+          name: 'dateRange',
+          type: 'select',
+          label: 'Date Range',
+          options: [
+            { value: 'week', label: 'Last Week' },
+            { value: 'month', label: 'Last Month' },
+            { value: 'quarter', label: 'Last Quarter' },
+            { value: 'year', label: 'Last Year' }
+          ]
+        }
+      ]
+    }
+  ];
 
-  const isAllSelected = selectedBuses.length === totalBuses && totalBuses > 0;
-  const isPartialSelected = selectedBuses.length > 0 && selectedBuses.length < totalBuses;
+  const handleActionSelect = (actionId) => {
+    setSelectedAction(actionId);
+    setActionData({});
+  };
 
-  const handleSelectAll = () => {
-    if (isAllSelected) {
-      onDeselectAll();
-    } else {
-      onSelectAll();
+  const handleFieldChange = (fieldName, value) => {
+    setActionData(prev => ({
+      ...prev,
+      [fieldName]: value
+    }));
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedAction) return;
+
+    setIsProcessing(true);
+    try {
+      await onAction(selectedAction, actionData);
+      onClose();
+    } catch (error) {
+      toast.error(`Bulk operation failed: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const handleBulkAssign = () => {
-    if (!bulkAssignData.depotId && !bulkAssignData.driverId && !bulkAssignData.conductorId) {
-      return;
-    }
-    
-    const assignments = {};
-    if (bulkAssignData.depotId) assignments.depotId = bulkAssignData.depotId;
-    if (bulkAssignData.driverId) assignments.assignedDriver = bulkAssignData.driverId;
-    if (bulkAssignData.conductorId) assignments.assignedConductor = bulkAssignData.conductorId;
-    if (bulkAssignData.status) assignments.status = bulkAssignData.status;
-
-    onBulkAssign(selectedBuses, assignments);
-    setShowBulkAssignModal(false);
-    setBulkAssignData({ depotId: '', driverId: '', conductorId: '', status: '' });
-  };
-
-  const handleBulkUpdate = () => {
-    const updates = {};
-    if (bulkUpdateData.status) updates.status = bulkUpdateData.status;
-    if (bulkUpdateData.depotId) updates.depotId = bulkUpdateData.depotId;
-    if (bulkUpdateData.maintenanceDate) updates.nextMaintenanceDate = bulkUpdateData.maintenanceDate;
-    if (bulkUpdateData.notes) updates.notes = bulkUpdateData.notes;
-
-    onBulkUpdate(selectedBuses, updates);
-    setShowBulkUpdateModal(false);
-    setBulkUpdateData({ status: '', depotId: '', maintenanceDate: '', notes: '' });
-  };
-
-  const handleBulkDelete = () => {
-    onBulkDelete(selectedBuses);
-    setShowDeleteConfirm(false);
-  };
-
-  if (selectedBuses.length === 0) return null;
+  const selectedActionConfig = bulkActions.find(action => action.id === selectedAction);
 
   return (
-    <>
-      {/* Bulk Operations Bar */}
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+    >
       <motion.div
-        initial={{ y: 100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 100, opacity: 0 }}
-        className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-white rounded-xl shadow-lg border border-gray-200 p-4 z-40"
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden"
       >
-        <div className="flex items-center space-x-4">
-          {/* Selection Info */}
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={handleSelectAll}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              {isAllSelected ? (
-                <CheckSquare className="w-5 h-5 text-blue-600" />
-              ) : isPartialSelected ? (
-                <div className="w-5 h-5 bg-blue-600 rounded border-2 border-blue-600 flex items-center justify-center">
-                  <div className="w-2 h-2 bg-white rounded"></div>
-                </div>
-              ) : (
-                <Square className="w-5 h-5 text-gray-400" />
-              )}
-            </button>
-            <span className="text-sm font-medium text-gray-900">
-              {selectedBuses.length} selected
-            </span>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setShowBulkAssignModal(true)}
-              className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 text-sm"
-            >
-              <Users className="w-4 h-4" />
-              <span>Assign</span>
-            </button>
-
-            <button
-              onClick={() => setShowBulkUpdateModal(true)}
-              className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2 text-sm"
-            >
-              <Settings className="w-4 h-4" />
-              <span>Update</span>
-            </button>
-
-            <button
-              onClick={() => onBulkExport(selectedBuses)}
-              className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2 text-sm"
-            >
-              <Download className="w-4 h-4" />
-              <span>Export</span>
-            </button>
-
-            {/* More Actions Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowBulkMenu(!showBulkMenu)}
-                className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </button>
-
-              <AnimatePresence>
-                {showBulkMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="absolute bottom-full mb-2 right-0 bg-white rounded-lg shadow-lg border border-gray-200 py-2 min-w-[160px]"
-                  >
-                    <button
-                      onClick={() => {
-                        setShowDeleteConfirm(true);
-                        setShowBulkMenu(false);
-                      }}
-                      className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      <span>Delete Selected</span>
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Settings className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">Bulk Operations</h3>
+                <p className="text-sm text-gray-600">
+                  {selectedBuses.length} bus{selectedBuses.length !== 1 ? 'es' : ''} selected
+                </p>
+              </div>
             </div>
-
-            {/* Close Button */}
             <button
-              onClick={onDeselectAll}
+              onClick={onClose}
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>
+
+        <div className="flex h-[600px]">
+          {/* Action Selection */}
+          <div className="w-1/3 border-r border-gray-200 bg-gray-50 p-4 overflow-y-auto">
+            <h4 className="text-sm font-medium text-gray-700 mb-4">Select Action</h4>
+            <div className="space-y-2">
+              {bulkActions.map((action) => {
+                const IconComponent = action.icon;
+                return (
+                  <button
+                    key={action.id}
+                    onClick={() => handleActionSelect(action.id)}
+                    className={`w-full p-3 rounded-lg text-left transition-all ${
+                      selectedAction === action.id
+                        ? `bg-${action.color}-100 border-2 border-${action.color}-300 text-${action.color}-700`
+                        : 'bg-white border border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className={`p-2 rounded-lg ${
+                        selectedAction === action.id
+                          ? `bg-${action.color}-200`
+                          : 'bg-gray-100'
+                      }`}>
+                        <IconComponent className={`w-4 h-4 ${
+                          selectedAction === action.id
+                            ? `text-${action.color}-600`
+                            : 'text-gray-600'
+                        }`} />
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{action.title}</p>
+                        <p className="text-xs text-gray-500">{action.description}</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Action Configuration */}
+          <div className="flex-1 p-6 overflow-y-auto">
+            {selectedAction ? (
+              <div>
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className={`p-3 bg-${selectedActionConfig.color}-100 rounded-lg`}>
+                    <selectedActionConfig.icon className={`w-6 h-6 text-${selectedActionConfig.color}-600`} />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold text-gray-900">{selectedActionConfig.title}</h4>
+                    <p className="text-sm text-gray-600">{selectedActionConfig.description}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {selectedActionConfig.fields.map((field) => (
+                    <div key={field.name}>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {field.label}
+                        {field.required && <span className="text-red-500 ml-1">*</span>}
+                      </label>
+                      
+                      {field.type === 'select' && (
+                        <select
+                          value={actionData[field.name] || ''}
+                          onChange={(e) => handleFieldChange(field.name, e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="">Select {field.label}</option>
+                          {field.options.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+
+                      {field.type === 'text' && (
+                        <input
+                          type="text"
+                          value={actionData[field.name] || ''}
+                          onChange={(e) => handleFieldChange(field.name, e.target.value)}
+                          placeholder={field.placeholder}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      )}
+
+                      {field.type === 'number' && (
+                        <input
+                          type="number"
+                          value={actionData[field.name] || ''}
+                          onChange={(e) => handleFieldChange(field.name, e.target.value)}
+                          min={field.min}
+                          max={field.max}
+                          step={field.step}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      )}
+
+                      {field.type === 'date' && (
+                        <input
+                          type="date"
+                          value={actionData[field.name] || ''}
+                          onChange={(e) => handleFieldChange(field.name, e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      )}
+
+                      {field.type === 'datetime-local' && (
+                        <input
+                          type="datetime-local"
+                          value={actionData[field.name] || ''}
+                          onChange={(e) => handleFieldChange(field.name, e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      )}
+
+                      {field.type === 'textarea' && (
+                        <textarea
+                          value={actionData[field.name] || ''}
+                          onChange={(e) => handleFieldChange(field.name, e.target.value)}
+                          placeholder={field.placeholder}
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      )}
+
+                      {field.type === 'checkbox' && (
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={actionData[field.name] || false}
+                            onChange={(e) => handleFieldChange(field.name, e.target.checked)}
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">{field.label}</span>
+                        </label>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Action Summary */}
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                  <h5 className="text-sm font-medium text-gray-700 mb-2">Action Summary</h5>
+                  <div className="text-sm text-gray-600">
+                    <p>• {selectedActionConfig.title} will be applied to {selectedBuses.length} bus{selectedBuses.length !== 1 ? 'es' : ''}</p>
+                    {Object.entries(actionData).map(([key, value]) => (
+                      <p key={key}>
+                        • {key}: {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : value}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <Settings className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 text-lg">Select an action to continue</p>
+                  <p className="text-gray-400 text-sm">Choose from the available bulk operations</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              {selectedBuses.length} bus{selectedBuses.length !== 1 ? 'es' : ''} will be affected
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={!selectedAction || isProcessing}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Execute Action</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       </motion.div>
-
-      {/* Bulk Assign Modal */}
-      <AnimatePresence>
-        {showBulkAssignModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-xl p-6 w-full max-w-md mx-4"
-            >
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Bulk Assign ({selectedBuses.length} buses)
-              </h3>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Depot</label>
-                  <select
-                    value={bulkAssignData.depotId}
-                    onChange={(e) => setBulkAssignData(prev => ({ ...prev, depotId: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Keep current depot</option>
-                    {depots.map(depot => (
-                      <option key={depot._id} value={depot._id}>{depot.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Driver</label>
-                  <select
-                    value={bulkAssignData.driverId}
-                    onChange={(e) => setBulkAssignData(prev => ({ ...prev, driverId: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Keep current driver</option>
-                    {drivers.map(driver => (
-                      <option key={driver._id} value={driver._id}>{driver.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Conductor</label>
-                  <select
-                    value={bulkAssignData.conductorId}
-                    onChange={(e) => setBulkAssignData(prev => ({ ...prev, conductorId: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Keep current conductor</option>
-                    {conductors.map(conductor => (
-                      <option key={conductor._id} value={conductor._id}>{conductor.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                  <select
-                    value={bulkAssignData.status}
-                    onChange={(e) => setBulkAssignData(prev => ({ ...prev, status: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Keep current status</option>
-                    <option value="active">Active</option>
-                    <option value="maintenance">Maintenance</option>
-                    <option value="retired">Retired</option>
-                    <option value="suspended">Suspended</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => setShowBulkAssignModal(false)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleBulkAssign}
-                  disabled={isLoading}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2"
-                >
-                  {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>Assign</span>
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Bulk Update Modal */}
-      <AnimatePresence>
-        {showBulkUpdateModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-xl p-6 w-full max-w-md mx-4"
-            >
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Bulk Update ({selectedBuses.length} buses)
-              </h3>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                  <select
-                    value={bulkUpdateData.status}
-                    onChange={(e) => setBulkUpdateData(prev => ({ ...prev, status: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">No change</option>
-                    <option value="active">Active</option>
-                    <option value="maintenance">Maintenance</option>
-                    <option value="retired">Retired</option>
-                    <option value="suspended">Suspended</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Transfer to Depot</label>
-                  <select
-                    value={bulkUpdateData.depotId}
-                    onChange={(e) => setBulkUpdateData(prev => ({ ...prev, depotId: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">No change</option>
-                    {depots.map(depot => (
-                      <option key={depot._id} value={depot._id}>{depot.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Schedule Maintenance</label>
-                  <input
-                    type="date"
-                    value={bulkUpdateData.maintenanceDate}
-                    onChange={(e) => setBulkUpdateData(prev => ({ ...prev, maintenanceDate: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-                  <textarea
-                    value={bulkUpdateData.notes}
-                    onChange={(e) => setBulkUpdateData(prev => ({ ...prev, notes: e.target.value }))}
-                    placeholder="Add bulk update notes..."
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => setShowBulkUpdateModal(false)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleBulkUpdate}
-                  disabled={isLoading}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center space-x-2"
-                >
-                  {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>Update</span>
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Delete Confirmation Modal */}
-      <AnimatePresence>
-        {showDeleteConfirm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-xl p-6 w-full max-w-md mx-4"
-            >
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="p-3 bg-red-100 rounded-full">
-                  <AlertTriangle className="w-6 h-6 text-red-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Delete Buses</h3>
-                  <p className="text-sm text-gray-600">This action cannot be undone</p>
-                </div>
-              </div>
-
-              <p className="text-gray-700 mb-6">
-                Are you sure you want to delete {selectedBuses.length} selected bus{selectedBuses.length > 1 ? 'es' : ''}?
-              </p>
-
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleBulkDelete}
-                  disabled={isLoading}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center space-x-2"
-                >
-                  {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>Delete</span>
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
+    </motion.div>
   );
 };
 

@@ -1749,7 +1749,52 @@ router.post('/trips', async (req, res) => {
     }
 
     // Create trip object with required fields
-    const derivedCapacity = (bus.capacity && typeof bus.capacity.total === 'number') ? bus.capacity.total : (typeof capacity === 'number' ? capacity : Number(capacity) || 30);
+    console.log('🚌 Bus capacity debug:', {
+      busCapacity: bus.capacity,
+      capacityType: typeof bus.capacity,
+      capacityTotal: bus.capacity?.total,
+      capacityTotalType: typeof bus.capacity?.total,
+      capacityFromBody: capacity,
+      capacityFromBodyType: typeof capacity
+    });
+    
+    // Try to get capacity from bus, with multiple fallbacks
+    let derivedCapacity = 30; // Default fallback
+    
+    if (bus.capacity && typeof bus.capacity.total === 'number' && bus.capacity.total > 0) {
+      derivedCapacity = bus.capacity.total;
+    } else if (bus.capacity && typeof bus.capacity === 'number' && bus.capacity > 0) {
+      derivedCapacity = bus.capacity;
+    } else if (typeof capacity === 'number' && capacity > 0) {
+      derivedCapacity = capacity;
+    } else if (capacity && typeof capacity === 'string' && !isNaN(Number(capacity))) {
+      derivedCapacity = Number(capacity);
+    }
+    
+    // Additional fallback: try to calculate from sleeper + seater
+    if (derivedCapacity === 30 && bus.capacity) {
+      const calculatedCapacity = (bus.capacity.sleeper || 0) + (bus.capacity.seater || 0);
+      if (calculatedCapacity > 0) {
+        derivedCapacity = calculatedCapacity;
+      }
+    }
+    
+    // Ensure capacity is a valid number
+    const validCapacity = Number(derivedCapacity);
+    console.log('🚌 Capacity validation:', {
+      derivedCapacity,
+      validCapacity,
+      isNaN: isNaN(validCapacity),
+      isPositive: validCapacity > 0
+    });
+    
+    if (isNaN(validCapacity) || validCapacity <= 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid bus capacity. Please ensure the selected bus has a valid capacity.' 
+      });
+    }
+    
     const tripData = {
       routeId,
       busId,
@@ -1759,8 +1804,8 @@ router.post('/trips', async (req, res) => {
       startTime,
       endTime,
       fare: typeof fare === 'number' ? fare : Number(fare) || 0,
-      capacity: derivedCapacity,
-      availableSeats: derivedCapacity,
+      capacity: validCapacity,
+      availableSeats: validCapacity, // This will be set correctly by the pre-save middleware
       bookedSeats: 0,
       status: status || 'scheduled',
       depotId,
@@ -1775,10 +1820,30 @@ router.post('/trips', async (req, res) => {
       }
     };
 
-    console.log('📊 Trip data to create:', tripData);
+    console.log('📊 Trip data to create:', {
+      ...tripData,
+      capacity: tripData.capacity,
+      availableSeats: tripData.availableSeats,
+      capacityType: typeof tripData.capacity,
+      availableSeatsType: typeof tripData.availableSeats
+    });
 
     const trip = new Trip(tripData);
-    await trip.save();
+    
+    try {
+      await trip.save();
+      console.log('✅ Trip created successfully:', trip._id);
+    } catch (saveError) {
+      console.error('❌ Trip save error:', saveError);
+      if (saveError.name === 'ValidationError') {
+        const validationErrors = Object.values(saveError.errors).map(err => err.message);
+        return res.status(400).json({
+          success: false,
+          message: 'Trip validation failed: ' + validationErrors.join(', ')
+        });
+      }
+      throw saveError;
+    }
 
     // Populate the trip with related data
     const populatedTrip = await Trip.findById(trip._id)
@@ -5318,6 +5383,103 @@ router.get('/depot-trips/stats', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch depot statistics',
+      error: error.message
+    });
+  }
+});
+
+// Create sample trip endpoint for testing
+router.post('/trips/sample', authRole(['admin', 'manager']), async (req, res) => {
+  try {
+    console.log('🚌 Creating sample trip via API...');
+
+    // Find an existing route
+    const route = await Route.findOne({ status: 'active' });
+    if (!route) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No active routes found. Please create a route first.' 
+      });
+    }
+
+    // Find an existing bus
+    const bus = await Bus.findOne({ status: 'active' });
+    if (!bus) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No active buses found. Please create a bus first.' 
+      });
+    }
+
+    // Find an existing depot
+    const depot = await Depot.findOne({ status: 'active' });
+    if (!depot) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No active depots found. Please create a depot first.' 
+      });
+    }
+
+    // Create tomorrow's date
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Sample trip data
+    const tripData = {
+      routeId: route._id,
+      busId: bus._id,
+      depotId: depot._id,
+      serviceDate: tomorrow,
+      startTime: '08:00',
+      endTime: '12:00',
+      fare: 250,
+      capacity: bus.capacity.total,
+      availableSeats: bus.capacity.total,
+      bookedSeats: 0,
+      status: 'scheduled',
+      createdBy: req.user._id,
+      notes: 'Sample trip created via API',
+      bookingOpen: true,
+      bookingCloseTime: new Date(tomorrow.getTime() - (2 * 60 * 60 * 1000)), // 2 hours before departure
+      cancellationPolicy: {
+        allowed: true,
+        hoursBeforeDeparture: 2,
+        refundPercentage: 80
+      }
+    };
+
+    console.log('📊 Sample trip data:', {
+      route: `${route.routeNumber} - ${route.routeName}`,
+      bus: `${bus.busNumber} - ${bus.busType}`,
+      depot: depot.depotName,
+      date: tripData.serviceDate.toDateString(),
+      time: `${tripData.startTime} - ${tripData.endTime}`,
+      fare: `₹${tripData.fare}`,
+      capacity: tripData.capacity
+    });
+
+    // Create the trip
+    const trip = new Trip(tripData);
+    await trip.save();
+
+    // Populate the trip with related data
+    const populatedTrip = await Trip.findById(trip._id)
+      .populate('routeId', 'routeName routeNumber')
+      .populate('busId', 'busNumber busType')
+      .populate('depotId', 'depotName')
+      .populate('createdBy', 'name email');
+
+    res.status(201).json({
+      success: true,
+      message: 'Sample trip created successfully',
+      data: populatedTrip
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating sample trip:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create sample trip',
       error: error.message
     });
   }

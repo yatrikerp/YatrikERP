@@ -79,10 +79,34 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Get cities from routes (public)
+router.get('/cities', async (req, res) => {
+  try {
+    const cities = await Route.aggregate([
+      { $match: { status: 'active' } },
+      { $group: { _id: null, cities: { $addToSet: '$startingPoint.city' } } },
+      { $unwind: '$cities' },
+      { $group: { _id: null, cities: { $addToSet: '$cities' } } },
+      { $project: { _id: 0, cities: 1 } }
+    ]);
+
+    const cityList = cities.length > 0 ? cities[0].cities : [];
+    res.json({ success: true, data: cityList });
+  } catch (error) {
+    console.error('Error fetching cities:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch cities' });
+  }
+});
+
 // Get route by ID (public)
 router.get('/:id', async (req, res) => {
   try {
-    const route = await Route.findById(req.params.id)
+    const { id } = req.params;
+    const { Types } = require('mongoose');
+    if (!Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid route id' });
+    }
+    const route = await Route.findById(id)
       .populate('depot.depotId', 'depotName depotCode location.city')
       .populate('assignedBuses.busId', 'busNumber capacity busType')
       .populate('createdBy', 'name email')
@@ -164,21 +188,6 @@ router.get('/depot/:depotId', async (req, res) => {
   }
 });
 
-// Public: get unique cities for search
-router.get('/cities', async (req, res) => {
-  try {
-    const routes = await Route.find({ isActive: true }).select('startingPoint. city endingPoint.city').lean();
-    const set = new Set();
-    routes.forEach(r => {
-      if (r.startingPoint?.city) set.add(r.startingPoint.city);
-      if (r.endingPoint?.city) set.add(r.endingPoint.city);
-    });
-    const cities = Array.from(set).sort((a, b) => a.localeCompare(b));
-    res.json({ success: true, data: { cities } });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to load cities' });
-  }
-});
 
 // Create new route (admin only)
 router.post('/', authRole(['admin', 'manager']), async (req, res) => {

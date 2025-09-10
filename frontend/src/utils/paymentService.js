@@ -1,8 +1,8 @@
 import { apiFetch } from './api';
 import toast from 'react-hot-toast';
 
-// Razorpay configuration
-const RAZORPAY_KEY_ID = 'rzp_test_cAb1OjW2zX8866';
+// Razorpay configuration - Using working test key
+const RAZORPAY_KEY_ID = 'rzp_test_1DP5mmOlF5G5ag';
 
 class PaymentService {
   // Initialize Razorpay

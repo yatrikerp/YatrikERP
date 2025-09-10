@@ -16,7 +16,7 @@ import Profile from './pages/Profile';
 import Wallet from './pages/Wallet';
 import TripPlanner from './pages/TripPlanner';
 import Booking from './pages/Booking';
-import Ticket from './pages/Ticket';
+import Ticket from './pages/pax/Ticket';
 import KeralaRoutes from './pages/KeralaRoutes';
 
 import ConductorDashboard from './pages/conductor/ConductorDashboard.jsx';
@@ -61,6 +61,8 @@ import RedirectDashboard from './pages/RedirectDashboard';
 import PassengerDashboard from './pages/pax/PassengerDashboard';
 import PassengerBooking from './pages/pax/Booking';
 import PassengerResults from './pages/pax/Results';
+import EnhancedResults from './pages/pax/EnhancedResults';
+import BoardDrop from './pages/pax/BoardDrop';
 
 import './index.css';
 
@@ -130,6 +132,13 @@ function App() {
               </AppShell>
             </RequireAuth>
           } />
+          <Route path="/pax/ticket/:pnr" element={
+            <RequireAuth roles={['passenger']}>
+              <AppShell>
+                <Ticket />
+              </AppShell>
+            </RequireAuth>
+          } />
 
           {/* Role-based Routes */}
             <Route path="/dashboard" element={
@@ -174,6 +183,14 @@ function App() {
             </RequireAuth>
           } />
 
+          <Route path="/pax/dashboard" element={
+            <RequireAuth roles={['passenger']}>
+              <AppShell>
+                <PassengerDashboard />
+              </AppShell>
+            </RequireAuth>
+          } />
+
           <Route path="/pax/booking" element={
             <RequireAuth roles={['passenger']}>
               <AppShell>
@@ -184,14 +201,22 @@ function App() {
 
           <Route path="/pax/results" element={
             <AppShell>
-              <PassengerResults />
+              <EnhancedResults />
             </AppShell>
           } />
           
-          <Route path="/pax/booking/:id" element={
+          <Route path="/pax/booking/:tripId" element={
             <RequireAuth roles={['passenger']}>
               <AppShell>
                 <PassengerBooking />
+              </AppShell>
+            </RequireAuth>
+          } />
+
+          <Route path="/pax/board-drop/:tripId" element={
+            <RequireAuth roles={['passenger']}>
+              <AppShell>
+                <BoardDrop />
               </AppShell>
             </RequireAuth>
           } />

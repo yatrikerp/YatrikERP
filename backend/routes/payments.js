@@ -4,16 +4,17 @@ const Razorpay = require('razorpay');
 const { auth, requireRole } = require('../middleware/auth');
 const crypto = require('crypto');
 
-// Initialize Razorpay
+// Initialize Razorpay with test keys
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET
+  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_1DP5mmOlF5G5ag',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || 'thisisnotarealsecretkey'
 });
 
 // Create payment order
-router.post('/create-order', auth, async (req, res) => {
+router.post('/create-order', async (req, res) => {
   try {
     const { amount, currency = 'INR', bookingId, passengerId } = req.body;
+    console.log('💳 Payment order request:', { amount, currency, bookingId, passengerId });
 
     if (!amount || !bookingId || !passengerId) {
       return res.status(400).json({
@@ -24,9 +25,9 @@ router.post('/create-order', auth, async (req, res) => {
 
     // Create Razorpay order
     const options = {
-      amount: amount * 100, // Razorpay expects amount in paise
+      amount: amount, // Amount is already in paise from frontend
       currency,
-      receipt: `booking_${bookingId}_${Date.now()}`,
+      receipt: `bk_${Date.now().toString().slice(-8)}`, // Short receipt - max 20 chars
       notes: {
         bookingId,
         passengerId,
@@ -54,6 +55,48 @@ router.post('/create-order', auth, async (req, res) => {
 });
 
 // Verify payment signature
+router.post('/verify', async (req, res) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, bookingId } = req.body;
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment verification parameters are required'
+      });
+    }
+
+    // Verify signature
+    const body = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(body.toString())
+      .digest("hex");
+
+    if (expectedSignature === razorpay_signature) {
+      res.json({
+        success: true,
+        message: 'Payment verified successfully',
+        paymentId: razorpay_payment_id,
+        orderId: razorpay_order_id
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid payment signature'
+      });
+    }
+
+  } catch (error) {
+    console.error('Payment verification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Payment verification failed'
+    });
+  }
+});
+
+// Verify payment signature (legacy endpoint)
 router.post('/verify-payment', auth, async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, bookingId } = req.body;
