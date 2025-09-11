@@ -1,7 +1,20 @@
-import React from 'react';
+import React, { useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import './LandingPage.css';
 
 const LandingPage = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const handleBookNow = useCallback(() => {
+    if (!user) {
+      navigate('/login?next=/pax');
+      return;
+    }
+    navigate('/pax');
+  }, [navigate, user]);
+
   return (
     <div className="landing-page">
       {/* Top Support Bar */}
@@ -44,7 +57,7 @@ const LandingPage = () => {
           {/* CTA Buttons */}
           <div className="hero-buttons">
             <button className="btn btn-primary">Sign Up</button>
-            <button className="btn btn-primary">Book Now</button>
+            <button className="btn btn-primary" onClick={handleBookNow}>Book Now</button>
           </div>
 
           {/* Search Section */}

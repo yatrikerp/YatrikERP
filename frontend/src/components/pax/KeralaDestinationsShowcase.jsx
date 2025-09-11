@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Mountain, Waves, Building, Leaf, Camera, 
@@ -8,6 +9,7 @@ import {
 
 const KeralaDestinationsShowcase = () => {
   const [selectedDestination, setSelectedDestination] = useState(0);
+  const navigate = useNavigate();
 
   const destinations = [
     {
@@ -224,6 +226,7 @@ const KeralaDestinationsShowcase = () => {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     className={`bg-gradient-to-r ${dest.color} text-white px-4 py-2 rounded-lg font-medium hover:shadow-lg transition-all`}
+                    onClick={() => navigate('/pax/search')}
                   >
                     Book Now
                   </motion.button>
@@ -324,6 +327,7 @@ const KeralaDestinationsShowcase = () => {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       className={`flex-1 bg-gradient-to-r ${destinations[selectedDestination].color} text-white py-4 px-8 rounded-xl font-semibold text-lg hover:shadow-lg transition-all flex items-center justify-center gap-3`}
+                      onClick={() => navigate('/pax/search')}
                     >
                       <Navigation className="w-6 h-6" />
                       Book This Trip

@@ -19,18 +19,23 @@ const LiveTrackingPanel = () => {
 
   // Fetch active trips from backend
   useEffect(() => {
-    fetchActiveTrips();
+    const token = localStorage.getItem('token');
+    if (!token) return; // Skip unauthenticated calls
+    fetchActiveTrips(token);
   }, []);
 
-  const fetchActiveTrips = async () => {
+  const fetchActiveTrips = async (token) => {
     try {
       const response = await fetch('/api/trips/active', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       
-      if (response.ok) {
+      if (!response.ok) {
+        return;
+      }
+      {
         const data = await response.json();
         if (data.success) {
           setActiveTrips(data.trips || []);

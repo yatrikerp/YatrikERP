@@ -74,10 +74,10 @@ const TripResults = () => {
 
   const handleBookNow = (trip) => {
     if (!user) {
-      navigate(`/login?next=/search-results?${searchParams.toString()}`);
+      navigate(`/login?next=/pax/booking/${trip.id}`);
       return;
     }
-    navigate(`/booking?tripId=${trip.id}&from=${trip.from}&to=${trip.to}&date=${date}`);
+    navigate(`/pax/booking/${trip.id}`);
   };
 
   const filteredAndSortedTrips = useMemo(() => {

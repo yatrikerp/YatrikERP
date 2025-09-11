@@ -140,23 +140,27 @@ const PaxBooking = () => {
 
   async function confirm(){
     try {
-      // ensure booking exists (but do not block payment if backend rejects)
-      if (!bookingId) {
+      // Ensure we have a bookingId available locally for this flow
+      let currentBookingId = bookingId;
+      if (!currentBookingId) {
         console.log('🔍 No booking ID found, creating booking...');
         const created = await createBooking();
         if (!created?.ok) {
           console.error('❌ Booking creation failed, using fallback');
-          const fallbackId = `BK${Date.now().toString().slice(-8)}`;
-          setBookingId(fallbackId);
+          currentBookingId = `BK${Date.now().toString().slice(-8)}`;
+          setBookingId(currentBookingId);
           setPassengerId('guest_1');
         } else {
           console.log('✅ Booking created successfully:', created.bookingId);
+          currentBookingId = created.bookingId;
+          setBookingId(currentBookingId);
+          if (created.passengerId) setPassengerId(created.passengerId);
         }
       }
-      
-      console.log('🔍 Current booking ID:', bookingId);
 
-      if (!bookingId) {
+      console.log('🔍 Current booking ID:', currentBookingId);
+
+      if (!currentBookingId) {
         console.error('❌ No booking ID available for payment');
         setError('No booking ID available. Please try again.');
         return;
@@ -168,7 +172,6 @@ const PaxBooking = () => {
       // Prefer backend order, but if not present, open checkout using key directly (test mode)
       let order_id, amount, currency, key;
       try {
-        const currentBookingId = bookingId || `BK${Date.now().toString().slice(-8)}`;
         const shortBookingId = currentBookingId.substring(0, 15); // Limit to 15 chars
         const paymentData = { amount: Math.round(totalAmount * 100), currency: 'INR', receipt: shortBookingId, bookingId: currentBookingId, passengerId: (passengerId || 'guest_1') };
         console.log('💳 Frontend sending payment data:', JSON.stringify(paymentData, null, 2));
@@ -201,16 +204,11 @@ const PaxBooking = () => {
           email: 'test@example.com',
           contact: '9999999999'
         },
-        notes: {
-          bookingId: bookingId || `BK${Date.now().toString().slice(-8)}`,
-          tripId: tripId
-        },
+        notes: { bookingId: currentBookingId, tripId: tripId },
         handler: async (response) => {
           console.log('💳 Payment response:', response);
           // For now, skip verification and directly confirm booking
           try {
-            // Use the actual booking ID from state, not generate a new one
-            const currentBookingId = bookingId;
             console.log('💳 Confirming booking with ID:', currentBookingId);
             console.log('💳 Available bookingId state:', bookingId);
             

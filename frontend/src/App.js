@@ -22,6 +22,7 @@ import KeralaRoutes from './pages/KeralaRoutes';
 import ConductorDashboard from './pages/conductor/ConductorDashboard.jsx';
 import DriverDashboard from './pages/driver/DriverDashboard.jsx';
 import DepotDashboard from './pages/depot/DepotDashboard';
+// import DepotTripsPage from './pages/depot/Trips';
 
 
 // Admin Pages
@@ -41,7 +42,7 @@ import AdminPassengers from './pages/admin/AdminPassengers';
 import AdminSystemStatus from './pages/admin/AdminSystemStatus';
 import AdminBuses from './pages/admin/AdminBuses';
 import EnhancedBusManagement from './pages/admin/EnhancedBusManagement';
-import BusManagementFallback from './pages/admin/BusManagementFallback';
+// import BusManagementFallback from './pages/admin/BusManagementFallback';
 import BusManagementPage from './pages/admin/BusManagementPage';
 import AdminConductors from './pages/admin/AdminConductors';
 import AdminDepotManagers from './pages/admin/AdminDepotManagers';
@@ -58,11 +59,12 @@ import AdminRevenue from './pages/admin/AdminRevenue';
 import RedirectDashboard from './pages/RedirectDashboard';
 
 // Passenger Pages
-import PassengerDashboard from './pages/pax/PassengerDashboard';
+import PassengerDashboardSimple from './pages/pax/PassengerDashboardSimple';
 import PassengerBooking from './pages/pax/Booking';
-import PassengerResults from './pages/pax/Results';
+// import PassengerResults from './pages/pax/Results';
 import EnhancedResults from './pages/pax/EnhancedResults';
 import BoardDrop from './pages/pax/BoardDrop';
+import TripSearchPanel from './components/pax/TripSearchPanel';
 
 import './index.css';
 
@@ -173,12 +175,22 @@ function App() {
                 <DepotDashboard />
               </RequireAuth>
             } />
+          <Route path="/depot/trips" element={
+            <RequireAuth roles={['depot_manager']}>
+                <DepotDashboard />
+              </RequireAuth>
+            } />
+          <Route path="/depot/trip-management" element={
+            <RequireAuth roles={['depot_manager']}>
+                <DepotDashboard />
+              </RequireAuth>
+            } />
             
             {/* Passenger Routes */}
           <Route path="/pax" element={
             <RequireAuth roles={['passenger']}>
               <AppShell>
-                <PassengerDashboard />
+                <PassengerDashboardSimple />
               </AppShell>
             </RequireAuth>
           } />
@@ -186,7 +198,7 @@ function App() {
           <Route path="/pax/dashboard" element={
             <RequireAuth roles={['passenger']}>
               <AppShell>
-                <PassengerDashboard />
+                <PassengerDashboardSimple />
               </AppShell>
             </RequireAuth>
           } />
@@ -195,6 +207,14 @@ function App() {
             <RequireAuth roles={['passenger']}>
               <AppShell>
                 <PassengerBooking />
+              </AppShell>
+            </RequireAuth>
+          } />
+
+          <Route path="/pax/search" element={
+            <RequireAuth roles={['passenger']}>
+              <AppShell>
+                <TripSearchPanel />
               </AppShell>
             </RequireAuth>
           } />

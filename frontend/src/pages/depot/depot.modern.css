@@ -1,14 +1,24 @@
 /* Modern Admin Dashboard - Clean Design */
+/* Layout reset/guard to prevent broken alignment or invisible content */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
 .admin-dashboard {
   min-height: 100vh;
   width: 100%;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: auto;
   display: flex;
   position: relative;
   box-sizing: border-box;
+  /* Push the whole layout below the fixed header */
+  padding-top: 84px; /* must match .top-bar height */
 }
 
 /* Prevent zooming and improve mobile experience */
@@ -16,14 +26,13 @@
   box-sizing: border-box;
 }
 
-/* Ensure proper scaling on mobile devices */
+/* Responsive adjustments disabled to keep desktop layout by default */
+/*
 @media screen and (max-width: 768px) {
   .admin-dashboard {
     font-size: 14px;
     line-height: 1.4;
   }
-  
-  /* Prevent horizontal scrolling */
   .admin-dashboard,
   .main-content,
   .dashboard-content {
@@ -31,6 +40,7 @@
     overflow-x: hidden;
   }
 }
+*/
 
 .admin-loading {
   display: flex;
@@ -74,7 +84,8 @@
   flex-direction: column;
   flex-shrink: 0;
   transition: width 0.3s ease;
-  position: relative;
+  position: sticky;
+  top: 84px; /* sit under fixed header */
   z-index: 50;
   border-right: 1px solid #e2e8f0;
   box-shadow: 4px 0 20px rgba(0, 0, 0, 0.08);
@@ -125,6 +136,9 @@
   font-weight: 600;
   color: #1e293b;
   margin-bottom: 2px;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .depot-location {
@@ -269,9 +283,22 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: auto;
   min-height: 0;
+  min-width: 1200px; /* lock desktop width; enable horizontal scroll on small screens */
+  width: calc(100vw - 280px); /* stretch to right edge next to sidebar */
+}
+
+/* Route Network Section - Full width expansion */
+.main-content .route-module {
+  width: 100%;
+  max-width: none;
+}
+
+/* When sidebar is collapsed, expand main content accordingly */
+.admin-sidebar.collapsed + .main-content {
+  width: calc(100vw - 80px);
 }
 
 /* Top Bar */
@@ -285,10 +312,13 @@
   height: 84px;
   flex-shrink: 0;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-  position: relative;
-  backdrop-filter: blur(20px);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   -webkit-backdrop-filter: blur(20px);
-  z-index: 100;
+  backdrop-filter: blur(20px);
+  z-index: 1000; /* above sidebar */
 }
 
 .top-bar::after {
@@ -307,13 +337,14 @@
   background: rgba(255, 255, 255, 0.95);
   border-radius: 16px;
   padding: 14px 20px;
-  width: 380px;
+  width: 100%;
+  max-width: 380px;
   border: 1px solid rgba(226, 232, 240, 0.6);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   position: relative;
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 .search-section:focus-within {
@@ -372,18 +403,21 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  position: relative;
+  position: absolute;
+  right: 24px;
+  top: 16px;
   z-index: 101;
 }
 
 .status-indicators {
   display: flex;
   gap: 20px;
+  flex-wrap: wrap;
   background: rgba(255, 255, 255, 0.8);
   padding: 10px 18px;
   border-radius: 14px;
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   border: 1px solid rgba(226, 232, 240, 0.4);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
@@ -445,8 +479,8 @@
   position: relative;
   background: rgba(255, 255, 255, 0.8);
   border: 1px solid rgba(226, 232, 240, 0.4);
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 .user-profile-top:hover {
@@ -512,8 +546,8 @@
   z-index: 9999;
   margin-top: 8px;
   overflow: hidden;
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 .dropdown-header {
@@ -601,49 +635,74 @@
   flex: 1;
   padding: 20px 24px;
   overflow-y: auto;
+  overflow-x: auto;
   background: transparent;
-  max-width: 100%;
+  max-width: none;
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
   box-sizing: border-box;
+  min-width: 1200px; /* keep desktop layout on mobile */
+}
+
+/* Route Network Dashboard Content - Full width */
+.dashboard-content .route-module {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
 }
 
 /* Dashboard Header */
 .dashboard-header {
   background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  padding: 28px 36px;
+  padding: 20px 24px;
   border-radius: 16px;
-  margin-bottom: 28px;
+  margin: 0 0 20px 0;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.8);
   display: flex;
   justify-content: space-between;
   align-items: center;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
+  width: 100%;
+  min-height: 120px; /* reserve space for pills */
+  padding-right: 500px; /* space for 4 compact pills */
+  box-sizing: border-box;
 }
 
 .header-right {
   display: flex;
   align-items: center;
   gap: 1rem;
+  position: absolute;
+  top: 18px;
+  right: 200px; /* offset from quick-action pills at right:24px */
+  margin-right: 0;
+  z-index: 2;
 }
 
 .notification-btn {
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: 8px;
-  padding: 0.75rem;
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 9999px;
+  height: 40px;
+  padding: 0 14px;
   color: #3b82f6;
   cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
+  transition: all 0.25s ease;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.08);
 }
 
 .notification-btn:hover {
-  background: rgba(59, 130, 246, 0.2);
+  background: rgba(59, 130, 246, 0.08);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 10px 24px rgba(59, 130, 246, 0.25);
 }
 
 .dashboard-header::before {
@@ -656,25 +715,82 @@
   background: linear-gradient(90deg, #E91E63 0%, #FF4081 50%, #9C27B0 100%);
 }
 
+/* Quick Actions layout (3 tiles top row, 1 bottom-left) */
+.quick-actions-grid {
+  position: absolute;
+  right: 24px;
+  top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  z-index: 1;
+}
+
+.quick-action {
+  border: none;
+  border-radius: 9999px;
+  color: #fff;
+  font-weight: 800;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.12);
+  height: 36px;
+  padding: 0 14px;
+}
+
+.quick-action.blue { background: #3B82F6; }
+.quick-action.green { background: #10B981; }
+.quick-action.purple { background: #8B5CF6; }
+.quick-action.orange { background: #F59E0B; }
+
+.qa-title { pointer-events: none; }
+
+/* Bottom-left stacked tile */
+.qa-bottom-left {
+  grid-column: 1 / 2;
+  grid-row: 2 / 3;
+}
+
 .header-left h1 {
-  margin: 0 0 8px 0;
-  font-size: 28px;
+  margin: 0;
+  font-size: 22px;
   font-weight: 800;
   color: #E91E63;
   letter-spacing: -0.5px;
-  line-height: 1.2;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Keep header text from overlapping pills */
+.header-left {
+  max-width: calc(100% - 520px);
 }
 
 .header-left p {
   margin: 0;
-  color: #64748b;
+  color: #475569;
   font-size: 15px;
-  font-weight: 500;
-  background: linear-gradient(135deg, #64748b 0%, #475569 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-weight: 600;
   line-height: 1.4;
+}
+
+/* Ensure welcome text shows full name and highlight */
+.welcome-text { white-space: normal; overflow: visible; text-overflow: initial; }
+.welcome-name { color: #0B3A53; font-weight: 800; }
+
+/* Lay out title + welcome on one line */
+.header-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: nowrap;
+  max-width: calc(100% - 480px);
 }
 
 /* Action Buttons Container */
@@ -688,7 +804,7 @@
   gap: 12px;
   align-items: center;
   justify-content: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .action-btn {
@@ -728,6 +844,65 @@
 
 .action-btn.orange {
   background: #F59E0B;
+}
+
+/* Common action intent colors for consistency across modules */
+.action-btn.view { background: #3B82F6; }
+.action-btn.track { background: #0EA5E9; }
+.action-btn.delete { background: #EF4444; }
+.action-btn.cancel { background: #F97316; }
+.action-btn.refresh { background: #22C55E; }
+
+/* Modal button styles used across all depot components */
+.btn-primary {
+  background: #E91E63;
+  color: #ffffff;
+  border: 1px solid #E91E63;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: #C2185B;
+  border-color: #C2185B;
+  box-shadow: 0 6px 16px rgba(233, 30, 99, 0.25);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: #e2e8f0;
+}
+
+.btn-danger {
+  background: #EF4444;
+  color: #ffffff;
+  border: 1px solid #EF4444;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-danger:hover {
+  background: #DC2626;
+  border-color: #DC2626;
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.25);
+  transform: translateY(-1px);
 }
 
 .action-icon {
@@ -813,7 +988,7 @@
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
 
@@ -1285,6 +1460,14 @@
   letter-spacing: 0.5px;
 }
 
+/* Color variants for status badges used by tables and cards */
+.status-badge.green { background: #10B981; }
+.status-badge.red { background: #EF4444; }
+.status-badge.blue { background: #3B82F6; }
+.status-badge.purple { background: #8B5CF6; }
+.status-badge.orange { background: #F59E0B; }
+.status-badge.gray { background: #94A3B8; }
+
 .action-btn-small {
   padding: 6px 12px;
   font-size: 12px;
@@ -1301,129 +1484,164 @@
   background: #e2e8f0;
 }
 
-/* Responsive Design */
+/* Unified Module Container styling to harmonize section UIs */
+.module-container {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+/* Route Network Module - Expanded to right side */
+.module-container.route-module {
+  width: 100% !important;
+  max-width: none !important;
+  margin-right: 0 !important;
+  margin-left: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* Trip Management Module - Expanded to full width similar to route module */
+.module-container.trip-module {
+  width: 100% !important;
+  max-width: none !important;
+  margin-right: 0 !important;
+  margin-left: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.module-container:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+/* Accent top border per module */
+.module-container::before {
+  content: '';
+  display: block;
+  height: 4px;
+  margin: -20px -24px 16px -24px;
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  background: linear-gradient(90deg, #E91E63 0%, #FF4081 50%, #9C27B0 100%);
+}
+
+/* Module-specific subtle backgrounds using project brand colors */
+.fleet-module { background-image: linear-gradient(180deg, rgba(233,30,99,0.03), rgba(233,30,99,0)); }
+.route-module { background-image: linear-gradient(180deg, rgba(0,188,212,0.05), rgba(0,188,212,0)); }
+.trip-module { background-image: linear-gradient(180deg, rgba(25,118,210,0.05), rgba(25,118,210,0)); }
+.staff-module { background-image: linear-gradient(180deg, rgba(0,168,107,0.05), rgba(0,168,107,0)); }
+.scheduling-module { background-image: linear-gradient(180deg, rgba(255,179,0,0.06), rgba(255,179,0,0)); }
+.new-booking-module { background-image: linear-gradient(180deg, rgba(233,30,99,0.06), rgba(233,30,99,0)); }
+.booking-mgmt-module { background-image: linear-gradient(180deg, rgba(33,33,33,0.03), rgba(33,33,33,0)); }
+
+/* Harmonize inner buttons/inputs inside modules without touching logic */
+.module-container button {
+  border-radius: 10px;
+}
+
+.module-container table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.module-container thead th {
+  background: #f8fafc;
+  color: #212121;
+}
+
+.module-container .section-header h3 {
+  color: #212121;
+}
+
+/* Harmonize inner sections commonly used by feature modules */
+.module-container .dashboard-header {
+  position: relative;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+}
+
+.module-container .dashboard-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #E91E63 0%, #FF4081 50%, #9C27B0 100%);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+}
+
+.module-container .kpi-card { border: 1px solid #eef2f6; }
+.module-container .search-section { border: 1px solid #e2e8f0; }
+.module-container .table-section { border: 1px solid #e2e8f0; box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+
+/* Export buttons used in TripManagement */
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #ffffff;
+  color: #334155;
+}
+
+.export-btn:hover { background: #f8fafc; }
+.export-btn.excel { color: #16A34A; border-color: rgba(22,163,74,0.3); }
+.export-btn.pdf { color: #DC2626; border-color: rgba(220,38,38,0.3); }
+
+/* Utility color classes referenced in JSX (ensure visible without Tailwind) */
+.bg-green-500 { background-color: #22C55E !important; }
+.bg-blue-500 { background-color: #3B82F6 !important; }
+.bg-orange-500 { background-color: #F97316 !important; }
+
+/* Responsive Design disabled to force desktop layout */
+/*
 @media (max-width: 1200px) {
-  .kpi-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .live-tracking-container {
-    grid-template-columns: 1fr;
-    height: auto;
-  }
-  
-  .dashboard-content {
-    padding: 16px 20px;
-  }
-  
-  .dashboard-header {
-    padding: 20px 24px;
-  }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .live-tracking-container { grid-template-columns: 1fr; height: auto; }
+  .dashboard-content { padding: 16px 20px; }
+  .dashboard-header { padding: 20px 24px; }
 }
+*/
 
+/*
 @media (max-width: 768px) {
-  .admin-sidebar {
-    width: 240px;
-  }
-  
-  .dashboard-content {
-    padding: 12px 16px;
-  }
-  
-  .top-bar {
-    padding: 12px 16px;
-    height: 70px;
-  }
-  
-  .search-section {
-    width: 280px;
-    padding: 10px 16px;
-  }
-  
-  .header-actions {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  
-  .action-btn {
-    padding: 8px 12px;
-    font-size: 11px;
-    min-width: 80px;
-    min-height: 40px;
-  }
-  
-  .kpi-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .welcome-section {
-    flex-direction: column;
-    gap: 16px;
-    text-align: center;
-  }
-  
-  .dashboard-header {
-    padding: 16px 20px;
-    margin-bottom: 20px;
-  }
-  
-  .header-left h1 {
-    font-size: 24px;
-  }
+  .admin-sidebar { width: 240px; }
+  .dashboard-content { padding: 12px 16px; }
+  .top-bar { padding: 12px 16px; height: 70px; }
+  .search-section { width: 280px; padding: 10px 16px; }
+  .header-actions { flex-wrap: wrap; gap: 8px; }
+  .action-btn { padding: 8px 12px; font-size: 11px; min-width: 80px; min-height: 40px; }
+  .kpi-grid { grid-template-columns: 1fr; }
+  .welcome-section { flex-direction: column; gap: 16px; text-align: center; }
+  .dashboard-header { padding: 16px 20px; margin-bottom: 20px; }
+  .header-left h1 { font-size: 24px; }
 }
+*/
 
+/*
 @media (max-width: 480px) {
-  .admin-sidebar {
-    width: 200px;
-  }
-  
-  .dashboard-content {
-    padding: 8px 12px;
-  }
-  
-  .top-bar {
-    padding: 8px 12px;
-    height: 60px;
-  }
-  
-  .search-section {
-    width: 200px;
-    padding: 8px 12px;
-  }
-  
-  .status-indicators {
-    display: none;
-  }
-  
-  .header-left h1 {
-    font-size: 20px;
-  }
-  
-  .welcome-section {
-    padding: 12px 16px;
-  }
-  
-  .welcome-left h2 {
-    font-size: 18px;
-  }
-  
-  .dashboard-header {
-    padding: 12px 16px;
-    margin-bottom: 16px;
-  }
-  
-  .action-btn {
-    padding: 6px 10px;
-    font-size: 10px;
-    min-width: 70px;
-    min-height: 35px;
-  }
-  
-  .kpi-card {
-    padding: 16px;
-  }
-  
-  .kpi-header h3 {
-    font-size: 20px;
-  }
+  .admin-sidebar { width: 200px; }
+  .dashboard-content { padding: 8px 12px; }
+  .top-bar { padding: 8px 12px; height: 60px; }
+  .search-section { width: 200px; padding: 8px 12px; }
+  .status-indicators { display: none; }
+  .header-left h1 { font-size: 20px; }
+  .welcome-section { padding: 12px 16px; }
+  .welcome-left h2 { font-size: 18px; }
+  .dashboard-header { padding: 12px 16px; margin-bottom: 16px; }
+  .action-btn { padding: 6px 10px; font-size: 10px; min-width: 70px; min-height: 35px; }
+  .kpi-card { padding: 16px; }
+  .kpi-header h3 { font-size: 20px; }
 }
+*/

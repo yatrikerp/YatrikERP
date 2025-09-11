@@ -1,0 +1,552 @@
+/* Route Search Map Styles */
+.route-search-map {
+  min-height: 100vh;
+  background: #F7F9FB;
+  padding: 0;
+}
+
+/* Search Header */
+.search-header {
+  background: linear-gradient(135deg, #E91E63 0%, #FF4081 100%);
+  color: white;
+  padding: 2rem;
+  text-align: center;
+}
+
+.search-title {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.search-subtitle {
+  font-size: 1rem;
+  opacity: 0.9;
+  margin: 0;
+}
+
+/* Search Form */
+.search-form-container {
+  background: white;
+  padding: 2rem;
+  border-bottom: 1px solid #ECEFF1;
+}
+
+.search-form {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.search-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 1rem;
+  align-items: end;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.input-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #212121;
+  margin-bottom: 0.5rem;
+}
+
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-icon {
+  position: absolute;
+  left: 0.75rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: #9E9E9E;
+  z-index: 1;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.75rem 0.75rem 0.75rem 2.5rem;
+  border: 2px solid #ECEFF1;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  background: white;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #E91E63;
+  box-shadow: 0 0 0 3px rgba(233, 30, 99, 0.1);
+}
+
+.search-button {
+  background: linear-gradient(135deg, #E91E63 0%, #FF4081 100%);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.search-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(233, 30, 99, 0.3);
+}
+
+.search-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Filters */
+.filters-section {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: center;
+}
+
+.filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #F7F8FA;
+  border: 1px solid #DADFE3;
+  border-radius: 0.5rem;
+  color: #212121;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-toggle:hover {
+  background: #ECEFF1;
+}
+
+/* Main Content */
+.main-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  min-height: calc(100vh - 200px);
+}
+
+/* Search Results */
+.search-results {
+  background: white;
+  border-right: 1px solid #ECEFF1;
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+}
+
+.results-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #ECEFF1;
+  background: #F7F8FA;
+}
+
+.results-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #212121;
+  margin: 0;
+}
+
+.results-list {
+  padding: 1rem;
+}
+
+/* Route Cards */
+.route-card {
+  background: white;
+  border: 2px solid #ECEFF1;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.route-card:hover {
+  border-color: #E91E63;
+  box-shadow: 0 4px 12px rgba(233, 30, 99, 0.1);
+  transform: translateY(-2px);
+}
+
+.route-card.selected {
+  border-color: #E91E63;
+  background: linear-gradient(135deg, rgba(233, 30, 99, 0.05) 0%, rgba(255, 64, 129, 0.05) 100%);
+  box-shadow: 0 4px 12px rgba(233, 30, 99, 0.2);
+}
+
+.route-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.route-info h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #212121;
+  margin: 0 0 0.25rem 0;
+}
+
+.route-cities {
+  color: #9E9E9E;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.route-price {
+  text-align: right;
+}
+
+.price {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #E91E63;
+  display: block;
+}
+
+.price-label {
+  font-size: 0.75rem;
+  color: #9E9E9E;
+}
+
+.route-card-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.detail-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #212121;
+}
+
+.detail-item svg {
+  width: 1rem;
+  height: 1rem;
+  color: #9E9E9E;
+}
+
+.seats-available {
+  color: #00A86B;
+  font-weight: 600;
+}
+
+.route-card-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.view-map-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #E91E63;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.view-map-btn:hover {
+  background: #C2185B;
+  transform: translateY(-1px);
+}
+
+/* No Results */
+.no-results {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #9E9E9E;
+}
+
+/* Map Section */
+.map-section {
+  background: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.map-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #ECEFF1;
+  background: #F7F8FA;
+}
+
+.map-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #212121;
+  margin: 0 0 0.5rem 0;
+}
+
+.map-route-info {
+  font-size: 0.875rem;
+  color: #9E9E9E;
+}
+
+.route-route {
+  font-weight: 500;
+  color: #E91E63;
+}
+
+/* Map Container */
+.map-container {
+  flex: 1;
+  position: relative;
+  background: #F7F8FA;
+  overflow: hidden;
+}
+
+.map-placeholder {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #F7F8FA;
+}
+
+.map-placeholder-content {
+  text-align: center;
+  color: #9E9E9E;
+}
+
+.map-overlay {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #F7F8FA 0%, #ECEFF1 100%);
+}
+
+/* India Map Outline */
+.india-outline {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  height: 80%;
+  opacity: 0.3;
+}
+
+.india-svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Route Line */
+.route-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.route-svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Route Markers */
+.route-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  z-index: 10;
+}
+
+.marker-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.from-marker .marker-pulse {
+  background: rgba(0, 168, 107, 0.3);
+}
+
+.to-marker .marker-pulse {
+  background: rgba(233, 30, 99, 0.3);
+}
+
+@keyframes pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2);
+    opacity: 0;
+  }
+}
+
+.marker-icon {
+  position: relative;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.from-icon {
+  background: #00A86B;
+  color: white;
+}
+
+.to-icon {
+  background: #E91E63;
+  color: white;
+}
+
+.marker-pin {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.marker-info {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 0.5rem;
+  background: white;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.marker-city {
+  font-weight: 600;
+  color: #212121;
+}
+
+.marker-label {
+  color: #9E9E9E;
+  font-size: 0.625rem;
+}
+
+/* Route Info Overlay */
+.route-info-overlay {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 20;
+}
+
+.route-info-card {
+  background: white;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border: 1px solid #ECEFF1;
+  max-width: 300px;
+}
+
+.route-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #212121;
+  margin: 0 0 0.75rem 0;
+}
+
+.route-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.route-detail-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #212121;
+}
+
+.route-detail-item svg {
+  width: 1rem;
+  height: 1rem;
+  color: #9E9E9E;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .main-content {
+    grid-template-columns: 1fr;
+  }
+  
+  .search-results {
+    border-right: none;
+    border-bottom: 1px solid #ECEFF1;
+    max-height: 50vh;
+  }
+  
+  .map-section {
+    min-height: 50vh;
+  }
+}
+
+@media (max-width: 768px) {
+  .search-inputs {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .search-form-container {
+    padding: 1rem;
+  }
+  
+  .search-header {
+    padding: 1.5rem 1rem;
+  }
+  
+  .search-title {
+    font-size: 1.5rem;
+  }
+  
+  .route-card-details {
+    grid-template-columns: 1fr;
+  }
+}
+

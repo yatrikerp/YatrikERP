@@ -1,12 +1,39 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import io from 'socket.io-client';
 import './TripManagement.css';
+import { apiFetch } from '../../../utils/api';
+import { 
+  Search, 
+  Eye, 
+  Trash2, 
+  Edit, 
+  Clock, 
+  MoreVertical,
+  CheckSquare,
+  Square,
+  ArrowUpDown,
+  Download,
+  RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Check,
+  Grid3X3,
+  List,
+  Copy,
+  Play,
+  Pause,
+  Navigation,
+  Calendar,
+  FileText,
+  FileSpreadsheet
+} from 'lucide-react';
 
 const TripManagement = () => {
-  const { user: _unusedUser } = useAuth();
+  const { } = useAuth();
   const socketRef = useRef(null);
   const [trips, setTrips] = useState([]);
   const [buses, setBuses] = useState([]);
@@ -21,7 +48,7 @@ const TripManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterDate, setFilterDate] = useState('all');
-  const [dateRange, setDateRange] = useState([null, null]);
+  const [dateRange] = useState([null, null]);
   const [startDate, endDate] = dateRange;
   const [selectedTrips, setSelectedTrips] = useState([]);
   const [editingTrip, setEditingTrip] = useState(null);
@@ -29,15 +56,14 @@ const TripManagement = () => {
   const [modalStep, setModalStep] = useState(1);
   const [routeSearch, setRouteSearch] = useState('');
   const [filteredRoutes, setFilteredRoutes] = useState([]);
-  const [stats, setStats] = useState({
-    totalTrips: 0,
-    activeTrips: 0,
-    completedTrips: 0,
-    cancelledTrips: 0,
-    totalRevenue: 0,
-    onTimePercentage: 0,
-    busUtilizationRate: 0
-  });
+  const [showActionsMenu, setShowActionsMenu] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [viewMode, setViewMode] = useState('table');
+  const [sortField, setSortField] = useState('departureTime');
+  const [sortDirection, setSortDirection] = useState('asc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [filterType, setFilterType] = useState('all');
 
   // Form states
   const [formData, setFormData] = useState({
@@ -58,6 +84,23 @@ const TripManagement = () => {
     { value: 'cancelled', label: 'Cancelled' },
     { value: 'delayed', label: 'Delayed' }
   ];
+
+  // Notification helper functions
+  const showNotification = (message, type = 'success', duration = 3000) => {
+    const id = Date.now() + Math.random();
+    const notification = { id, message, type, duration };
+    
+    setNotifications(prev => [...prev, notification]);
+    
+    // Auto remove notification after duration
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, duration);
+  };
+
+  const removeNotification = (id) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
 
   useEffect(() => {
     fetchData();
@@ -99,6 +142,20 @@ const TripManagement = () => {
     };
   }, []);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showActionsMenu && !event.target.closest('.actions-dropdown')) {
+        setShowActionsMenu(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showActionsMenu]);
+
   useEffect(() => {
     // Filter routes based on search
     if (routeSearch) {
@@ -117,26 +174,16 @@ const TripManagement = () => {
     try {
       setLoading(true);
       const [tripsRes, busesRes, routesRes, driversRes, conductorsRes] = await Promise.all([
-        fetch('/api/depot/trips', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        }),
-        fetch('/api/depot/buses', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        }),
-        fetch('/api/depot/routes', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        }),
-        fetch('/api/driver/all', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        }),
-        fetch('/api/conductor/all', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        })
+        apiFetch('/api/depot/trips'),
+        apiFetch('/api/depot/buses'),
+        apiFetch('/api/depot/routes'),
+        apiFetch('/api/driver/all'),
+        apiFetch('/api/conductor/all')
       ]);
 
       if (tripsRes.ok) {
-        const tripsData = await tripsRes.json();
-        const allTrips = tripsData.data.trips || [];
+        const tripsData = tripsRes.data || {};
+        const allTrips = tripsData.data?.trips || tripsData.trips || [];
         // Filter out any trips that might have been soft-deleted or have invalid status
         const activeTrips = allTrips.filter(trip => 
           trip && 
@@ -145,27 +192,28 @@ const TripManagement = () => {
           !['deleted', 'archived'].includes(trip.status.toLowerCase())
         );
         setTrips(activeTrips);
-        setStats(tripsData.data.stats || {});
       }
 
       if (busesRes.ok) {
-        const busesData = await busesRes.json();
-        setBuses(busesData.data.buses || []);
+        const busesData = busesRes.data || {};
+        setBuses(busesData.data?.buses || busesData.buses || []);
       }
 
       if (routesRes.ok) {
-        const routesData = await routesRes.json();
-        setRoutes(routesData.data.routes || []);
+        const routesData = routesRes.data || {};
+        setRoutes(routesData.data?.routes || routesData.routes || []);
       }
 
       if (driversRes.ok) {
-        const driversData = await driversRes.json();
-        setDrivers(Array.isArray(driversData.data) ? driversData.data : (driversData.data?.drivers || []));
+        const driversData = driversRes.data || {};
+        const driversArr = Array.isArray(driversData) ? driversData : (driversData.data || driversData.drivers);
+        setDrivers(Array.isArray(driversArr) ? driversArr : []);
       }
 
       if (conductorsRes.ok) {
-        const conductorsData = await conductorsRes.json();
-        setConductors(Array.isArray(conductorsData.data) ? conductorsData.data : (conductorsData.data?.conductors || []));
+        const conductorsData = conductorsRes.data || {};
+        const conductorsArr = Array.isArray(conductorsData) ? conductorsData : (conductorsData.data || conductorsData.conductors);
+        setConductors(Array.isArray(conductorsArr) ? conductorsArr : []);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -233,35 +281,31 @@ const TripManagement = () => {
         status: 'scheduled'
       };
 
-      const response = await fetch('/api/depot/trips', {
+      const response = await apiFetch('/api/depot/trips', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
         body: JSON.stringify(payload)
       });
 
       if (response.ok) {
-        const newTrip = await response.json();
+        const newTrip = response.data || {};
         setTrips(prevTrips => [newTrip.data || newTrip, ...prevTrips]);
         setShowAddModal(false);
         resetForm();
         setModalStep(1);
-        alert('Trip created successfully!');
+        showNotification('Trip created successfully!', 'success');
         
         // Emit socket event for real-time update
         if (socketRef.current) {
           socketRef.current.emit('tripCreated', newTrip.data || newTrip);
         }
       } else {
-        const error = await response.json();
+        const error = response.data || {};
         console.error('Trip creation error:', error);
-        alert(`Failed to create trip: ${error.message || 'Unknown error'}`);
+        showNotification(`Failed to create trip: ${response.message || error.message || 'Unknown error'}`, 'error');
       }
     } catch (error) {
       console.error('Error creating trip:', error);
-      alert(`Failed to create trip: ${error.message}`);
+      showNotification(`Failed to create trip: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -317,17 +361,13 @@ const TripManagement = () => {
         notes: formData.notes
       };
 
-      const response = await fetch(`/api/depot/trips/${selectedTrip._id}`, {
+      const response = await apiFetch(`/api/depot/trips/${selectedTrip._id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
         body: JSON.stringify(payload)
       });
 
       if (response.ok) {
-        const updatedTrip = await response.json();
+        const updatedTrip = response.data || {};
         setTrips(prevTrips => 
           prevTrips.map(trip => 
             trip._id === selectedTrip._id ? (updatedTrip.data || updatedTrip) : trip
@@ -336,19 +376,18 @@ const TripManagement = () => {
         setShowEditModal(false);
         resetForm();
         setSelectedTrip(null);
-        alert('Trip updated successfully!');
+        showNotification('Trip updated successfully!', 'success');
         
         // Emit socket event for real-time update
         if (socketRef.current) {
           socketRef.current.emit('tripUpdated', updatedTrip.data || updatedTrip);
         }
       } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to update trip');
+        showNotification(response.message || 'Failed to update trip', 'error');
       }
     } catch (error) {
       console.error('Error updating trip:', error);
-      alert('Failed to update trip');
+      showNotification('Failed to update trip. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -376,11 +415,8 @@ const TripManagement = () => {
     try {
       setLoading(true);
       
-      const response = await fetch(`/api/depot/trips/${selectedTrip._id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+      const response = await apiFetch(`/api/depot/trips/${selectedTrip._id}`, {
+        method: 'DELETE'
       });
 
       if (response.ok) {
@@ -388,7 +424,7 @@ const TripManagement = () => {
         setTrips(prevTrips => prevTrips.filter(trip => trip._id !== selectedTrip._id));
         setShowDeleteModal(false);
         setSelectedTrip(null);
-        alert('Trip permanently deleted!');
+        showNotification('Trip permanently deleted!', 'success');
         
         // Emit socket event for real-time update
         if (socketRef.current) {
@@ -400,12 +436,11 @@ const TripManagement = () => {
           fetchData();
         }, 1000);
       } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to delete trip');
+        showNotification(response.message || 'Failed to delete trip', 'error');
       }
     } catch (error) {
       console.error('Error deleting trip:', error);
-      alert('Failed to delete trip');
+      showNotification('Failed to delete trip. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -414,12 +449,8 @@ const TripManagement = () => {
   // Soft delete (cancel trip)
   const handleCancelTrip = async (tripId) => {
     try {
-      const response = await fetch(`/api/depot/trips/${tripId}/status`, {
+      const response = await apiFetch(`/api/depot/trips/${tripId}/status`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
         body: JSON.stringify({ status: 'cancelled' })
       });
 
@@ -436,8 +467,7 @@ const TripManagement = () => {
           socketRef.current.emit('tripStatusUpdate', { tripId, status: 'cancelled' });
         }
       } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to cancel trip');
+        alert(response.message || 'Failed to cancel trip');
       }
     } catch (error) {
       console.error('Error cancelling trip:', error);
@@ -447,26 +477,205 @@ const TripManagement = () => {
 
   const handleStatusChange = async (tripId, newStatus) => {
     try {
-      const response = await fetch(`/api/depot/trips/${tripId}/status`, {
+      const response = await apiFetch(`/api/depot/trips/${tripId}/status`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
         body: JSON.stringify({ status: newStatus })
       });
 
       if (response.ok) {
         fetchData();
+        showNotification(`Trip status updated to ${newStatus}`, 'success');
       } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to update trip status');
+        showNotification(response.message || 'Failed to update trip status', 'error');
       }
     } catch (error) {
       console.error('Error updating trip status:', error);
-      alert('Failed to update trip status');
+      showNotification('Failed to update trip status', 'error');
     }
   };
+
+  // New action handlers
+  const toggleActionsMenu = (tripId) => {
+    setShowActionsMenu(showActionsMenu === tripId ? null : tripId);
+  };
+
+  const handleAdditionalAction = (action, trip) => {
+    switch (action) {
+      case 'duplicate':
+        showNotification(`Duplicating trip ${trip.tripNumber}...`, 'info');
+        console.log('Duplicate trip:', trip.tripNumber);
+        break;
+      case 'export':
+        showNotification(`Exporting data for trip ${trip.tripNumber}...`, 'info');
+        console.log('Export trip data:', trip.tripNumber);
+        break;
+      case 'schedule':
+        showNotification(`Opening schedule for trip ${trip.tripNumber}...`, 'info');
+        console.log('View schedule for trip:', trip.tripNumber);
+        break;
+      case 'track':
+        showNotification(`Opening tracking for trip ${trip.tripNumber}...`, 'info');
+        console.log('Track trip:', trip.tripNumber);
+        break;
+      default:
+        console.log('Unknown action:', action);
+        break;
+    }
+    setShowActionsMenu(null);
+  };
+
+  // Advanced filtering and sorting with useMemo for performance
+  const filteredAndSortedTrips = useMemo(() => {
+    let filtered = trips.filter(trip => {
+      const matchesSearch = 
+        trip.tripNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        trip.routeId?.routeNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        trip.busId?.busNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        trip.driverId?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        trip.conductorId?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = filterStatus === 'all' || trip.status === filterStatus;
+      const matchesType = filterType === 'all' || (trip.busId?.busType || '').toLowerCase() === filterType.toLowerCase();
+      
+      const matchesDate = filterDate === 'all' || (() => {
+        if (!trip.departureTime) return false;
+        const tripDate = new Date(trip.departureTime);
+        if (isNaN(tripDate.getTime())) return false;
+        
+        const tripDateString = tripDate.toDateString();
+        const today = new Date().toDateString();
+        const tomorrow = new Date(Date.now() + 86400000).toDateString();
+        
+        switch (filterDate) {
+          case 'today': return tripDateString === today;
+          case 'tomorrow': return tripDateString === tomorrow;
+          case 'this-week': return tripDate >= new Date(Date.now() - 7 * 86400000);
+          default: return true;
+        }
+      })();
+
+      const matchesDateRange = !startDate || !endDate || (() => {
+        if (!trip.departureTime) return false;
+        const tripDate = new Date(trip.departureTime);
+        if (isNaN(tripDate.getTime())) return false;
+        return tripDate >= startDate && tripDate <= endDate;
+      })();
+      
+      return matchesSearch && matchesStatus && matchesType && matchesDate && matchesDateRange;
+    });
+
+    // Advanced sorting
+    filtered.sort((a, b) => {
+      let aValue = a[sortField];
+      let bValue = b[sortField];
+      
+      // Handle nested properties
+      if (sortField === 'routeId') {
+        aValue = a.routeId?.routeNumber || '';
+        bValue = b.routeId?.routeNumber || '';
+      }
+      if (sortField === 'busId') {
+        aValue = a.busId?.busNumber || '';
+        bValue = b.busId?.busNumber || '';
+      }
+      if (sortField === 'driverId') {
+        aValue = a.driverId?.name || '';
+        bValue = b.driverId?.name || '';
+      }
+      if (sortField === 'conductorId') {
+        aValue = a.conductorId?.name || '';
+        bValue = b.conductorId?.name || '';
+      }
+      
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = bValue.toLowerCase();
+      }
+      
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return filtered;
+  }, [trips, searchTerm, filterStatus, filterDate, startDate, endDate, sortField, sortDirection]);
+
+  // Pagination
+  const paginatedTrips = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredAndSortedTrips.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredAndSortedTrips, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredAndSortedTrips.length / itemsPerPage);
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedTrips.length === filteredAndSortedTrips.length) {
+      setSelectedTrips([]);
+    } else {
+      setSelectedTrips(filteredAndSortedTrips.map(trip => trip._id));
+    }
+  }, [selectedTrips.length, filteredAndSortedTrips]);
+
+  const handleSelectTrip = useCallback((tripId) => {
+    setSelectedTrips(prev => 
+      prev.includes(tripId) 
+        ? prev.filter(id => id !== tripId)
+        : [...prev, tripId]
+    );
+  }, []);
+
+  const handleBulkAction = useCallback(async (action) => {
+    if (selectedTrips.length === 0) return;
+
+    try {
+      switch (action) {
+        case 'activate':
+          const activatePromises = selectedTrips.map(tripId => 
+            apiFetch(`/api/depot/trips/${tripId}/status`, {
+              method: 'PUT',
+              body: JSON.stringify({ status: 'running' })
+            })
+          );
+          await Promise.all(activatePromises);
+          showNotification(`${selectedTrips.length} trips activated`, 'success');
+          break;
+        case 'inactive':
+          const deactivatePromises = selectedTrips.map(tripId => 
+            apiFetch(`/api/depot/trips/${tripId}/status`, {
+              method: 'PUT',
+              body: JSON.stringify({ status: 'cancelled' })
+            })
+          );
+          await Promise.all(deactivatePromises);
+          showNotification(`${selectedTrips.length} trips cancelled`, 'success');
+          break;
+        case 'delete':
+          const deletePromises = selectedTrips.map(tripId => 
+            apiFetch(`/api/depot/trips/${tripId}`, { method: 'DELETE' })
+          );
+          await Promise.all(deletePromises);
+          showNotification(`${selectedTrips.length} trips deleted`, 'success');
+          break;
+        default:
+          break;
+      }
+      
+      setSelectedTrips([]);
+      fetchData();
+    } catch (error) {
+      console.error('Error in bulk action:', error);
+      showNotification('Failed to perform bulk action', 'error');
+    }
+  }, [selectedTrips]);
+
+  const handleSort = useCallback((field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  }, [sortField, sortDirection]);
 
   const resetForm = () => {
     setFormData({
@@ -500,42 +709,6 @@ const TripManagement = () => {
     setSelectedTrip(trip);
     setShowDeleteModal(true);
   };
-
-  const filteredTrips = trips.filter(trip => {
-    const matchesSearch = 
-      trip.tripNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      trip.routeId?.routeNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      trip.busId?.busNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      trip.driverId?.name?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = filterStatus === 'all' || trip.status === filterStatus;
-    
-    const matchesDate = filterDate === 'all' || (() => {
-      if (!trip.departureTime) return false;
-      const tripDate = new Date(trip.departureTime);
-      if (isNaN(tripDate.getTime())) return false;
-      
-      const tripDateString = tripDate.toDateString();
-      const today = new Date().toDateString();
-      const tomorrow = new Date(Date.now() + 86400000).toDateString();
-      
-      switch (filterDate) {
-        case 'today': return tripDateString === today;
-        case 'tomorrow': return tripDateString === tomorrow;
-        case 'this-week': return tripDate >= new Date(Date.now() - 7 * 86400000);
-        default: return true;
-      }
-    })();
-
-    const matchesDateRange = !startDate || !endDate || (() => {
-      if (!trip.departureTime) return false;
-      const tripDate = new Date(trip.departureTime);
-      if (isNaN(tripDate.getTime())) return false;
-      return tripDate >= startDate && tripDate <= endDate;
-    })();
-    
-    return matchesSearch && matchesStatus && matchesDate && matchesDateRange;
-  });
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -605,17 +778,13 @@ const TripManagement = () => {
         formattedValue = parseFloat(value);
       }
 
-      const response = await fetch(`/api/depot/trips/${tripId}`, {
+      const response = await apiFetch(`/api/depot/trips/${tripId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
         body: JSON.stringify({ [field]: formattedValue })
       });
 
       if (response.ok) {
-        const updatedTrip = await response.json();
+        const updatedTrip = response.data || {};
         setTrips(prevTrips => 
           prevTrips.map(trip => 
             trip._id === tripId ? (updatedTrip.data || updatedTrip) : trip
@@ -629,8 +798,7 @@ const TripManagement = () => {
           socketRef.current.emit('tripUpdated', updatedTrip.data || updatedTrip);
         }
       } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to update trip');
+        alert(response.message || 'Failed to update trip');
       }
     } catch (error) {
       console.error('Error updating trip:', error);
@@ -638,39 +806,10 @@ const TripManagement = () => {
     }
   };
 
-  // Bulk operations
-  const handleBulkSelect = (tripId) => {
-    setSelectedTrips(prev => 
-      prev.includes(tripId) 
-        ? prev.filter(id => id !== tripId)
-        : [...prev, tripId]
-    );
-  };
-
-  const handleBulkStatusChange = async (newStatus) => {
-    try {
-      const promises = selectedTrips.map(tripId => 
-        fetch(`/api/depot/trips/${tripId}/status`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify({ status: newStatus })
-        })
-      );
-
-      await Promise.all(promises);
-      setSelectedTrips([]);
-      fetchData();
-    } catch (error) {
-      console.error('Error updating bulk status:', error);
-    }
-  };
 
   // Export functions (simplified)
   const exportToExcel = () => {
-    const exportData = filteredTrips.map(trip => ({
+    const exportData = filteredAndSortedTrips.map(trip => ({
       'Trip Number': trip.tripNumber,
       'Route': trip.routeId?.routeName,
       'Bus': trip.busId?.busNumber,
@@ -695,11 +834,13 @@ const TripManagement = () => {
     a.download = 'trips-export.csv';
     a.click();
     window.URL.revokeObjectURL(url);
+    showNotification('Trips exported to Excel successfully', 'success');
   };
 
   const exportToPDF = () => {
     // Simple print functionality
     window.print();
+    showNotification('Trips exported to PDF successfully', 'success');
   };
 
   // Get available resources
@@ -753,6 +894,35 @@ const TripManagement = () => {
 
   return (
     <div className="trip-management">
+      {/* Notification Container */}
+      <div className="notification-container">
+        {notifications.map(notification => (
+          <div
+            key={notification.id}
+            className={`notification notification-${notification.type}`}
+            onClick={() => removeNotification(notification.id)}
+          >
+            <div className="notification-content">
+              <div className="notification-icon">
+                {notification.type === 'success' && <Check size={16} />}
+                {notification.type === 'error' && <X size={16} />}
+                {notification.type === 'info' && <Clock size={16} />}
+              </div>
+              <div className="notification-message">{notification.message}</div>
+              <button 
+                className="notification-close"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeNotification(notification.id);
+                }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <div className="dashboard-header">
         <div className="header-left">
           <h1>Trip Management</h1>
@@ -764,18 +934,14 @@ const TripManagement = () => {
             onClick={fetchData}
             title="Refresh Data"
           >
-            <svg fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-            </svg>
+            <RefreshCw size={16} />
             Refresh
           </button>
           <button 
             className="action-btn"
             onClick={() => setShowAddModal(true)}
           >
-            <svg fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-            </svg>
+            <Calendar size={16} />
             Schedule New Trip
           </button>
         </div>
@@ -783,94 +949,85 @@ const TripManagement = () => {
 
 
 
-      {/* Search and Filters */}
-      <div className="search-section">
-        <div className="search-input-wrapper">
-          <svg className="search-icon" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414L10.89 9.89A6 6 0 012 8z" clipRule="evenodd" />
-          </svg>
+      {/* Compact one-line Search Bar */}
+      <div className="search-section" style={{flexWrap:'nowrap'}}>
+        <div className="search-input-wrapper" style={{flex:'1 1 auto'}}>
+          <Search size={20} className="search-icon" />
           <input
             type="text"
-            placeholder="Search trips, routes, buses, or drivers..."
+            placeholder="Search buses, routes, registration..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="search-input"
           />
         </div>
-        
-        <div className="filter-controls">
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="filter-select"
-          >
-            <option value="all">All Status</option>
-            {tripStatuses.map(status => (
-              <option key={status.value} value={status.value}>{status.label}</option>
-            ))}
-          </select>
-
-          <select
-            value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-            className="filter-select"
-          >
-            <option value="all">All Dates</option>
-            <option value="today">Today</option>
-            <option value="tomorrow">Tomorrow</option>
-            <option value="this-week">This Week</option>
-          </select>
-
-          <DatePicker
-            selectsRange={true}
-            startDate={startDate}
-            endDate={endDate}
-            onChange={(update) => {
-              setDateRange(update);
-            }}
-            isClearable={true}
-            placeholderText="Select date range"
-            className="date-range-picker"
-          />
-
-          <div className="export-buttons">
-            <button onClick={exportToExcel} className="export-btn excel">
-              <svg fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-              Excel
-            </button>
-            <button onClick={exportToPDF} className="export-btn pdf">
-              <svg fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-              </svg>
-              PDF
-            </button>
-          </div>
-        </div>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="filter-dropdown"
+        >
+          <option value="all">All Status</option>
+          {tripStatuses.map(status => (
+            <option key={status.value} value={status.value}>{status.label}</option>
+          ))}
+        </select>
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+          className="filter-dropdown"
+        >
+          <option value="all">All Types</option>
+          <option value="sleeper">Sleeper</option>
+          <option value="seater">Seater</option>
+          <option value="ac">AC</option>
+          <option value="non-ac">Non-AC</option>
+        </select>
+        <select
+          value={itemsPerPage}
+          onChange={(e) => setItemsPerPage(Number(e.target.value))}
+          className="filter-dropdown"
+        >
+          <option value={10}>10 per page</option>
+          <option value={25}>25 per page</option>
+          <option value={50}>50 per page</option>
+        </select>
       </div>
 
       {/* Bulk Actions */}
       {selectedTrips.length > 0 && (
-        <div className="bulk-actions">
+        <div className="bulk-actions-bar">
           <div className="bulk-info">
+            <CheckSquare size={16} />
             <span>{selectedTrips.length} trips selected</span>
           </div>
-          <div className="bulk-controls">
-            <select
-              onChange={(e) => handleBulkStatusChange(e.target.value)}
-              className="bulk-select"
+          <div className="bulk-actions">
+            <button
+              className="bulk-btn activate"
+              onClick={() => handleBulkAction('activate')}
             >
-              <option value="">Change Status</option>
-              {tripStatuses.map(status => (
-                <option key={status.value} value={status.value}>{status.label}</option>
-              ))}
-            </select>
-            <button 
+              <Play size={14} />
+              Activate
+            </button>
+            <button
+              className="bulk-btn inactive"
+              onClick={() => handleBulkAction('inactive')}
+            >
+              <Pause size={14} />
+              Cancel
+            </button>
+            <button
+              className="bulk-btn delete"
+              onClick={() => handleBulkAction('delete')}
+            >
+              <Trash2 size={14} />
+              Delete
+            </button>
+            <button
+              className="bulk-btn clear"
               onClick={() => setSelectedTrips([])}
-              className="clear-selection-btn"
             >
-              Clear Selection
+              <X size={14} />
+              Clear
             </button>
           </div>
         </div>
@@ -882,38 +1039,74 @@ const TripManagement = () => {
           <table className="data-table" id="trips-table">
           <thead>
             <tr>
-              <th>
-                <input
-                  type="checkbox"
-                  checked={selectedTrips.length === filteredTrips.length && filteredTrips.length > 0}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedTrips(filteredTrips.map(trip => trip._id));
-                    } else {
-                      setSelectedTrips([]);
-                    }
-                  }}
-                />
+              <th className="select-column">
+                <button
+                  className="select-all-btn"
+                  onClick={handleSelectAll}
+                  title={selectedTrips.length === filteredAndSortedTrips.length ? 'Deselect all' : 'Select all'}
+                >
+                  {selectedTrips.length === filteredAndSortedTrips.length && filteredAndSortedTrips.length > 0 ? (
+                    <CheckSquare size={16} />
+                  ) : (
+                    <Square size={16} />
+                  )}
+                </button>
               </th>
-              <th>Trip Number</th>
-              <th>Route</th>
-              <th>Bus</th>
-              <th>Crew</th>
-              <th>Schedule</th>
-              <th>Status</th>
+              <th className="sortable" onClick={() => handleSort('tripNumber')}>
+                <div className="th-content">
+                  Trip Number
+                  <ArrowUpDown size={14} />
+                </div>
+              </th>
+              <th className="sortable" onClick={() => handleSort('routeId')}>
+                <div className="th-content">
+                  Route
+                  <ArrowUpDown size={14} />
+                </div>
+              </th>
+              <th className="sortable" onClick={() => handleSort('busId')}>
+                <div className="th-content">
+                  Bus
+                  <ArrowUpDown size={14} />
+                </div>
+              </th>
+              <th className="sortable" onClick={() => handleSort('driverId')}>
+                <div className="th-content">
+                  Crew
+                  <ArrowUpDown size={14} />
+                </div>
+              </th>
+              <th className="sortable" onClick={() => handleSort('departureTime')}>
+                <div className="th-content">
+                  Schedule
+                  <ArrowUpDown size={14} />
+                </div>
+              </th>
+              <th className="sortable" onClick={() => handleSort('status')}>
+                <div className="th-content">
+                  Status
+                  <ArrowUpDown size={14} />
+                </div>
+              </th>
               <th>Progress</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filteredTrips.map((trip) => (
+            {paginatedTrips.map((trip) => (
               <tr key={trip._id} className={selectedTrips.includes(trip._id) ? 'selected' : ''}>
                 <td>
-                  <input
-                    type="checkbox"
-                    checked={selectedTrips.includes(trip._id)}
-                    onChange={() => handleBulkSelect(trip._id)}
-                  />
+                  <button
+                    className="select-route-btn"
+                    onClick={() => handleSelectTrip(trip._id)}
+                    title={selectedTrips.includes(trip._id) ? 'Deselect trip' : 'Select trip'}
+                  >
+                    {selectedTrips.includes(trip._id) ? (
+                      <CheckSquare size={16} />
+                    ) : (
+                      <Square size={16} />
+                    )}
+                  </button>
                 </td>
                 <td>
                   <div className="trip-info">
@@ -1118,49 +1311,93 @@ const TripManagement = () => {
                   </div>
                 </td>
                 <td>
-                  <div className="action-buttons">
-                    <button
-                      className="action-btn view"
-                      onClick={() => openEditModal(trip)}
-                      title="View/Edit"
-                    >
-                      <svg fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                        <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                    <button
-                      className="action-btn track"
-                      title="Track Trip"
-                    >
-                      <svg fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                    {(trip.status === 'scheduled' || trip.status === 'running') && (
+                  <div className="actions-container">
+                    <div className="primary-actions">
                       <button
-                        className="action-btn cancel"
-                        onClick={() => {
-                          if (window.confirm('Are you sure you want to cancel this trip?')) {
-                            handleCancelTrip(trip._id);
-                          }
-                        }}
-                        title="Cancel Trip"
+                        className="action-card view"
+                        onClick={() => openEditModal(trip)}
+                        title="View Details"
                       >
-                        <svg fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
+                        <Eye size={14} />
+                        <span>View</span>
                       </button>
-                    )}
-                    <button
-                      className="action-btn delete"
-                      onClick={() => openDeleteModal(trip)}
-                      title="Delete Trip"
-                    >
-                      <svg fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                    </button>
+                      <button
+                        className="action-card edit"
+                        onClick={() => openEditModal(trip)}
+                        title="Edit Trip"
+                      >
+                        <Edit size={14} />
+                        <span>Edit</span>
+                      </button>
+                    </div>
+                    <div className="secondary-actions">
+                      <div className="actions-dropdown">
+                        <button
+                          className="action-card more"
+                          onClick={() => toggleActionsMenu(trip._id)}
+                          title="More Actions"
+                        >
+                          <MoreVertical size={14} />
+                          <span>More</span>
+                        </button>
+                        {showActionsMenu === trip._id && (
+                          <div className="dropdown-menu">
+                            <button
+                              className="dropdown-item"
+                              onClick={() => handleAdditionalAction('duplicate', trip)}
+                            >
+                              <Copy size={12} />
+                              Duplicate
+                            </button>
+                            <button
+                              className="dropdown-item"
+                              onClick={() => handleAdditionalAction('export', trip)}
+                            >
+                              <Download size={12} />
+                              Export Data
+                            </button>
+                            <button
+                              className="dropdown-item"
+                              onClick={() => handleAdditionalAction('schedule', trip)}
+                            >
+                              <Clock size={12} />
+                              View Schedule
+                            </button>
+                            <button
+                              className="dropdown-item"
+                              onClick={() => handleAdditionalAction('track', trip)}
+                            >
+                              <Navigation size={12} />
+                              Track Trip
+                            </button>
+                            {(trip.status === 'scheduled' || trip.status === 'running') && (
+                              <>
+                                <div className="dropdown-divider"></div>
+                                <button
+                                  className="dropdown-item danger"
+                                  onClick={() => {
+                                    if (window.confirm('Are you sure you want to cancel this trip?')) {
+                                      handleCancelTrip(trip._id);
+                                    }
+                                  }}
+                                >
+                                  <Pause size={12} />
+                                  Cancel Trip
+                                </button>
+                              </>
+                            )}
+                            <div className="dropdown-divider"></div>
+                            <button
+                              className="dropdown-item danger"
+                              onClick={() => openDeleteModal(trip)}
+                            >
+                              <Trash2 size={12} />
+                              Delete Trip
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </td>
               </tr>
@@ -1168,11 +1405,9 @@ const TripManagement = () => {
           </tbody>
         </table>
 
-        {filteredTrips.length === 0 && (
+        {filteredAndSortedTrips.length === 0 && (
           <div className="no-data">
-            <svg fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-            </svg>
+            <Play size={48} />
             <h3>No trips found</h3>
             <p>Try adjusting your search or filters</p>
           </div>
@@ -1180,135 +1415,61 @@ const TripManagement = () => {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="kpi-section">
-        <div className="kpi-grid">
-          <div className="kpi-card">
-            <div className="kpi-icon">
-              <svg fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="kpi-content">
-              <div className="kpi-value">{stats.totalTrips}</div>
-              <div className="kpi-label">Total Trips</div>
-            </div>
+      {/* Pagination */}
+      {filteredAndSortedTrips.length > 0 && (
+        <div className="pagination-section">
+          <div className="pagination-info">
+            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredAndSortedTrips.length)} of {filteredAndSortedTrips.length} trips
           </div>
-
-          <div className="kpi-card">
-            <div className="kpi-icon">
-              <svg fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
+          <div className="pagination-controls">
+            <button
+              className="pagination-btn"
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+            >
+              <ChevronUp size={16} />
+              Previous
+            </button>
+            
+            <div className="pagination-numbers">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const pageNum = i + 1;
+                return (
+                  <button
+                    key={pageNum}
+                    className={`pagination-number ${currentPage === pageNum ? 'active' : ''}`}
+                    onClick={() => setCurrentPage(pageNum)}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+              {totalPages > 5 && (
+                <>
+                  <span className="pagination-ellipsis">...</span>
+                  <button
+                    className={`pagination-number ${currentPage === totalPages ? 'active' : ''}`}
+                    onClick={() => setCurrentPage(totalPages)}
+                  >
+                    {totalPages}
+                  </button>
+                </>
+              )}
             </div>
-            <div className="kpi-content">
-              <div className="kpi-value">{stats.activeTrips}</div>
-              <div className="kpi-label">Active Trips</div>
-            </div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-icon">
-              <svg fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="kpi-content">
-              <div className="kpi-value">{stats.completedTrips}</div>
-              <div className="kpi-label">Completed</div>
-            </div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-icon">
-              <svg fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="kpi-content">
-              <div className="kpi-value">{stats.cancelledTrips}</div>
-              <div className="kpi-label">Cancelled</div>
-            </div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-icon">
-              <svg fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="kpi-content">
-              <div className="kpi-value">₹{stats.totalRevenue?.toLocaleString()}</div>
-              <div className="kpi-label">Total Revenue</div>
-            </div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-icon">
-              <svg fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="kpi-content">
-              <div className="kpi-value">{stats.onTimePercentage}%</div>
-              <div className="kpi-label">On-Time %</div>
-            </div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-icon">
-              <svg fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 4a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1V8zm8 0a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V8zm0 4a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1v-2z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="kpi-content">
-              <div className="kpi-value">{stats.busUtilizationRate}%</div>
-              <div className="kpi-label">Bus Utilization</div>
-            </div>
+            
+            <button
+              className="pagination-btn"
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+            >
+              Next
+              <ChevronDown size={16} />
+            </button>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Analytics Summary */}
-      <div className="analytics-section">
-        <div className="analytics-summary">
-          <div className="summary-card">
-            <h3>Trip Status Summary</h3>
-            <div className="status-summary">
-              <div className="status-item">
-                <div className="status-dot blue"></div>
-                <span>Scheduled: {stats.totalTrips - stats.activeTrips - stats.completedTrips - stats.cancelledTrips}</span>
-              </div>
-              <div className="status-item">
-                <div className="status-dot green"></div>
-                <span>Active: {stats.activeTrips}</span>
-              </div>
-              <div className="status-item">
-                <div className="status-dot purple"></div>
-                <span>Completed: {stats.completedTrips}</span>
-              </div>
-              <div className="status-item">
-                <div className="status-dot red"></div>
-                <span>Cancelled: {stats.cancelledTrips}</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="summary-card">
-            <h3>Performance Metrics</h3>
-            <div className="metrics-grid">
-              <div className="metric-item">
-                <div className="metric-value">{stats.onTimePercentage}%</div>
-                <div className="metric-label">On-Time Performance</div>
-              </div>
-              <div className="metric-item">
-                <div className="metric-value">{stats.busUtilizationRate}%</div>
-                <div className="metric-label">Bus Utilization</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+
 
       {/* Enhanced Multi-Step Add Trip Modal */}
       {showAddModal && (

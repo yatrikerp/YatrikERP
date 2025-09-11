@@ -110,11 +110,16 @@ const AdminMasterDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Fetching dashboard data...');
       const res = await apiFetch('/api/admin/dashboard');
       
       if (res.ok) {
         const data = res.data;
-        console.log('📊 Dashboard data received:', data);
+        console.log('📊 Dashboard data received:', {
+          cached: data.cached || false,
+          processingTime: data.processingTime || 'N/A',
+          cacheAge: data.cacheAge || 'N/A'
+        });
         
         // Update all stats with comprehensive data
         setStats({
@@ -203,7 +208,11 @@ const AdminMasterDashboard = () => {
       
       if (res.ok) {
         const data = res.data;
-        console.log('📊 Recent activities data:', data);
+        console.log('📊 Recent activities data:', {
+          count: data.activities?.length || 0,
+          processingTime: data.processingTime || 'N/A',
+          total: data.total || 0
+        });
         setRecentActivities(data.activities || []);
         console.log('✅ Recent activities updated:', data.activities?.length || 0, 'activities');
       } else {

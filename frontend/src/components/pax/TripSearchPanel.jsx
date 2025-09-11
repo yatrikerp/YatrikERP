@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { 
   Search, 
   MapPin, 
@@ -15,6 +17,8 @@ import {
 } from 'lucide-react';
 
 const TripSearchPanel = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchForm, setSearchForm] = useState({
     from: '',
     to: '',
@@ -216,8 +220,12 @@ const TripSearchPanel = () => {
   };
 
   const handleBookNow = (busId) => {
-    // TODO: Navigate to booking page
-    console.log('Booking bus:', busId);
+    if (!busId) return;
+    if (!user) {
+      navigate(`/login?next=/pax/booking/${busId}`);
+      return;
+    }
+    navigate(`/pax/booking/${busId}`);
   };
 
   const handleQuickView = (bus) => {

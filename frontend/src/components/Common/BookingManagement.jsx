@@ -36,7 +36,8 @@ const BookingManagement = ({ depotId, user }) => {
         ...filters
       });
 
-      const response = await fetch(`/api/booking/depot/${depotId}?${queryParams}`, {
+      const basePath = depotId ? `/api/booking/depot/${depotId}` : `/api/booking`;
+      const response = await fetch(`${basePath}?${queryParams}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('depotToken') || localStorage.getItem('token')}`
         }
@@ -45,8 +46,9 @@ const BookingManagement = ({ depotId, user }) => {
       const result = await response.json();
 
       if (result.success) {
-        setBookings(result.data.bookings);
-        setPagination(result.data.pagination);
+        const data = result.data || {};
+        setBookings(data.bookings || data.items || []);
+        setPagination(data.pagination || { ...pagination });
       } else {
         setError(result.message || 'Failed to fetch bookings');
       }

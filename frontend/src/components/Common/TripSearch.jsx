@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Calendar, Users, Clock, Bus, Star, Filter } from 'lucide-react';
 import './TripSearch.css';
 
 const TripSearch = () => {
+  const navigate = useNavigate();
   const [searchData, setSearchData] = useState({
     from: '',
     to: '',
@@ -493,7 +495,15 @@ const TripSearch = () => {
 
                 <div className="trip-actions">
                   <button className="view-seats-btn">View Seats</button>
-                  <button className="book-now-btn">Book Now</button>
+                  <button 
+                    className="book-now-btn"
+                    onClick={() => {
+                      const id = trip?.id || trip?._id || trip?.tripId;
+                      if (id) navigate(`/pax/booking/${id}`);
+                    }}
+                  >
+                    Book Now
+                  </button>
                 </div>
               </div>
             ))}

@@ -36,8 +36,41 @@ router.use(adminAuth);
 // 1) Dashboard & Status
 // =================================================================
 
+// Simple in-memory cache for dashboard data
+const dashboardCache = {
+  data: null,
+  timestamp: null,
+  ttl: 60000 // 1 minute cache
+};
+
+const getCachedDashboardData = () => {
+  if (dashboardCache.data && dashboardCache.timestamp && 
+      (Date.now() - dashboardCache.timestamp) < dashboardCache.ttl) {
+    return dashboardCache.data;
+  }
+  return null;
+};
+
+const setCachedDashboardData = (data) => {
+  dashboardCache.data = data;
+  dashboardCache.timestamp = Date.now();
+};
+
 // GET /api/admin/dashboard
 router.get('/dashboard', async (req, res) => {
+  const startTime = Date.now();
+  
+  // Check cache first
+  const cachedData = getCachedDashboardData();
+  if (cachedData) {
+    console.log('📊 Returning cached dashboard data');
+    return res.json({
+      ...cachedData,
+      cached: true,
+      cacheAge: Date.now() - dashboardCache.timestamp
+    });
+  }
+  
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -50,18 +83,32 @@ router.get('/dashboard', async (req, res) => {
 
     console.log('📊 Fetching comprehensive dashboard data...');
 
-    // Helper wrappers to avoid throwing and always return a number
-    const safeCount = async (model, query = {}) => {
-      try { return await model.countDocuments(query); } catch (_) { return 0; }
+    // Helper wrappers to avoid throwing and always return a number with timeout
+    const safeCount = async (model, query = {}, timeoutMs = 5000) => {
+      try { 
+        const result = await Promise.race([
+          model.countDocuments(query),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Query timeout')), timeoutMs))
+        ]);
+        return result;
+      } catch (error) { 
+        console.warn(`Count query failed for ${model.modelName}:`, error.message);
+        return 0; 
+      }
     };
-    const safeAggregateSum = async (model, match, sumPath) => {
+    
+    const safeAggregateSum = async (model, match, sumPath, timeoutMs = 5000) => {
       try {
-        const result = await model.aggregate([
-          { $match: match },
-          { $group: { _id: null, total: { $sum: sumPath } } }
+        const result = await Promise.race([
+          model.aggregate([
+            { $match: match },
+            { $group: { _id: null, total: { $sum: sumPath } } }
+          ]),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Aggregate timeout')), timeoutMs))
         ]);
         return result[0]?.total || 0;
-      } catch (_) {
+      } catch (error) {
+        console.warn(`Aggregate query failed for ${model.modelName}:`, error.message);
         return 0;
       }
     };
@@ -158,51 +205,69 @@ router.get('/dashboard', async (req, res) => {
       Promise.resolve(0)
     ]);
 
-    // Fetch recent data for activities
-    const [recentBookings, recentTrips, recentUsers, recentDrivers, recentConductors] = await Promise.all([
-      Booking.find()
-        .sort({ createdAt: -1 })
-        .limit(10)
-        .populate('tripId', 'routeId serviceDate startTime')
-        .populate('routeId', 'routeName')
-        .select('customer pricing payment status createdAt tripId routeId'),
+    // Fetch recent data for activities with timeout protection
+    const fetchRecentData = async () => {
+      try {
+        const [recentBookings, recentTrips, recentUsers, recentDrivers, recentConductors] = await Promise.all([
+          Booking.find()
+            .sort({ createdAt: -1 })
+            .limit(5) // Reduced from 10 to 5
+            .populate('tripId', 'routeId serviceDate startTime')
+            .populate('routeId', 'routeName')
+            .select('customer pricing payment status createdAt tripId routeId')
+            .lean(), // Use lean() for better performance
+            
+          Trip.find()
+            .sort({ createdAt: -1 })
+            .limit(5) // Reduced from 10 to 5
+            .populate('routeId', 'routeName')
+            .populate('driverId', 'name')
+            .populate('conductorId', 'name')
+            .populate('busId', 'busNumber')
+            .lean(), // Use lean() for better performance
+            
+          User.find()
+            .sort({ createdAt: -1 })
+            .limit(5) // Reduced from 10 to 5
+            .select('name email role status createdAt')
+            .lean(), // Use lean() for better performance
+            
+          Driver.find()
+            .sort({ createdAt: -1 })
+            .limit(5) // Reduced from 10 to 5
+            .populate('depotId', 'depotName')
+            .select('name employeeCode status depotId createdAt')
+            .lean(), // Use lean() for better performance
+            
+          Conductor.find()
+            .sort({ createdAt: -1 })
+            .limit(5) // Reduced from 10 to 5
+            .populate('depotId', 'depotName')
+            .select('name employeeCode status depotId createdAt')
+            .lean() // Use lean() for better performance
+        ]);
         
-      Trip.find()
-        .sort({ createdAt: -1 })
-        .limit(10)
-        .populate('routeId', 'routeName')
-        .populate('driverId', 'name')
-        .populate('conductorId', 'name')
-        .populate('busId', 'busNumber'),
-        
-      User.find()
-        .sort({ createdAt: -1 })
-        .limit(10)
-        .select('name email role status createdAt'),
-        
-      Driver.find()
-        .sort({ createdAt: -1 })
-        .limit(10)
-        .populate('depotId', 'depotName')
-        .select('name employeeCode status depotId createdAt'),
-        
-      Conductor.find()
-        .sort({ createdAt: -1 })
-        .limit(10)
-        .populate('depotId', 'depotName')
-        .select('name employeeCode status depotId createdAt')
-    ]);
+        return { recentBookings, recentTrips, recentUsers, recentDrivers, recentConductors };
+      } catch (error) {
+        console.warn('Recent data fetch failed:', error.message);
+        return { recentBookings: [], recentTrips: [], recentUsers: [], recentDrivers: [], recentConductors: [] };
+      }
+    };
+
+    const { recentBookings, recentTrips, recentUsers, recentDrivers, recentConductors } = await fetchRecentData();
 
     // Calculate additional metrics
     const occupancyRate = totalBuses > 0 ? Math.round((busesOnRoute / totalBuses) * 100) : 0;
     const bookingSuccessRate = totalBookings > 0 ? Math.round((confirmedBookings / totalBookings) * 100) : 0;
     const tripCompletionRate = totalTrips > 0 ? Math.round((completedTripsToday / tripsToday) * 100) : 0;
 
-    console.log('✅ Dashboard data fetched successfully');
+    const processingTime = Date.now() - startTime;
+    console.log(`✅ Dashboard data fetched successfully in ${processingTime}ms`);
 
-    res.json({
+    const responseData = {
       success: true,
       timestamp: new Date().toISOString(),
+      processingTime: processingTime,
       kpis: {
         // User metrics
         users: totalUsers,
@@ -279,7 +344,12 @@ router.get('/dashboard', async (req, res) => {
           frontend: 'healthy'
         }
       }
-    });
+    };
+
+    // Cache the response data
+    setCachedDashboardData(responseData);
+    
+    res.json(responseData);
   } catch (error) {
     console.error('❌ Dashboard error:', error);
     res.status(500).json({ 
@@ -288,6 +358,14 @@ router.get('/dashboard', async (req, res) => {
       details: error.message 
     });
   }
+});
+
+// POST /api/admin/dashboard/clear-cache
+router.post('/dashboard/clear-cache', (req, res) => {
+  dashboardCache.data = null;
+  dashboardCache.timestamp = null;
+  console.log('🗑️ Dashboard cache cleared');
+  res.json({ success: true, message: 'Dashboard cache cleared' });
 });
 
 // GET /api/admin/system/status
@@ -1295,6 +1373,7 @@ router.get('/routes', async (req, res) => {
     const [routes, total] = await Promise.all([
       Route.find(filter)
         .populate('depotId', 'depotName location')
+        .populate('assignedBuses.busId', 'busNumber busType capacity status currentRoute')
         .sort(sort)
         .skip(skip)
         .limit(parseInt(limit))
@@ -3837,25 +3916,37 @@ router.get('/debug-all-staff', async (req, res) => {
 
 // GET /api/admin/recent-activities
 router.get('/recent-activities', async (req, res) => {
+  const startTime = Date.now();
+  
   try {
     const { limit = 20, category = 'all' } = req.query;
     
     // Generate comprehensive recent activities from various sources
     const activities = [];
     
-    // Recent bookings (safe)
-    let recentBookings = [];
-    try {
-      recentBookings = await Booking.find()
+    // Helper function to safely fetch data with timeout
+    const safeFetch = async (queryFn, timeoutMs = 3000) => {
+      try {
+        return await Promise.race([
+          queryFn(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Query timeout')), timeoutMs))
+        ]);
+      } catch (error) {
+        console.warn('Query failed:', error.message);
+        return [];
+      }
+    };
+    
+    // Recent bookings (safe with timeout)
+    const recentBookings = await safeFetch(async () => {
+      return await Booking.find()
         .sort({ createdAt: -1 })
-        .limit(5)
+        .limit(3) // Reduced from 5 to 3
         .populate('tripId', 'routeId serviceDate startTime')
         .populate('routeId', 'routeName')
         .select('customer pricing payment status createdAt tripId routeId')
         .lean();
-    } catch (e) {
-      console.error('recent-activities bookings query error:', e?.message);
-    }
+    });
     
     recentBookings.forEach(booking => {
       activities.push({
@@ -3871,17 +3962,14 @@ router.get('/recent-activities', async (req, res) => {
       });
     });
     
-    // Recent user registrations
-    let recentUsers = [];
-    try {
-      recentUsers = await User.find()
+    // Recent user registrations (optimized)
+    const recentUsers = await safeFetch(async () => {
+      return await User.find()
         .sort({ createdAt: -1 })
-        .limit(5)
+        .limit(3) // Reduced from 5 to 3
         .select('name email role createdAt')
         .lean();
-    } catch (e) {
-      console.error('recent-activities users query error:', e?.message);
-    }
+    });
     
     recentUsers.forEach(user => {
       activities.push({
@@ -3897,18 +3985,15 @@ router.get('/recent-activities', async (req, res) => {
       });
     });
     
-    // Recent trips
-    let recentTrips = [];
-    try {
-      recentTrips = await Trip.find()
+    // Recent trips (optimized)
+    const recentTrips = await safeFetch(async () => {
+      return await Trip.find()
         .sort({ createdAt: -1 })
-        .limit(5)
+        .limit(3) // Reduced from 5 to 3
         .populate('routeId', 'routeName')
         .select('routeId status startTime endTime createdAt')
         .lean();
-    } catch (e) {
-      console.error('recent-activities trips query error:', e?.message);
-    }
+    });
     
     recentTrips.forEach(trip => {
       activities.push({
@@ -3924,18 +4009,15 @@ router.get('/recent-activities', async (req, res) => {
       });
     });
     
-    // Recent drivers created
-    let recentDrivers = [];
-    try {
-      recentDrivers = await Driver.find()
+    // Recent drivers created (optimized)
+    const recentDrivers = await safeFetch(async () => {
+      return await Driver.find()
         .sort({ createdAt: -1 })
-        .limit(3)
+        .limit(2) // Reduced from 3 to 2
         .populate('depotId', 'depotName')
         .select('name employeeCode createdAt depotId')
         .lean();
-    } catch (e) {
-      console.error('recent-activities drivers query error:', e?.message);
-    }
+    });
     
     recentDrivers.forEach(driver => {
       activities.push({
@@ -3951,18 +4033,15 @@ router.get('/recent-activities', async (req, res) => {
       });
     });
     
-    // Recent conductors created
-    let recentConductors = [];
-    try {
-      recentConductors = await Conductor.find()
+    // Recent conductors created (optimized)
+    const recentConductors = await safeFetch(async () => {
+      return await Conductor.find()
         .sort({ createdAt: -1 })
-        .limit(3)
+        .limit(2) // Reduced from 3 to 2
         .populate('depotId', 'depotName')
         .select('name employeeCode createdAt depotId')
         .lean();
-    } catch (e) {
-      console.error('recent-activities conductors query error:', e?.message);
-    }
+    });
     
     recentConductors.forEach(conductor => {
       activities.push({
@@ -4014,10 +4093,14 @@ router.get('/recent-activities', async (req, res) => {
     // Limit results
     const limitedActivities = filteredActivities.slice(0, parseInt(limit));
     
+    const processingTime = Date.now() - startTime;
+    console.log(`✅ Recent activities fetched successfully in ${processingTime}ms`);
+    
     res.json({
       success: true,
       activities: limitedActivities,
       total: filteredActivities.length,
+      processingTime: processingTime,
       categories: {
         bookings: activities.filter(a => a.category === 'bookings').length,
         trips: activities.filter(a => a.category === 'trips').length,

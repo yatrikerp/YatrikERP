@@ -91,6 +91,19 @@ const busSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Trip'
   },
+  currentRoute: {
+    routeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Route'
+    },
+    routeName: String,
+    routeNumber: String,
+    assignedAt: Date,
+    assignedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }
+  },
   maintenance: {
     lastService: Date,
     nextService: Date,
@@ -150,6 +163,7 @@ busSchema.index({ 'currentLocation.lastUpdated': -1 });
 busSchema.index({ assignedDriver: 1 });
 busSchema.index({ assignedConductor: 1 });
 busSchema.index({ currentTrip: 1 });
+busSchema.index({ 'currentRoute.routeId': 1 });
 
 // Calculate total capacity before saving (only if not explicitly set)
 busSchema.pre('save', function(next) {

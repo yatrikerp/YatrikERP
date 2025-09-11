@@ -132,7 +132,8 @@
 
 .section-title{font-family:"Space Grotesk",system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-weight:800;letter-spacing:.2px}
 
-/* Responsive */
+/* Responsive disabled: keep desktop layout at all widths */
+/*
 @media (max-width:1280px){
 	.depot-main{grid-template-columns:1fr}
 	.depot-bottom{grid-template-columns:1fr}
@@ -143,3 +144,4 @@
 	.kpi-value{font-size:18px}
 	.thead,.trow{grid-template-columns:1.5fr .7fr .9fr .9fr .9fr}
 }
+*/

@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Bell } from 'lucide-react';
-import SmartNotifications from '../../components/Common/SmartNotifications';
+// Notifications removed per request
 import NotificationCenter from '../../components/Common/NotificationCenter';
 import BusScheduling from '../../components/Common/BusScheduling';
 import BookingSystem from '../../components/Common/BookingSystem';
@@ -40,6 +39,14 @@ const DepotDashboard = () => {
   const [lastUpdated, setLastUpdated] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSection, setActiveSection] = useState('dashboard');
+  const location = useLocation();
+
+  useEffect(() => {
+    const path = location.pathname.toLowerCase();
+    if (path.includes('/depot/trips') || path.includes('/depot/trip-management')) {
+      setActiveSection('trips');
+    }
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     try {
@@ -404,7 +411,7 @@ const DepotDashboard = () => {
             
                 <li 
               className={`nav-item ${activeSection === 'trips' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('trips')}
+                  onClick={() => { setActiveSection('trips'); navigate('/depot/trips'); }}
                 >
               <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
@@ -538,7 +545,6 @@ const DepotDashboard = () => {
 
           {/* Right Section - User Profile */}
           <div className="top-bar-right">
-            <SmartNotifications />
             <div className="user-profile-top" onClick={() => setShowProfileDropdown(!showProfileDropdown)}>
               <div className="user-avatar-top">
                 {user?.name?.charAt(0) || 'D'}
@@ -613,58 +619,25 @@ const DepotDashboard = () => {
         <div className="dashboard-content">
             {activeSection === 'dashboard' && (
               <>
-                {/* Dashboard Header with Action Buttons */}
+                {/* Dashboard Header with Quick Actions */}
                 <div className="dashboard-header">
                   <div className="header-left">
                     <h1>{depotInfo.name || 'Yatrik Depot'} Dashboard</h1>
-                    <p>Welcome back, {depotInfo.manager || user?.name || 'Depot Manager'}! Here's your depot overview.</p>
+                    <p className="welcome-text">Welcome back, <span className="welcome-name">{depotInfo.manager || user?.name || 'Depot Manager'}</span>.</p>
                   </div>
-                  <div className="header-right">
-                    <button 
-                      className="notification-btn"
-                      onClick={() => setShowNotificationCenter(true)}
-                      title="Notifications"
-                    >
-                      <Bell size={20} />
+                  <div className="header-right"></div>
+                  <div className="quick-actions-grid">
+                    <button className="quick-action blue" onClick={() => setActiveSection('buses')}>
+                      <span className="qa-title">Add Bus</span>
                     </button>
-                  </div>
-                  <div className="action-buttons-container">
-                    <button className="action-btn blue" onClick={() => setActiveSection('buses')}>
-                      <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                        <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-                      </svg>
-                      Fleet
+                    <button className="quick-action green" onClick={() => setActiveSection('scheduling')}>
+                      <span className="qa-title">Schedule Trip</span>
                     </button>
-                    <button className="action-btn green" onClick={() => setActiveSection('routes')}>
-                      <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                      </svg>
-                      Routes
+                    <button className="quick-action purple" onClick={() => setActiveSection('reports')}>
+                      <span className="qa-title">View Reports</span>
                     </button>
-                    <button className="action-btn purple" onClick={() => setActiveSection('trips')}>
-                      <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                      </svg>
-                      Trips
-                    </button>
-                    <button className="action-btn orange" onClick={() => setActiveSection('reports')}>
-                      <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
-                      </svg>
-                      Reports
-                    </button>
-                  </div>
-                  <div style={{ marginTop: '16px', textAlign: 'center' }}>
-                    <button 
-                      className="action-btn" 
-                      onClick={createSampleBookings}
-                      style={{ background: '#E91E63', color: 'white', padding: '12px 24px', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
-                    >
-                      <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20" style={{ width: '16px', height: '16px', marginRight: '8px' }}>
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
-                      </svg>
-                      Create Sample Bookings (For Testing)
+                    <button className="quick-action orange qa-bottom-left" onClick={() => setActiveSection('dashboard')}>
+                      <span className="qa-title">System Status</span>
                     </button>
                   </div>
                 </div>
@@ -900,25 +873,53 @@ const DepotDashboard = () => {
             )}
 
             {/* Fleet Management Section */}
-            {activeSection === 'buses' && <FleetManagement />}
+            {activeSection === 'buses' && (
+              <div className="module-container fleet-module">
+                <FleetManagement />
+              </div>
+            )}
 
             {/* Route Network Section */}
-            {activeSection === 'routes' && <RouteNetwork />}
+            {activeSection === 'routes' && (
+              <div className="module-container route-module">
+                <RouteNetwork />
+              </div>
+            )}
 
             {/* Trip Management Section */}
-            {activeSection === 'trips' && <TripManagement />}
+            {activeSection === 'trips' && (
+              <div className="module-container trip-module">
+                <TripManagement />
+              </div>
+            )}
 
             {/* Staff Management Section */}
-            {activeSection === 'crew' && <StaffManagement />}
+            {activeSection === 'crew' && (
+              <div className="module-container staff-module">
+                <StaffManagement />
+              </div>
+            )}
 
             {/* Bus Scheduling Section */}
-            {activeSection === 'scheduling' && <BusScheduling depotId={user?.depotId} />}
+            {activeSection === 'scheduling' && (
+              <div className="module-container scheduling-module">
+                <BusScheduling depotId={user?.depotId} />
+              </div>
+            )}
 
             {/* New Booking Section */}
-            {activeSection === 'booking-system' && <BookingSystem user={user} onBookingComplete={handleBookingComplete} />}
+            {activeSection === 'booking-system' && (
+              <div className="module-container new-booking-module">
+                <BookingSystem user={user} onBookingComplete={handleBookingComplete} />
+              </div>
+            )}
 
             {/* Booking Management Section */}
-            {activeSection === 'booking-management' && <BookingManagement depotId={user?.depotId} user={user} />}
+            {activeSection === 'booking-management' && (
+              <div className="module-container booking-mgmt-module">
+                <BookingManagement depotId={user?.depotId} user={user} />
+              </div>
+            )}
         </div>
       </div>
 

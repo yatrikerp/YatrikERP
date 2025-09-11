@@ -147,6 +147,36 @@ class NotificationService {
     });
   }
 
+  // Route assignment notification
+  static async notifyRouteAssignment(bus, route, depotId, assignedBy) {
+    const depot = await Depot.findById(depotId);
+    
+    return await this.createDepotNotification(depotId, {
+      title: 'Route Assigned to Bus',
+      message: `Route ${route.routeName} (${route.routeNumber}) has been assigned to bus ${bus.busNumber}`,
+      type: 'route_assigned',
+      priority: 'medium',
+      relatedEntity: {
+        type: 'bus',
+        id: bus._id
+      },
+      actionData: {
+        action: 'view',
+        url: `/depot/fleet/${bus._id}`,
+        buttonText: 'View Bus'
+      },
+      senderId: assignedBy._id,
+      senderRole: assignedBy.role,
+      metadata: {
+        busId: bus._id,
+        busNumber: bus.busNumber,
+        routeId: route._id,
+        routeName: route.routeName,
+        routeNumber: route.routeNumber
+      }
+    });
+  }
+
   // Route creation notification
   static async notifyRouteCreation(route, depotId, createdBy) {
     const depot = await Depot.findById(depotId);

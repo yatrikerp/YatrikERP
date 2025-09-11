@@ -1623,6 +1623,167 @@ router.delete('/buses/:id', async (req, res) => {
   }
 });
 
+// POST /api/depot/buses/:id/assign-route - Assign route to bus
+router.post('/buses/:id/assign-route', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { routeId } = req.body;
+    const depotId = req.user.depotId;
+
+    // Validate input
+    if (!routeId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route ID is required'
+      });
+    }
+
+    // Verify bus belongs to this depot
+    const bus = await Bus.findById(id);
+    if (!bus || bus.depotId.toString() !== depotId.toString()) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bus not found or access denied'
+      });
+    }
+
+    // Verify route exists and is active
+    const route = await Route.findById(routeId);
+    if (!route) {
+      return res.status(404).json({
+        success: false,
+        message: 'Route not found'
+      });
+    }
+
+    if (route.status !== 'active') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot assign inactive route to bus'
+      });
+    }
+
+    // Check if route is already assigned to this bus
+    const existingAssignment = await Route.findOne({
+      _id: routeId,
+      'assignedBuses.busId': id
+    });
+
+    if (existingAssignment) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route is already assigned to this bus'
+      });
+    }
+
+    // Add bus to route's assigned buses
+    await Route.findByIdAndUpdate(routeId, {
+      $addToSet: {
+        assignedBuses: {
+          busId: id,
+          assignedAt: new Date(),
+          assignedBy: req.user._id,
+          active: true
+        }
+      }
+    });
+
+    // Update bus with current route information
+    await Bus.findByIdAndUpdate(id, {
+      $set: {
+        currentRoute: {
+          routeId: routeId,
+          routeName: route.routeName,
+          routeNumber: route.routeNumber,
+          assignedAt: new Date(),
+          assignedBy: req.user._id
+        },
+        lastUpdated: new Date()
+      }
+    });
+
+    // Send notification about route assignment
+    try {
+      await NotificationService.notifyRouteAssignment(bus, route, depotId, req.user);
+    } catch (notificationError) {
+      console.error('Failed to send route assignment notification:', notificationError);
+    }
+
+    res.json({
+      success: true,
+      message: `Route ${route.routeName} assigned to bus ${bus.busNumber} successfully`,
+      data: {
+        busId: id,
+        routeId: routeId,
+        routeName: route.routeName,
+        routeNumber: route.routeNumber
+      }
+    });
+
+  } catch (error) {
+    console.error('Route assignment error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to assign route to bus',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/depot/buses/:id/assign-route - Remove route assignment from bus
+router.delete('/buses/:id/assign-route', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { routeId } = req.body;
+    const depotId = req.user.depotId;
+
+    // Validate input
+    if (!routeId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route ID is required'
+      });
+    }
+
+    // Verify bus belongs to this depot
+    const bus = await Bus.findById(id);
+    if (!bus || bus.depotId.toString() !== depotId.toString()) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bus not found or access denied'
+      });
+    }
+
+    // Remove bus from route's assigned buses
+    await Route.findByIdAndUpdate(routeId, {
+      $pull: {
+        assignedBuses: { busId: id }
+      }
+    });
+
+    // Clear current route from bus if it matches
+    if (bus.currentRoute && bus.currentRoute.routeId.toString() === routeId) {
+      await Bus.findByIdAndUpdate(id, {
+        $unset: { currentRoute: 1 },
+        $set: { lastUpdated: new Date() }
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Route assignment removed from bus ${bus.busNumber} successfully`
+    });
+
+  } catch (error) {
+    console.error('Route unassignment error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to remove route assignment from bus',
+      error: error.message
+    });
+  }
+});
+
 // =================================================================
 // 5) Route Management for Depot Managers
 // =================================================================

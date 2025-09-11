@@ -1172,99 +1172,11 @@
   text-transform: capitalize;
 }
 
-/* Responsive Design */
-@media (max-width: 1024px) {
-  .depot-nav {
-    width: 240px;
-  }
-  
-  .depot-nav.compact {
-    width: 200px;
-  }
-  
-  .depot-main {
-    padding: 1.5rem;
-  }
-  
-  .depot-main.compact {
-    padding: 1rem;
-  }
-  
-  .charts-section {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 768px) {
-  .depot-dashboard {
-    flex-direction: column;
-  }
-  
-  .depot-nav {
-    width: 100%;
-    order: 2;
-  }
-  
-  .depot-main {
-    order: 1;
-    padding: 1rem;
-  }
-  
-  .header-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .search-container {
-    max-width: none;
-  }
-  
-  .metrics-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .quick-actions {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .info-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .activity-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
-  }
-  
-  .activity-status {
-    align-self: flex-end;
-  }
-  
-  .crew-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .quick-actions {
-    grid-template-columns: 1fr;
-  }
-  
-  .health-indicators {
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-  
-  .activity-list {
-    gap: 0.75rem;
-  }
-  
-  .crew-list {
-    gap: 0.75rem;
-  }
-}
+/* Responsive rules disabled to keep desktop layout at all widths */
+/*
+@media (max-width: 1024px) { ... }
+@media (max-width: 768px) { ... }
+@media (max-width: 480px) { ... }
+*/
 
 

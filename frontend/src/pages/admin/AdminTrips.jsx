@@ -128,7 +128,7 @@ const AdminTrips = () => {
     try {
       const [driversRes, conductorsRes] = await Promise.all([
         apiFetch('/api/admin/all-drivers'),
-        apiFetch('/api/admin/conductors')
+        apiFetch('/api/admin/all-conductors')
       ]);
       
       if (driversRes.ok) {

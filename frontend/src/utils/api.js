@@ -5,7 +5,7 @@ const apiCache = new Map();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 // Request timeout configuration
-const REQUEST_TIMEOUT = 10000; // 10 seconds
+const REQUEST_TIMEOUT = 30000; // 30 seconds for dashboard endpoints
 
 let warnedBase = false;
 
@@ -39,10 +39,23 @@ export async function apiFetch(path, options = {}) {
   // Add performance headers
   headers.set('X-Requested-With', 'XMLHttpRequest');
   
+  // Dynamic timeout based on endpoint
+  const getTimeout = (path) => {
+    if (path.includes('/dashboard') || path.includes('/recent-activities')) {
+      return 30000; // 30 seconds for dashboard endpoints
+    }
+    if (path.includes('/admin/') || path.includes('/depot/')) {
+      return 20000; // 20 seconds for admin/depot endpoints
+    }
+    return 10000; // 10 seconds for other endpoints
+  };
+  
+  const timeout = options.timeout || getTimeout(path);
+  
   try {
     // Create abort controller for timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
     
     const res = await fetch(base + path, { 
       ...options, 
@@ -106,11 +119,14 @@ export async function apiFetch(path, options = {}) {
     return result;
   } catch (error) {
     if (error.name === 'AbortError') {
-      const timeoutError = { message: 'Request timeout', code: 'TIMEOUT' };
+      const timeoutError = { 
+        message: `Request timed out after ${timeout/1000} seconds. Please try again.`, 
+        code: 'TIMEOUT' 
+      };
       handleError(timeoutError);
       return { ok: false, status: 408, message: 'Request timeout', data: null };
     }
-    const networkError = { message: 'Network error', code: 'NETWORK_ERROR' };
+    const networkError = { message: 'Network error. Please check your connection.', code: 'NETWORK_ERROR' };
     handleError(networkError);
     return { ok: false, status: 0, message: 'Network error', data: null };
   }
