@@ -2158,6 +2158,193 @@ router.get('/passengers', async (req, res) => {
   }
 });
 
+// POST /api/admin/trips/create-from-routes - Create trips for all active routes
+router.post('/trips/create-from-routes', async (req, res) => {
+  try {
+    const { days = 7, startDate } = req.body;
+    
+    // Get all active routes
+    const routes = await Route.find({ status: 'active' })
+      .populate('depot', 'depotName')
+      .lean();
+    
+    if (routes.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No active routes found. Please create routes first.'
+      });
+    }
+
+    // Get available buses
+    const buses = await Bus.find({ status: 'available' }).lean();
+    
+    if (buses.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No available buses found. Please add buses first.'
+      });
+    }
+
+    // Calculate start date
+    const baseDate = startDate ? new Date(startDate) : new Date();
+    baseDate.setHours(0, 0, 0, 0);
+
+    const trips = [];
+    let busIndex = 0;
+
+    // Create trips for each route for the specified number of days
+    for (let day = 0; day < days; day++) {
+      const serviceDate = new Date(baseDate);
+      serviceDate.setDate(baseDate.getDate() + day);
+
+      routes.forEach((route, routeIndex) => {
+        // Assign buses in round-robin fashion
+        const bus = buses[busIndex % buses.length];
+        busIndex++;
+
+        // Create morning trip
+        const morningTrip = {
+          routeId: route._id,
+          busId: bus._id,
+          serviceDate: serviceDate,
+          startTime: '08:00',
+          endTime: '18:00', // Default 10-hour journey
+          fare: route.baseFare || 500,
+          capacity: bus.capacity?.total || 35,
+          availableSeats: bus.capacity?.total || 35,
+          bookedSeats: 0,
+          status: 'scheduled',
+          depotId: route.depot?._id,
+          createdBy: req.user._id,
+          bookingOpen: true,
+          notes: `Auto-generated trip for ${route.routeName}`
+        };
+
+        // Create evening trip
+        const eveningTrip = {
+          routeId: route._id,
+          busId: buses[(busIndex) % buses.length]._id,
+          serviceDate: serviceDate,
+          startTime: '20:00',
+          endTime: '06:00', // Next day arrival
+          fare: (route.baseFare || 500) + 100, // Evening trips cost more
+          capacity: buses[(busIndex) % buses.length].capacity?.total || 35,
+          availableSeats: buses[(busIndex) % buses.length].capacity?.total || 35,
+          bookedSeats: 0,
+          status: 'scheduled',
+          depotId: route.depot?._id,
+          createdBy: req.user._id,
+          bookingOpen: true,
+          notes: `Auto-generated evening trip for ${route.routeName}`
+        };
+
+        trips.push(morningTrip, eveningTrip);
+        busIndex++; // Increment for evening trip bus
+      });
+    }
+
+    // Insert all trips
+    const createdTrips = await Trip.insertMany(trips);
+
+    console.log(`Created ${createdTrips.length} trips from ${routes.length} routes for ${days} days`);
+
+    res.json({
+      success: true,
+      message: `Successfully created ${createdTrips.length} trips`,
+      data: {
+        tripsCreated: createdTrips.length,
+        routesUsed: routes.length,
+        busesUsed: buses.length,
+        daysCovered: days,
+        startDate: baseDate.toISOString().split('T')[0],
+        trips: createdTrips.map(trip => ({
+          id: trip._id,
+          routeId: trip.routeId,
+          busId: trip.busId,
+          serviceDate: trip.serviceDate,
+          startTime: trip.startTime,
+          endTime: trip.endTime,
+          fare: trip.fare,
+          status: trip.status,
+          bookingOpen: trip.bookingOpen
+        }))
+      }
+    });
+
+  } catch (error) {
+    console.error('Create trips from routes error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create trips from routes',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/trips/debug - Debug endpoint to see all trips
+router.get('/trips/debug', async (req, res) => {
+  try {
+    const trips = await Trip.find({})
+      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+      .populate('busId', 'busNumber busType')
+      .populate('depotId', 'depotName')
+      .populate('createdBy', 'name email role')
+      .sort({ serviceDate: 1, startTime: 1 })
+      .lean();
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const upcomingTrips = trips.filter(trip => new Date(trip.serviceDate) >= today);
+    const pastTrips = trips.filter(trip => new Date(trip.serviceDate) < today);
+
+    res.json({
+      success: true,
+      data: {
+        totalTrips: trips.length,
+        upcomingTrips: upcomingTrips.length,
+        pastTrips: pastTrips.length,
+        trips: trips.map(trip => ({
+          id: trip._id,
+          routeName: trip.routeId?.routeName || 'Unknown',
+          routeNumber: trip.routeId?.routeNumber || 'N/A',
+          from: trip.routeId?.startingPoint?.city || 'Unknown',
+          to: trip.routeId?.endingPoint?.city || 'Unknown',
+          serviceDate: trip.serviceDate,
+          startTime: trip.startTime,
+          endTime: trip.endTime,
+          fare: trip.fare,
+          capacity: trip.capacity,
+          availableSeats: trip.availableSeats,
+          bookedSeats: trip.bookedSeats,
+          status: trip.status,
+          bookingOpen: trip.bookingOpen,
+          busNumber: trip.busId?.busNumber || 'N/A',
+          busType: trip.busId?.busType || 'Unknown',
+          depotName: trip.depotId?.depotName || 'Unknown',
+          createdBy: trip.createdBy?.name || 'Unknown',
+          createdByRole: trip.createdBy?.role || 'Unknown',
+          createdAt: trip.createdAt
+        })),
+        debug: {
+          today: today.toISOString(),
+          tripStatuses: [...new Set(trips.map(t => t.status))],
+          bookingOpenCount: trips.filter(t => t.bookingOpen).length,
+          createdByRoles: [...new Set(trips.map(t => t.createdBy?.role).filter(Boolean))]
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Debug trips error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch trips debug info',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/admin/passengers/:id/bookings
 router.get('/passengers/:id/bookings', async (req, res) => {
   try {

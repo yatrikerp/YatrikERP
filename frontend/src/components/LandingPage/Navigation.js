@@ -11,9 +11,9 @@ const Navigation = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
 
   const handleNavClick = (slug) => {
     if (user) {
-      navigate(`/pax#${slug}`);
+      navigate(`/passenger/dashboard#${slug}`);
     } else {
-      navigate(`/login?next=/pax#${slug}`);
+      navigate(`/login?next=/passenger/dashboard#${slug}`);
     }
   };
 

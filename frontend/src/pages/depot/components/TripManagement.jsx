@@ -29,7 +29,8 @@ import {
   Navigation,
   Calendar,
   FileText,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Filter
 } from 'lucide-react';
 
 const TripManagement = () => {
@@ -111,25 +112,27 @@ const TripManagement = () => {
     socketRef.current.on('tripStatusUpdate', (data) => {
       setTrips(prevTrips => 
         prevTrips.map(trip => 
-          trip._id === data.tripId ? { ...trip, status: data.status } : trip
-        )
+          trip && trip._id && trip._id === data.tripId ? { ...trip, status: data.status } : trip
+        ).filter(trip => trip && trip._id)
       );
     });
 
     socketRef.current.on('tripCreated', (newTrip) => {
-      setTrips(prevTrips => [newTrip, ...prevTrips]);
+      if (newTrip && newTrip._id) {
+        setTrips(prevTrips => [newTrip, ...prevTrips]);
+      }
     });
 
     socketRef.current.on('tripUpdated', (updatedTrip) => {
       setTrips(prevTrips => 
         prevTrips.map(trip => 
-          trip._id === updatedTrip._id ? updatedTrip : trip
-        )
+          trip && trip._id && updatedTrip && updatedTrip._id && trip._id === updatedTrip._id ? updatedTrip : trip
+        ).filter(trip => trip && trip._id)
       );
     });
 
     socketRef.current.on('tripDeleted', (tripId) => {
-      setTrips(prevTrips => prevTrips.filter(trip => trip._id !== tripId));
+      setTrips(prevTrips => prevTrips.filter(trip => trip && trip._id && trip._id !== tripId));
     });
 
     const interval = setInterval(fetchData, 30000); // Refresh every 30 seconds
@@ -526,7 +529,7 @@ const TripManagement = () => {
 
   // Advanced filtering and sorting with useMemo for performance
   const filteredAndSortedTrips = useMemo(() => {
-    let filtered = trips.filter(trip => {
+    let filtered = trips.filter(trip => trip && trip._id).filter(trip => {
       const matchesSearch = 
         trip.tripNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         trip.routeId?.routeNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -612,7 +615,7 @@ const TripManagement = () => {
     if (selectedTrips.length === filteredAndSortedTrips.length) {
       setSelectedTrips([]);
     } else {
-      setSelectedTrips(filteredAndSortedTrips.map(trip => trip._id));
+      setSelectedTrips(filteredAndSortedTrips.filter(trip => trip && trip._id).map(trip => trip._id));
     }
   }, [selectedTrips.length, filteredAndSortedTrips]);
 
@@ -691,6 +694,10 @@ const TripManagement = () => {
   };
 
   const openEditModal = (trip) => {
+    if (!trip || !trip._id) {
+      console.error('Invalid trip object for editing');
+      return;
+    }
     setSelectedTrip(trip);
     setFormData({
       routeId: trip.routeId?._id || '',
@@ -706,6 +713,10 @@ const TripManagement = () => {
   };
 
   const openDeleteModal = (trip) => {
+    if (!trip || !trip._id) {
+      console.error('Invalid trip object for deletion');
+      return;
+    }
     setSelectedTrip(trip);
     setShowDeleteModal(true);
   };
@@ -846,23 +857,26 @@ const TripManagement = () => {
   // Get available resources
   const getAvailableBuses = () => {
     const activeTripBusIds = trips
-      .filter(trip => ['scheduled', 'running'].includes(trip.status))
-      .map(trip => trip.busId?._id);
-    return buses.filter(bus => !activeTripBusIds.includes(bus._id) && bus.status === 'active');
+      .filter(trip => trip && trip.status && ['scheduled', 'running'].includes(trip.status))
+      .map(trip => trip.busId?._id)
+      .filter(id => id); // Remove undefined/null IDs
+    return buses.filter(bus => bus && bus._id && !activeTripBusIds.includes(bus._id) && bus.status === 'active');
   };
 
   const getAvailableDrivers = () => {
     const activeTripDriverIds = trips
-      .filter(trip => ['scheduled', 'running'].includes(trip.status))
-      .map(trip => trip.driverId?._id);
-    return drivers.filter(driver => !activeTripDriverIds.includes(driver._id) && driver.status === 'active');
+      .filter(trip => trip && trip.status && ['scheduled', 'running'].includes(trip.status))
+      .map(trip => trip.driverId?._id)
+      .filter(id => id); // Remove undefined/null IDs
+    return drivers.filter(driver => driver && driver._id && !activeTripDriverIds.includes(driver._id) && driver.status === 'active');
   };
 
   const getAvailableConductors = () => {
     const activeTripConductorIds = trips
-      .filter(trip => ['scheduled', 'running'].includes(trip.status))
-      .map(trip => trip.conductorId?._id);
-    return conductors.filter(conductor => !activeTripConductorIds.includes(conductor._id) && conductor.status === 'active');
+      .filter(trip => trip && trip.status && ['scheduled', 'running'].includes(trip.status))
+      .map(trip => trip.conductorId?._id)
+      .filter(id => id); // Remove undefined/null IDs
+    return conductors.filter(conductor => conductor && conductor._id && !activeTripConductorIds.includes(conductor._id) && conductor.status === 'active');
   };
 
   // Progress calculation
@@ -991,6 +1005,12 @@ const TripManagement = () => {
           <option value={25}>25 per page</option>
           <option value={50}>50 per page</option>
         </select>
+        <div className="quick-chip chip-primary" title="Primary action" />
+        <div className="quick-chip" title="Action 2" />
+        <div className="quick-chip" title="Action 3" />
+        <button className="filter-icon-btn" title="More filters">
+          <Filter size={16} />
+        </button>
       </div>
 
       {/* Bulk Actions */}
@@ -1093,7 +1113,7 @@ const TripManagement = () => {
             </tr>
           </thead>
           <tbody>
-            {paginatedTrips.map((trip) => (
+            {paginatedTrips.filter(trip => trip && trip._id).map((trip) => (
               <tr key={trip._id} className={selectedTrips.includes(trip._id) ? 'selected' : ''}>
                 <td>
                   <button

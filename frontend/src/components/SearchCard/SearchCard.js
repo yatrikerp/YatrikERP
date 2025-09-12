@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bus, Link, MapPin, Calendar, Search } from 'lucide-react';
+import { Bus, Link, MapPin, Calendar, Search, Clock, Navigation } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import './search-card.css';
 
@@ -15,6 +15,17 @@ const SearchCard = ({ onSearchResults, showResults = false }) => {
   });
   const [loading, setLoading] = useState(false);
   const [cities, setCities] = useState([]);
+  
+  // Autocomplete states
+  const [suggestions, setSuggestions] = useState({ from: [], to: [] });
+  const [showSuggestions, setShowSuggestions] = useState({ from: false, to: false });
+  const [selectedIndex, setSelectedIndex] = useState({ from: -1, to: -1 });
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState({ from: false, to: false });
+  
+  // Refs
+  const fromInputRef = useRef(null);
+  const toInputRef = useRef(null);
+  const suggestionTimeoutRef = useRef(null);
   const navigate = useNavigate();
 
   // Load cities on component mount
@@ -34,6 +45,116 @@ const SearchCard = ({ onSearchResults, showResults = false }) => {
     }
   };
 
+  // Debounced search function
+  const debouncedSearch = useCallback((query, field) => {
+    if (suggestionTimeoutRef.current) {
+      clearTimeout(suggestionTimeoutRef.current);
+    }
+    
+    suggestionTimeoutRef.current = setTimeout(() => {
+      fetchSuggestions(query, field);
+    }, 300);
+  }, []);
+
+  // Fetch autocomplete suggestions
+  const fetchSuggestions = async (query, field) => {
+    if (!query || query.length < 1) {
+      setSuggestions(prev => ({ ...prev, [field]: [] }));
+      setShowSuggestions(prev => ({ ...prev, [field]: false }));
+      return;
+    }
+
+    setIsLoadingSuggestions(prev => ({ ...prev, [field]: true }));
+
+    try {
+      const response = await fetch(`/api/search/autocomplete?q=${encodeURIComponent(query)}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setSuggestions(prev => ({ ...prev, [field]: data.data.suggestions }));
+          setShowSuggestions(prev => ({ ...prev, [field]: true }));
+          setSelectedIndex(prev => ({ ...prev, [field]: -1 }));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch suggestions:', error);
+    } finally {
+      setIsLoadingSuggestions(prev => ({ ...prev, [field]: false }));
+    }
+  };
+
+  // Handle input change with autocomplete
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    
+    if (value.length >= 1) {
+      debouncedSearch(value, field);
+    } else {
+      setSuggestions(prev => ({ ...prev, [field]: [] }));
+      setShowSuggestions(prev => ({ ...prev, [field]: false }));
+    }
+  };
+
+  // Handle suggestion selection
+  const selectSuggestion = (suggestion, field) => {
+    setFormData(prev => ({ ...prev, [field]: suggestion.city }));
+    setShowSuggestions(prev => ({ ...prev, [field]: false }));
+    setSelectedIndex(prev => ({ ...prev, [field]: -1 }));
+    
+    // Focus on next input
+    if (field === 'from') {
+      toInputRef.current?.focus();
+    }
+  };
+
+  // Handle keyboard navigation
+  const handleKeyDown = (e, field) => {
+    const currentSuggestions = suggestions[field];
+    const currentIndex = selectedIndex[field];
+    
+    if (!showSuggestions[field] || currentSuggestions.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedIndex(prev => ({
+          ...prev,
+          [field]: Math.min(currentIndex + 1, currentSuggestions.length - 1)
+        }));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedIndex(prev => ({
+          ...prev,
+          [field]: Math.max(currentIndex - 1, -1)
+        }));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (currentIndex >= 0 && currentIndex < currentSuggestions.length) {
+          selectSuggestion(currentSuggestions[currentIndex], field);
+        }
+        break;
+      case 'Escape':
+        setShowSuggestions(prev => ({ ...prev, [field]: false }));
+        setSelectedIndex(prev => ({ ...prev, [field]: -1 }));
+        break;
+    }
+  };
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!fromInputRef.current?.contains(event.target) && !toInputRef.current?.contains(event.target)) {
+        setShowSuggestions({ from: false, to: false });
+        setSelectedIndex({ from: -1, to: -1 });
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -45,6 +166,21 @@ const SearchCard = ({ onSearchResults, showResults = false }) => {
     setLoading(true);
     
     try {
+      // First validate that trips exist for this search
+      const token = localStorage.getItem('token');
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      
+      // Add auth header only if user is logged in
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const searchResponse = await fetch(`/api/passenger/trips/search?from=${encodeURIComponent(formData.from)}&to=${encodeURIComponent(formData.to)}&date=${formData.journeyDate}`, {
+        headers
+      });
+
       const queryParams = new URLSearchParams({
         from: formData.from,
         to: formData.to,
@@ -56,8 +192,23 @@ const SearchCard = ({ onSearchResults, showResults = false }) => {
         queryParams.append('returnDate', formData.returnDate);
       }
 
-      // Redirect to results page with search parameters
-      navigate(`/search-results?${queryParams.toString()}`);
+      if (searchResponse.ok) {
+        const searchData = await searchResponse.json();
+        if (searchData.success && searchData.data.trips.length > 0) {
+          toast.success(`Found ${searchData.data.trips.length} trips available!`);
+        } else {
+          toast.info('No trips found for your search criteria, but you can still view all available trips.');
+        }
+      }
+
+      // Navigate to appropriate results page based on authentication
+      if (token) {
+        // User is logged in, go to passenger results
+        navigate(`/passenger/results?${queryParams.toString()}`);
+      } else {
+        // User is not logged in, go to public results page
+        navigate(`/search-results?${queryParams.toString()}`);
+      }
       
     } catch (error) {
       console.error('Search error:', error);
@@ -121,51 +272,127 @@ const SearchCard = ({ onSearchResults, showResults = false }) => {
 
       <form onSubmit={handleSubmit} className="form">
         {/* From Location */}
-        <div>
+        <div className="autocomplete-container">
           <label className="label">
             From
           </label>
           <div className="field">
             <MapPin className="field__icon" />
             <input
+              ref={fromInputRef}
               type="text"
               value={formData.from}
-              onChange={(e) => setFormData({...formData, from: e.target.value})}
+              onChange={(e) => handleInputChange('from', e.target.value)}
+              onKeyDown={(e) => handleKeyDown(e, 'from')}
               placeholder="Enter departure location"
               className="input"
               required
-              list="cities-from"
+              autoComplete="off"
             />
-            <datalist id="cities-from">
-              {cities.map((city, index) => (
-                <option key={index} value={city} />
-              ))}
-            </datalist>
+            {isLoadingSuggestions.from && (
+              <div className="loading-spinner">
+                <div className="spinner"></div>
+              </div>
+            )}
           </div>
+          
+          {/* Suggestions Dropdown */}
+          {showSuggestions.from && suggestions.from.length > 0 && (
+            <div className="suggestions-dropdown">
+              {suggestions.from.map((suggestion, index) => (
+                <div
+                  key={suggestion.id}
+                  className={`suggestion-item ${selectedIndex.from === index ? 'selected' : ''}`}
+                  onClick={() => selectSuggestion(suggestion, 'from')}
+                  onMouseEnter={() => setSelectedIndex(prev => ({ ...prev, from: index }))}
+                >
+                  <div className="suggestion-icon">
+                    {suggestion.type === 'stop' ? (
+                      <Navigation className="w-4 h-4" />
+                    ) : suggestion.type === 'city' ? (
+                      <MapPin className="w-4 h-4" />
+                    ) : (
+                      <Clock className="w-4 h-4" />
+                    )}
+                  </div>
+                  <div className="suggestion-content">
+                    <div className="suggestion-name">{suggestion.name}</div>
+                    <div className="suggestion-details">
+                      {suggestion.city !== suggestion.name && suggestion.city}
+                      {suggestion.state && `, ${suggestion.state}`}
+                      {suggestion.routeCount && ` • ${suggestion.routeCount} routes`}
+                    </div>
+                  </div>
+                  <div className="suggestion-type">
+                    {suggestion.type === 'stop' ? 'Stop' : 
+                     suggestion.type === 'city' ? 'City' : 'Route'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* To Location */}
-        <div>
+        <div className="autocomplete-container">
           <label className="label">
             To
           </label>
           <div className="field">
             <MapPin className="field__icon" />
             <input
+              ref={toInputRef}
               type="text"
               value={formData.to}
-              onChange={(e) => setFormData({...formData, to: e.target.value})}
+              onChange={(e) => handleInputChange('to', e.target.value)}
+              onKeyDown={(e) => handleKeyDown(e, 'to')}
               placeholder="Enter destination location"
               className="input"
               required
-              list="cities-to"
+              autoComplete="off"
             />
-            <datalist id="cities-to">
-              {cities.map((city, index) => (
-                <option key={index} value={city} />
-              ))}
-            </datalist>
+            {isLoadingSuggestions.to && (
+              <div className="loading-spinner">
+                <div className="spinner"></div>
+              </div>
+            )}
           </div>
+          
+          {/* Suggestions Dropdown */}
+          {showSuggestions.to && suggestions.to.length > 0 && (
+            <div className="suggestions-dropdown">
+              {suggestions.to.map((suggestion, index) => (
+                <div
+                  key={suggestion.id}
+                  className={`suggestion-item ${selectedIndex.to === index ? 'selected' : ''}`}
+                  onClick={() => selectSuggestion(suggestion, 'to')}
+                  onMouseEnter={() => setSelectedIndex(prev => ({ ...prev, to: index }))}
+                >
+                  <div className="suggestion-icon">
+                    {suggestion.type === 'stop' ? (
+                      <Navigation className="w-4 h-4" />
+                    ) : suggestion.type === 'city' ? (
+                      <MapPin className="w-4 h-4" />
+                    ) : (
+                      <Clock className="w-4 h-4" />
+                    )}
+                  </div>
+                  <div className="suggestion-content">
+                    <div className="suggestion-name">{suggestion.name}</div>
+                    <div className="suggestion-details">
+                      {suggestion.city !== suggestion.name && suggestion.city}
+                      {suggestion.state && `, ${suggestion.state}`}
+                      {suggestion.routeCount && ` • ${suggestion.routeCount} routes`}
+                    </div>
+                  </div>
+                  <div className="suggestion-type">
+                    {suggestion.type === 'stop' ? 'Stop' : 
+                     suggestion.type === 'city' ? 'City' : 'Route'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Date Fields */}

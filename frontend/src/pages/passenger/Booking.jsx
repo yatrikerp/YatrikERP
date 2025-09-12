@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch } from '../../utils/api';
+import notificationService from '../../services/notificationService';
 
 const PaxBooking = () => {
   const { tripId } = useParams();
@@ -51,8 +52,8 @@ const PaxBooking = () => {
     
     // Create proper booking data structure that matches backend model requirements
     const departureDate = trip.serviceDate || new Date().toISOString().split('T')[0];
-    const departureTime = trip.startTime || '08:00';
-    const arrivalTime = trip.endTime || '12:00';
+    const departureTime = boarding?.time || trip.startTime || '08:00';
+    const arrivalTime = dropping?.time || trip.endTime || '12:00';
     const baseFare = trip.fare || 250;
     const seatCount = Math.max(1, selectedSeats.length || 1);
     const totalAmount = baseFare * seatCount;
@@ -77,7 +78,9 @@ const PaxBooking = () => {
         departureTime: departureTime,
         arrivalDate: new Date(departureDate), // Same day arrival
         arrivalTime: arrivalTime,
-        duration: 240 // 4 hours in minutes
+        duration: 240, // 4 hours in minutes
+        boardingPoint: boarding?.title || 'Central Bus Stand',
+        droppingPoint: dropping?.title || 'Central Bus Stand'
       },
       seats: (selectedSeats.length ? selectedSeats : ['U1']).map((s, idx) => ({
         seatNumber: s,
@@ -225,7 +228,7 @@ const PaxBooking = () => {
             if (!currentBookingId) {
               console.error('❌ No booking ID available for confirmation');
               const fallbackPnr = `PNR${Date.now().toString().slice(-8)}`;
-              navigate(`/pax/ticket/${fallbackPnr}?pnr=${fallbackPnr}`);
+              navigate(`/passenger/ticket/${fallbackPnr}?pnr=${fallbackPnr}`);
               return;
             }
             
@@ -244,14 +247,34 @@ const PaxBooking = () => {
             if (confirmRes.ok) {
               const pnr = confirmRes.data?.data?.ticket?.pnr || confirmRes.data?.ticket?.pnr || currentBookingId || `PNR${Date.now().toString().slice(-8)}`;
               console.log('✅ Payment successful! Navigating to ticket:', pnr);
-              navigate(`/pax/ticket/${pnr}?pnr=${pnr}`);
+              
+              // Trigger notifications
+              notificationService.showPaymentSuccess({
+                amount: amount / 100, // Convert from paise to rupees
+                bookingId: currentBookingId,
+                pnr: pnr
+              });
+              
+              notificationService.showBookingConfirmation({
+                bookingId: currentBookingId,
+                pnr: pnr,
+                trip: {
+                  from: trip?.fromCity || 'Origin',
+                  to: trip?.toCity || 'Destination',
+                  date: trip?.serviceDate || new Date().toISOString().split('T')[0],
+                  time: trip?.startTime || '08:00',
+                  seats: selectedSeats.length ? selectedSeats : ['U1']
+                }
+              });
+              
+              navigate(`/passenger/ticket/${pnr}?pnr=${pnr}`);
               return;
             } else {
               console.error('Booking confirmation failed:', confirmRes);
               // Fallback: navigate to ticket anyway
               const fallbackPnr = `PNR${Date.now().toString().slice(-8)}`;
               console.log('⚠️ Using fallback PNR:', fallbackPnr);
-              navigate(`/pax/ticket/${fallbackPnr}?pnr=${fallbackPnr}`);
+              navigate(`/passenger/ticket/${fallbackPnr}?pnr=${fallbackPnr}`);
             }
           } catch (error) {
             console.error('Payment processing error:', error);
@@ -287,6 +310,7 @@ const PaxBooking = () => {
       <div className="max-w-5xl mx-auto bg-white rounded-2xl shadow-soft p-6 space-y-4">
         <div className="text-center py-8">
           <div className="text-lg">Loading trip details...</div>
+          <div className="text-sm text-gray-500 mt-2">Trip ID: {tripId || 'Not found'}</div>
         </div>
       </div>
     );
@@ -297,11 +321,12 @@ const PaxBooking = () => {
       <div className="max-w-5xl mx-auto bg-white rounded-2xl shadow-soft p-6 space-y-4">
         <div className="text-center py-8">
           <div className="text-red-600 text-lg mb-4">{error}</div>
+          <div className="text-sm text-gray-500 mb-4">Trip ID: {tripId || 'Not found'}</div>
           <button 
-            onClick={() => navigate('/pax/dashboard')}
+            onClick={() => navigate('/passenger/dashboard')}
             className="bg-blue-600 text-white px-6 py-2 rounded-lg"
           >
-            Back to Search
+            Back to Dashboard
           </button>
         </div>
       </div>
@@ -382,23 +407,6 @@ const PaxBooking = () => {
               <div className="text-2xl font-bold">₹{(fare || 0) * Math.max(1, selectedSeats.length || 1)}</div>
         </div>
             <button onClick={confirm} className="mt-4 w-full rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3">Continue booking</button>
-            <button 
-              onClick={async () => {
-                console.log('🚀 Test mode: Skipping payment verification');
-                try {
-                  const res = await apiFetch('/api/booking/confirm', { method: 'POST', body: JSON.stringify({ bookingId }) });
-                  if (res.ok) {
-                    const pnr = res.data.data?.ticket?.pnr || res.data.ticket?.pnr || bookingId;
-                    navigate(`/pax/ticket/${pnr}?pnr=${pnr}`);
-                  }
-                } catch (error) {
-                  console.error('Test mode confirmation failed:', error);
-                }
-              }}
-              className="mt-2 w-full rounded-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3"
-            >
-              🚀 Test Mode: Skip Payment
-            </button>
           </div>
         </div>
       </div>

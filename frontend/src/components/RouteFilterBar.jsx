@@ -194,16 +194,18 @@ const RouteFilterBar = ({
 
           {/* Action Buttons */}
           <div className="action-buttons">
-            <button
-              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              className={`filter-btn ${showAdvancedFilters ? 'active' : ''}`}
-            >
-              <Filter size={18} />
-              Advanced
-              {activeFiltersCount > 0 && (
-                <span className="filter-count">{activeFiltersCount}</span>
-              )}
-            </button>
+            {false && (
+              <button
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className={`filter-btn ${showAdvancedFilters ? 'active' : ''}`}
+              >
+                <Filter size={18} />
+                Advanced
+                {activeFiltersCount > 0 && (
+                  <span className="filter-count">{activeFiltersCount}</span>
+                )}
+              </button>
+            )}
 
             <button onClick={onRefresh} className="refresh-btn">
               <RefreshCw size={18} />
@@ -224,24 +226,26 @@ const RouteFilterBar = ({
               </button>
             </div>
 
-            <div className="export-import-buttons">
-              <button onClick={onExport} className="export-btn">
-                <Download size={18} />
-                Export
-              </button>
-              <label className="import-btn">
-                <Upload size={18} />
-                Import
-                <input
-                  type="file"
-                  accept=".xlsx,.csv"
-                  onChange={onImport}
-                  style={{ display: 'none' }}
-                />
-              </label>
-            </div>
+            {false && (
+              <div className="export-import-buttons">
+                <button onClick={onExport} className="export-btn">
+                  <Download size={18} />
+                  Export
+                </button>
+                <label className="import-btn">
+                  <Upload size={18} />
+                  Import
+                  <input
+                    type="file"
+                    accept=".xlsx,.csv"
+                    onChange={onImport}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
+            )}
 
-            {showCategorization !== undefined && (
+            {false && showCategorization !== undefined && (
               <button
                 onClick={onToggleCategorization}
                 className={`categorization-btn ${showCategorization ? 'active' : ''}`}

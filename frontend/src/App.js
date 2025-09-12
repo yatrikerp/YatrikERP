@@ -58,13 +58,26 @@ import AdminPaymentHistory from './pages/admin/AdminPaymentHistory';
 import AdminRevenue from './pages/admin/AdminRevenue';
 import RedirectDashboard from './pages/RedirectDashboard';
 
-// Passenger Pages
-import PassengerDashboardSimple from './pages/pax/PassengerDashboardSimple';
-import PassengerBooking from './pages/pax/Booking';
-// import PassengerResults from './pages/pax/Results';
-import EnhancedResults from './pages/pax/EnhancedResults';
-import BoardDrop from './pages/pax/BoardDrop';
-import TripSearchPanel from './components/pax/TripSearchPanel';
+// Passenger Pages (Legacy - keeping for reference)
+// import PassengerDashboardSimple from './pages/pax/PassengerDashboardSimple';
+// import PassengerBooking from './pages/pax/Booking';
+// import EnhancedResults from './pages/pax/EnhancedResults';
+// import BoardDrop from './pages/pax/BoardDrop';
+// import TripSearchPanel from './components/pax/TripSearchPanel';
+
+// New Passenger Module Pages
+import PassengerLayout from './components/pax/PassengerLayout';
+import PassengerDashboard from './pages/passenger/PassengerDashboard';
+import PassengerSearch from './pages/passenger/Search';
+import PassengerBookingNew from './pages/passenger/Booking';
+import PassengerResults from './pages/passenger/Results';
+import PassengerEnhancedResults from './pages/passenger/EnhancedResults';
+import PassengerBoardDrop from './pages/passenger/BoardDrop';
+import PassengerTicket from './pages/passenger/Ticket';
+import PassengerTicketsList from './pages/passenger/TicketsList';
+import PassengerWallet from './pages/passenger/Wallet';
+import PassengerRecommendations from './pages/passenger/Recommendations';
+import PassengerProfile from './pages/passenger/Profile';
 
 import './index.css';
 
@@ -189,55 +202,162 @@ function App() {
             {/* Passenger Routes */}
           <Route path="/pax" element={
             <RequireAuth roles={['passenger']}>
-              <AppShell>
-                <PassengerDashboardSimple />
-              </AppShell>
+              <PassengerLayout>
+                <PassengerDashboard />
+              </PassengerLayout>
             </RequireAuth>
           } />
 
           <Route path="/pax/dashboard" element={
             <RequireAuth roles={['passenger']}>
-              <AppShell>
-                <PassengerDashboardSimple />
-              </AppShell>
+              <PassengerLayout>
+                <PassengerDashboard />
+              </PassengerLayout>
             </RequireAuth>
           } />
 
           <Route path="/pax/booking" element={
             <RequireAuth roles={['passenger']}>
-              <AppShell>
-                <PassengerBooking />
-              </AppShell>
+              <PassengerLayout>
+                <PassengerBookingNew />
+              </PassengerLayout>
             </RequireAuth>
           } />
 
           <Route path="/pax/search" element={
             <RequireAuth roles={['passenger']}>
-              <AppShell>
-                <TripSearchPanel />
-              </AppShell>
+              <PassengerLayout>
+                <PassengerBookingNew />
+              </PassengerLayout>
             </RequireAuth>
           } />
 
           <Route path="/pax/results" element={
-            <AppShell>
-              <EnhancedResults />
-            </AppShell>
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerResults />
+              </PassengerLayout>
+            </RequireAuth>
           } />
           
           <Route path="/pax/booking/:tripId" element={
             <RequireAuth roles={['passenger']}>
-              <AppShell>
-                <PassengerBooking />
-              </AppShell>
+              <PassengerLayout>
+                <PassengerBookingNew />
+              </PassengerLayout>
             </RequireAuth>
           } />
 
           <Route path="/pax/board-drop/:tripId" element={
             <RequireAuth roles={['passenger']}>
-              <AppShell>
-                <BoardDrop />
-              </AppShell>
+              <PassengerLayout>
+                <PassengerBoardDrop />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          {/* New Passenger Module Routes */}
+          <Route path="/passenger/dashboard" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerDashboard />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/passenger/booking" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerSearch />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/passenger/search" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerSearch />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/passenger/results" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerResults />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/passenger/boarddrop/:tripId" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerBoardDrop />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/passenger/booking/:tripId" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerBookingNew />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/passenger/ticket/:pnr" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerTicket />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/passenger/enhanced-results" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerEnhancedResults />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/passenger/board-drop" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerBoardDrop />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/passenger/tickets" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerTicketsList />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/passenger/wallet" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerWallet />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/passenger/recommendations" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerRecommendations />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/passenger/profile" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerProfile />
+              </PassengerLayout>
             </RequireAuth>
           } />
             

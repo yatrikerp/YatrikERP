@@ -139,6 +139,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/depot-auth', require('./routes/depotAuth'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/depot', require('./routes/depot'));
+app.use('/api/passenger', require('./routes/passenger'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/bus-schedule', require('./routes/busSchedule'));
 app.use('/api/driver', require('./routes/driver'));

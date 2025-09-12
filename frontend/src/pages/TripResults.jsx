@@ -42,12 +42,11 @@ const TripResults = () => {
       setLoading(true);
       setError('');
 
-      // Make actual API call to search for trips
-      const response = await fetch(`/api/booking/search?${new URLSearchParams({
+      // Make actual API call to search for trips using passenger API
+      const response = await fetch(`/api/passenger/trips/search?${new URLSearchParams({
         from: from,
         to: to,
-        date: date,
-        tripType: tripType
+        date: date
       })}`);
       
       const data = await response.json();
@@ -57,7 +56,7 @@ const TripResults = () => {
         setError('');
       } else {
         setTrips([]);
-        setError(data.message || 'No routes found for the specified cities. Please try different cities or dates.');
+        setError(data.message || 'No trips found for the specified cities. Please try different cities or dates.');
       }
     } catch (error) {
       console.error('Search error:', error);

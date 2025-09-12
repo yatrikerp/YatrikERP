@@ -30,17 +30,17 @@ const LandingPage = () => {
     
     if (!user) {
       console.log('No user, redirecting to login');
-      navigate('/login?next=/pax');
+      navigate('/login?next=/passenger/dashboard');
       return;
     }
     
     const role = (user.role || 'passenger').toUpperCase();
     console.log('User role:', role);
     
-    // Send each role to its own dashboard; only passengers to pax
+    // Send each role to its own dashboard; passengers to new passenger dashboard
     if (role === 'PASSENGER') {
-      console.log('Redirecting to /pax');
-      navigate('/pax');
+      console.log('Redirecting to /passenger/dashboard');
+      navigate('/passenger/dashboard');
     } else if (role === 'ADMIN') {
       console.log('Redirecting to /admin');
       navigate('/admin');

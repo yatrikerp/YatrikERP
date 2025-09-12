@@ -91,7 +91,7 @@ router.get('/cities', async (req, res) => {
     ]);
 
     const cityList = cities.length > 0 ? cities[0].cities : [];
-    res.json({ success: true, data: cityList });
+    res.json({ success: true, data: { cities: cityList } });
   } catch (error) {
     console.error('Error fetching cities:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch cities' });

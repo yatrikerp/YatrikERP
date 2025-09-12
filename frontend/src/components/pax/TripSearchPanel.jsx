@@ -151,11 +151,16 @@ const TripSearchPanel = () => {
 
     setIsSearching(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      setSearchResults(mockSearchResults);
-      setIsSearching(false);
-    }, 1500);
+    // Redirect to results page with search parameters
+    const queryParams = new URLSearchParams({
+      from: searchForm.from,
+      to: searchForm.to,
+      date: searchForm.date,
+      passengers: searchForm.passengers
+    });
+
+    // Use navigate to redirect to passenger results
+    navigate(`/passenger/results?${queryParams.toString()}`);
   };
 
   const handleInputChange = (field, value) => {

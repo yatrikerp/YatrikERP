@@ -499,121 +499,63 @@ const DepotDashboard = () => {
           </div>
         </div>
 
-        {/* Main Content */}
-      <div className="main-content">
-        {/* Top Application Bar - Proper Order */}
-        <div className="top-bar">
-          {/* Left Section - Search */}
-          <div className="top-bar-left">
-            <div className="search-section">
+        {/* Top Header */}
+        <div className="top-header">
+          {/* Left Section - Search Bar */}
+          <div className="header-left">
+            <div className="search-container">
               <svg className="search-icon" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414L10.89 9.89A6 6 0 012 8z" clipRule="evenodd" />
               </svg>
-              <input type="text" className="search-input" placeholder="Search users, trips, routes..." />
+              <input 
+                type="text" 
+                className="search-input" 
+                placeholder="Search users, trips, routes..." 
+              />
             </div>
           </div>
 
-          {/* Center Section - Status Indicators */}
-          <div className="top-bar-center">
+          {/* Center Section - System Status Indicators */}
+          <div className="header-center">
             <div className="status-indicators">
-              <div className="status-item">
+              <div className="status-item status-online">
                 <svg className="status-icon" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
                 </svg>
                 <span>Database</span>
+                <div className="status-dot dot-green"></div>
               </div>
-              <div className="status-item">
+              
+              <div className="status-item status-online">
                 <svg className="status-icon" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M2 5a2 2 0 012-2h8a2 2 0 012 2v10a2 2 0 002 2H4a2 2 0 01-2-2V5zm3 1h6v4H5V6zm6 6H5v2h6v-2z" clipRule="evenodd" />
                 </svg>
                 <span>API Server</span>
+                <div className="status-dot dot-green"></div>
               </div>
-              <div className="status-item">
+              
+              <div className="status-item status-online">
                 <svg className="status-icon" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
                 <span>Frontend</span>
+                <div className="status-dot dot-green"></div>
               </div>
-              <div className="status-item">
-                <svg className="status-icon" fill="currentColor" viewBox="0 0 20 20">
+              
+              <div className="status-item status-online">
+                <svg className="status-icon mobile-icon" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M7 2a2 2 0 00-2 2v12a2 2 0 002 2h6a2 2 0 002-2V4a2 2 0 00-2-2H7zm3 14a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
                 </svg>
                 <span>Mobile App</span>
+                <div className="status-dot dot-green"></div>
               </div>
             </div>
           </div>
 
-          {/* Right Section - User Profile */}
-          <div className="top-bar-right">
-            <div className="user-profile-top" onClick={() => setShowProfileDropdown(!showProfileDropdown)}>
-              <div className="user-avatar-top">
-                {user?.name?.charAt(0) || 'D'}
-              </div>
-              <div className="user-info-top">
-                <div className="user-name-top">{depotInfo.manager || user?.name || 'Depot Manager'}</div>
-              </div>
-              <svg className="dropdown-arrow" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </div>
-            
-            {/* Profile Dropdown Menu */}
-            {showProfileDropdown && (
-              <div className="profile-dropdown">
-                <div className="dropdown-header">
-                  <div className="dropdown-avatar">
-                    {user?.name?.charAt(0) || 'D'}
-                  </div>
-                  <div className="dropdown-user-info">
-                    <div className="dropdown-name">{depotInfo.manager || user?.name || 'Depot Manager'}</div>
-                    <div className="dropdown-role">Depot Manager</div>
-                  </div>
-                </div>
-                
-                <div className="dropdown-divider"></div>
-                
-                <div className="dropdown-menu">
-                  <div className="dropdown-item" onClick={handleProfileView}>
-                    <svg className="dropdown-icon" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                    </svg>
-                    <span>View Profile</span>
-                  </div>
-                  
-                  <div className="dropdown-item" onClick={handleChangeDepotName}>
-                    <svg className="dropdown-icon" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                    </svg>
-                    <span>Change Depot Name</span>
-                  </div>
-                  
-                  <div className="dropdown-item" onClick={handleChangePassword}>
-                    <svg className="dropdown-icon" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                    </svg>
-                    <span>Change Password</span>
-                  </div>
-                  
-                  <div className="dropdown-item" onClick={handleDepotSettings}>
-                    <svg className="dropdown-icon" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-                    </svg>
-                    <span>Depot Settings</span>
-                  </div>
-                  
-                  <div className="dropdown-divider"></div>
-                  
-                  <div className="dropdown-item logout-item" onClick={handleLogout}>
-                    <svg className="dropdown-icon" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
-                    </svg>
-                    <span>Logout</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
+
+        {/* Main Content */}
+      <div className="main-content">
 
         {/* Dashboard Content */}
         <div className="dashboard-content">
