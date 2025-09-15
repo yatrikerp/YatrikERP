@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import PaymentService from '../utils/paymentService';
 import { apiFetch } from '../utils/api';
+import SeatSelection from '../components/SeatSelection';
+import BoardingDropSelection from '../components/BoardingDropSelection';
 import { 
   Bus, 
   MapPin, 
@@ -29,12 +31,14 @@ const Booking = () => {
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [seats, setSeats] = useState([]);
   const [selectedSeats, setSelectedSeats] = useState([]);
+  const [boardingPoint, setBoardingPoint] = useState(null);
+  const [dropPoint, setDropPoint] = useState(null);
   const [passengerDetails, setPassengerDetails] = useState({
     name: user?.name || '',
     email: user?.email || '',
     phone: user?.phone || '',
     age: '',
-    gender: 'male'
+    gender: user?.gender || 'male'
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [bookingStep, setBookingStep] = useState(1);
@@ -125,13 +129,15 @@ const Booking = () => {
           tripId: selectedTrip.id,
           seatNumbers: selectedSeats,
           passengerDetails: passengerDetails,
+          boardingPoint: boardingPoint,
+          dropPoint: dropPoint,
           paymentMethod: 'razorpay'
         })
       });
 
       if (response.ok) {
         setBookingData(response.data);
-        setBookingStep(4);
+        setBookingStep(5);
       } else {
         toast.error(response.message || 'Failed to create booking');
       }
@@ -163,7 +169,7 @@ const Booking = () => {
 
       if (confirmResponse.ok) {
         setTickets(confirmResponse.data.tickets);
-        setBookingStep(5);
+        setBookingStep(6);
         toast.success('Booking confirmed! Payment successful.');
       } else {
         toast.error('Failed to confirm booking');
@@ -286,75 +292,27 @@ const Booking = () => {
   );
 
   const renderSeatSelection = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-gray-800">Select Seats</h2>
-        <button
-          onClick={() => setBookingStep(1)}
-          className="flex items-center space-x-2 text-gray-600 hover:text-gray-800"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Trips</span>
-        </button>
-      </div>
+    <SeatSelection
+      trip={selectedTrip}
+      selectedSeats={selectedSeats}
+      onSeatSelect={handleSeatSelection}
+      onBack={() => setBookingStep(1)}
+      onContinue={() => setBookingStep(3)}
+      passengerGender={passengerDetails.gender}
+    />
+  );
 
-      {/* Trip Info */}
-      {selectedTrip && (
-        <div className="bg-green-50 p-4 rounded-lg mb-6">
-          <h3 className="font-semibold text-green-900 mb-2">{selectedTrip.routeName}</h3>
-          <div className="flex items-center space-x-4 text-sm text-green-700">
-            <span>{selectedTrip.from} → {selectedTrip.to}</span>
-            <span>•</span>
-            <span>{new Date(selectedTrip.date).toLocaleDateString()}</span>
-            <span>•</span>
-            <span>{selectedTrip.time}</span>
-            <span>•</span>
-            <span>Bus: {selectedTrip.busNumber}</span>
-          </div>
-        </div>
-      )}
-
-      <div className="bg-gray-100 p-4 rounded-lg">
-        <div className="grid grid-cols-4 gap-2 max-w-md mx-auto">
-          {seats.map((seat) => (
-            <button
-              key={seat.seatNumber}
-              disabled={seat.isBooked}
-              className={`p-2 rounded text-sm font-medium transition-colors ${
-                seat.isBooked
-                  ? 'bg-red-500 text-white cursor-not-allowed'
-                  : selectedSeats.includes(seat.seatNumber)
-                  ? 'bg-pink-500 text-white'
-                  : 'bg-white text-gray-700 hover:bg-pink-100'
-              }`}
-              onClick={() => handleSeatSelection(seat.seatNumber)}
-            >
-              {seat.seatNumber}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="text-center space-y-2">
-        <p className="text-sm text-gray-600">
-          Selected seats: {selectedSeats.join(', ') || 'None'}
-        </p>
-        <div className="flex justify-center space-x-4 text-xs">
-          <div className="flex items-center space-x-1">
-            <div className="w-3 h-3 bg-white rounded"></div>
-            <span>Available</span>
-          </div>
-          <div className="flex items-center space-x-1">
-            <div className="w-3 h-3 bg-pink-500 rounded"></div>
-            <span>Selected</span>
-          </div>
-          <div className="flex items-center space-x-1">
-            <div className="w-3 h-3 bg-red-500 rounded"></div>
-            <span>Booked</span>
-          </div>
-        </div>
-      </div>
-    </div>
+  const renderBoardingDropSelection = () => (
+    <BoardingDropSelection
+      trip={selectedTrip}
+      selectedSeats={selectedSeats}
+      boardingPoint={boardingPoint}
+      dropPoint={dropPoint}
+      onBoardingSelect={setBoardingPoint}
+      onDropSelect={setDropPoint}
+      onBack={() => setBookingStep(2)}
+      onContinue={() => setBookingStep(4)}
+    />
   );
 
   const renderPassengerDetails = () => (
@@ -610,32 +568,14 @@ const Booking = () => {
 
       <div className="bg-white rounded-lg shadow-lg p-6">
         {bookingStep === 1 && renderTripSelection()}
-        {bookingStep === 2 && (
-          <div className="space-y-6">
-            {renderSeatSelection()}
-            <div className="flex justify-between">
-              <button
-                onClick={() => setBookingStep(1)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={() => setBookingStep(3)}
-                disabled={selectedSeats.length === 0}
-                className="px-6 py-2 bg-pink-600 text-white rounded-lg disabled:opacity-50"
-              >
-                Continue →
-              </button>
-            </div>
-          </div>
-        )}
-        {bookingStep === 3 && (
+        {bookingStep === 2 && renderSeatSelection()}
+        {bookingStep === 3 && renderBoardingDropSelection()}
+        {bookingStep === 4 && (
           <div className="space-y-6">
             {renderPassengerDetails()}
             <div className="flex justify-between">
               <button
-                onClick={() => setBookingStep(2)}
+                onClick={() => setBookingStep(3)}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800"
               >
                 ← Back
@@ -650,8 +590,8 @@ const Booking = () => {
             </div>
           </div>
         )}
-        {bookingStep === 4 && renderPaymentStep()}
-        {bookingStep === 5 && renderTicketConfirmation()}
+        {bookingStep === 5 && renderPaymentStep()}
+        {bookingStep === 6 && renderTicketConfirmation()}
       </div>
     </div>
   );

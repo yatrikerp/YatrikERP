@@ -23,10 +23,12 @@ router.post('/mark', auth, async (req, res) => {
     
     // Find employee based on user role
     if (req.user.role === 'driver') {
-      employee = await Driver.findById(req.user.driverId);
+      const driverId = req.user.driverId || req.user._id;
+      employee = await Driver.findById(driverId);
       employeeType = 'driver';
     } else if (req.user.role === 'conductor') {
-      employee = await Conductor.findById(req.user.conductorId);
+      const conductorId = req.user.conductorId || req.user._id;
+      employee = await Conductor.findById(conductorId);
       employeeType = 'conductor';
     } else {
       return res.status(403).json({

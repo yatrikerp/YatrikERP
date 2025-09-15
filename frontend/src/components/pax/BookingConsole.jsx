@@ -88,7 +88,7 @@ const BookingConsole = () => {
                   <td className="px-3 py-2">{t.availableSeats ?? '-'}</td>
                   <td className="px-3 py-2">₹{t.fare}</td>
                   <td className="px-3 py-2 text-right">
-                    <button onClick={()=> navigate(`/pax/booking/${t._id}`)} className="px-3 py-1.5 rounded bg-[#ff7a1a] text-white text-xs">View Seat</button>
+                    <button onClick={()=> navigate(`/pax/board-drop/${t._id}`, { state: { trip: t } })} className="px-3 py-1.5 rounded bg-[#ff7a1a] text-white text-xs">View Seat</button>
                   </td>
                 </tr>
               ))}

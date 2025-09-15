@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const DepotUser = require('../models/DepotUser');
+const Driver = require('../models/Driver');
+const Conductor = require('../models/Conductor');
 
 // Simple in-memory cache for user data (in production, use Redis)
 const userCache = new Map();
@@ -62,6 +64,48 @@ const auth = async (req, res, next) => {
           depotCode: depotUser.depotCode,
           depotName: depotUser.depotName,
           permissions: depotUser.permissions || []
+        };
+      }
+    }
+
+    // If still not found, try Driver model
+    if (!user) {
+      const driver = await Driver.findById(payload.userId)
+        .select('_id driverId name email phone status depotId lastLogin')
+        .lean();
+
+      if (driver) {
+        user = {
+          _id: driver._id,
+          driverId: driver.driverId,
+          name: driver.name,
+          email: driver.email,
+          phone: driver.phone,
+          role: 'driver',
+          status: driver.status,
+          depotId: driver.depotId,
+          lastLogin: driver.lastLogin
+        };
+      }
+    }
+
+    // If still not found, try Conductor model
+    if (!user) {
+      const conductor = await Conductor.findById(payload.userId)
+        .select('_id conductorId name email phone status depotId lastLogin')
+        .lean();
+
+      if (conductor) {
+        user = {
+          _id: conductor._id,
+          conductorId: conductor.conductorId,
+          name: conductor.name,
+          email: conductor.email,
+          phone: conductor.phone,
+          role: 'conductor',
+          status: conductor.status,
+          depotId: conductor.depotId,
+          lastLogin: conductor.lastLogin
         };
       }
     }

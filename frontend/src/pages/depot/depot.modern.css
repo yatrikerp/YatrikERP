@@ -1082,6 +1082,36 @@ html, body, #root {
 
 
 
+/* Scheduling Dashboard Module */
+.scheduling-dashboard-module {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.scheduling-dashboard-module .module-header {
+  background: linear-gradient(135deg, #E91E63 0%, #FF4081 100%);
+  color: white;
+  padding: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.scheduling-dashboard-module .module-header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.scheduling-dashboard-module .module-header .icon {
+  width: 28px;
+  height: 28px;
+}
+
 /* System Health */
 .system-health {
   background: white;
@@ -1273,6 +1303,10 @@ html, body, #root {
   background: linear-gradient(135deg, #fce7f3 0%, #fdf2f8 100%);
 }
 
+.kpi-icon.purple {
+  background: linear-gradient(135deg, #e9d5ff 0%, #f3e8ff 100%);
+}
+
 .kpi-icon .icon {
   width: 24px;
   height: 24px;
@@ -1292,6 +1326,10 @@ html, body, #root {
 
 .kpi-icon.red .icon {
   color: #E91E63;
+}
+
+.kpi-icon.purple .icon {
+  color: #8B5CF6;
 }
 
 /* Live Tracking */

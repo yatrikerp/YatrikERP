@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conductor Dashboard Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #F7F9FB;
+        }
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .navbar {
+            background: linear-gradient(135deg, #0A2540 0%, #0B3A53 100%);
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            color: white;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 8px;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .card {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            border: 1px solid #ECEFF1;
+        }
+        .btn {
+            background: #E53935;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover { background: #c62828; }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <div class="navbar">
+            <h1>🚌 Conductor Dashboard Test</h1>
+            <p>Testing if the conductor dashboard changes are visible</p>
+        </div>
+
+        <div class="status info">
+            <strong>Test Status:</strong> This page shows the expected conductor dashboard design
+        </div>
+
+        <div class="card">
+            <h3>✅ Expected Design Elements:</h3>
+            <ul>
+                <li>Dark Navy Blue navbar (#0A2540)</li>
+                <li>Light background (#F7F9FB)</li>
+                <li>Clean card layouts with rounded corners</li>
+                <li>Professional spacing and typography</li>
+                <li>Bright Red buttons (#E53935)</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h3>🔧 Troubleshooting Steps:</h3>
+            <ol>
+                <li><strong>Clear Browser Cache:</strong> Press Ctrl+F5 (Windows) or Cmd+Shift+R (Mac)</li>
+                <li><strong>Check URL:</strong> Make sure you're going to <code>http://localhost:3000/conductor</code></li>
+                <li><strong>Login as Conductor:</strong> Use conductor@yatrik.com / conductor123</li>
+                <li><strong>Check Console:</strong> Press F12 and look for JavaScript errors</li>
+                <li><strong>Restart Server:</strong> Stop and restart the frontend server</li>
+            </ol>
+        </div>
+
+        <div class="card">
+            <h3>🎯 Quick Actions:</h3>
+            <button class="btn" onclick="window.open('http://localhost:3000/conductor', '_blank')">
+                Open Conductor Dashboard
+            </button>
+            <button class="btn" onclick="window.open('http://localhost:3000/login', '_blank')">
+                Open Login Page
+            </button>
+            <button class="btn" onclick="location.reload()">
+                Refresh This Page
+            </button>
+        </div>
+
+        <div class="card">
+            <h3>📱 Test Credentials:</h3>
+            <p><strong>Email:</strong> conductor@yatrik.com</p>
+            <p><strong>Password:</strong> conductor123</p>
+            <p><strong>Role:</strong> conductor</p>
+        </div>
+    </div>
+
+    <script>
+        console.log('Conductor Dashboard Test Page Loaded');
+        console.log('Expected URL: http://localhost:3000/conductor');
+        console.log('Test Credentials: conductor@yatrik.com / conductor123');
+    </script>
+</body>
+</html>

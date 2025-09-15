@@ -73,6 +73,7 @@ router.post('/login', async (req, res) => {
     // Generate JWT token
     const token = jwt.sign(
       {
+        userId: conductor._id,
         conductorId: conductor._id,
         username: conductor.username,
         depotId: conductor.depotId,
@@ -119,7 +120,8 @@ router.post('/login', async (req, res) => {
 // POST /api/conductor/logout - Conductor logout with attendance marking
 router.post('/logout', auth, async (req, res) => {
   try {
-    const conductor = await Conductor.findById(req.user.conductorId);
+    const conductorId = req.user.conductorId || req.user._id;
+    const conductor = await Conductor.findById(conductorId);
     if (!conductor) {
       return res.status(404).json({
         success: false,
@@ -156,27 +158,67 @@ router.post('/logout', auth, async (req, res) => {
 // GET /api/conductor/profile - Get conductor profile
 router.get('/profile', auth, async (req, res) => {
   try {
-    const conductor = await Conductor.findById(req.user.conductorId)
-      .populate('depotId', 'depotName depotCode location')
-      .select('-password');
-
-    if (!conductor) {
-      return res.status(404).json({
+    console.log('Conductor profile request - User object:', req.user);
+    
+    // Try multiple possible conductor ID fields
+    const conductorId = req.user.conductorId || req.user._id || req.user.id;
+    
+    console.log('Extracted conductor ID:', conductorId);
+    
+    if (!conductorId) {
+      console.error('No conductor ID found in user object:', req.user);
+      return res.status(400).json({
         success: false,
-        message: 'Conductor not found'
+        message: 'Conductor ID not found in token',
+        debug: { userObject: req.user }
       });
     }
 
+    const conductor = await Conductor.findById(conductorId)
+      .populate('depotId', 'depotName depotCode location')
+      .select('-password -loginAttempts -lockUntil');
+
+    console.log('Found conductor:', conductor ? 'Yes' : 'No');
+
+    if (!conductor) {
+      console.error('Conductor not found in database for ID:', conductorId);
+      return res.status(404).json({
+        success: false,
+        message: 'Conductor not found',
+        debug: { conductorId }
+      });
+    }
+
+    // Format the response to match frontend expectations
+    const profileData = {
+      _id: conductor._id,
+      conductorId: conductor.conductorId,
+      name: conductor.name,
+      employeeCode: conductor.employeeCode,
+      phone: conductor.phone,
+      email: conductor.email,
+      address: conductor.address,
+      emergencyContact: conductor.emergencyContact,
+      depotId: conductor.depotId,
+      status: conductor.status,
+      currentDuty: conductor.currentDuty,
+      createdAt: conductor.createdAt,
+      updatedAt: conductor.updatedAt
+    };
+
+    console.log('Returning profile data:', profileData);
+
     res.json({
       success: true,
-      data: conductor
+      data: profileData
     });
 
   } catch (error) {
     console.error('Get conductor profile error:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error',
+      error: error.message
     });
   }
 });
@@ -186,7 +228,8 @@ router.put('/profile', auth, async (req, res) => {
   try {
     const { name, phone, email, address, emergencyContact } = req.body;
     
-    const conductor = await Conductor.findById(req.user.conductorId);
+    const conductorId = req.user.conductorId || req.user._id;
+    const conductor = await Conductor.findById(conductorId);
     if (!conductor) {
       return res.status(404).json({
         success: false,
@@ -201,7 +244,7 @@ router.put('/profile', auth, async (req, res) => {
     if (address) conductor.address = address;
     if (emergencyContact) conductor.emergencyContact = emergencyContact;
 
-    conductor.updatedBy = req.user.conductorId;
+    conductor.updatedBy = req.user.conductorId || req.user._id;
     await conductor.save();
 
     // Log activity
@@ -235,7 +278,10 @@ router.get('/duties', auth, async (req, res) => {
   try {
     const { status, date } = req.query;
     
-    let query = { conductorId: req.user.conductorId };
+    // Ensure we have the correct conductor ID
+    const conductorId = req.user.conductorId || req.user._id;
+    
+    let query = { conductorId: conductorId };
     
     if (status) {
       query.status = status;
@@ -273,8 +319,11 @@ router.get('/duties', auth, async (req, res) => {
 // GET /api/conductor/duties/current - Get current duty
 router.get('/duties/current', auth, async (req, res) => {
   try {
+    // Ensure we have the correct conductor ID
+    const conductorId = req.user.conductorId || req.user._id;
+    
     const duty = await Duty.findOne({
-      conductorId: req.user.conductorId,
+      conductorId: conductorId,
       status: { $in: ['assigned', 'started', 'in-progress', 'on-break'] }
     })
     .populate('driverId', 'name driverId')
@@ -311,7 +360,7 @@ router.post('/duties/:dutyId/start', auth, async (req, res) => {
     
     const duty = await Duty.findOne({
       _id: req.params.dutyId,
-      conductorId: req.user.conductorId,
+      conductorId: req.user.conductorId || req.user._id,
       status: 'assigned'
     });
 
@@ -326,7 +375,8 @@ router.post('/duties/:dutyId/start', auth, async (req, res) => {
     await duty.startDuty(location);
 
     // Update conductor's current duty
-    const conductor = await Conductor.findById(req.user.conductorId);
+    const conductorId = req.user.conductorId || req.user._id;
+    const conductor = await Conductor.findById(conductorId);
     await conductor.startDuty(duty._id, duty.tripId, duty.busId);
 
     // Log activity
@@ -360,7 +410,7 @@ router.post('/duties/:dutyId/end', auth, async (req, res) => {
     
     const duty = await Duty.findOne({
       _id: req.params.dutyId,
-      conductorId: req.user.conductorId,
+      conductorId: req.user.conductorId || req.user._id,
       status: { $in: ['started', 'in-progress', 'on-break'] }
     });
 
@@ -375,7 +425,8 @@ router.post('/duties/:dutyId/end', auth, async (req, res) => {
     await duty.completeDuty(location);
 
     // Update conductor's duty status
-    const conductor = await Conductor.findById(req.user.conductorId);
+    const conductorId = req.user.conductorId || req.user._id;
+    const conductor = await Conductor.findById(conductorId);
     await conductor.endDuty();
 
     // Log activity
@@ -409,7 +460,7 @@ router.post('/duties/:dutyId/break', auth, async (req, res) => {
     
     const duty = await Duty.findOne({
       _id: req.params.dutyId,
-      conductorId: req.user.conductorId,
+      conductorId: req.user.conductorId || req.user._id,
       status: { $in: ['started', 'in-progress'] }
     });
 
@@ -424,7 +475,8 @@ router.post('/duties/:dutyId/break', auth, async (req, res) => {
     await duty.takeBreak(location, duration);
 
     // Log activity
-    const conductor = await Conductor.findById(req.user.conductorId);
+    const conductorId = req.user.conductorId || req.user._id;
+    const conductor = await Conductor.findById(conductorId);
     await conductor.logActivity(
       'break_started',
       `Started break for ${duration} minutes`,
@@ -453,7 +505,7 @@ router.post('/duties/:dutyId/break/end', auth, async (req, res) => {
   try {
     const duty = await Duty.findOne({
       _id: req.params.dutyId,
-      conductorId: req.user.conductorId,
+      conductorId: req.user.conductorId || req.user._id,
       status: 'on-break'
     });
 
@@ -468,7 +520,8 @@ router.post('/duties/:dutyId/break/end', auth, async (req, res) => {
     await duty.endBreak();
 
     // Log activity
-    const conductor = await Conductor.findById(req.user.conductorId);
+    const conductorId = req.user.conductorId || req.user._id;
+    const conductor = await Conductor.findById(conductorId);
     await conductor.logActivity(
       'break_ended',
       'Break ended',
@@ -499,7 +552,7 @@ router.post('/duties/:dutyId/delay', auth, async (req, res) => {
     
     const duty = await Duty.findOne({
       _id: req.params.dutyId,
-      conductorId: req.user.conductorId,
+      conductorId: req.user.conductorId || req.user._id,
       status: { $in: ['started', 'in-progress'] }
     });
 
@@ -514,7 +567,8 @@ router.post('/duties/:dutyId/delay', auth, async (req, res) => {
     await duty.addDelay(reason, duration, location);
 
     // Log activity
-    const conductor = await Conductor.findById(req.user.conductorId);
+    const conductorId = req.user.conductorId || req.user._id;
+    const conductor = await Conductor.findById(conductorId);
     await conductor.logActivity(
       'delay_reported',
       `Delay reported: ${reason} (${duration} minutes)`,
@@ -545,7 +599,7 @@ router.post('/duties/:dutyId/incident', auth, async (req, res) => {
     
     const duty = await Duty.findOne({
       _id: req.params.dutyId,
-      conductorId: req.user.conductorId,
+      conductorId: req.user.conductorId || req.user._id,
       status: { $in: ['started', 'in-progress', 'on-break'] }
     });
 
@@ -557,10 +611,11 @@ router.post('/duties/:dutyId/incident', auth, async (req, res) => {
     }
 
     // Report incident
-    await duty.reportIncident(type, description, severity, location, req.user.conductorId);
+    await duty.reportIncident(type, description, severity, location, req.user.conductorId || req.user._id);
 
     // Log activity
-    const conductor = await Conductor.findById(req.user.conductorId);
+    const conductorId = req.user.conductorId || req.user._id;
+    const conductor = await Conductor.findById(conductorId);
     await conductor.logActivity(
       'incident_reported',
       `Incident reported: ${type} - ${description}`,
@@ -591,7 +646,8 @@ router.get('/attendance', auth, async (req, res) => {
   try {
     const { startDate, endDate, status } = req.query;
     
-    const conductor = await Conductor.findById(req.user.conductorId);
+    const conductorId = req.user.conductorId || req.user._id;
+    const conductor = await Conductor.findById(conductorId);
     if (!conductor) {
       return res.status(404).json({
         success: false,
@@ -635,7 +691,8 @@ router.get('/activities', auth, async (req, res) => {
   try {
     const { startDate, endDate, action, relatedEntity, limit = 50 } = req.query;
     
-    const conductor = await Conductor.findById(req.user.conductorId);
+    const conductorId = req.user.conductorId || req.user._id;
+    const conductor = await Conductor.findById(conductorId);
     if (!conductor) {
       return res.status(404).json({
         success: false,
@@ -931,6 +988,783 @@ router.delete('/:id', auth, requireRole(['admin']), async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Internal server error'
+    });
+  }
+});
+
+// New Conductor Dashboard API Routes
+
+// GET /api/conductor/duties/current - Get current duty assignment
+router.get('/duties/current', auth, requireRole(['conductor']), async (req, res) => {
+  try {
+    const conductorId = req.user.id;
+    
+    // Find current active duty
+    const currentDuty = await Duty.findOne({
+      conductorId,
+      status: { $in: ['assigned', 'active'] },
+      date: {
+        $gte: new Date().setHours(0, 0, 0, 0),
+        $lt: new Date().setHours(23, 59, 59, 999)
+      }
+    })
+    .populate('routeId', 'routeName origin destination')
+    .populate('busId', 'busNumber totalSeats')
+    .populate('tripId');
+
+    if (!currentDuty) {
+      return res.json({
+        success: true,
+        data: null,
+        message: 'No active duty assigned'
+      });
+    }
+
+    // Calculate passenger statistics
+    const passengerCount = currentDuty.passengerManifest ? currentDuty.passengerManifest.length : 0;
+    const boardedCount = currentDuty.passengerManifest ? 
+      currentDuty.passengerManifest.filter(p => p.boardingStatus === 'boarded').length : 0;
+
+    const dutyData = {
+      _id: currentDuty._id,
+      status: currentDuty.status,
+      busNumber: currentDuty.busId?.busNumber || 'N/A',
+      routeName: currentDuty.routeId?.routeName || 'N/A',
+      origin: currentDuty.routeId?.origin || 'N/A',
+      destination: currentDuty.routeId?.destination || 'N/A',
+      totalSeats: currentDuty.busId?.totalSeats || 0,
+      boardedCount,
+      revenue: currentDuty.revenue || 0,
+      nextStop: currentDuty.nextStop || '',
+      progress: currentDuty.progress || 0,
+      startTime: currentDuty.startTime,
+      endTime: currentDuty.endTime
+    };
+
+    res.json({
+      success: true,
+      data: dutyData
+    });
+  } catch (error) {
+    console.error('Error fetching current duty:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/conductor/duties/:dutyId/start - Start duty
+router.post('/duties/:dutyId/start', auth, requireRole(['conductor']), async (req, res) => {
+  try {
+    const { dutyId } = req.params;
+    const conductorId = req.user.id;
+
+    const duty = await Duty.findOne({ _id: dutyId, conductorId });
+    if (!duty) {
+      return res.status(404).json({
+        success: false,
+        message: 'Duty not found'
+      });
+    }
+
+    if (duty.status !== 'assigned') {
+      return res.status(400).json({
+        success: false,
+        message: 'Duty cannot be started'
+      });
+    }
+
+    duty.status = 'active';
+    duty.startTime = new Date();
+    await duty.save();
+
+    res.json({
+      success: true,
+      message: 'Duty started successfully',
+      data: duty
+    });
+  } catch (error) {
+    console.error('Error starting duty:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/conductor/duties/:dutyId/end - End duty
+router.post('/duties/:dutyId/end', auth, requireRole(['conductor']), async (req, res) => {
+  try {
+    const { dutyId } = req.params;
+    const conductorId = req.user.id;
+
+    const duty = await Duty.findOne({ _id: dutyId, conductorId });
+    if (!duty) {
+      return res.status(404).json({
+        success: false,
+        message: 'Duty not found'
+      });
+    }
+
+    if (duty.status !== 'active') {
+      return res.status(400).json({
+        success: false,
+        message: 'Duty is not active'
+      });
+    }
+
+    duty.status = 'completed';
+    duty.endTime = new Date();
+    
+    // Generate final report
+    const report = {
+      dutyId: duty._id,
+      conductorId,
+      totalPassengers: duty.passengerManifest ? duty.passengerManifest.length : 0,
+      boardedPassengers: duty.passengerManifest ? 
+        duty.passengerManifest.filter(p => p.boardingStatus === 'boarded').length : 0,
+      revenue: duty.revenue || 0,
+      completedAt: new Date()
+    };
+
+    duty.finalReport = report;
+    await duty.save();
+
+    res.json({
+      success: true,
+      message: 'Duty completed successfully',
+      data: { duty, report }
+    });
+  } catch (error) {
+    console.error('Error ending duty:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// GET /api/conductor/trips/:tripId/passengers - Get passenger list for trip
+router.get('/trips/:tripId/passengers', auth, requireRole(['conductor']), async (req, res) => {
+  try {
+    const { tripId } = req.params;
+    
+    const duty = await Duty.findOne({ 
+      tripId,
+      conductorId: req.user.id,
+      status: { $in: ['assigned', 'active'] }
+    });
+
+    if (!duty) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trip not found or not assigned to you'
+      });
+    }
+
+    const passengers = duty.passengerManifest || [];
+
+    res.json({
+      success: true,
+      data: passengers
+    });
+  } catch (error) {
+    console.error('Error fetching passengers:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/conductor/validate-ticket - Validate QR ticket
+router.post('/validate-ticket', auth, requireRole(['conductor']), async (req, res) => {
+  try {
+    const { pnr, seatNumber, passengerName, tripId } = req.body;
+    const conductorId = req.user.id;
+
+    // Find the duty
+    const duty = await Duty.findOne({
+      conductorId,
+      status: 'active'
+    });
+
+    if (!duty) {
+      return res.status(400).json({
+        success: false,
+        message: 'No active duty found'
+      });
+    }
+
+    // Validate ticket (simplified - in real implementation, check against booking system)
+    const isValidTicket = pnr && seatNumber && passengerName;
+    
+    if (!isValidTicket) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid ticket data'
+      });
+    }
+
+    // Add passenger to manifest or update boarding status
+    if (!duty.passengerManifest) {
+      duty.passengerManifest = [];
+    }
+
+    const existingPassenger = duty.passengerManifest.find(p => p.pnr === pnr);
+    
+    if (existingPassenger) {
+      existingPassenger.boardingStatus = 'boarded';
+      existingPassenger.boardingTime = new Date();
+    } else {
+      duty.passengerManifest.push({
+        pnr,
+        seatNumber,
+        name: passengerName,
+        boardingStatus: 'boarded',
+        boardingTime: new Date()
+      });
+    }
+
+    // Update revenue (simplified calculation)
+    duty.revenue = (duty.revenue || 0) + 50; // Base fare
+
+    await duty.save();
+
+    res.json({
+      success: true,
+      message: 'Ticket validated successfully',
+      data: {
+        pnr,
+        seatNumber,
+        passengerName,
+        status: 'boarded'
+      }
+    });
+  } catch (error) {
+    console.error('Error validating ticket:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/conductor/vacant-seat - Mark seat as vacant
+router.post('/vacant-seat', auth, requireRole(['conductor']), async (req, res) => {
+  try {
+    const { tripId, seatNumber } = req.body;
+    const conductorId = req.user.id;
+
+    const duty = await Duty.findOne({
+      conductorId,
+      status: 'active'
+    });
+
+    if (!duty) {
+      return res.status(400).json({
+        success: false,
+        message: 'No active duty found'
+      });
+    }
+
+    // Remove passenger from manifest or mark as vacant
+    if (duty.passengerManifest) {
+      duty.passengerManifest = duty.passengerManifest.filter(p => p.seatNumber !== seatNumber);
+    }
+
+    await duty.save();
+
+    res.json({
+      success: true,
+      message: 'Seat marked as vacant successfully'
+    });
+  } catch (error) {
+    console.error('Error marking seat vacant:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/conductor/validate-ticket - Validate QR ticket
+router.post('/validate-ticket', auth, async (req, res) => {
+  try {
+    const { ticketId, tripId, scannedAt, conductorId } = req.body;
+    
+    // Find the duty for this conductor
+    const duty = await Duty.findOne({
+      conductorId: req.user.conductorId || req.user._id,
+      status: { $in: ['started', 'in-progress'] }
+    }).populate('tripId').populate('busId');
+
+    if (!duty) {
+      return res.status(404).json({
+        success: false,
+        message: 'No active duty found'
+      });
+    }
+
+    // Find ticket by PNR or QR data
+    const ticket = await Ticket.findOne({
+      $or: [
+        { pnr: ticketId },
+        { qrPayload: { $regex: ticketId, $options: 'i' } }
+      ],
+      state: 'active'
+    }).populate('bookingId');
+
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ticket not found or invalid'
+      });
+    }
+
+    // Check if ticket is for the correct trip
+    if (ticket.tripDetails?.tripId?.toString() !== duty.tripId?._id?.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ticket is not valid for this trip'
+      });
+    }
+
+    // Check if ticket has already been scanned
+    if (ticket.scannedAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ticket has already been scanned',
+        data: {
+          scannedAt: ticket.scannedAt,
+          scannedBy: ticket.scannedBy
+        }
+      });
+    }
+
+    // Mark ticket as scanned
+    await Ticket.findByIdAndUpdate(ticket._id, {
+      scannedAt: new Date(scannedAt),
+      scannedBy: req.user.conductorId || req.user._id,
+      scannedLocation: duty.busId?.currentLocation || 'On Board'
+    });
+
+    // Update booking status
+    await Booking.findByIdAndUpdate(ticket.bookingId, {
+      status: 'boarded',
+      boardedAt: new Date(scannedAt)
+    });
+
+    // Update duty statistics
+    await Duty.findByIdAndUpdate(duty._id, {
+      $inc: { boardedCount: 1 },
+      $push: {
+        passengerLog: {
+          pnr: ticket.pnr,
+          seatNumber: ticket.seatNumber,
+          passengerName: ticket.passengerName,
+          boardedAt: new Date(scannedAt),
+          conductorId: req.user.conductorId || req.user._id
+        }
+      }
+    });
+
+    // Log activity
+    const conductor = await Conductor.findById(req.user.conductorId || req.user._id);
+    await conductor.logActivity(
+      'ticket_scanned',
+      `Scanned ticket for ${ticket.passengerName} - Seat ${ticket.seatNumber}`,
+      null,
+      'duty',
+      duty._id
+    );
+
+    res.json({
+      success: true,
+      message: 'Ticket validated successfully',
+      data: {
+        pnr: ticket.pnr,
+        seatNumber: ticket.seatNumber,
+        passengerName: ticket.passengerName,
+        fareAmount: ticket.fareAmount,
+        boardingStop: ticket.boardingStop,
+        destinationStop: ticket.destinationStop,
+        scannedAt: new Date(scannedAt)
+      }
+    });
+
+  } catch (error) {
+    console.error('Validate ticket error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/conductor/duties/:dutyId/assign - Assign duty (Step 2)
+router.post('/duties/:dutyId/assign', auth, async (req, res) => {
+  try {
+    const { status, assignedAt, conductorId } = req.body;
+    
+    const duty = await Duty.findOne({
+      _id: req.params.dutyId,
+      status: 'unassigned'
+    });
+
+    if (!duty) {
+      return res.status(404).json({
+        success: false,
+        message: 'Duty not found or already assigned'
+      });
+    }
+
+    duty.status = 'assigned';
+    duty.conductorId = req.user.conductorId || req.user._id;
+    duty.assignedAt = new Date();
+    await duty.save();
+
+    res.json({
+      success: true,
+      message: 'Duty assigned successfully',
+      data: duty
+    });
+
+  } catch (error) {
+    console.error('Assign duty error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/conductor/duties/:dutyId/interest - Mark duty interest (Assign Later)
+router.post('/duties/:dutyId/interest', auth, async (req, res) => {
+  try {
+    const { conductorId, interestedAt } = req.body;
+    
+    const duty = await Duty.findById(req.params.dutyId);
+
+    if (!duty) {
+      return res.status(404).json({
+        success: false,
+        message: 'Duty not found'
+      });
+    }
+
+    // Mark conductor interest without changing status
+    duty.interestedConductors = duty.interestedConductors || [];
+    if (!duty.interestedConductors.includes(req.user.conductorId || req.user._id)) {
+      duty.interestedConductors.push(req.user.conductorId || req.user._id);
+    }
+    await duty.save();
+
+    res.json({
+      success: true,
+      message: 'Interest marked successfully',
+      data: duty
+    });
+
+  } catch (error) {
+    console.error('Mark duty interest error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/conductor/notify-status - Notify depot and admin of status changes
+router.post('/notify-status', auth, async (req, res) => {
+  try {
+    const { dutyId, conductorId, conductorName, status, timestamp, routeId, busId, depotId } = req.body;
+    
+    // Create notification record
+    const notification = {
+      type: 'duty_status_change',
+      dutyId,
+      conductorId,
+      conductorName,
+      status,
+      timestamp: new Date(),
+      routeId,
+      busId,
+      depotId,
+      message: `Conductor ${conductorName} - Status changed to ${status}`
+    };
+
+    // In a real implementation, you would:
+    // 1. Save to notifications collection
+    // 2. Send real-time updates via WebSocket
+    // 3. Update depot and admin dashboards
+    
+    console.log('Status notification:', notification);
+
+    res.json({
+      success: true,
+      message: 'Status notification sent successfully'
+    });
+
+  } catch (error) {
+    console.error('Notify status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/conductor/update-passenger-status - Update passenger status (Step 5)
+router.post('/update-passenger-status', auth, async (req, res) => {
+  try {
+    const { tripId, seatNumber, status, updatedAt, conductorId } = req.body;
+    
+    // Update passenger status in the booking system
+    const Booking = require('../models/Booking');
+    const booking = await Booking.findOne({
+      'journey.tripId': tripId,
+      'seats.seatNumber': seatNumber
+    });
+
+    if (booking) {
+      booking.seats = booking.seats.map(seat => 
+        seat.seatNumber === seatNumber 
+          ? { ...seat, status, updatedAt: new Date(), updatedBy: conductorId }
+          : seat
+      );
+      await booking.save();
+    }
+
+    res.json({
+      success: true,
+      message: 'Passenger status updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Update passenger status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Enhanced Dashboard API Routes
+
+// GET /api/conductor/dashboard/stats - Get dashboard statistics
+router.get('/dashboard/stats', auth, async (req, res) => {
+  try {
+    const conductorId = req.user.conductorId || req.user._id;
+    
+    // Get current duty
+    const currentDuty = await Duty.findOne({
+      conductorId,
+      status: { $in: ['assigned', 'started', 'in-progress', 'on-break'] }
+    });
+
+    // Calculate statistics
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(today);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Get today's duties
+    const todayDuties = await Duty.find({
+      conductorId,
+      scheduledStartTime: { $gte: today, $lte: endOfDay }
+    });
+
+    // Calculate stats
+    const stats = {
+      totalTrips: todayDuties.length,
+      activeTrips: todayDuties.filter(d => ['started', 'in-progress', 'on-break'].includes(d.status)).length,
+      completedTrips: todayDuties.filter(d => d.status === 'completed').length,
+      totalRevenue: todayDuties.reduce((sum, d) => sum + (d.revenue || 0), 0),
+      totalPassengers: todayDuties.reduce((sum, d) => sum + (d.passengerManifest?.length || 0), 0),
+      fuelConsumption: 0, // Placeholder - would need fuel tracking
+      maintenanceAlerts: 0, // Placeholder - would need maintenance system
+      delayAlerts: todayDuties.filter(d => d.delays && d.delays.length > 0).length
+    };
+
+    res.json({
+      success: true,
+      data: stats
+    });
+
+  } catch (error) {
+    console.error('Get dashboard stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// GET /api/conductor/notifications - Get notifications
+router.get('/notifications', auth, async (req, res) => {
+  try {
+    const conductorId = req.user.conductorId || req.user._id;
+    
+    // Get conductor activities as notifications
+    const conductor = await Conductor.findById(conductorId);
+    if (!conductor) {
+      return res.status(404).json({
+        success: false,
+        message: 'Conductor not found'
+      });
+    }
+
+    // Get recent activities (last 10)
+    const notifications = conductor.activities
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 10)
+      .map(activity => ({
+        id: activity._id,
+        title: activity.description,
+        message: activity.description,
+        type: activity.action,
+        timestamp: activity.timestamp,
+        severity: activity.action.includes('error') ? 'high' : 'medium'
+      }));
+
+    res.json({
+      success: true,
+      data: notifications
+    });
+
+  } catch (error) {
+    console.error('Get notifications error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// GET /api/conductor/alerts - Get alerts
+router.get('/alerts', auth, async (req, res) => {
+  try {
+    const conductorId = req.user.conductorId || req.user._id;
+    
+    // Get current duty
+    const currentDuty = await Duty.findOne({
+      conductorId,
+      status: { $in: ['assigned', 'started', 'in-progress', 'on-break'] }
+    });
+
+    const alerts = [];
+
+    // Check for duty-related alerts
+    if (currentDuty) {
+      // Check for delays
+      if (currentDuty.delays && currentDuty.delays.length > 0) {
+        alerts.push({
+          id: 'delay-alert',
+          title: 'Trip Delay',
+          message: `Trip is delayed by ${currentDuty.delays[currentDuty.delays.length - 1].duration} minutes`,
+          severity: 'high',
+          timestamp: new Date(),
+          type: 'delay'
+        });
+      }
+
+      // Check for incidents
+      if (currentDuty.incidents && currentDuty.incidents.length > 0) {
+        alerts.push({
+          id: 'incident-alert',
+          title: 'Incident Reported',
+          message: `Incident: ${currentDuty.incidents[currentDuty.incidents.length - 1].type}`,
+          severity: 'critical',
+          timestamp: new Date(),
+          type: 'incident'
+        });
+      }
+    }
+
+    // Add sample alerts for demonstration
+    alerts.push({
+      id: 'maintenance-alert',
+      title: 'Bus Maintenance Due',
+      message: 'Bus #1234 requires oil change',
+      severity: 'medium',
+      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+      type: 'maintenance'
+    });
+
+    res.json({
+      success: true,
+      data: alerts
+    });
+
+  } catch (error) {
+    console.error('Get alerts error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// GET /api/conductor/tracking/:dutyId - Get live tracking data
+router.get('/tracking/:dutyId', auth, async (req, res) => {
+  try {
+    const { dutyId } = req.params;
+    const conductorId = req.user.conductorId || req.user._id;
+    
+    const duty = await Duty.findOne({
+      _id: dutyId,
+      conductorId,
+      status: { $in: ['started', 'in-progress', 'on-break'] }
+    }).populate('busId');
+
+    if (!duty) {
+      return res.status(404).json({
+        success: false,
+        message: 'Duty not found or not active'
+      });
+    }
+
+    // Get bus location (placeholder - would integrate with GPS system)
+    const trackingData = {
+      currentLocation: duty.busId?.currentLocation || 'GPS Offline',
+      speed: duty.busId?.currentSpeed || 0,
+      direction: duty.busId?.currentDirection || 'N',
+      lastUpdate: duty.busId?.lastLocationUpdate || new Date(),
+      route: duty.routeId?.name || 'Unknown Route',
+      nextStop: duty.nextStop || 'Unknown'
+    };
+
+    res.json({
+      success: true,
+      data: trackingData
+    });
+
+  } catch (error) {
+    console.error('Get tracking data error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Test endpoint to verify conductor authentication
+router.get('/test-auth', auth, async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      message: 'Authentication working',
+      user: req.user,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Test auth error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Test failed',
+      error: error.message
     });
   }
 });

@@ -1951,6 +1951,133 @@ router.post('/trips', async (req, res) => {
   }
 });
 
+// PUT /api/admin/trips/:id - Update trip
+router.put('/trips/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    
+    console.log('🚌 PUT /api/admin/trips/:id - Update trip request received');
+    console.log('📝 Trip ID:', id);
+    console.log('📦 Update data:', updateData);
+    console.log('👤 User:', req.user);
+
+    // Validate ObjectId format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid trip ID format'
+      });
+    }
+
+    // Check if trip exists
+    const existingTrip = await Trip.findById(id);
+    if (!existingTrip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trip not found'
+      });
+    }
+
+    // Remove immutable fields
+    delete updateData.depotId;
+    delete updateData.createdBy;
+    delete updateData._id;
+
+    // Parse serviceDate if provided
+    if (updateData.serviceDate) {
+      const parseServiceDate = (val) => {
+        if (!val) return null;
+        if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+        if (typeof val === 'string') {
+          const ddmmyyyy = /^(\d{2})-(\d{2})-(\d{4})$/;
+          const yyyymmdd = /^(\d{4})-(\d{2})-(\d{2})$/;
+          if (ddmmyyyy.test(val)) {
+            const [, dd, mm, yyyy] = val.match(ddmmyyyy);
+            const iso = `${yyyy}-${mm}-${dd}`;
+            const d = new Date(iso + 'T00:00:00Z');
+            return isNaN(d.getTime()) ? null : d;
+          }
+          if (yyyymmdd.test(val)) {
+            const d = new Date(val + 'T00:00:00Z');
+            return isNaN(d.getTime()) ? null : d;
+          }
+          const d = new Date(val);
+          return isNaN(d.getTime()) ? null : d;
+        }
+        return null;
+      };
+
+      const parsedServiceDate = parseServiceDate(updateData.serviceDate);
+      if (!parsedServiceDate) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid service date format. Use YYYY-MM-DD' 
+        });
+      }
+      updateData.serviceDate = parsedServiceDate;
+    }
+
+    // Validate time format if provided
+    if (updateData.startTime || updateData.endTime) {
+      const timeRe = /^\d{2}:\d{2}$/;
+      if (updateData.startTime && !timeRe.test(updateData.startTime)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid start time format. Use HH:MM' 
+        });
+      }
+      if (updateData.endTime && !timeRe.test(updateData.endTime)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid end time format. Use HH:MM' 
+        });
+      }
+    }
+
+    // Validate fare if provided
+    if (updateData.fare !== undefined) {
+      const fare = typeof updateData.fare === 'number' ? updateData.fare : Number(updateData.fare);
+      if (isNaN(fare) || fare < 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid fare amount' 
+        });
+      }
+      updateData.fare = fare;
+    }
+
+    // Update the trip
+    const updatedTrip = await Trip.findByIdAndUpdate(
+      id,
+      { ...updateData, updatedBy: req.user._id },
+      { new: true, runValidators: true }
+    ).populate('routeId', 'routeName routeNumber')
+     .populate('busId', 'busNumber busType')
+     .populate('driverId', 'name')
+     .populate('conductorId', 'name')
+     .populate('depotId', 'depotName')
+     .populate('createdBy', 'name')
+     .lean();
+
+    console.log('✅ Trip updated successfully:', updatedTrip._id);
+
+    res.json({
+      success: true,
+      message: 'Trip updated successfully',
+      data: updatedTrip
+    });
+
+  } catch (error) {
+    console.error('❌ Trip update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update trip',
+      error: error.message
+    });
+  }
+});
+
 // Assign crew to trip
 router.put('/trips/:id/assign-crew', async (req, res) => {
   try {
@@ -5513,6 +5640,586 @@ router.get('/depot-trips', async (req, res) => {
   }
 });
 
+// POST /api/admin/bookings - Create a new booking
+router.post('/bookings', async (req, res) => {
+  try {
+    const {
+      tripId,
+      routeId,
+      busId,
+      depotId,
+      customer,
+      journey,
+      seats,
+      pricing,
+      payment,
+      specialRequests,
+      source = 'admin'
+    } = req.body;
+
+    // Validate required fields
+    if (!tripId || !routeId || !busId || !depotId || !customer || !journey || !seats || !pricing) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: tripId, routeId, busId, depotId, customer, journey, seats, pricing'
+      });
+    }
+
+    // Validate customer information
+    if (!customer.name || !customer.email || !customer.phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Customer name, email, and phone are required'
+      });
+    }
+
+    // Validate journey information
+    if (!journey.from || !journey.to || !journey.departureDate || !journey.departureTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'Journey details (from, to, departureDate, departureTime) are required'
+      });
+    }
+
+    // Validate seats
+    if (!Array.isArray(seats) || seats.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one seat is required'
+      });
+    }
+
+    // Validate pricing
+    if (!pricing.totalAmount || pricing.totalAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid total amount is required'
+      });
+    }
+
+    // Check if trip exists and is available
+    const trip = await Trip.findById(tripId);
+    if (!trip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trip not found'
+      });
+    }
+
+    // Check if seats are available
+    const existingBookings = await Booking.find({
+      tripId,
+      status: { $in: ['confirmed', 'pending'] },
+      'seats.seatNumber': { $in: seats.map(s => s.seatNumber) }
+    });
+
+    if (existingBookings.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Some seats are already booked',
+        conflicts: existingBookings.map(b => b.seats.map(s => s.seatNumber)).flat()
+      });
+    }
+
+    // Create booking data
+    const bookingData = {
+      tripId,
+      routeId,
+      busId,
+      depotId,
+      customer: {
+        name: customer.name.trim(),
+        email: customer.email.trim().toLowerCase(),
+        phone: customer.phone.trim(),
+        age: customer.age,
+        gender: customer.gender,
+        idProof: customer.idProof
+      },
+      journey: {
+        from: journey.from.trim(),
+        to: journey.to.trim(),
+        departureDate: new Date(journey.departureDate),
+        departureTime: journey.departureTime,
+        arrivalDate: new Date(journey.arrivalDate || journey.departureDate),
+        arrivalTime: journey.arrivalTime || journey.departureTime,
+        duration: journey.duration || 0
+      },
+      seats: seats.map(seat => ({
+        seatNumber: seat.seatNumber,
+        seatType: seat.seatType || 'seater',
+        seatPosition: seat.seatPosition || 'window',
+        floor: seat.floor || 'lower',
+        berth: seat.berth,
+        price: seat.price || pricing.baseFare,
+        passengerName: seat.passengerName || customer.name,
+        passengerAge: seat.passengerAge || customer.age,
+        passengerGender: seat.passengerGender || customer.gender
+      })),
+      pricing: {
+        baseFare: pricing.baseFare || 0,
+        seatFare: pricing.seatFare || 0,
+        taxes: pricing.taxes || { gst: 0, serviceTax: 0, other: 0 },
+        discounts: pricing.discounts || { earlyBird: 0, loyalty: 0, promo: 0, other: 0 },
+        totalAmount: pricing.totalAmount,
+        paidAmount: pricing.paidAmount || 0,
+        refundAmount: pricing.refundAmount || 0
+      },
+      payment: {
+        method: payment?.method || 'cash',
+        transactionId: payment?.transactionId,
+        paymentGateway: payment?.paymentGateway,
+        paymentStatus: payment?.paymentStatus || 'pending',
+        paidAt: payment?.paidAt ? new Date(payment.paidAt) : undefined,
+        refundedAt: payment?.refundedAt ? new Date(payment.refundedAt) : undefined
+      },
+      specialRequests: specialRequests || {
+        wheelchair: false,
+        meal: false,
+        blanket: false,
+        pillow: false,
+        other: ''
+      },
+      source,
+      userAgent: req.get('User-Agent'),
+      ipAddress: req.ip,
+      createdBy: req.user._id
+    };
+
+    // Create the booking
+    const booking = new Booking(bookingData);
+    await booking.save();
+
+    // Populate the response
+    const populatedBooking = await Booking.findById(booking._id)
+      .populate('tripId', 'routeId busId serviceDate startTime')
+      .populate('tripId.routeId', 'routeName startingPoint endingPoint')
+      .populate('tripId.busId', 'busNumber busType')
+      .lean();
+
+    res.status(201).json({
+      success: true,
+      message: 'Booking created successfully',
+      data: populatedBooking
+    });
+
+  } catch (error) {
+    console.error('Admin booking creation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create booking',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/bookings - Get all bookings with filters
+router.get('/bookings', async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 20, 
+      status, 
+      search, 
+      date,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+    
+    const skip = (page - 1) * limit;
+    
+    // Build query
+    const query = {};
+    
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+    
+    if (date) {
+      const startDate = new Date(date);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(date);
+      endDate.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: startDate, $lte: endDate };
+    }
+    
+    if (search) {
+      query.$or = [
+        { bookingId: { $regex: search, $options: 'i' } },
+        { bookingReference: { $regex: search, $options: 'i' } },
+        { 'customer.name': { $regex: search, $options: 'i' } },
+        { 'customer.phone': { $regex: search, $options: 'i' } },
+        { 'customer.email': { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    // Sort options
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    
+    const [bookings, total] = await Promise.all([
+      Booking.find(query)
+        .populate('tripId', 'routeId busId serviceDate startTime')
+        .populate('tripId.routeId', 'routeName startingPoint endingPoint')
+        .populate('tripId.busId', 'busNumber busType')
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Booking.countDocuments(query)
+    ]);
+    
+    // Calculate stats
+    const stats = await Promise.all([
+      Booking.countDocuments(),
+      Booking.countDocuments({ status: 'confirmed' }),
+      Booking.countDocuments({ status: 'pending' }),
+      Booking.countDocuments({ status: 'cancelled' }),
+      Booking.aggregate([
+        { $match: { status: { $in: ['confirmed', 'completed'] } } },
+        { $group: { _id: null, total: { $sum: '$pricing.totalAmount' } } }
+      ])
+    ]);
+    
+    const [totalBookings, confirmedBookings, pendingBookings, cancelledBookings, revenueResult] = stats;
+    const totalRevenue = revenueResult[0]?.total || 0;
+    
+    res.json({
+      success: true,
+      data: {
+        bookings,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(total / limit),
+          totalItems: total,
+          itemsPerPage: parseInt(limit)
+        },
+        stats: {
+          totalBookings,
+          confirmedBookings,
+          pendingBookings,
+          cancelledBookings,
+          totalRevenue
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Admin bookings fetch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch bookings',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/bookings/:id - Get a single booking by ID
+router.get('/bookings/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const booking = await Booking.findById(id)
+      .populate('tripId', 'routeId busId serviceDate startTime endTime')
+      .populate('tripId.routeId', 'routeName startingPoint endingPoint routeNumber')
+      .populate('tripId.busId', 'busNumber busType capacity')
+      .populate('routeId', 'routeName startingPoint endingPoint')
+      .populate('busId', 'busNumber busType capacity')
+      .populate('depotId', 'depotName depotCode location')
+      .populate('createdBy', 'name email role')
+      .populate('lastModifiedBy', 'name email role')
+      .lean();
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: booking
+    });
+
+  } catch (error) {
+    console.error('Admin booking fetch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch booking',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/admin/bookings/:id - Update booking details
+router.put('/bookings/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // Find the booking
+    const existingBooking = await Booking.findById(id);
+    if (!existingBooking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    // Validate status transitions
+    if (updateData.status && existingBooking.status !== updateData.status) {
+      const validTransitions = {
+        'pending': ['confirmed', 'cancelled'],
+        'confirmed': ['completed', 'cancelled', 'no_show'],
+        'completed': ['refunded'],
+        'cancelled': [],
+        'no_show': [],
+        'refunded': []
+      };
+
+      if (!validTransitions[existingBooking.status]?.includes(updateData.status)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid status transition from ${existingBooking.status} to ${updateData.status}`
+        });
+      }
+    }
+
+    // Check seat availability if seats are being updated
+    if (updateData.seats && Array.isArray(updateData.seats)) {
+      const newSeatNumbers = updateData.seats.map(s => s.seatNumber);
+      const existingSeatNumbers = existingBooking.seats.map(s => s.seatNumber);
+      
+      // Check if any new seats are already booked by other bookings
+      const conflictingBookings = await Booking.find({
+        _id: { $ne: id },
+        tripId: existingBooking.tripId,
+        status: { $in: ['confirmed', 'pending'] },
+        'seats.seatNumber': { $in: newSeatNumbers }
+      });
+
+      if (conflictingBookings.length > 0) {
+        const conflicts = conflictingBookings
+          .map(b => b.seats.map(s => s.seatNumber))
+          .flat()
+          .filter(seat => newSeatNumbers.includes(seat));
+        
+        return res.status(400).json({
+          success: false,
+          message: 'Some seats are already booked by other customers',
+          conflicts
+        });
+      }
+    }
+
+    // Prepare update data
+    const allowedUpdates = [
+      'customer', 'journey', 'seats', 'pricing', 'payment', 
+      'specialRequests', 'status', 'checkIn', 'notifications'
+    ];
+
+    const filteredUpdateData = {};
+    Object.keys(updateData).forEach(key => {
+      if (allowedUpdates.includes(key)) {
+        filteredUpdateData[key] = updateData[key];
+      }
+    });
+
+    // Add metadata
+    filteredUpdateData.lastModifiedBy = req.user._id;
+    filteredUpdateData.updatedAt = new Date();
+
+    // Handle cancellation details
+    if (updateData.status === 'cancelled') {
+      filteredUpdateData.cancellation = {
+        cancelledBy: req.user.role === 'admin' ? 'admin' : 'system',
+        cancelledAt: new Date(),
+        reason: updateData.cancellationReason || 'Cancelled by admin',
+        refundEligible: updateData.refundEligible !== false,
+        refundAmount: updateData.refundAmount || 0,
+        cancellationCharges: updateData.cancellationCharges || 0
+      };
+    }
+
+    // Update the booking
+    const updatedBooking = await Booking.findByIdAndUpdate(
+      id,
+      filteredUpdateData,
+      { new: true, runValidators: true }
+    )
+      .populate('tripId', 'routeId busId serviceDate startTime endTime')
+      .populate('tripId.routeId', 'routeName startingPoint endingPoint')
+      .populate('tripId.busId', 'busNumber busType')
+      .populate('createdBy', 'name email role')
+      .populate('lastModifiedBy', 'name email role')
+      .lean();
+
+    res.json({
+      success: true,
+      message: 'Booking updated successfully',
+      data: updatedBooking
+    });
+
+  } catch (error) {
+    console.error('Admin booking update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update booking',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/admin/bookings/:id/status - Update booking status
+router.put('/bookings/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status is required'
+      });
+    }
+    
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+    
+    booking.status = status;
+    booking.updatedAt = new Date();
+    
+    await booking.save();
+    
+    res.json({
+      success: true,
+      message: 'Booking status updated successfully',
+      data: booking
+    });
+    
+  } catch (error) {
+    console.error('Booking status update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update booking status',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/admin/bookings/:id - Delete a booking
+router.delete('/bookings/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { force = false } = req.query; // Allow force deletion
+
+    // Find the booking
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    // Check if booking can be deleted
+    const canDelete = force === 'true' || 
+                     booking.status === 'pending' || 
+                     (booking.status === 'cancelled' && 
+                      new Date() - new Date(booking.createdAt) < 24 * 60 * 60 * 1000); // Within 24 hours
+
+    if (!canDelete) {
+      return res.status(400).json({
+        success: false,
+        message: 'Booking cannot be deleted. Only pending bookings or recently cancelled bookings (within 24 hours) can be deleted.',
+        bookingStatus: booking.status,
+        bookingAge: Math.floor((new Date() - new Date(booking.createdAt)) / (1000 * 60 * 60)) + ' hours',
+        suggestion: 'Use force=true query parameter to force delete (use with caution)'
+      });
+    }
+
+    // Check if booking has payment records
+    const hasPayment = booking.payment?.paymentStatus === 'completed' && 
+                      booking.pricing?.paidAmount > 0;
+
+    if (hasPayment && force !== 'true') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete booking with completed payment. Refund the booking first or use force=true to delete.',
+        paymentStatus: booking.payment.paymentStatus,
+        paidAmount: booking.pricing.paidAmount
+      });
+    }
+
+    // Store booking data for audit log
+    const deletedBookingData = {
+      bookingId: booking.bookingId,
+      bookingReference: booking.bookingReference,
+      customerName: booking.customer.name,
+      customerEmail: booking.customer.email,
+      tripId: booking.tripId,
+      routeId: booking.routeId,
+      busId: booking.busId,
+      totalAmount: booking.pricing?.totalAmount,
+      paidAmount: booking.pricing?.paidAmount,
+      status: booking.status,
+      seats: booking.seats.map(s => s.seatNumber),
+      createdAt: booking.createdAt,
+      deletedBy: req.user._id,
+      deletedAt: new Date(),
+      deletedByRole: req.user.role,
+      forceDeleted: force === 'true'
+    };
+
+    // Delete the booking
+    await Booking.findByIdAndDelete(id);
+
+    // Log the deletion for audit purposes
+    console.log('📝 Booking deletion logged:', deletedBookingData);
+
+    // TODO: Add to audit log collection if you have one
+    // await AuditLog.create({
+    //   action: 'DELETE_BOOKING',
+    //   entityType: 'Booking',
+    //   entityId: id,
+    //   details: deletedBookingData,
+    //   performedBy: req.user._id,
+    //   timestamp: new Date()
+    // });
+
+    res.json({
+      success: true,
+      message: 'Booking deleted successfully',
+      deletedBooking: {
+        id: deletedBookingData.bookingId,
+        reference: deletedBookingData.bookingReference,
+        customerName: deletedBookingData.customerName,
+        status: deletedBookingData.status,
+        totalAmount: deletedBookingData.totalAmount,
+        deletedAt: deletedBookingData.deletedAt
+      },
+      audit: {
+        deletedBy: req.user.name || req.user.email,
+        deletedByRole: req.user.role,
+        forceDeleted: force === 'true'
+      }
+    });
+
+  } catch (error) {
+    console.error('Admin booking deletion error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete booking',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/admin/trip/:id/bookings - Get bookings for a specific trip
 router.get('/trip/:id/bookings', async (req, res) => {
   try {
@@ -5525,7 +6232,6 @@ router.get('/trip/:id/bookings', async (req, res) => {
 
     const [bookings, total] = await Promise.all([
       Booking.find(query)
-        .populate('passengerId', 'name email phone')
         .populate('tripId', 'routeId busId serviceDate startTime')
         .populate('tripId.routeId', 'routeName startingPoint endingPoint')
         .populate('tripId.busId', 'busNumber busType')
@@ -5751,6 +6457,213 @@ router.post('/trips/sample', authRole(['admin', 'manager']), async (req, res) =>
       success: false,
       message: 'Failed to create sample trip',
       error: error.message
+    });
+  }
+});
+
+// Trip Assignment and Management APIs for Admin
+
+// POST /api/admin/assign-trip - Assign trip to driver
+router.post('/assign-trip', auth, requireRole(['admin', 'depot_manager']), async (req, res) => {
+  try {
+    const { driverId, routeId, busId, tripId, scheduledDate, scheduledTime } = req.body;
+    const assignedBy = req.user.id;
+    const depotId = req.user.depotId; // For depot managers
+
+    // Validate required fields
+    if (!driverId || !routeId || !busId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Driver, route, and bus are required'
+      });
+    }
+
+    // Check if driver exists and is available
+    const Driver = require('../models/Driver');
+    const driver = await Driver.findById(driverId);
+    if (!driver || driver.status !== 'active') {
+      return res.status(400).json({
+        success: false,
+        message: 'Driver not found or not available'
+      });
+    }
+
+    // Check if driver already has duty for the date
+    const existingDuty = await Duty.findOne({
+      driverId,
+      date: {
+        $gte: new Date(scheduledDate).setHours(0, 0, 0, 0),
+        $lt: new Date(scheduledDate).setHours(23, 59, 59, 999)
+      },
+      status: { $in: ['assigned', 'active'] }
+    });
+
+    if (existingDuty) {
+      return res.status(400).json({
+        success: false,
+        message: 'Driver already has a duty assigned for this date'
+      });
+    }
+
+    // Create new duty assignment
+    const newDuty = new Duty({
+      driverId,
+      routeId,
+      busId,
+      tripId,
+      depotId: depotId || driver.depotId,
+      assignedBy,
+      date: new Date(scheduledDate),
+      scheduledStartTime: new Date(`${scheduledDate} ${scheduledTime}`),
+      status: 'assigned',
+      createdAt: new Date(),
+      tripTracking: {
+        locationHistory: [],
+        distanceCovered: 0,
+        fuelConsumed: 0
+      }
+    });
+
+    await newDuty.save();
+
+    // Create notification for driver
+    const Notification = require('../models/Notification');
+    await Notification.create({
+      recipientId: driverId,
+      recipientType: 'driver',
+      type: 'trip_assigned',
+      title: 'New Trip Assigned',
+      message: `You have been assigned a new trip on route ${driver.routeName || 'N/A'} scheduled for ${scheduledDate} at ${scheduledTime}`,
+      relatedDuty: newDuty._id,
+      isRead: false,
+      createdAt: new Date()
+    });
+
+    // Populate the duty for response
+    const populatedDuty = await Duty.findById(newDuty._id)
+      .populate('driverId', 'name employeeCode phone')
+      .populate('routeId', 'routeName origin destination')
+      .populate('busId', 'busNumber registrationNumber')
+      .populate('tripId', 'tripNumber');
+
+    res.json({
+      success: true,
+      message: 'Trip assigned successfully',
+      data: populatedDuty
+    });
+  } catch (error) {
+    console.error('Error assigning trip:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// GET /api/admin/running-trips - Get all currently running trips
+router.get('/running-trips', auth, requireRole(['admin', 'depot_manager']), async (req, res) => {
+  try {
+    let query = { status: 'active' };
+    
+    // If depot manager, only show trips from their depot
+    if (req.user.role === 'depot_manager') {
+      query.depotId = req.user.depotId;
+    }
+
+    const runningTrips = await Duty.find(query)
+      .populate('driverId', 'name employeeCode phone')
+      .populate('routeId', 'routeName origin destination distance')
+      .populate('busId', 'busNumber registrationNumber totalSeats')
+      .populate('tripId', 'tripNumber scheduledDeparture scheduledArrival')
+      .populate('depotId', 'depotName depotCode')
+      .sort({ startTime: -1 });
+
+    // Calculate additional metrics for each trip
+    const tripsWithMetrics = runningTrips.map(trip => {
+      const elapsedTime = trip.startTime ? 
+        (new Date() - new Date(trip.startTime)) / (1000 * 60) : 0; // minutes
+      
+      const estimatedDuration = trip.routeId?.estimatedDuration || 120;
+      const progress = Math.min(Math.round((elapsedTime / estimatedDuration) * 100), 100);
+      
+      return {
+        ...trip.toObject(),
+        elapsedTime: Math.round(elapsedTime),
+        progress,
+        isDelayed: elapsedTime > estimatedDuration * 1.2, // 20% over scheduled time
+        currentLocation: trip.tripTracking?.currentLocation || null,
+        distanceCovered: trip.tripTracking?.distanceCovered || 0
+      };
+    });
+
+    res.json({
+      success: true,
+      data: tripsWithMetrics,
+      count: tripsWithMetrics.length
+    });
+  } catch (error) {
+    console.error('Error fetching running trips:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// GET /api/admin/trip-assignments - Get all trip assignments for management
+router.get('/trip-assignments', auth, requireRole(['admin', 'depot_manager']), async (req, res) => {
+  try {
+    const { date, status, driverId } = req.query;
+    let query = {};
+    
+    // If depot manager, only show assignments from their depot
+    if (req.user.role === 'depot_manager') {
+      query.depotId = req.user.depotId;
+    }
+
+    // Filter by date if provided
+    if (date) {
+      query.date = {
+        $gte: new Date(date).setHours(0, 0, 0, 0),
+        $lt: new Date(date).setHours(23, 59, 59, 999)
+      };
+    } else {
+      // Default to today
+      query.date = {
+        $gte: new Date().setHours(0, 0, 0, 0),
+        $lt: new Date().setHours(23, 59, 59, 999)
+      };
+    }
+
+    // Filter by status if provided
+    if (status) {
+      query.status = status;
+    }
+
+    // Filter by driver if provided
+    if (driverId) {
+      query.driverId = driverId;
+    }
+
+    const assignments = await Duty.find(query)
+      .populate('driverId', 'name employeeCode phone status')
+      .populate('routeId', 'routeName origin destination distance')
+      .populate('busId', 'busNumber registrationNumber totalSeats')
+      .populate('tripId', 'tripNumber scheduledDeparture scheduledArrival')
+      .populate('depotId', 'depotName depotCode')
+      .populate('assignedBy', 'name role')
+      .sort({ scheduledStartTime: 1 });
+
+    res.json({
+      success: true,
+      data: assignments,
+      count: assignments.length
+    });
+  } catch (error) {
+    console.error('Error fetching trip assignments:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
     });
   }
 });

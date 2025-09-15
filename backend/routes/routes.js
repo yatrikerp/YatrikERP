@@ -457,4 +457,37 @@ router.get('/stats/overview', authRole(['admin', 'manager']), async (req, res) =
   }
 });
 
+// GET /api/routes/:routeId/stops - Get stops for a route
+router.get('/:routeId/stops', async (req, res) => {
+  try {
+    const { routeId } = req.params;
+    
+    // Mock stops data - in real implementation, fetch from database
+    const mockStops = [
+      { _id: '1', stopName: 'Central Bus Station', address: 'Main Road, City Center', sequence: 1, arrivalTime: '08:00', departureTime: '08:05' },
+      { _id: '2', stopName: 'Railway Station', address: 'Railway Road', sequence: 2, arrivalTime: '08:15', departureTime: '08:20' },
+      { _id: '3', stopName: 'Airport Junction', address: 'Airport Road', sequence: 3, arrivalTime: '08:30', departureTime: '08:35' },
+      { _id: '4', stopName: 'University Gate', address: 'Education District', sequence: 4, arrivalTime: '08:45', departureTime: '08:50' },
+      { _id: '5', stopName: 'Shopping Mall', address: 'Commercial Area', sequence: 5, arrivalTime: '09:00', departureTime: '09:05' },
+      { _id: '6', stopName: 'Hospital Stop', address: 'Medical District', sequence: 6, arrivalTime: '09:15', departureTime: '09:20' },
+      { _id: '7', stopName: 'IT Park', address: 'Technology Hub', sequence: 7, arrivalTime: '09:30', departureTime: '09:35' },
+      { _id: '8', stopName: 'Residential Area', address: 'Suburb District', sequence: 8, arrivalTime: '09:45', departureTime: '09:50' },
+      { _id: '9', stopName: 'Final Destination', address: 'Terminal Point', sequence: 9, arrivalTime: '10:00', departureTime: '10:00' }
+    ];
+    
+    res.json({
+      success: true,
+      data: mockStops
+    });
+    
+  } catch (error) {
+    console.error('Route stops error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch route stops',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;

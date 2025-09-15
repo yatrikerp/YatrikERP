@@ -148,7 +148,7 @@ router.post('/refund/initiate', auth, requireSupport, async (req, res) => {
     
     // Create refund transaction
     const refundTransaction = await Transaction.create({
-      userId: booking.passengerId,
+      userId: booking.createdBy,
       type: 'refund',
       amount: refundAmountToProcess,
       currency: 'INR',

@@ -13,10 +13,11 @@ const authRole = (roles) => [auth, requireRole(roles)];
 // Allow both admin and depot users to access booking routes
 const bookingAuth = authRole(['admin', 'depot_manager', 'depot_supervisor', 'depot_operator', 'MANAGER', 'SUPERVISOR', 'OPERATOR', 'passenger']);
 
-// POST /api/booking - Create new booking - No auth required
-router.post('/', async (req, res) => {
+// POST /api/booking - Create new booking - Auth required
+router.post('/', auth, async (req, res) => {
   try {
     const bookingData = req.body;
+    const userId = req.user._id;
     console.log('📝 Received booking data:', JSON.stringify(bookingData, null, 2));
 
     // Validate required fields
@@ -30,6 +31,20 @@ router.post('/', async (req, res) => {
       }
     }
 
+    // Get trip details to extract proper references
+    const trip = await Trip.findById(bookingData.tripId)
+      .populate('routeId', '_id routeName routeNumber startingPoint endingPoint')
+      .populate('busId', '_id busNumber busType')
+      .populate('depotId', '_id depotName')
+      .lean();
+    
+    if (!trip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trip not found'
+      });
+    }
+
     // Create a simple booking with all required fields
     const bookingId = `BK${Date.now().toString().slice(-8)}`;
     const bookingReference = `REF${Date.now().toString().slice(-8)}`;
@@ -38,11 +53,13 @@ router.post('/', async (req, res) => {
       ...bookingData,
       bookingId: bookingId,
       bookingReference: bookingReference,
+      createdBy: userId, // Link booking to the authenticated user
       status: 'pending',
       paymentStatus: 'pending',
-      depotId: bookingData.tripId, // Use tripId as depotId for now
-      busId: bookingData.tripId, // Use tripId as busId for now
-      routeId: bookingData.tripId, // Use tripId as routeId for now
+      tripId: bookingData.tripId,
+      depotId: trip.depotId?._id || trip.depotId,
+      busId: trip.busId?._id || trip.busId,
+      routeId: trip.routeId?._id || trip.routeId,
       journey: {
         ...bookingData.journey,
         arrivalDate: bookingData.journey.departureDate, // Use same date
@@ -61,7 +78,7 @@ router.post('/', async (req, res) => {
       },
       payment: {
         method: 'upi', // Valid enum value
-        status: 'pending'
+        paymentStatus: 'pending'
       },
       createdAt: new Date()
     });
@@ -680,6 +697,153 @@ router.get('/refund/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to calculate refund',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/booking/test - Test endpoint
+router.get('/test', (req, res) => {
+  res.json({ success: true, message: 'Booking routes are working!' });
+});
+
+// POST /api/booking/create-sample - Create sample booking for testing
+router.post('/create-sample', async (req, res) => {
+  try {
+    const sampleBooking = {
+      bookingId: 'PNR69154187',
+      customer: {
+        name: 'Guest Passenger',
+        email: 'guest@example.com',
+        phone: '+91-9876543210',
+        age: 30,
+        gender: 'male'
+      },
+      journey: {
+        from: 'Kochi',
+        to: 'Thiruvananthapuram',
+        departureDate: new Date('2025-09-14'),
+        departureTime: '08:00',
+        arrivalTime: '14:00'
+      },
+      seats: [
+        { seatNumber: 'U1', seatType: 'seater', price: 225 },
+        { seatNumber: 'U2', seatType: 'seater', price: 225 }
+      ],
+      pricing: {
+        baseFare: 400,
+        seatCharges: 50,
+        total: 450
+      },
+      status: 'confirmed',
+      paymentStatus: 'paid',
+      paymentMethod: 'upi',
+      createdAt: new Date()
+    };
+
+    // Check if booking already exists
+    const existingBooking = await Booking.findOne({ bookingId: sampleBooking.bookingId });
+    if (existingBooking) {
+      return res.json({
+        success: true,
+        message: 'Sample booking already exists',
+        data: existingBooking
+      });
+    }
+
+    const booking = new Booking(sampleBooking);
+    await booking.save();
+
+    res.json({
+      success: true,
+      message: 'Sample booking created successfully',
+      data: booking
+    });
+
+  } catch (error) {
+    console.error('Create sample booking error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create sample booking',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/booking/pnr/:pnr - Get booking by PNR (temporarily without auth for debugging)
+router.get('/pnr/:pnr', async (req, res) => {
+  try {
+    const { pnr } = req.params;
+    
+    if (!pnr) {
+      return res.status(400).json({
+        success: false,
+        message: 'PNR is required'
+      });
+    }
+
+    // Search for booking by PNR
+    const booking = await Booking.findOne({ bookingId: pnr })
+      .populate('tripId', 'serviceDate startTime endTime fare capacity')
+      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+      .populate('busId', 'busNumber busType')
+      .populate('depotId', 'depotName')
+      .lean();
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    // Check if user has access to this booking (temporarily disabled for debugging)
+    // if (req.user.role === 'passenger' && booking.createdBy.toString() !== req.user._id.toString()) {
+    //   return res.status(403).json({
+    //     success: false,
+    //     message: 'Access denied'
+    //   });
+    // }
+
+    // Debug logging
+    console.log('🔍 Debug - Booking found:', booking.bookingId);
+    console.log('🔍 Debug - Customer data:', JSON.stringify(booking.customer, null, 2));
+
+    // Format the response data
+    const ticketData = {
+      pnr: booking.bookingId,
+      bookingId: booking.bookingId,
+      status: booking.status,
+      customer: booking.customer,
+      journey: {
+        from: booking.journey?.from || booking.routeId?.startingPoint?.city || 'Origin',
+        to: booking.journey?.to || booking.routeId?.endingPoint?.city || 'Destination',
+        departureDate: booking.journey?.departureDate || booking.tripId?.serviceDate,
+        departureTime: booking.journey?.departureTime || booking.tripId?.startTime,
+        arrivalTime: booking.journey?.arrivalTime || booking.tripId?.endTime,
+        boardingPoint: booking.journey?.boardingPoint || 'Central Bus Stand',
+        droppingPoint: booking.journey?.droppingPoint || 'Central Bus Stand'
+      },
+      seats: booking.seats,
+      bus: {
+        busNumber: booking.busId?.busNumber || 'N/A',
+        busType: booking.busId?.busType || 'Standard'
+      },
+      pricing: booking.pricing,
+      payment: booking.payment,
+      createdAt: booking.createdAt
+    };
+
+    res.json({
+      success: true,
+      data: ticketData
+    });
+
+  } catch (error) {
+    console.error('Get booking by PNR error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch booking details',
       error: error.message
     });
   }

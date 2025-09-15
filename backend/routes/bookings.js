@@ -33,7 +33,7 @@ router.post('/create', auth, async (req, res) => {
     const fare = Math.round(100 + distanceKm * 2);
 
     const booking = await Booking.create({
-      passengerId: req.user._id,
+      createdBy: req.user._id,
       tripId,
       seatNo,
       fareAmount: fare,
@@ -64,7 +64,7 @@ router.get('/:userId', auth, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorized to view these bookings' });
     }
 
-    const bookings = await Booking.find({ passengerId: userId }).sort({ createdAt: -1 }).lean();
+    const bookings = await Booking.find({ createdBy: userId }).sort({ createdAt: -1 }).lean();
     const bookingIds = bookings.map(b => b._id);
     const tickets = await Ticket.find({ bookingId: { $in: bookingIds } }).sort({ createdAt: -1 }).lean();
 

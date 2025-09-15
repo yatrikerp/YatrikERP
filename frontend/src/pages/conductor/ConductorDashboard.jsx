@@ -1,278 +1,90 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import SmartNotifications from '../../components/Common/SmartNotifications';
 import './conductor.modern.css';
-import QRScanner from '../../components/QRScanner.jsx';
-import { apiFetch } from '../../utils/api';
+import { 
+  MapPin, 
+  CheckCircle, 
+  Play, 
+  LogOut,
+  Activity,
+  RefreshCw,
+  Fuel,
+  AlertTriangle,
+  Bus,
+  Bell,
+  Wrench,
+  AlertCircle,
+  Users,
+  QrCode,
+  Settings
+} from 'lucide-react';
 
 const ConductorDashboard = () => {
-  const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [conductorInfo, setConductorInfo] = useState({
-    name: '',
-    id: '',
-    badge: '',
-    experience: '',
-    currentBus: '',
-    currentRoute: ''
-  });
-  const [ticketData, setTicketData] = useState({
-    ticketsSold: 0,
-    totalRevenue: 0,
-    todayEarnings: 0,
-    passengerCount: 0,
-    rating: 0
-  });
-  const [systemHealth, setSystemHealth] = useState({
-    ticketMachine: 'connected',
-    cardReader: 'normal',
-    printer: 'ready'
-  });
-  const [lastUpdated, setLastUpdated] = useState('');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [activeSection, setActiveSection] = useState('dashboard');
-  const [currentTrip, setCurrentTrip] = useState(null);
-  const [passengers, setPassengers] = useState([]);
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [dutyActive, setDutyActive] = useState(false);
-  const primaryTeal = '#0088A9';
-  const accentCoral = '#FF6B35';
+  const { user, logout } = useAuth();
+  
+  // State management
+  const [refreshInterval, setRefreshInterval] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [dutyStatus, setDutyStatus] = useState('assigned'); // not_assigned, assigned, active, completed
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [notifications] = useState(3);
+  const [activeTab, setActiveTab] = useState('dashboard');
 
-  const handleLogout = async () => {
+  // Refresh dashboard data
+  const refreshDashboard = useCallback(async () => {
+    setIsRefreshing(true);
     try {
-      await logout();
-      navigate('/login');
+      // Add refresh logic here
+      console.log('Refreshing dashboard data...');
     } catch (error) {
-      console.error('Logout error:', error);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      localStorage.removeItem('conductorToken');
-      localStorage.removeItem('conductorUser');
-      navigate('/login');
+      console.error('Error refreshing dashboard:', error);
+    } finally {
+      setIsRefreshing(false);
     }
-  };
+  }, []);
 
-  const toggleSidebar = () => {
-    setSidebarCollapsed(!sidebarCollapsed);
-  };
+  const handleLogout = useCallback(() => {
+    logout();
+    navigate('/login');
+  }, [logout, navigate]);
 
-  const fetchConductorInfo = async () => {
-    try {
-      const token = localStorage.getItem('conductorToken') || localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await fetch('/api/conductor/profile', {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Conductor info received:', data);
-        
-        const updatedConductorInfo = {
-          name: data.name || data.conductorName || user?.name || 'Conductor',
-          id: data.id || data.conductorId || 'CD001',
-          badge: data.badge || data.badgeNumber || 'BD123456',
-          experience: data.experience || '3 years',
-          currentBus: data.currentBus || data.busNumber || 'BUS-001',
-          currentRoute: data.currentRoute || data.routeName || 'Route 101'
-        };
-        
-        setConductorInfo(updatedConductorInfo);
-        localStorage.setItem('conductorInfo', JSON.stringify(updatedConductorInfo));
-      }
-    } catch (error) {
-      console.error('Error fetching conductor info:', error);
-    }
-  };
-
-  const fetchCurrentTrip = async () => {
-    const res = await apiFetch('/api/conductor/duties/current', { method: 'GET' });
-    if (res.ok) {
-      setCurrentTrip(res.data || null);
-      if (res.data?._id) {
-        await fetchPassengers(null);
-      } else {
-        setPassengers([]);
-      }
-    }
-  };
-
-  const fetchPassengers = async (tripId) => {
-    if (!tripId) return;
-    const res = await apiFetch(`/api/conductor/trips/${tripId}/passengers`, { method: 'GET' });
-    if (res.ok) {
-      setPassengers(res.data?.passengers || res.data || []);
-    }
-  };
-
-  const handleValidateTicket = async (ticketId) => {
-    if (!ticketId) return;
-    // No matching backend endpoint; placeholder for future integration
-    await fetchCurrentTrip();
-  };
-
-  const handleMarkVacant = async (seatNo) => {
-    // No matching backend endpoint; placeholder for future integration
-    await fetchCurrentTrip();
-  };
-
-  const startDuty = async () => {
-    const dutyId = currentTrip?._id;
-    if (!dutyId) return;
-    const res = await apiFetch(`/api/conductor/duties/${dutyId}/start`, { method: 'POST', body: JSON.stringify({}) });
-    if (res.ok) {
-      setDutyActive(true);
-      await fetchCurrentTrip();
-    }
-  };
-
-  const endDuty = async () => {
-    const dutyId = currentTrip?._id;
-    if (!dutyId) return;
-    const res = await apiFetch(`/api/conductor/duties/${dutyId}/end`, { method: 'POST', body: JSON.stringify({}) });
-    if (res.ok) {
-      setDutyActive(false);
-      setCurrentTrip(null);
-      setPassengers([]);
-    }
-  };
-
-  const fetchTicketData = async () => {
-    try {
-      const token = localStorage.getItem('conductorToken') || localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await fetch('/api/conductor/tickets', {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Ticket data received:', data);
-        
-        setTicketData({
-          ticketsSold: data.ticketsSold || 0,
-          totalRevenue: data.totalRevenue || 0,
-          todayEarnings: data.todayEarnings || 0,
-          passengerCount: data.passengerCount || 0,
-          rating: data.rating || 4.3
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching ticket data:', error);
-    }
-  };
-
-  const handleRefresh = async () => {
-    try {
-      setLoading(true);
-      await fetchConductorInfo();
-      await fetchTicketData();
-      await fetchCurrentTrip();
-      setLastUpdated(new Date().toLocaleTimeString());
-      setLoading(false);
-    } catch (error) {
-      console.error('Refresh failed:', error);
-      setLoading(false);
-    }
-  };
-
-  const sellTicket = async () => {
-    try {
-      const token = localStorage.getItem('conductorToken') || localStorage.getItem('token');
-      const response = await fetch('/api/conductor/sell-ticket', {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          amount: 50,
-          passengerType: 'adult'
-        })
-      });
-
-      if (response.ok) {
-        await fetchTicketData();
-        alert('Ticket sold successfully!');
-      }
-    } catch (error) {
-      console.error('Error selling ticket:', error);
-      alert('Failed to sell ticket');
-    }
-  };
-
-  const printReceipt = async () => {
-    try {
-      const token = localStorage.getItem('conductorToken') || localStorage.getItem('token');
-      const response = await fetch('/api/conductor/print-receipt', {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        alert('Receipt printed successfully!');
-      }
-    } catch (error) {
-      console.error('Error printing receipt:', error);
-      alert('Failed to print receipt');
-    }
-  };
-
+  // Initialize dashboard
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        if (!user) return;
-
-        // Load stored conductor info
-        const storedConductorInfo = localStorage.getItem('conductorInfo');
-        if (storedConductorInfo) {
-          try {
-            const parsedConductorInfo = JSON.parse(storedConductorInfo);
-            setConductorInfo(parsedConductorInfo);
-          } catch (e) {
-            console.log('Failed to parse stored conductor info');
-          }
-        }
-
-        await fetchConductorInfo();
-        await fetchTicketData();
-        await fetchCurrentTrip();
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        setLoading(false);
+    refreshDashboard();
+    
+    // Set up auto-refresh every 30 seconds
+    const interval = setInterval(refreshDashboard, 30000);
+    setRefreshInterval(interval);
+    
+    // Update time every second
+    const timeInterval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+      if (timeInterval) {
+        clearInterval(timeInterval);
       }
     };
+  }, [refreshDashboard]);
 
-    fetchData();
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    };
+  }, [refreshInterval]);
 
-    const interval = setInterval(async () => {
-      setLastUpdated(new Date().toLocaleTimeString());
-      await fetchTicketData();
-      await fetchCurrentTrip();
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [user]);
-
-  if (loading) {
+  if (!user) {
     return (
-      <div className="conductor-loading">
-        <div className="loading-spinner"></div>
+      <div className="loading-container">
         <h3>Loading Conductor Dashboard...</h3>
       </div>
     );
@@ -280,495 +92,554 @@ const ConductorDashboard = () => {
 
   return (
     <div className="conductor-dashboard">
-      {/* Sidebar */}
-      <div className={`conductor-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-        <div className="sidebar-header">
-          <h2>Conductor Panel</h2>
-          <div className="conductor-info">
-            <div className="conductor-name">{conductorInfo.name}</div>
-            <div className="conductor-id">ID: {conductorInfo.id}</div>
-          </div>
+      {/* Compact Header */}
+      <div className="dashboard-header">
+        <div className="header-left">
+          <div className="logo-section">
+            <div className="logo-icon">
+              <Bus size={14} />
+            </div>
+            <div className="logo-text">
+              <h1>YATRIK ERP</h1>
+            </div>
         </div>
-        
-        <nav className="sidebar-nav">
-          <ul className="nav-menu">
-            <li 
-              className={`nav-item ${activeSection === 'dashboard' ? 'active' : ''}`}
-              onClick={() => setActiveSection('dashboard')}
-            >
-              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-              </svg>
-              <span>Dashboard</span>
-            </li>
-            <li 
-              className={`nav-item ${activeSection === 'tickets' ? 'active' : ''}`}
-              onClick={() => setActiveSection('tickets')}
-            >
-              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-              </svg>
-              <span>Ticket Sales</span>
-            </li>
-            <li 
-              className={`nav-item ${activeSection === 'passengers' ? 'active' : ''}`}
-              onClick={() => setActiveSection('passengers')}
-            >
-              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
-              </svg>
-              <span>Passengers</span>
-            </li>
-            <li 
-              className={`nav-item ${activeSection === 'earnings' ? 'active' : ''}`}
-              onClick={() => setActiveSection('earnings')}
-            >
-              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" />
-              </svg>
-              <span>Earnings</span>
-            </li>
-            <li 
-              className={`nav-item ${activeSection === 'reports' ? 'active' : ''}`}
-              onClick={() => setActiveSection('reports')}
-            >
-              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
-              </svg>
-              <span>Reports</span>
-            </li>
-            <li 
-              className={`nav-item ${activeSection === 'settings' ? 'active' : ''}`}
-              onClick={() => setActiveSection('settings')}
-            >
-              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-              </svg>
-              <span>Settings</span>
-            </li>
-          </ul>
-        </nav>
+      </div>
 
-        <div className="sidebar-footer">
-          <div className="user-profile">
-            <div className="user-avatar">
-              {conductorInfo.name?.charAt(0) || 'C'}
+        <div className="header-center">
+          <div className="current-time">
+            {currentTime.toLocaleTimeString()}
             </div>
-            <div className="user-info">
-              <div className="user-name">{conductorInfo.name}</div>
-              <div className="user-role">Conductor</div>
+          <div className="duty-status-indicator">
+            <div className={`duty-status-dot ${dutyStatus}`}></div>
+            <span className="duty-status-text">
+              {dutyStatus === 'not_assigned' ? 'Off' : 
+               dutyStatus === 'assigned' ? 'Ready' :
+               dutyStatus === 'active' ? 'Active' : 'Done'}
+              </span>
+              </div>
             </div>
-          </div>
-          <button className="logout-btn" onClick={handleLogout}>
-            <svg className="logout-icon" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
-            </svg>
+            
+        <div className="header-right">
+          <button className="notification-btn">
+            <Bell size={14} />
+            {notifications > 0 && (
+              <span className="notification-badge">{notifications}</span>
+            )}
+              </button>
+          <button className="logout-btn-header" onClick={handleLogout}>
+            <LogOut size={12} />
           </button>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="main-content">
-        {/* Top Bar */}
-        <div className="top-bar">
-          <div className="search-section">
-            <svg className="search-icon" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-            </svg>
-            <input type="text" className="search-input" placeholder="Search passengers, tickets..." />
-          </div>
 
-          <div className="status-section">
-            <div className="status-indicators">
-              <div className="status-item">
-                <div className={`status-dot ${systemHealth.ticketMachine === 'connected' ? 'green' : 'red'}`}></div>
-                <span>Ticket Machine</span>
-              </div>
-              <div className="status-item">
-                <div className={`status-dot ${systemHealth.cardReader === 'normal' ? 'green' : 'red'}`}></div>
-                <span>Card Reader</span>
-              </div>
-              <div className="status-item">
-                <div className={`status-dot ${systemHealth.printer === 'ready' ? 'green' : 'red'}`}></div>
-                <span>Printer</span>
+      {/* 3-Column Main Layout */}
+      <div className="dashboard-content">
+        
+        {/* Conditional Content Based on Active Tab */}
+        {activeTab === 'dashboard' && (
+          <>
+            {/* Left Sidebar - Profile & Controls */}
+            <div className="left-sidebar">
+          {/* Conductor Profile */}
+          <div className="compact-card profile-card">
+            <div className="card-header">
+              <h3>Conductor Profile</h3>
+            </div>
+            <div className="card-content">
+              <div className="profile-info">
+                <h4>{user?.name || 'Joel'}</h4>
+                <p>ID: {user?.id?.slice(-8) || '88c8'}</p>
+                <div className="status-badge">
+                  <div className={`status-dot ${dutyStatus}`}></div>
+                  <span>{dutyStatus === 'active' ? 'On Duty' : 'Ready'}</span>
+                </div>
               </div>
             </div>
-
-            <div className="user-section">
-              <SmartNotifications />
-              <div className="user-profile-top">
-                <div className="user-avatar-top">
-                  {conductorInfo.name?.charAt(0) || 'C'}
+          </div>
+          
+          {/* Vehicle Status & Duty Controls */}
+          <div className="compact-card vehicle-controls-card">
+            <div className="card-header">
+              <h3>Vehicle & Controls</h3>
                 </div>
-                <div className="user-info-top">
-                  <div className="user-name-top">{conductorInfo.name}</div>
+            <div className="card-content">
+              <div className="status-grid-compact">
+                <div className="status-item-compact">
+                  <CheckCircle size={14} />
+                  <span>Engine: Normal</span>
+                </div>
+                <div className="status-item-compact">
+                  <MapPin size={14} />
+                  <span>GPS: Active</span>
+                </div>
+                <div className="status-item-compact">
+                  <Fuel size={14} />
+                  <span>Fuel: 85%</span>
+                </div>
+                <div className="status-item-compact">
+                  <Activity size={14} />
+                  <span>Speed: 0 km/h</span>
+                </div>
+              </div>
+              <div className="duty-controls">
+                      <button 
+                  className="duty-btn primary"
+                onClick={() => {
+                  if (dutyStatus === 'assigned') {
+                    setDutyStatus('active');
+                  } else if (dutyStatus === 'active') {
+                    setDutyStatus('completed');
+                  }
+                }}
+                disabled={dutyStatus === 'not_assigned'}
+              >
+                  <Play size={16} />
+                {dutyStatus === 'assigned' ? 'Start Duty' : 
+                   dutyStatus === 'active' ? 'End Duty' : 'No Duty'}
+                      </button>
+                      <button 
+                  className="duty-btn secondary"
+                onClick={refreshDashboard}
+                disabled={isRefreshing}
+                      >
+                  <RefreshCw size={14} className={isRefreshing ? 'spinning' : ''} />
+                  Refresh
+                      </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ETA Controls */}
+          <div className="compact-card eta-card">
+            <div className="card-header">
+              <h3>ETA Management</h3>
+            </div>
+            <div className="card-content">
+              <div className="eta-buttons">
+                <button className="eta-btn on-time">On Time</button>
+                <button className="eta-btn delay">+10min</button>
+                <button className="eta-btn delay">+20min</button>
+                <button className="eta-btn major-delay">+30min</button>
+              </div>
+            </div>
+                      </div>
+                      </div>
+
+        {/* Center Content - Trip Status & Performance */}
+        <div className="center-content">
+          {/* Trip Status Header */}
+          <div className="trip-status-header">
+            <h2>Current Trip Status</h2>
+            <p>Kochi → Alappuzha • KL-07-CD-5678</p>
+                    </div>
+                    
+          {/* Performance Summary - 2x2 Grid */}
+          <div className="compact-card performance-card">
+            <div className="card-header">
+              <h3>Performance Summary</h3>
+            </div>
+            <div className="card-content">
+              <div className="performance-grid">
+                <div className="perf-item">
+                  <div className="perf-icon" style={{background: '#00A86B'}}>
+                    <CheckCircle size={16} />
+                  </div>
+                  <div className="perf-data">
+                    <div className="perf-value">98%</div>
+                    <div className="perf-label">On-Time</div>
+                  </div>
+                </div>
+                <div className="perf-item">
+                  <div className="perf-icon" style={{background: '#1976D2'}}>
+                    <Users size={16} />
+                  </div>
+                  <div className="perf-data">
+                    <div className="perf-value">47</div>
+                    <div className="perf-label">Passengers</div>
+                  </div>
+                </div>
+                <div className="perf-item">
+                  <div className="perf-icon" style={{background: '#FFB300'}}>
+                    <Fuel size={16} />
+                  </div>
+                  <div className="perf-data">
+                    <div className="perf-value">12.5L</div>
+                    <div className="perf-label">Fuel Used</div>
+                  </div>
+                      </div>
+                <div className="perf-item">
+                  <div className="perf-icon" style={{background: '#E91E63'}}>
+                    <Activity size={16} />
+                    </div>
+                  <div className="perf-data">
+                    <div className="perf-value">45</div>
+                    <div className="perf-label">Avg Speed</div>
+          </div>
+          </div>
+                      </div>
+                      </div>
+                    </div>
+                    
+          {/* Live Bus Status - Half Height */}
+          <div className="compact-card bus-status-card">
+          <div className="card-header">
+              <h3>Live Bus Status</h3>
+          </div>
+          <div className="card-content">
+              <div className="status-info-grid">
+                <div className="info-row">
+                  <span className="info-label">Location:</span>
+                  <span className="info-value">Cherthala Junction</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Next Stop:</span>
+                  <span className="info-value">2.3 km (5 min)</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Passengers:</span>
+                  <span className="info-value">23/45 seats</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Progress:</span>
+                  <span className="info-value">60% Complete</span>
+                </div>
+              </div>
+              <div className="progress-bar-container">
+                <div className="progress-bar" style={{ width: '60%' }}></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Trip Progress */}
+          <div className="compact-card trip-progress-card">
+            <div className="card-header">
+              <h3>Route Timeline</h3>
+            </div>
+            <div className="card-content">
+              <div className="timeline-compact">
+                <div className="timeline-stop completed">
+                  <div className="stop-dot"></div>
+                  <div className="stop-info">
+                    <span className="stop-name">Kochi Central</span>
+                    <span className="stop-time">09:00</span>
+                  </div>
+                </div>
+                <div className="timeline-stop completed">
+                  <div className="stop-dot"></div>
+                  <div className="stop-info">
+                    <span className="stop-name">Edappally</span>
+                    <span className="stop-time">09:15</span>
+                  </div>
+                </div>
+                <div className="timeline-stop current">
+                  <div className="stop-dot"></div>
+                  <div className="stop-info">
+                    <span className="stop-name">Cherthala</span>
+                    <span className="stop-time">09:30</span>
+              </div>
+                </div>
+                <div className="timeline-stop pending">
+                  <div className="stop-dot"></div>
+                  <div className="stop-info">
+                    <span className="stop-name">Alappuzha</span>
+                    <span className="stop-time">09:45</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Dashboard Content */}
-        <div className="dashboard-content">
-          {activeSection === 'dashboard' && (
-            <>
-              {/* Dashboard Header */}
-              <div className="dashboard-header">
-                <div className="header-left">
-                  <h1>Conductor Dashboard</h1>
-                  <p>Welcome back, {conductorInfo.name}!</p>
+        {/* Right Sidebar - Passengers & Maintenance */}
+        <div className="right-sidebar">
+          {/* Recent Passengers */}
+          <div className="compact-card passengers-card">
+          <div className="card-header">
+              <h3>Recent Passengers</h3>
+          </div>
+          <div className="card-content">
+              <div className="passengers-list">
+                <div className="passenger-item">
+                  <div className="passenger-info">
+                    <span className="passenger-name">Rajesh Kumar</span>
+                    <span className="passenger-details">A12 • ₹45</span>
+                  </div>
                 </div>
-                <div className="header-actions">
-                  <button className="action-btn blue" onClick={sellTicket}>
-                    <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                    </svg>
-                    Sell Ticket
-                  </button>
-                  <button className="action-btn green" onClick={printReceipt}>
-                    <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" />
-                    </svg>
-                    Print Receipt
-                  </button>
-                  <button className="action-btn purple" onClick={handleRefresh}>
-                    <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                    </svg>
-                    Refresh
-              </button>
+                <div className="passenger-item">
+                  <div className="passenger-info">
+                    <span className="passenger-name">Priya Menon</span>
+                    <span className="passenger-details">B08 • ₹25</span>
+                  </div>
+                </div>
+                <div className="passenger-item">
+                  <div className="passenger-info">
+                    <span className="passenger-name">Suresh Nair</span>
+                    <span className="passenger-details">C15 • ₹35</span>
+                  </div>
+                </div>
+                <div className="passenger-item">
+                  <div className="passenger-info">
+                    <span className="passenger-name">Anita Raj</span>
+                    <span className="passenger-details">A05 • ₹40</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-              {/* Welcome Section */}
-              <div className="welcome-section">
-                <div className="welcome-left">
-                  <h2>Ticket Control Center</h2>
-                  <p>Current Status: Active - Ready to serve passengers</p>
+          {/* Maintenance Alerts */}
+          <div className="compact-card maintenance-card">
+            <div className="card-header">
+              <h3>Maintenance Alerts</h3>
+            </div>
+            <div className="card-content">
+              <div className="alerts-list">
+                <div className="alert-item warning">
+                  <div className="alert-icon">
+                    <Wrench size={12} />
+                  </div>
+                  <div className="alert-info">
+                    <span className="alert-title">Oil Change Due</span>
+                    <span className="alert-time">500 km remaining</span>
+                  </div>
                 </div>
-                <div className="welcome-right">
-                  <div className="last-updated">Last updated: {lastUpdated}</div>
+                <div className="alert-item info">
+                  <div className="alert-icon">
+                    <CheckCircle size={12} />
+                  </div>
+                  <div className="alert-info">
+                    <span className="alert-title">Tire Pressure OK</span>
+                    <span className="alert-time">All normal</span>
+                  </div>
+                </div>
+                <div className="alert-item critical">
+                  <div className="alert-icon">
+                    <AlertCircle size={12} />
+              </div>
+                  <div className="alert-info">
+                    <span className="alert-title">Engine Check</span>
+                    <span className="alert-time">Minor vibration</span>
+              </div>
+              </div>
+            </div>
+          </div>
         </div>
+
+          {/* Today's Summary */}
+          <div className="compact-card summary-card">
+          <div className="card-header">
+              <h3>Today's Summary</h3>
           </div>
-
-              {/* Quick Stats */}
-              <div className="stats-section">
-                <div className="section-header">
-                  <div className="section-left">
-                    <svg className="section-icon" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
-                    </svg>
-                    <h3>Today's Performance</h3>
-                  </div>
+          <div className="card-content">
+              <div className="summary-stats">
+                <div className="summary-item">
+                  <span className="summary-label">Distance</span>
+                  <span className="summary-value">125km</span>
                 </div>
-                <div className="stats-grid">
-                  <div className="stat-card">
-                    <div className="stat-content">
-                      <div className="stat-header">
-                        <h3>{ticketData.ticketsSold}</h3>
-                        <div className="stat-trend">
-                          <svg className="trend-icon up" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
-                          </svg>
-                          <span>+15%</span>
-                        </div>
-                      </div>
-                      <p className="stat-label">Tickets Sold</p>
-                    </div>
-                    <div className="stat-icon blue">
-                      <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  <div className="stat-card">
-                    <div className="stat-content">
-                      <div className="stat-header">
-                        <h3>₹{ticketData.totalRevenue}</h3>
-                        <div className="stat-trend">
-                          <svg className="trend-icon up" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
-                          </svg>
-                          <span>+12%</span>
-                        </div>
-                            </div>
-                      <p className="stat-label">Total Revenue</p>
-                              </div>
-                    <div className="stat-icon green">
-                      <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" />
-                      </svg>
-                              </div>
-                              </div>
-
-                  <div className="stat-card">
-                    <div className="stat-content">
-                      <div className="stat-header">
-                        <h3>{ticketData.passengerCount}</h3>
-                        <div className="stat-trend">
-                          <svg className="trend-icon up" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
-                          </svg>
-                          <span>+8%</span>
-                              </div>
-                            </div>
-                      <p className="stat-label">Passengers Served</p>
-                    </div>
-                    <div className="stat-icon yellow">
-                      <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
-                      </svg>
-                          </div>
-                          </div>
-
-                  <div className="stat-card">
-                    <div className="stat-content">
-                      <div className="stat-header">
-                        <h3>{ticketData.rating}★</h3>
-                        <div className="stat-trend">
-                          <svg className="trend-icon up" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
-                          </svg>
-                          <span>+3%</span>
-                        </div>
-                      </div>
-                      <p className="stat-label">Service Rating</p>
-                    </div>
-                    <div className="stat-icon purple">
-                      <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
-                    </div>
-                  </div>
+                <div className="summary-item">
+                  <span className="summary-label">Earnings</span>
+                  <span className="summary-value">₹1,850</span>
+                </div>
+                <div className="summary-item">
+                  <span className="summary-label">Trips</span>
+                  <span className="summary-value">3</span>
+                </div>
+                <div className="summary-item">
+                  <span className="summary-label">Fuel</span>
+                  <span className="summary-value">85%</span>
                 </div>
               </div>
-
-              {/* Conductor Info */}
-              <div className="conductor-info-section">
-                <div className="section-header">
-                  <div className="section-left">
-                    <svg className="section-icon" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                    </svg>
-                    <h3>Conductor Information</h3>
-                  </div>
-                            </div>
-                <div className="conductor-details">
-                  <div className="detail-grid">
-                    <div className="detail-item">
-                      <span className="label">Badge Number:</span>
-                      <span className="value">{conductorInfo.badge}</span>
-                              </div>
-                    <div className="detail-item">
-                      <span className="label">Experience:</span>
-                      <span className="value">{conductorInfo.experience}</span>
-                              </div>
-                    <div className="detail-item">
-                      <span className="label">Current Bus:</span>
-                      <span className="value">{conductorInfo.currentBus}</span>
-                              </div>
-                    <div className="detail-item">
-                      <span className="label">Current Route:</span>
-                      <span className="value">{conductorInfo.currentRoute}</span>
-                              </div>
-                            </div>
-                              </div>
-                          </div>
-
-              {/* Recent Activity */}
-              <div className="activity-section">
-                <div className="section-header">
-                  <div className="section-left">
-                    <svg className="section-icon" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                    </svg>
-                    <h3>Recent Activity</h3>
-                          </div>
-                        </div>
-                <div className="activity-list">
-                  <div className="activity-item">
-                    <div className="activity-icon">
-                      <svg fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                      </svg>
-                    </div>
-                    <div className="activity-content">
-                      <div className="activity-title">Ticket sold to passenger</div>
-                      <div className="activity-time">2 minutes ago</div>
-                    </div>
-                    <div className="activity-amount">₹50</div>
-                  </div>
-                  <div className="activity-item">
-                    <div className="activity-icon">
-                      <svg fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="activity-content">
-                      <div className="activity-title">Receipt printed</div>
-                      <div className="activity-time">5 minutes ago</div>
-                    </div>
-                    <div className="activity-amount">-</div>
-                  </div>
-                  <div className="activity-item">
-                    <div className="activity-icon">
-                      <svg fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                      </svg>
-                    </div>
-                    <div className="activity-content">
-                      <div className="activity-title">Ticket sold to passenger</div>
-                      <div className="activity-time">8 minutes ago</div>
-                      </div>
-                    <div className="activity-amount">₹30</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Current Trip Card */}
-              <div className="trip-card" style={{
-                background: 'rgba(255,255,255,0.1)',
-                backdropFilter: 'blur(10px)',
-                WebkitBackdropFilter: 'blur(10px)',
-                borderRadius: '1rem',
-                border: '1px solid rgba(255,255,255,0.2)',
-                boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
-                padding: '16px',
-                marginTop: '16px'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h3 style={{ margin: 0, color: primaryTeal }}>Current Trip</h3>
-                    {currentTrip ? (
-                      <p style={{ marginTop: 6 }}>
-                        {currentTrip.origin || currentTrip.from} → {currentTrip.destination || currentTrip.to} • Status: {currentTrip.status || 'Assigned'}
-                      </p>
-                    ) : (
-                      <p style={{ marginTop: 6 }}>No active trip assigned</p>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="action-btn" style={{
-                      background: `linear-gradient(90deg, ${primaryTeal}, ${accentCoral})`,
-                      color: '#fff'
-                    }} onClick={() => setIsScannerOpen(true)}>Approve via QR Scan</button>
-                    {!dutyActive ? (
-                      <button className="action-btn" style={{ background: `linear-gradient(90deg, ${primaryTeal}, #00bcd4)`, color: '#fff' }} onClick={startDuty}>Start Duty</button>
-                    ) : (
-                      <button className="action-btn" style={{ background: `linear-gradient(90deg, ${accentCoral}, #ff9966)`, color: '#fff' }} onClick={endDuty}>End Duty</button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-
-          {activeSection === 'tickets' && (
-            <div className="tickets-section">
-              <h2>Ticket Sales Management</h2>
-              <p>Ticket sales functionality will be implemented here.</p>
             </div>
-          )}
+          </div>
+        </div>
+          </>
+        )}
 
-          {activeSection === 'passengers' && (
-            <div className="passengers-section">
+        {/* GPS Tracking Tab */}
+        {activeTab === 'gps' && (
+          <div className="tab-content">
+            <div className="tab-header">
+              <h2>GPS Tracking</h2>
+              <p>Real-time vehicle location and route tracking</p>
+                      </div>
+            <div className="compact-card">
+              <div className="card-header">
+                <h3>Current Location</h3>
+                      </div>
+              <div className="card-content">
+                <div className="location-info">
+                  <div className="info-row">
+                    <span className="info-label">Current Position:</span>
+                    <span className="info-value">Cherthala Junction</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Speed:</span>
+                    <span className="info-value">45 km/h</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Direction:</span>
+                    <span className="info-value">North-East</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Fuel Monitor Tab */}
+        {activeTab === 'fuel' && (
+          <div className="tab-content">
+            <div className="tab-header">
+              <h2>Fuel Monitor</h2>
+              <p>Vehicle fuel consumption and efficiency tracking</p>
+            </div>
+            <div className="compact-card">
+              <div className="card-header">
+                <h3>Fuel Status</h3>
+                </div>
+              <div className="card-content">
+                <div className="fuel-info">
+                  <div className="fuel-gauge">
+                    <div className="fuel-level" style={{width: '85%'}}></div>
+                      </div>
+                  <div className="fuel-stats">
+                    <div className="stat-item">
+                      <span className="stat-label">Current Level:</span>
+                      <span className="stat-value">85%</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Consumption:</span>
+                      <span className="stat-value">12.5L/100km</span>
+                </div>
+                </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Maintenance Tab */}
+        {activeTab === 'maintenance' && (
+          <div className="tab-content">
+            <div className="tab-header">
+              <h2>Maintenance</h2>
+              <p>Vehicle maintenance schedule and alerts</p>
+            </div>
+            <div className="compact-card">
+              <div className="card-header">
+                <h3>Maintenance Schedule</h3>
+              </div>
+              <div className="card-content">
+                <div className="maintenance-list">
+                  <div className="maintenance-item urgent">
+                    <Wrench size={16} />
+                    <div className="maintenance-info">
+                      <span className="maintenance-title">Oil Change Due</span>
+                      <span className="maintenance-desc">500 km remaining</span>
+                    </div>
+                  </div>
+                  <div className="maintenance-item normal">
+                    <CheckCircle size={16} />
+                    <div className="maintenance-info">
+                      <span className="maintenance-title">Tire Check</span>
+                      <span className="maintenance-desc">All normal</span>
+                    </div>
+                  </div>
+                </div>
+                        </div>
+            </div>
+          </div>
+        )}
+
+        {/* Ticket Scan Tab */}
+        {activeTab === 'tickets' && (
+          <div className="tab-content">
+            <div className="tab-header">
+              <h2>Ticket Scanning</h2>
+              <p>QR code scanning and ticket validation</p>
+        </div>
+            <div className="compact-card">
+            <div className="card-header">
+                <h3>QR Scanner</h3>
+              </div>
+            <div className="card-content">
+                <div className="scanner-area">
+                  <div className="qr-scanner-placeholder">
+                    <QrCode size={48} />
+                    <p>Position QR code within the frame</p>
+                    <button className="scan-btn">Start Scanning</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Passengers Tab */}
+        {activeTab === 'passengers' && (
+          <div className="tab-content">
+            <div className="tab-header">
               <h2>Passenger Management</h2>
-              <div style={{
-                overflowX: 'auto',
-                marginTop: 12,
-                borderRadius: '12px',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.08)'
-              }}>
-                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
-                  <thead>
-                    <tr style={{ background: 'linear-gradient(90deg, rgba(0,136,169,0.15), rgba(255,107,53,0.15))' }}>
-                      <th style={{ textAlign: 'left', padding: '12px 16px' }}>Name</th>
-                      <th style={{ textAlign: 'left', padding: '12px 16px' }}>Seat</th>
-                      <th style={{ textAlign: 'left', padding: '12px 16px' }}>Ticket</th>
-                      <th style={{ textAlign: 'left', padding: '12px 16px' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {passengers.map((p, idx) => (
-                      <tr key={p.id || p.ticketId || idx} style={{ background: 'rgba(255,255,255,0.7)' }} className="hover:glow-row">
-                        <td style={{ padding: '12px 16px' }}>{p.name || p.passengerName || 'Passenger'}</td>
-                        <td style={{ padding: '12px 16px' }}>{p.seatNo || p.seat || '-'}</td>
-                        <td style={{ padding: '12px 16px' }}>
-                          {(p.ticketStatus || p.status) === 'valid' || p.valid ? '✅ Valid' : '❌ Pending'}
-                        </td>
-                        <td style={{ padding: '12px 16px', display: 'flex', gap: 8 }}>
-                          {((p.ticketStatus || p.status) !== 'valid' && !p.valid) && (
-                            <button
-                              onClick={() => handleValidateTicket(p.ticketId || p.id)}
-                              className="action-btn"
-                              style={{ background: `linear-gradient(90deg, ${primaryTeal}, ${accentCoral})`, color: '#fff' }}
-                            >Approve</button>
-                          )}
-                          <button
-                            onClick={() => handleMarkVacant(p.seatNo || p.seat)}
-                            className="action-btn"
-                            style={{ background: `linear-gradient(90deg, #6c757d, #95a5a6)`, color: '#fff' }}
-                          >Mark Vacant</button>
-                        </td>
-                      </tr>
-                    ))}
-                    {passengers.length === 0 && (
-                      <tr>
-                        <td colSpan="4" style={{ padding: '16px', textAlign: 'center', color: '#64748b' }}>No passengers to show</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <p>Current passengers and seat management</p>
             </div>
-          )}
-
-          {activeSection === 'earnings' && (
-            <div className="earnings-section">
-              <h2>Earnings Dashboard</h2>
-              <p>Earnings and financial information will be shown here.</p>
+            <div className="compact-card">
+              <div className="card-header">
+                <h3>Current Passengers</h3>
             </div>
-          )}
-
-          {activeSection === 'reports' && (
-            <div className="reports-section">
-              <h2>Conductor Reports</h2>
-              <p>Performance reports and analytics will be shown here.</p>
-              </div>
-            )}
-
-          {activeSection === 'settings' && (
-            <div className="settings-section">
-              <h2>Settings</h2>
-              <p>Conductor settings and preferences will be displayed here.</p>
+              <div className="card-content">
+                <div className="passenger-summary">
+                  <div className="summary-stat">
+                    <span className="stat-number">23</span>
+                    <span className="stat-label">Current Passengers</span>
+                  </div>
+                  <div className="summary-stat">
+                    <span className="stat-number">45</span>
+                    <span className="stat-label">Total Seats</span>
+                  </div>
+                  <div className="summary-stat">
+                    <span className="stat-number">22</span>
+                    <span className="stat-label">Available Seats</span>
+            </div>
           </div>
-          )}
+            </div>
+            </div>
+          </div>
+        )}
+
+        {/* Settings Tab */}
+        {activeTab === 'settings' && (
+          <div className="tab-content">
+            <div className="tab-header">
+              <h2>Settings</h2>
+              <p>Application preferences and configurations</p>
+            </div>
+            <div className="compact-card">
+              <div className="card-header">
+                <h3>Preferences</h3>
+              </div>
+              <div className="card-content">
+                <div className="settings-list">
+                  <div className="setting-item">
+                    <span className="setting-label">Notifications</span>
+                    <button className="toggle-btn active">ON</button>
+          </div>
+                  <div className="setting-item">
+                    <span className="setting-label">Auto Refresh</span>
+                    <button className="toggle-btn active">ON</button>
         </div>
+                  <div className="setting-item">
+                    <span className="setting-label">Sound Alerts</span>
+                    <button className="toggle-btn">OFF</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-      {isScannerOpen && (
-        <QRScanner
-          onScan={(data) => {
-            const ticketId = data?.ticketId || data?.id || data?.raw;
-            if (ticketId) {
-              handleValidateTicket(ticketId);
-            }
-            setIsScannerOpen(false);
-          }}
-          onClose={() => setIsScannerOpen(false)}
-        />
-      )}
     </div>
   );
 };
 
 export default ConductorDashboard;
-
-// Inline modal render at end to avoid layout rewrites
-// We conditionally render QRScanner when isScannerOpen is true
-// This must be outside the main return; in React, we cannot render here.
-// Instead, include it inside main return near root container.
-
-

@@ -499,7 +499,7 @@ const TripSearch = () => {
                     className="book-now-btn"
                     onClick={() => {
                       const id = trip?.id || trip?._id || trip?.tripId;
-                      if (id) navigate(`/pax/booking/${id}`);
+                      if (id) navigate(`/pax/board-drop/${id}`, { state: { trip: trip } });
                     }}
                   >
                     Book Now

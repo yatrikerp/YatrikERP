@@ -16,12 +16,14 @@ import StatusCheckPanel from '../components/pax/StatusCheckPanel';
 import CancellationPolicyPanel from '../components/pax/CancellationPolicyPanel';
 import FeedbackPanel from '../components/pax/FeedbackPanel';
 import ContactUsPanel from '../components/pax/ContactUsPanel';
+import BusTrackingModal from '../components/Common/BusTrackingModal';
 import './landing.css';
 import heroBus from '../assets/hero-bus.png';
 import { useAuth } from '../context/AuthContext';
 
 const LandingPage = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showBusTracking, setShowBusTracking] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -114,6 +116,7 @@ const LandingPage = () => {
                 <motion.button
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowBusTracking(true)}
                   className="btn btn--secondary"
                 >
                   <Bus size={16} /> Track Bus
@@ -264,6 +267,12 @@ const LandingPage = () => {
           <div className="footer__bottom">© 2024 YATRIK ERP. All rights reserved.</div>
         </div>
       </footer>
+
+      {/* Bus Tracking Modal */}
+      <BusTrackingModal 
+        isOpen={showBusTracking}
+        onClose={() => setShowBusTracking(false)}
+      />
     </div>
   );
 };

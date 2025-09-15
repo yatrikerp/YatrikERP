@@ -23,38 +23,82 @@ const PassengerTicket = () => {
 
       try {
         setLoading(true);
-        // For now, we'll create a mock ticket since we don't have a ticket API endpoint yet
-        // In a real implementation, you would fetch from /api/tickets/{pnr}
-        const mockTicket = {
-          pnr: pnr,
-          bookingId: `BK${Date.now().toString().slice(-8)}`,
-          status: 'confirmed',
-          passengerName: 'Guest Passenger',
-          from: 'Kochi',
-          to: 'Thiruvananthapuram',
-          departureDate: new Date().toISOString().split('T')[0],
-          departureTime: '08:00',
-          arrivalTime: '14:00',
-          seatNumbers: 'U1, U2',
-          amount: 450,
-          boardingPoint: 'Kochi Central Bus Stand',
-          droppingPoint: 'Thiruvananthapuram Central Bus Stand',
-          busNumber: 'KL-07-AB-1234',
-          busType: 'AC Sleeper',
-          qrData: JSON.stringify({
+        
+        // Try to fetch real ticket data from API
+        const response = await apiFetch(`/api/booking/pnr/${pnr}`);
+        
+        if (response.ok && response.data) {
+          // Use real data from API
+          const bookingData = response.data;
+          console.log('🎫 Fetched booking data:', bookingData);
+          console.log('🎫 Customer data:', bookingData.customer);
+          console.log('🎫 Customer name:', bookingData.customer?.name);
+          
+          const ticket = {
+            pnr: pnr,
+            bookingId: bookingData.bookingId,
+            status: bookingData.status || 'confirmed',
+            passengerName: bookingData.customer?.name || 'Guest Passenger',
+            passengerEmail: bookingData.customer?.email || '',
+            passengerPhone: bookingData.customer?.phone || '',
+            passengerAge: bookingData.customer?.age || '',
+            passengerGender: bookingData.customer?.gender || '',
+            from: bookingData.journey?.from || 'Origin',
+            to: bookingData.journey?.to || 'Destination',
+            departureDate: bookingData.journey?.departureDate || new Date().toISOString().split('T')[0],
+            departureTime: bookingData.journey?.departureTime || '08:00',
+            arrivalTime: bookingData.journey?.arrivalTime || '14:00',
+            seatNumbers: bookingData.seats?.map(s => s.seatNumber).join(', ') || 'U1',
+            amount: bookingData.pricing?.totalAmount || 450,
+            boardingPoint: bookingData.journey?.boardingPoint || 'Central Bus Stand',
+            droppingPoint: bookingData.journey?.droppingPoint || 'Central Bus Stand',
+            busNumber: bookingData.bus?.busNumber || 'KL-07-AB-1234',
+            busType: bookingData.bus?.busType || 'AC Sleeper',
+            qrData: JSON.stringify({
+              pnr: pnr,
+              bookingId: bookingData.bookingId,
+              passengerName: bookingData.customer?.name || 'Guest Passenger',
+              from: bookingData.journey?.from || 'Origin',
+              to: bookingData.journey?.to || 'Destination',
+              departureDate: bookingData.journey?.departureDate || new Date().toISOString().split('T')[0],
+              departureTime: bookingData.journey?.departureTime || '08:00',
+              seatNumbers: bookingData.seats?.map(s => s.seatNumber).join(', ') || 'U1',
+              amount: bookingData.pricing?.totalAmount || 450
+            })
+          };
+          setTicket(ticket);
+        } else {
+          // Fallback to mock data if API fails
+          const mockTicket = {
             pnr: pnr,
             bookingId: `BK${Date.now().toString().slice(-8)}`,
+            status: 'confirmed',
             passengerName: 'Guest Passenger',
             from: 'Kochi',
             to: 'Thiruvananthapuram',
             departureDate: new Date().toISOString().split('T')[0],
             departureTime: '08:00',
+            arrivalTime: '14:00',
             seatNumbers: 'U1, U2',
-            amount: 450
-          })
-        };
-        
-        setTicket(mockTicket);
+            amount: 450,
+            boardingPoint: 'Kochi Central Bus Stand',
+            droppingPoint: 'Thiruvananthapuram Central Bus Stand',
+            busNumber: 'KL-07-AB-1234',
+            busType: 'AC Sleeper',
+            qrData: JSON.stringify({
+              pnr: pnr,
+              bookingId: `BK${Date.now().toString().slice(-8)}`,
+              passengerName: 'Guest Passenger',
+              from: 'Kochi',
+              to: 'Thiruvananthapuram',
+              departureDate: new Date().toISOString().split('T')[0],
+              departureTime: '08:00',
+              seatNumbers: 'U1, U2',
+              amount: 450
+            })
+          };
+          setTicket(mockTicket);
+        }
       } catch (err) {
         console.error('Error loading ticket:', err);
         setError('Failed to load ticket details');
@@ -78,6 +122,10 @@ Status: ${ticket?.status?.toUpperCase()}
 
 PASSENGER DETAILS:
 Name: ${ticket?.passengerName}
+Age: ${ticket?.passengerAge || 'N/A'}
+Gender: ${ticket?.passengerGender || 'N/A'}
+Email: ${ticket?.passengerEmail || 'N/A'}
+Phone: ${ticket?.passengerPhone || 'N/A'}
 
 JOURNEY DETAILS:
 From: ${ticket?.from}
@@ -160,156 +208,166 @@ Please present this ticket at boarding.
       </div>
 
       {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Ticket Card */}
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-          {/* Ticket Header */}
-          <div className="bg-gradient-to-r from-pink-600 to-pink-700 text-white p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold">YATRIK ERP</h1>
-                <p className="text-pink-100">Bus Ticket</p>
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        {/* Compact Ticket Cards */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Main Journey Card */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              {/* Compact Header */}
+              <div className="bg-gradient-to-r from-pink-600 to-pink-700 text-white p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className="text-xl font-bold">YATRIK ERP</h1>
+                    <p className="text-pink-100 text-sm">Bus Ticket</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-pink-100">PNR</p>
+                    <p className="text-lg font-bold">{ticket.pnr}</p>
+                  </div>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-sm text-pink-100">PNR</p>
-                <p className="text-xl font-bold">{ticket.pnr}</p>
+
+              {/* Journey Route */}
+              <div className="p-4 border-b border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div className="text-center">
+                    <div className="text-sm text-gray-500">From</div>
+                    <div className="font-semibold text-gray-900">{ticket.from}</div>
+                    <div className="text-xs text-gray-500">{ticket.departureTime}</div>
+                  </div>
+                  <div className="flex-1 mx-4">
+                    <div className="flex items-center justify-center">
+                      <div className="w-full h-px bg-gray-300"></div>
+                      <Bus className="w-4 h-4 text-gray-400 mx-2" />
+                      <div className="w-full h-px bg-gray-300"></div>
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm text-gray-500">To</div>
+                    <div className="font-semibold text-gray-900">{ticket.to}</div>
+                    <div className="text-xs text-gray-500">{ticket.arrivalTime}</div>
+                  </div>
+                </div>
+                <div className="text-center mt-3">
+                  <span className="text-sm text-gray-600">{new Date(ticket.departureDate).toLocaleDateString('en-IN', { 
+                    weekday: 'short', 
+                    day: 'numeric', 
+                    month: 'short',
+                    year: 'numeric'
+                  })}</span>
+                </div>
+              </div>
+
+              {/* Compact Details Grid */}
+              <div className="p-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <div>
+                      <div className="text-xs text-gray-500">Passenger</div>
+                      <div className="font-medium text-gray-900">{ticket.passengerName}</div>
+                      {ticket.passengerAge && (
+                        <div className="text-xs text-gray-500">Age: {ticket.passengerAge}</div>
+                      )}
+                      {ticket.passengerGender && (
+                        <div className="text-xs text-gray-500 capitalize">Gender: {ticket.passengerGender}</div>
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">Seats</div>
+                      <div className="font-medium text-gray-900">{ticket.seatNumbers}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">Booking ID</div>
+                      <div className="font-medium text-gray-900 text-sm">{ticket.bookingId}</div>
+                    </div>
+                    {ticket.passengerEmail && (
+                      <div>
+                        <div className="text-xs text-gray-500">Email</div>
+                        <div className="font-medium text-gray-900 text-sm">{ticket.passengerEmail}</div>
+                      </div>
+                    )}
+                    {ticket.passengerPhone && (
+                      <div>
+                        <div className="text-xs text-gray-500">Phone</div>
+                        <div className="font-medium text-gray-900 text-sm">{ticket.passengerPhone}</div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="text-xs text-gray-500">Bus</div>
+                      <div className="font-medium text-gray-900">{ticket.busNumber}</div>
+                      <div className="text-xs text-gray-500">{ticket.busType}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">Amount</div>
+                      <div className="font-semibold text-pink-600 text-lg">₹{ticket.amount}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">Status</div>
+                      <div className="font-medium text-green-600">Confirmed</div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Ticket Body */}
-          <div className="p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Left Column - Journey Details */}
-              <div className="space-y-6">
-                {/* Route Information */}
-                <div className="border rounded-xl p-4">
-                  <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <MapPin className="w-5 h-5" />
-                    Journey Details
-                  </h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">From</span>
-                      <span className="font-medium">{ticket.from}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">To</span>
-                      <span className="font-medium">{ticket.to}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Date</span>
-                      <span className="font-medium">{new Date(ticket.departureDate).toLocaleDateString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Departure</span>
-                      <span className="font-medium">{ticket.departureTime}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Arrival</span>
-                      <span className="font-medium">{ticket.arrivalTime}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Passenger Information */}
-                <div className="border rounded-xl p-4">
-                  <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <User className="w-5 h-5" />
-                    Passenger Details
-                  </h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Name</span>
-                      <span className="font-medium">{ticket.passengerName}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Seats</span>
-                      <span className="font-medium">{ticket.seatNumbers}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Booking ID</span>
-                      <span className="font-medium text-sm">{ticket.bookingId}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bus Information */}
-                <div className="border rounded-xl p-4">
-                  <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <Bus className="w-5 h-5" />
-                    Bus Details
-                  </h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Bus Number</span>
-                      <span className="font-medium">{ticket.busNumber}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Bus Type</span>
-                      <span className="font-medium">{ticket.busType}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Boarding Point</span>
-                      <span className="font-medium text-sm">{ticket.boardingPoint}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Dropping Point</span>
-                      <span className="font-medium text-sm">{ticket.droppingPoint}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Payment Information */}
-                <div className="border rounded-xl p-4">
-                  <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <CreditCard className="w-5 h-5" />
-                    Payment Details
-                  </h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Amount Paid</span>
-                      <span className="font-medium text-lg">₹{ticket.amount}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Status</span>
-                      <span className="font-medium text-green-600">Paid</span>
-                    </div>
-                  </div>
-                </div>
+          {/* QR Code Card */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="text-center mb-4">
+                <h3 className="font-semibold text-gray-900 mb-1">QR Code</h3>
+                <p className="text-sm text-gray-600">Present at boarding</p>
               </div>
-
-              {/* Right Column - QR Code */}
-              <div className="flex flex-col items-center justify-center space-y-6">
-                <div className="text-center">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">QR Code</h3>
-                  <p className="text-sm text-gray-600 mb-4">Present this at boarding</p>
-                </div>
-                
-                <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-gray-200">
+              
+              <div className="flex justify-center mb-4">
+                <div className="bg-white p-4 rounded-lg shadow-sm border-2 border-gray-200">
                   <QRCode 
                     value={ticket.qrData} 
-                    size={200} 
+                    size={160} 
                     includeMargin={true}
                     level="M"
                   />
                 </div>
+              </div>
 
-                <div className="text-center">
-                  <p className="text-xs text-gray-500 mb-2">Valid for this journey only</p>
-                  <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
-                    <Clock className="w-4 h-4" />
-                    <span>Boarding starts 30 minutes before departure</span>
-                  </div>
+              <div className="text-center mb-4">
+                <p className="text-xs text-gray-500 mb-2">Valid for this journey only</p>
+                <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+                  <Clock className="w-4 h-4" />
+                  <span>Boarding 30 min before</span>
                 </div>
+              </div>
 
-                <button
-                  onClick={downloadTicket}
-                  className="flex items-center gap-2 bg-pink-600 text-white px-6 py-3 rounded-lg hover:bg-pink-700 transition-colors"
-                >
-                  <Download className="w-5 h-5" />
-                  Download Ticket
-                </button>
+              <button
+                onClick={downloadTicket}
+                className="w-full flex items-center justify-center gap-2 bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 transition-colors text-sm"
+              >
+                <Download className="w-4 h-4" />
+                Download Ticket
+              </button>
+            </div>
+          </div>
+
+          {/* Boarding Points Card */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <MapPin className="w-5 h-5" />
+                Boarding & Drop Points
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <div className="text-sm text-gray-500 mb-1">Boarding Point</div>
+                  <div className="font-medium text-gray-900">{ticket.boardingPoint}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500 mb-1">Drop Point</div>
+                  <div className="font-medium text-gray-900">{ticket.droppingPoint}</div>
+                </div>
               </div>
             </div>
           </div>

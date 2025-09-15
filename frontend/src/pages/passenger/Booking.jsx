@@ -406,7 +406,7 @@ const PaxBooking = () => {
               <div className="text-sm text-gray-500">Amount</div>
               <div className="text-2xl font-bold">₹{(fare || 0) * Math.max(1, selectedSeats.length || 1)}</div>
         </div>
-            <button onClick={confirm} className="mt-4 w-full rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3">Continue booking</button>
+            <button onClick={confirm} className="mt-4 w-full rounded-full bg-pink-600 hover:bg-pink-700 text-white font-semibold py-3">Continue booking</button>
           </div>
         </div>
       </div>

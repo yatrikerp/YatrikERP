@@ -17,7 +17,17 @@ import Wallet from './pages/Wallet';
 import TripPlanner from './pages/TripPlanner';
 import Booking from './pages/Booking';
 import Ticket from './pages/pax/Ticket';
+import PassengerDetails from './pages/pax/PassengerDetails';
 import KeralaRoutes from './pages/KeralaRoutes';
+
+// RedBus-style pages
+import RedBusSearch from './components/RedBusSearch';
+import RedBusResults from './pages/RedBusResults';
+import RedBusBoardDrop from './pages/RedBusBoardDrop';
+import RedBusSeatSelection from './pages/RedBusSeatSelection';
+import RedBusPassengerDetails from './pages/RedBusPassengerDetails';
+import RedBusPayment from './pages/RedBusPayment';
+import RedBusTicket from './pages/RedBusTicket';
 
 import ConductorDashboard from './pages/conductor/ConductorDashboard.jsx';
 import DriverDashboard from './pages/driver/DriverDashboard.jsx';
@@ -36,6 +46,7 @@ import RoutesManagement from './pages/admin/RoutesManagement';
 import DepotManagement from './pages/admin/DepotManagement';
 import AdminStops from './pages/admin/AdminStops';
 import AdminTrips from './pages/admin/AdminTrips';
+import AdminBookings from './pages/admin/AdminBookings';
 import AdminDuties from './pages/admin/AdminDuties';
 import AdminDrivers from './pages/admin/AdminDrivers';
 import AdminPassengers from './pages/admin/AdminPassengers';
@@ -73,6 +84,7 @@ import PassengerBookingNew from './pages/passenger/Booking';
 import PassengerResults from './pages/passenger/Results';
 import PassengerEnhancedResults from './pages/passenger/EnhancedResults';
 import PassengerBoardDrop from './pages/passenger/BoardDrop';
+import PassengerSeatSelection from './pages/passenger/SeatSelection';
 import PassengerTicket from './pages/passenger/Ticket';
 import PassengerTicketsList from './pages/passenger/TicketsList';
 import PassengerWallet from './pages/passenger/Wallet';
@@ -140,6 +152,15 @@ function App() {
             </RequireAuth>
           } />
 
+          {/* RedBus-style routes */}
+          <Route path="/redbus" element={<RedBusSearch />} />
+          <Route path="/search-results" element={<RedBusResults />} />
+          <Route path="/redbus/board-drop/:tripId" element={<RedBusBoardDrop />} />
+          <Route path="/redbus/seats/:tripId" element={<RedBusSeatSelection />} />
+          <Route path="/redbus/passenger-details/:tripId" element={<RedBusPassengerDetails />} />
+          <Route path="/redbus/payment" element={<RedBusPayment />} />
+          <Route path="/redbus/ticket/:pnr" element={<RedBusTicket />} />
+
           <Route path="/ticket" element={
             <RequireAuth>
               <AppShell>
@@ -164,17 +185,13 @@ function App() {
 
           <Route path="/conductor" element={
             <RequireAuth roles={['conductor']}>
-              <AppShell>
-                <ConductorDashboard />
-              </AppShell>
+              <ConductorDashboard />
             </RequireAuth>
           } />
 
           <Route path="/driver" element={
             <RequireAuth roles={['driver']}>
-              <AppShell>
-                <DriverDashboard />
-              </AppShell>
+              <DriverDashboard />
             </RequireAuth>
           } />
 
@@ -256,6 +273,22 @@ function App() {
             </RequireAuth>
           } />
 
+          <Route path="/pax/passenger-details/:tripId" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerDetails />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/pax/seats/:tripId" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerSeatSelection />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
           {/* New Passenger Module Routes */}
           <Route path="/passenger/dashboard" element={
             <RequireAuth roles={['passenger']}>
@@ -293,6 +326,14 @@ function App() {
             <RequireAuth roles={['passenger']}>
               <PassengerLayout>
                 <PassengerBoardDrop />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/passenger/seats/:tripId" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <PassengerSeatSelection />
               </PassengerLayout>
             </RequireAuth>
           } />
@@ -438,6 +479,14 @@ function App() {
             <RequireAuth roles={['admin']}>
               <AdminLayout>
                 <AdminTrips />
+              </AdminLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/admin/bookings" element={
+            <RequireAuth roles={['admin']}>
+              <AdminLayout>
+                <AdminBookings />
               </AdminLayout>
             </RequireAuth>
           } />

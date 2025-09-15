@@ -227,10 +227,10 @@ const TripSearchPanel = () => {
   const handleBookNow = (busId) => {
     if (!busId) return;
     if (!user) {
-      navigate(`/login?next=/pax/booking/${busId}`);
+      navigate(`/login?next=/pax/board-drop/${busId}`);
       return;
     }
-    navigate(`/pax/booking/${busId}`);
+    navigate(`/pax/board-drop/${busId}`);
   };
 
   const handleQuickView = (bus) => {

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import locationService from '../services/locationService';
 
 const AuthContext = createContext();
 
@@ -115,6 +116,38 @@ export const AuthProvider = ({ children }) => {
           localStorage.setItem('user', JSON.stringify(normalizedUser))
         ]);
       }
+
+      // Auto-start location tracking for drivers
+      if (normalizedUser.role === 'driver') {
+        try {
+          console.log('Starting automatic location tracking for driver...');
+          
+          // Get initial location
+          const initialLocation = await locationService.getCurrentLocation();
+          console.log('Initial driver location detected:', initialLocation);
+          
+          // Start continuous tracking
+          locationService.startTracking((location, error) => {
+            if (error) {
+              console.error('Location tracking error:', error);
+              return;
+            }
+            
+            console.log('Driver location updated:', location);
+            
+            // Send location to backend if driver has an active duty
+            const currentDutyId = localStorage.getItem('currentDutyId');
+            if (currentDutyId && currentDutyId !== 'demo') {
+              locationService.sendLocationToBackend(currentDutyId)
+                .catch(err => console.error('Failed to send location to backend:', err));
+            }
+          });
+          
+        } catch (locationError) {
+          console.warn('Failed to initialize location tracking:', locationError);
+          // Continue login process even if location fails
+        }
+      }
       
       console.log('AuthContext.login completed, user state updated:', normalizedUser);
       
@@ -131,6 +164,12 @@ export const AuthProvider = ({ children }) => {
     
     setIsLoggingOut(true);
     
+    // Stop location tracking for drivers
+    if (user?.role === 'driver') {
+      locationService.stopTracking();
+      console.log('Location tracking stopped for driver logout');
+    }
+    
     // Clear state immediately for instant UI response
     setUser(null);
     
@@ -140,12 +179,10 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('depotToken');
     localStorage.removeItem('depotUser');
     localStorage.removeItem('depotInfo');
-    
-    // Remove artificial delay - not needed
-    // await new Promise(resolve => setTimeout(resolve, 100));
+    localStorage.removeItem('currentDutyId');
     
     setIsLoggingOut(false);
-  }, [isLoggingOut]);
+  }, [isLoggingOut, user]);
 
   const value = {
     user,

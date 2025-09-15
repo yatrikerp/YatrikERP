@@ -36,7 +36,8 @@ const BookingManagement = ({ depotId, user }) => {
         ...filters
       });
 
-      const basePath = depotId ? `/api/booking/depot/${depotId}` : `/api/booking`;
+      // Use depot-specific API endpoint
+      const basePath = depotId ? `/api/depot/bookings` : `/api/booking`;
       const response = await fetch(`${basePath}?${queryParams}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('depotToken') || localStorage.getItem('token')}`
@@ -71,13 +72,17 @@ const BookingManagement = ({ depotId, user }) => {
 
   const handleStatusChange = async (bookingId, newStatus) => {
     try {
-      const response = await fetch(`/api/booking/${bookingId}`, {
-        method: 'PUT',
+      const endpoint = depotId ? `/api/depot/bookings/${bookingId}/status` : `/api/booking/${bookingId}`;
+      const method = depotId ? 'PUT' : 'PUT';
+      const body = depotId ? JSON.stringify({ status: newStatus, reason: 'Status updated by depot staff' }) : JSON.stringify({ status: newStatus });
+      
+      const response = await fetch(endpoint, {
+        method: method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('depotToken') || localStorage.getItem('token')}`
         },
-        body: JSON.stringify({ status: newStatus })
+        body: body
       });
 
       const result = await response.json();
@@ -98,7 +103,9 @@ const BookingManagement = ({ depotId, user }) => {
 
   const handleCheckIn = async (bookingId) => {
     try {
-      const response = await fetch(`/api/booking/check-in/${bookingId}`, {
+      const endpoint = depotId ? `/api/depot/bookings/${bookingId}/check-in` : `/api/booking/check-in/${bookingId}`;
+      
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -106,7 +113,8 @@ const BookingManagement = ({ depotId, user }) => {
         },
         body: JSON.stringify({
           boardingPoint: 'Main Terminal',
-          seatAllocated: 'Confirmed'
+          seatAllocated: 'Confirmed',
+          notes: 'Checked in by depot staff'
         })
       });
 

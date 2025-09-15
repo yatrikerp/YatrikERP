@@ -5,6 +5,30 @@
   box-sizing: border-box;
 }
 
+/* Current Assignment Display */
+.fleet-management .current-assignment {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fleet-management .current-label {
+  font-size: 12px;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.fleet-management .current-name {
+  font-size: 14px;
+  color: #495057;
+  font-weight: 600;
+}
+
 /* Notification System */
 .fleet-management .notification-container {
   position: fixed !important;
@@ -1829,6 +1853,558 @@
   transform: translateY(-1px) !important;
 }
 
+/* Predictive Insights */
+.fleet-management .predictive-insights {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 16px !important;
+  padding: 20px !important;
+  margin-bottom: 24px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08) !important;
+}
+
+.fleet-management .insights-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 16px !important;
+}
+
+.fleet-management .insights-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.fleet-management .insights-title h3 {
+  margin: 0 !important;
+  color: #1e293b !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+}
+
+.fleet-management .alert-count {
+  background: #E91E63 !important;
+  color: white !important;
+  padding: 4px 8px !important;
+  border-radius: 12px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+.fleet-management .insights-toggle {
+  background: none !important;
+  border: none !important;
+  cursor: pointer !important;
+  padding: 8px !important;
+  border-radius: 8px !important;
+  color: #6b7280 !important;
+  transition: all 0.2s ease !important;
+}
+
+.fleet-management .insights-toggle:hover {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+}
+
+.fleet-management .alerts-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)) !important;
+  gap: 12px !important;
+}
+
+.fleet-management .alert-card {
+  background: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 12px !important;
+  padding: 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  transition: all 0.2s ease !important;
+  position: relative !important;
+}
+
+.fleet-management .alert-card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1) !important;
+}
+
+.fleet-management .alert-card.warning {
+  border-left: 4px solid #f59e0b !important;
+}
+
+.fleet-management .alert-card.info {
+  border-left: 4px solid #3b82f6 !important;
+}
+
+.fleet-management .alert-card.high {
+  background: #fef2f2 !important;
+}
+
+.fleet-management .alert-icon {
+  font-size: 20px !important;
+  flex-shrink: 0 !important;
+}
+
+.fleet-management .alert-content {
+  flex: 1 !important;
+}
+
+.fleet-management .alert-message {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: #1f2937 !important;
+  margin-bottom: 4px !important;
+}
+
+.fleet-management .alert-bus {
+  font-size: 12px !important;
+  color: #6b7280 !important;
+}
+
+.fleet-management .alert-action-btn {
+  background: #f3f4f6 !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 8px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  color: #6b7280 !important;
+}
+
+.fleet-management .alert-action-btn:hover {
+  background: #e5e7eb !important;
+  color: #374151 !important;
+}
+
+.fleet-management .insights-footer {
+  text-align: center !important;
+  margin-top: 16px !important;
+  padding-top: 16px !important;
+  border-top: 1px solid #e5e7eb !important;
+}
+
+.fleet-management .more-alerts {
+  color: #6b7280 !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+
+/* Enhanced Filter Views */
+.fleet-management .filter-views {
+  display: flex !important;
+  gap: 8px !important;
+  margin-right: 16px !important;
+}
+
+.fleet-management .filter-view-btn {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 8px 12px !important;
+  border: 1px solid #d1d5db !important;
+  background: white !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: #6b7280 !important;
+}
+
+.fleet-management .filter-view-btn:hover {
+  border-color: #00BCD4 !important;
+  color: #00BCD4 !important;
+}
+
+.fleet-management .filter-view-btn.active {
+  background: #00BCD4 !important;
+  border-color: #00BCD4 !important;
+  color: white !important;
+}
+
+.fleet-management .view-icon {
+  font-size: 14px !important;
+}
+
+.fleet-management .view-name {
+  white-space: nowrap !important;
+}
+
+.fleet-management .export-btn {
+  width: 32px !important;
+  height: 32px !important;
+  border: 1px solid #d1d5db !important;
+  background: white !important;
+  border-radius: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  color: #6b7280 !important;
+}
+
+.fleet-management .export-btn:hover {
+  border-color: #00BCD4 !important;
+  color: #00BCD4 !important;
+}
+
+/* Advanced Filters Panel */
+.fleet-management .advanced-filters-panel {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  padding: 20px !important;
+  margin-bottom: 20px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+}
+
+.fleet-management .filters-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 16px !important;
+}
+
+.fleet-management .filters-header h4 {
+  margin: 0 !important;
+  color: #1e293b !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+}
+
+.fleet-management .close-filters {
+  background: none !important;
+  border: none !important;
+  cursor: pointer !important;
+  padding: 4px !important;
+  border-radius: 4px !important;
+  color: #6b7280 !important;
+  transition: all 0.2s ease !important;
+}
+
+.fleet-management .close-filters:hover {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+}
+
+.fleet-management .filters-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+  gap: 16px !important;
+  margin-bottom: 16px !important;
+}
+
+.fleet-management .filter-group {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+
+.fleet-management .filter-group label {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: #374151 !important;
+}
+
+.fleet-management .range-inputs {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.fleet-management .range-inputs input {
+  flex: 1 !important;
+  padding: 8px !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 6px !important;
+  font-size: 14px !important;
+}
+
+.fleet-management .range-inputs span {
+  color: #6b7280 !important;
+  font-size: 14px !important;
+}
+
+.fleet-management .filters-actions {
+  display: flex !important;
+  gap: 12px !important;
+  justify-content: flex-end !important;
+}
+
+.fleet-management .clear-filters-btn,
+.fleet-management .save-filter-btn {
+  padding: 8px 16px !important;
+  border: 1px solid #d1d5db !important;
+  background: white !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.fleet-management .clear-filters-btn {
+  color: #6b7280 !important;
+}
+
+.fleet-management .clear-filters-btn:hover {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+}
+
+.fleet-management .save-filter-btn {
+  color: #00BCD4 !important;
+  border-color: #00BCD4 !important;
+}
+
+.fleet-management .save-filter-btn:hover {
+  background: #00BCD4 !important;
+  color: white !important;
+}
+
+/* Enhanced Bulk Actions */
+.fleet-management .bulk-stats {
+  display: flex !important;
+  gap: 16px !important;
+  margin-left: 16px !important;
+}
+
+.fleet-management .stat-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  font-size: 12px !important;
+}
+
+.fleet-management .stat-label {
+  color: #6b7280 !important;
+}
+
+.fleet-management .stat-value {
+  color: #1f2937 !important;
+  font-weight: 600 !important;
+}
+
+.fleet-management .bulk-btn.primary {
+  background: #3b82f6 !important;
+  color: white !important;
+}
+
+.fleet-management .bulk-btn.primary:hover {
+  background: #2563eb !important;
+}
+
+/* Enhanced Table Elements */
+.fleet-management .assign-route-btn,
+.fleet-management .assign-crew-btn {
+  background: #f0f9ff !important;
+  border: 1px solid #0ea5e9 !important;
+  color: #0ea5e9 !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.fleet-management .assign-route-btn:hover,
+.fleet-management .assign-crew-btn:hover {
+  background: #0ea5e9 !important;
+  color: white !important;
+}
+
+.fleet-management .crew-info {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+
+.fleet-management .crew-member {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-size: 12px !important;
+}
+
+.fleet-management .crew-label {
+  color: #6b7280 !important;
+  font-weight: 500 !important;
+  min-width: 60px !important;
+}
+
+.fleet-management .crew-name {
+  color: #1f2937 !important;
+  font-weight: 500 !important;
+}
+
+.fleet-management .status-icon {
+  margin-right: 4px !important;
+  font-size: 12px !important;
+}
+
+/* Maintenance Modal Styles */
+.fleet-management .maintenance-form {
+  padding: 24px !important;
+}
+
+.fleet-management .maintenance-form .form-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)) !important;
+  gap: 20px !important;
+  margin-bottom: 24px !important;
+}
+
+/* Crew Assignment Modal Styles */
+.fleet-management .crew-assignment-content {
+  padding: 24px !important;
+}
+
+.fleet-management .crew-selection h3 {
+  margin: 0 0 16px 0 !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: #1e293b !important;
+}
+
+.fleet-management .crew-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 24px !important;
+}
+
+.fleet-management .crew-section h4 {
+  margin: 0 0 12px 0 !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: #374151 !important;
+}
+
+.fleet-management .crew-select {
+  width: 100% !important;
+  padding: 12px !important;
+  border: 2px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  background: #ffffff !important;
+  color: #1f2937 !important;
+  transition: all 0.2s ease !important;
+}
+
+.fleet-management .crew-select:focus {
+  outline: none !important;
+  border-color: #00BCD4 !important;
+  box-shadow: 0 0 0 3px rgba(0, 188, 212, 0.1) !important;
+}
+
+/* Export Modal Styles */
+.fleet-management .export-modal {
+  max-width: 600px !important;
+}
+
+.fleet-management .export-content {
+  padding: 24px !important;
+}
+
+.fleet-management .export-options h3,
+.fleet-management .export-stats h3 {
+  margin: 0 0 16px 0 !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: #1e293b !important;
+}
+
+.fleet-management .format-buttons {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 16px !important;
+  margin-bottom: 32px !important;
+}
+
+.fleet-management .format-btn {
+  background: #ffffff !important;
+  border: 2px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  padding: 20px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  text-align: center !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.fleet-management .format-btn:hover {
+  border-color: #00BCD4 !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 25px rgba(0, 188, 212, 0.15) !important;
+}
+
+.fleet-management .format-btn.excel:hover {
+  border-color: #10b981 !important;
+  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.15) !important;
+}
+
+.fleet-management .format-btn.pdf:hover {
+  border-color: #ef4444 !important;
+  box-shadow: 0 8px 25px rgba(239, 68, 68, 0.15) !important;
+}
+
+.fleet-management .format-btn span {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: #1e293b !important;
+}
+
+.fleet-management .format-btn small {
+  font-size: 12px !important;
+  color: #6b7280 !important;
+}
+
+.fleet-management .stats-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) !important;
+  gap: 16px !important;
+}
+
+.fleet-management .stat-card {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  padding: 16px !important;
+  text-align: center !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.fleet-management .stat-card .stat-icon {
+  color: #00BCD4 !important;
+}
+
+.fleet-management .stat-card .stat-value {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: #1e293b !important;
+}
+
+.fleet-management .stat-card .stat-label {
+  font-size: 12px !important;
+  color: #6b7280 !important;
+  font-weight: 500 !important;
+}
+
 /* Responsive tweaks */
 @media (max-width: 768px) {
   .fleet-management {
@@ -1844,6 +2420,21 @@
     grid-template-columns: 1fr !important;
   }
   .fleet-management .routes-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .fleet-management .crew-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .fleet-management .format-buttons {
+    grid-template-columns: 1fr !important;
+  }
+  .fleet-management .filter-views {
+    display: none !important;
+  }
+  .fleet-management .bulk-stats {
+    display: none !important;
+  }
+  .fleet-management .alerts-grid {
     grid-template-columns: 1fr !important;
   }
   }

@@ -143,10 +143,10 @@ export default function PassengerBoardDrop() {
   const canContinue = boarding && dropping;
 
   const handleContinue = () => {
-    navigate(`/passenger/booking/${tripId}`, {
+    navigate(`/passenger/seats/${tripId}`, {
       state: { 
         trip, 
-        selectedSeats: state?.selectedSeats || [], 
+        selectedSeats: state?.selectedSeats || [],
         boarding, 
         dropping 
       }

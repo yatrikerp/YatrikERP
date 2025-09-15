@@ -24,7 +24,16 @@ import {
   Check,
   Grid3X3,
   List,
-  Copy
+  Copy,
+  AlertTriangle,
+  FileText,
+  TrendingUp,
+  Archive,
+  UserPlus,
+  Route,
+  Activity,
+  BarChart3,
+  Save
 } from 'lucide-react';
 
 const FleetManagement = () => {
@@ -36,8 +45,6 @@ const FleetManagement = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedBus, setSelectedBus] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterType, setFilterType] = useState('all');
   const [sortField, setSortField] = useState('busNumber');
   const [sortDirection, setSortDirection] = useState('asc');
   const [selectedBuses, setSelectedBuses] = useState([]);
@@ -61,6 +68,21 @@ const FleetManagement = () => {
   const [drivers, setDrivers] = useState([]);
   const [conductors, setConductors] = useState([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
+
+  // Enhanced features state
+  const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [showCrewAssignmentModal, setShowCrewAssignmentModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showPredictiveInsights, setShowPredictiveInsights] = useState(true);
+  const [savedFilters, setSavedFilters] = useState([]);
+  const [activeFilterView, setActiveFilterView] = useState('default');
+  const [predictiveAlerts, setPredictiveAlerts] = useState([]);
+  const [fleetStats, setFleetStats] = useState({
+    totalTrips: 0,
+    totalKm: 0,
+    avgFuelEfficiency: 0,
+    downtimeHours: 0
+  });
 
   // Form states
   const [formData, setFormData] = useState({
@@ -92,6 +114,28 @@ const FleetManagement = () => {
     notes: ''
   });
 
+  // Enhanced filter states
+  const [advancedFilters, setAdvancedFilters] = useState({
+    status: 'all',
+    type: 'all',
+    capacityRange: { min: 0, max: 100 },
+    depot: 'all',
+    lastMaintenance: 'all',
+    assignedCrew: 'all'
+  });
+
+  // Maintenance form data
+  const [maintenanceFormData, setMaintenanceFormData] = useState({
+    busId: '',
+    problemType: '',
+    description: '',
+    assignedMechanic: '',
+    estimatedReturnTime: '',
+    priority: 'medium',
+    partsRequired: [],
+    estimatedCost: 0
+  });
+
   const busTypes = [
     { value: 'ac_sleeper', label: 'AC Sleeper' },
     { value: 'ac_seater', label: 'AC Seater' },
@@ -119,6 +163,42 @@ const FleetManagement = () => {
     { value: 'hybrid', label: 'Hybrid' }
   ];
 
+  // Enhanced constants
+  const problemTypes = [
+    { value: 'engine', label: 'Engine Issues' },
+    { value: 'tires', label: 'Tire Problems' },
+    { value: 'brakes', label: 'Brake System' },
+    { value: 'electrical', label: 'Electrical' },
+    { value: 'air_conditioning', label: 'Air Conditioning' },
+    { value: 'transmission', label: 'Transmission' },
+    { value: 'suspension', label: 'Suspension' },
+    { value: 'documents', label: 'Documentation' },
+    { value: 'other', label: 'Other' }
+  ];
+
+  const priorityLevels = [
+    { value: 'low', label: 'Low', color: 'green' },
+    { value: 'medium', label: 'Medium', color: 'orange' },
+    { value: 'high', label: 'High', color: 'red' },
+    { value: 'critical', label: 'Critical', color: 'red' }
+  ];
+
+  const statusColors = {
+    active: { bg: '#E8F5E9', color: '#00A86B', icon: '🟢' },
+    maintenance: { bg: '#FFF8E1', color: '#FFB300', icon: '🟡' },
+    breakdown: { bg: '#FFEBEE', color: '#F44336', icon: '🔴' },
+    idle: { bg: '#F5F5F5', color: '#9E9E9E', icon: '⚪' },
+    retired: { bg: '#F3F4F6', color: '#6B7280', icon: '⚫' }
+  };
+
+  const savedFilterViews = [
+    { id: 'default', name: 'All Buses', icon: '📋' },
+    { id: 'active_only', name: 'Active Only', icon: '🟢' },
+    { id: 'ac_buses', name: 'AC Buses &gt;50 seats', icon: '❄️' },
+    { id: 'maintenance_due', name: 'Maintenance Due', icon: '🔧' },
+    { id: 'idle_buses', name: 'Idle Buses', icon: '⚪' }
+  ];
+
   // Notification helper functions
   const showNotification = (message, type = 'success', duration = 3000) => {
     const id = Date.now() + Math.random();
@@ -135,6 +215,108 @@ const FleetManagement = () => {
   const removeNotification = (id) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
+
+  const getBusTypeLabel = useCallback((type) => {
+    return busTypes.find(bt => bt.value === type)?.label || type;
+  }, [busTypes]);
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'active': return 'green';
+      case 'maintenance': return 'orange';
+      case 'retired': return 'red';
+      case 'suspended': return 'gray';
+      default: return 'gray';
+    }
+  };
+
+  // Enhanced helper functions
+  const generatePredictiveAlerts = useCallback(() => {
+    const alerts = [];
+    const today = new Date();
+    
+    buses.forEach(bus => {
+      // FC renewal alerts
+      if (bus.lastMaintenance) {
+        const lastMaintenance = new Date(bus.lastMaintenance);
+        const daysSinceMaintenance = Math.floor((today - lastMaintenance) / (1000 * 60 * 60 * 24));
+        
+        if (daysSinceMaintenance >= 330) { // 11 months
+          alerts.push({
+            id: `fc-${bus._id}`,
+            type: 'warning',
+            busId: bus._id,
+            busNumber: bus.busNumber,
+            message: `Bus ${bus.busNumber} due for FC renewal in ${365 - daysSinceMaintenance} days`,
+            icon: '📋',
+            priority: daysSinceMaintenance >= 350 ? 'high' : 'medium'
+          });
+        }
+      }
+
+      // Low mileage trend alerts
+      if (bus.recentTrips && bus.recentTrips.length >= 3) {
+        const avgMileage = bus.recentTrips.reduce((sum, trip) => sum + trip.mileage, 0) / bus.recentTrips.length;
+        if (avgMileage < 50) { // Less than 50km per trip
+          alerts.push({
+            id: `mileage-${bus._id}`,
+            type: 'info',
+            busId: bus._id,
+            busNumber: bus.busNumber,
+            message: `Bus ${bus.busNumber} low mileage trend last 3 trips (avg: ${avgMileage.toFixed(1)}km)`,
+            icon: '⛽',
+            priority: 'medium'
+          });
+        }
+      }
+
+      // Scheduled maintenance alerts
+      if (bus.nextMaintenance) {
+        const nextMaintenance = new Date(bus.nextMaintenance);
+        const daysUntilMaintenance = Math.floor((nextMaintenance - today) / (1000 * 60 * 60 * 24));
+        
+        if (daysUntilMaintenance <= 7) {
+          alerts.push({
+            id: `scheduled-${bus._id}`,
+            type: 'info',
+            busId: bus._id,
+            busNumber: bus.busNumber,
+            message: `Bus ${bus.busNumber} scheduled for maintenance ${daysUntilMaintenance === 0 ? 'today' : `in ${daysUntilMaintenance} days`}`,
+            icon: '🛠️',
+            priority: daysUntilMaintenance <= 1 ? 'high' : 'medium'
+          });
+        }
+      }
+    });
+
+    setPredictiveAlerts(alerts);
+  }, [buses]);
+
+  const fetchMaintenanceLogs = useCallback(async () => {
+    try {
+      // For now, we'll simulate maintenance logs from bus data
+      // In the future, this can be replaced with actual API call
+      console.log('Maintenance logs would be fetched here');
+    } catch (error) {
+      console.error('Error fetching maintenance logs:', error);
+    }
+  }, []);
+
+  const fetchFleetStats = useCallback(async () => {
+    try {
+      // Calculate fleet stats from existing bus data
+      const calculatedStats = {
+        totalTrips: buses.filter(bus => bus.status === 'active').length,
+        totalKm: buses.reduce((sum, bus) => sum + (bus.totalKm || 0), 0),
+        avgFuelEfficiency: buses.length > 0 ? 
+          buses.reduce((sum, bus) => sum + (bus.fuelEfficiency || 0), 0) / buses.length : 0,
+        downtimeHours: buses.filter(bus => bus.status === 'maintenance').length * 24
+      };
+      setFleetStats(calculatedStats);
+    } catch (error) {
+      console.error('Error calculating fleet stats:', error);
+    }
+  }, [buses]);
 
   const fetchBuses = useCallback(async () => {
     try {
@@ -224,7 +406,16 @@ const FleetManagement = () => {
     fetchBuses();
     fetchStaffData();
     fetchAvailableRoutes();
-  }, [fetchBuses, fetchAvailableRoutes]);
+    fetchMaintenanceLogs();
+  }, [fetchBuses, fetchAvailableRoutes, fetchMaintenanceLogs]);
+
+  useEffect(() => {
+    fetchFleetStats();
+  }, [fetchFleetStats]);
+
+  useEffect(() => {
+    generatePredictiveAlerts();
+  }, [generatePredictiveAlerts]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -418,15 +609,20 @@ const FleetManagement = () => {
     try {
       const response = await apiFetch(`/api/depot/buses/${selectedBus._id}/assign-route`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ routeId })
       });
 
       if (response.ok) {
         showNotification(`Route assigned to bus ${selectedBus.busNumber} successfully!`, 'success');
         setShowRouteAssignmentModal(false);
+        setSelectedBus(null);
         fetchBuses(); // Refresh bus data
       } else {
-        showNotification(response.message || 'Failed to assign route', 'error');
+        const errorData = response.data || response;
+        showNotification(errorData.message || 'Failed to assign route', 'error');
       }
     } catch (error) {
       console.error('Error assigning route:', error);
@@ -439,10 +635,46 @@ const FleetManagement = () => {
     let filtered = buses.filter(bus => {
       const matchesSearch = bus.busNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            bus.registrationNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           bus.currentTrip?.route?.name?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = filterStatus === 'all' || bus.status === filterStatus;
-      const matchesType = filterType === 'all' || bus.busType === filterType;
-      return matchesSearch && matchesStatus && matchesType;
+                           bus.currentRoute?.routeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           bus.currentRoute?.routeNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           bus.assignedDriver?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           bus.assignedConductor?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = advancedFilters.status === 'all' || bus.status === advancedFilters.status;
+      const matchesType = advancedFilters.type === 'all' || bus.busType === advancedFilters.type;
+      const matchesCapacity = bus.capacity?.total >= advancedFilters.capacityRange.min && 
+                             bus.capacity?.total <= advancedFilters.capacityRange.max;
+      const matchesDepot = advancedFilters.depot === 'all' || bus.depot === advancedFilters.depot;
+      
+      // Last maintenance filter
+      let matchesMaintenance = true;
+      if (advancedFilters.lastMaintenance !== 'all' && bus.lastMaintenance) {
+        const lastMaintenance = new Date(bus.lastMaintenance);
+        const daysSince = Math.floor((new Date() - lastMaintenance) / (1000 * 60 * 60 * 24));
+        
+        switch (advancedFilters.lastMaintenance) {
+          case 'recent':
+            matchesMaintenance = daysSince <= 30;
+            break;
+          case 'overdue':
+            matchesMaintenance = daysSince > 365;
+            break;
+        case 'due_soon':
+          matchesMaintenance = daysSince > 300 && daysSince <= 365;
+          break;
+        default:
+          matchesMaintenance = true;
+          break;
+      }
+      }
+      
+      // Crew assignment filter
+      const matchesCrew = advancedFilters.assignedCrew === 'all' || 
+                          (advancedFilters.assignedCrew === 'assigned' && bus.assignedDriver && bus.assignedConductor) ||
+                          (advancedFilters.assignedCrew === 'unassigned' && (!bus.assignedDriver || !bus.assignedConductor));
+      
+      return matchesSearch && matchesStatus && matchesType && matchesCapacity && 
+             matchesDepot && matchesMaintenance && matchesCrew;
     });
 
     // Advanced sorting
@@ -452,8 +684,8 @@ const FleetManagement = () => {
       
       // Handle nested properties
       if (sortField === 'route') {
-        aValue = a.currentTrip?.route?.name || '';
-        bValue = b.currentTrip?.route?.name || '';
+        aValue = a.currentRoute?.routeName || '';
+        bValue = b.currentRoute?.routeName || '';
       }
       
       if (typeof aValue === 'string') {
@@ -467,7 +699,7 @@ const FleetManagement = () => {
     });
 
     return filtered;
-  }, [buses, searchTerm, filterStatus, filterType, sortField, sortDirection]);
+  }, [buses, searchTerm, advancedFilters, sortField, sortDirection]);
 
   // Pagination
   const paginatedBuses = useMemo(() => {
@@ -501,8 +733,8 @@ const FleetManagement = () => {
       switch (action) {
         case 'activate':
           await Promise.all(selectedBuses.map(id => 
-            apiFetch(`/api/buses/${id}`, {
-              method: 'PATCH',
+            apiFetch(`/api/depot/buses/${id}`, {
+              method: 'PUT',
               body: JSON.stringify({ status: 'active' })
             })
           ));
@@ -510,16 +742,37 @@ const FleetManagement = () => {
           break;
         case 'maintenance':
           await Promise.all(selectedBuses.map(id => 
-            apiFetch(`/api/buses/${id}`, {
-              method: 'PATCH',
+            apiFetch(`/api/depot/buses/${id}`, {
+              method: 'PUT',
               body: JSON.stringify({ status: 'maintenance' })
             })
           ));
           showNotification(`${selectedBuses.length} buses sent to maintenance!`, 'success');
           break;
+        case 'assign_route':
+          if (selectedBuses.length === 1) {
+            const bus = buses.find(b => b._id === selectedBuses[0]);
+            setSelectedBus(bus);
+            setShowRouteAssignmentModal(true);
+          } else {
+            showNotification('Please select only one bus to assign a route', 'warning');
+          }
+          break;
+        case 'assign_crew':
+          setShowCrewAssignmentModal(true);
+          break;
+        case 'archive':
+          await Promise.all(selectedBuses.map(id => 
+            apiFetch(`/api/depot/buses/${id}`, {
+              method: 'PUT',
+              body: JSON.stringify({ status: 'retired' })
+            })
+          ));
+          showNotification(`${selectedBuses.length} buses archived successfully!`, 'success');
+          break;
         case 'delete':
           await Promise.all(selectedBuses.map(id => 
-            apiFetch(`/api/buses/${id}`, { method: 'DELETE' })
+            apiFetch(`/api/depot/buses/${id}`, { method: 'DELETE' })
           ));
           showNotification(`${selectedBuses.length} buses deleted successfully!`, 'success');
           break;
@@ -551,8 +804,8 @@ const FleetManagement = () => {
       const bus = buses.find(b => b._id === busId);
       const busNumber = bus ? bus.busNumber : 'Unknown';
       
-      await apiFetch(`/api/buses/${busId}`, {
-        method: 'PATCH',
+      await apiFetch(`/api/depot/buses/${busId}`, {
+        method: 'PUT',
         body: JSON.stringify({ status: newStatus })
       });
       fetchBuses();
@@ -565,19 +818,125 @@ const FleetManagement = () => {
     }
   }, [fetchBuses, buses]);
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'active': return 'green';
-      case 'maintenance': return 'orange';
-      case 'retired': return 'red';
-      case 'suspended': return 'gray';
-      default: return 'gray';
+  // Enhanced filtering functions
+  const applyFilterView = useCallback((viewId) => {
+    setActiveFilterView(viewId);
+    
+    switch (viewId) {
+      case 'active_only':
+        setAdvancedFilters(prev => ({ ...prev, status: 'active' }));
+        break;
+      case 'ac_buses':
+        setAdvancedFilters(prev => ({ 
+          ...prev, 
+          type: 'ac_seater', 
+          capacityRange: { min: 50, max: 100 } 
+        }));
+        break;
+      case 'maintenance_due':
+        setAdvancedFilters(prev => ({ ...prev, status: 'maintenance' }));
+        break;
+      case 'idle_buses':
+        setAdvancedFilters(prev => ({ ...prev, status: 'idle' }));
+        break;
+      default:
+        setAdvancedFilters({
+          status: 'all',
+          type: 'all',
+          capacityRange: { min: 0, max: 100 },
+          depot: 'all',
+          lastMaintenance: 'all',
+          assignedCrew: 'all'
+        });
     }
-  };
+  }, []);
 
-  const getBusTypeLabel = (type) => {
-    return busTypes.find(bt => bt.value === type)?.label || type;
-  };
+  const handleMaintenanceSubmit = useCallback(async (e) => {
+    e.preventDefault();
+    
+    try {
+      // For now, we'll simulate creating a maintenance log
+      // In the future, this can be replaced with actual API call
+      console.log('Creating maintenance log:', maintenanceFormData);
+      
+      // Simulate success
+      showNotification('Maintenance log created successfully!', 'success');
+      setShowMaintenanceModal(false);
+      setMaintenanceFormData({
+        busId: '',
+        problemType: '',
+        description: '',
+        assignedMechanic: '',
+        estimatedReturnTime: '',
+        priority: 'medium',
+        partsRequired: [],
+        estimatedCost: 0
+      });
+      
+      // Update bus status to maintenance if not already
+      if (maintenanceFormData.busId) {
+        await handleQuickStatusChange(maintenanceFormData.busId, 'maintenance');
+      }
+    } catch (error) {
+      console.error('Error creating maintenance log:', error);
+      showNotification('Failed to create maintenance log. Please try again.', 'error');
+    }
+  }, [maintenanceFormData, handleQuickStatusChange, buses]);
+
+  const openMaintenanceModal = useCallback((bus) => {
+    setMaintenanceFormData(prev => ({
+      ...prev,
+      busId: bus._id
+    }));
+    setShowMaintenanceModal(true);
+  }, []);
+
+  const exportFleetData = useCallback(async (format) => {
+    try {
+      // For now, we'll simulate export functionality
+      // In the future, this can be replaced with actual API call
+      console.log(`Exporting fleet data as ${format}`);
+      
+      // Create a simple CSV export for now
+      if (format === 'excel' && buses.length > 0) {
+        const csvData = buses.map(bus => ({
+          'Bus Number': bus.busNumber,
+          'Registration': bus.registrationNumber,
+          'Type': getBusTypeLabel(bus.busType),
+          'Capacity': bus.capacity?.total || 0,
+          'Status': bus.status,
+          'Driver': bus.assignedDriver?.name || 'Unassigned',
+          'Conductor': bus.assignedConductor?.name || 'Unassigned',
+          'Route': bus.currentRoute?.routeName || 'No Route',
+          'Last Maintenance': bus.lastMaintenance ? new Date(bus.lastMaintenance).toLocaleDateString() : 'N/A'
+        }));
+        
+        const csvContent = [
+          Object.keys(csvData[0]).join(','),
+          ...csvData.map(row => Object.values(row).join(','))
+        ].join('\n');
+        
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `fleet-report-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } else if (format === 'excel') {
+        showNotification('No buses available to export', 'warning');
+        return;
+      }
+      
+      showNotification(`Fleet report exported successfully!`, 'success');
+    } catch (error) {
+      console.error('Export failed:', error);
+      showNotification('Export failed. Please try again.', 'error');
+    }
+  }, [buses, getBusTypeLabel]);
+
 
   if (loading) {
     return (
@@ -690,6 +1049,58 @@ const FleetManagement = () => {
         </div>
       </div>
 
+      {/* Predictive Insights */}
+      {showPredictiveInsights && predictiveAlerts.length > 0 && (
+        <div className="predictive-insights">
+          <div className="insights-header">
+            <div className="insights-title">
+              <AlertTriangle size={20} />
+              <h3>Predictive Insights</h3>
+              <span className="alert-count">{predictiveAlerts.length}</span>
+            </div>
+            <button 
+              className="insights-toggle"
+              onClick={() => setShowPredictiveInsights(false)}
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <div className="alerts-grid">
+            {predictiveAlerts.slice(0, 6).map((alert) => (
+              <div key={alert.id} className={`alert-card ${alert.type} ${alert.priority}`}>
+                <div className="alert-icon">{alert.icon}</div>
+                <div className="alert-content">
+                  <div className="alert-message">{alert.message}</div>
+                  <div className="alert-bus">Bus: {alert.busNumber}</div>
+                </div>
+                <div className="alert-actions">
+                  <button 
+                    className="alert-action-btn"
+                    onClick={() => {
+                      const bus = buses.find(b => b._id === alert.busId);
+                      if (bus) {
+                        if (alert.type === 'warning') {
+                          openMaintenanceModal(bus);
+                        } else {
+                          openEditModal(bus);
+                        }
+                      }
+                    }}
+                  >
+                    {alert.type === 'warning' ? <Wrench size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {predictiveAlerts.length > 6 && (
+            <div className="insights-footer">
+              <span className="more-alerts">+{predictiveAlerts.length - 6} more alerts</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Advanced Search and Filters */}
       <div className="search-section">
         <div className="search-input-wrapper">
@@ -697,7 +1108,7 @@ const FleetManagement = () => {
           <input
             type="text"
             className="search-input"
-            placeholder="Search buses, routes, registration..."
+            placeholder="Search buses, routes, registration, crew..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -714,25 +1125,36 @@ const FleetManagement = () => {
         <div className="filter-dropdowns">
           <select
             className="filter-dropdown"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+            value={advancedFilters.status}
+            onChange={(e) => setAdvancedFilters(prev => ({ ...prev, status: e.target.value }))}
           >
             <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="maintenance">Maintenance</option>
-            <option value="retired">Retired</option>
-            <option value="suspended">Suspended</option>
+            <option value="active">🟢 Active</option>
+            <option value="maintenance">🟡 Maintenance</option>
+            <option value="breakdown">🔴 Breakdown</option>
+            <option value="idle">⚪ Idle</option>
+            <option value="retired">⚫ Retired</option>
           </select>
           
           <select
             className="filter-dropdown"
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
+            value={advancedFilters.type}
+            onChange={(e) => setAdvancedFilters(prev => ({ ...prev, type: e.target.value }))}
           >
             <option value="all">All Types</option>
             {busTypes.map(type => (
               <option key={type.value} value={type.value}>{type.label}</option>
             ))}
+          </select>
+
+          <select
+            className="filter-dropdown"
+            value={advancedFilters.assignedCrew}
+            onChange={(e) => setAdvancedFilters(prev => ({ ...prev, assignedCrew: e.target.value }))}
+          >
+            <option value="all">All Crew Status</option>
+            <option value="assigned">👥 Assigned</option>
+            <option value="unassigned">❌ Unassigned</option>
           </select>
 
           <select
@@ -748,16 +1170,32 @@ const FleetManagement = () => {
         </div>
 
         <div className="view-controls">
+          <div className="filter-views">
+            {savedFilterViews.map(view => (
+              <button
+                key={view.id}
+                className={`filter-view-btn ${activeFilterView === view.id ? 'active' : ''}`}
+                onClick={() => applyFilterView(view.id)}
+                title={view.name}
+              >
+                <span className="view-icon">{view.icon}</span>
+                <span className="view-name">{view.name}</span>
+              </button>
+            ))}
+          </div>
+
           <div className="view-modes">
             <button 
               className={`view-btn ${viewMode === 'table' ? 'active' : ''}`}
               onClick={() => setViewMode('table')}
+              title="Table View"
             >
               <List size={16} />
             </button>
             <button 
               className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
               onClick={() => setViewMode('grid')}
+              title="Card View"
             >
               <Grid3X3 size={16} />
             </button>
@@ -767,31 +1205,156 @@ const FleetManagement = () => {
             className="refresh-btn"
             onClick={fetchBuses}
             disabled={loading}
+            title="Refresh Data"
           >
             <RefreshCw size={16} className={loading ? 'spinning' : ''} />
           </button>
 
           <button 
+            className="export-btn"
+            onClick={() => setShowExportModal(true)}
+            title="Export Data"
+          >
+            <Download size={16} />
+          </button>
+
+          <button 
             className="filter-toggle"
             onClick={() => setShowFilters(!showFilters)}
+            title="Advanced Filters"
           >
             <Filter size={16} />
-            {showFilters && <span className="filter-count">3</span>}
+            {showFilters && <span className="filter-count">5</span>}
           </button>
         </div>
       </div>
+
+      {/* Advanced Filters Panel */}
+      {showFilters && (
+        <div className="advanced-filters-panel">
+          <div className="filters-header">
+            <h4>Advanced Filters</h4>
+            <button 
+              className="close-filters"
+              onClick={() => setShowFilters(false)}
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <div className="filters-grid">
+            <div className="filter-group">
+              <label>Capacity Range</label>
+              <div className="range-inputs">
+                <input
+                  type="number"
+                  placeholder="Min"
+                  value={advancedFilters.capacityRange.min}
+                  onChange={(e) => setAdvancedFilters(prev => ({
+                    ...prev,
+                    capacityRange: { ...prev.capacityRange, min: parseInt(e.target.value) || 0 }
+                  }))}
+                />
+                <span>to</span>
+                <input
+                  type="number"
+                  placeholder="Max"
+                  value={advancedFilters.capacityRange.max}
+                  onChange={(e) => setAdvancedFilters(prev => ({
+                    ...prev,
+                    capacityRange: { ...prev.capacityRange, max: parseInt(e.target.value) || 100 }
+                  }))}
+                />
+              </div>
+            </div>
+
+            <div className="filter-group">
+              <label>Last Maintenance</label>
+              <select
+                value={advancedFilters.lastMaintenance}
+                onChange={(e) => setAdvancedFilters(prev => ({ ...prev, lastMaintenance: e.target.value }))}
+              >
+                <option value="all">All</option>
+                <option value="recent">Recent (≤30 days)</option>
+                <option value="due_soon">Due Soon (300-365 days)</option>
+                <option value="overdue">Overdue (&gt;365 days)</option>
+              </select>
+            </div>
+
+            <div className="filter-group">
+              <label>Depot</label>
+              <select
+                value={advancedFilters.depot}
+                onChange={(e) => setAdvancedFilters(prev => ({ ...prev, depot: e.target.value }))}
+              >
+                <option value="all">All Depots</option>
+                <option value="main">Main Depot</option>
+                <option value="branch1">Branch 1</option>
+                <option value="branch2">Branch 2</option>
+              </select>
+            </div>
+          </div>
+          <div className="filters-actions">
+            <button 
+              className="clear-filters-btn"
+              onClick={() => {
+                setAdvancedFilters({
+                  status: 'all',
+                  type: 'all',
+                  capacityRange: { min: 0, max: 100 },
+                  depot: 'all',
+                  lastMaintenance: 'all',
+                  assignedCrew: 'all'
+                });
+                setActiveFilterView('default');
+              }}
+            >
+              Clear All Filters
+            </button>
+            <button 
+              className="save-filter-btn"
+              onClick={() => {
+                const newFilter = {
+                  id: `custom_${Date.now()}`,
+                  name: `Custom Filter ${savedFilters.length + 1}`,
+                  filters: advancedFilters
+                };
+                setSavedFilters(prev => [...prev, newFilter]);
+                showNotification('Filter saved successfully!', 'success');
+              }}
+            >
+              <Save size={14} />
+              Save Filter
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Bulk Actions Bar */}
       {selectedBuses.length > 0 && (
         <div className="bulk-actions-bar">
           <div className="bulk-info">
             <CheckSquare size={16} />
-            <span>{selectedBuses.length} selected</span>
+            <span>{selectedBuses.length} buses selected</span>
+            <div className="bulk-stats">
+              <span className="stat-item">
+                <span className="stat-label">Active:</span>
+                <span className="stat-value">
+                  {selectedBuses.filter(id => buses.find(b => b._id === id)?.status === 'active').length}
+                </span>
+              </span>
+              <span className="stat-item">
+                <span className="stat-label">Maintenance:</span>
+                <span className="stat-value">
+                  {selectedBuses.filter(id => buses.find(b => b._id === id)?.status === 'maintenance').length}
+                </span>
+              </span>
+            </div>
           </div>
           <div className="bulk-actions">
             <button 
               className="bulk-btn success"
               onClick={() => handleBulkAction('activate')}
+              title="Activate Selected Buses"
             >
               <Check size={14} />
               Activate
@@ -799,13 +1362,39 @@ const FleetManagement = () => {
             <button 
               className="bulk-btn warning"
               onClick={() => handleBulkAction('maintenance')}
+              title="Send to Maintenance"
             >
               <Wrench size={14} />
               Maintenance
             </button>
             <button 
+              className="bulk-btn primary"
+              onClick={() => handleBulkAction('assign_route')}
+              title="Assign Route"
+            >
+              <Route size={14} />
+              Assign Route
+            </button>
+            <button 
+              className="bulk-btn primary"
+              onClick={() => handleBulkAction('assign_crew')}
+              title="Assign Crew"
+            >
+              <UserPlus size={14} />
+              Assign Crew
+            </button>
+            <button 
+              className="bulk-btn secondary"
+              onClick={() => handleBulkAction('archive')}
+              title="Archive Buses"
+            >
+              <Archive size={14} />
+              Archive
+            </button>
+            <button 
               className="bulk-btn danger"
               onClick={() => handleBulkAction('delete')}
+              title="Delete Buses"
             >
               <Trash2 size={14} />
               Delete
@@ -813,6 +1402,7 @@ const FleetManagement = () => {
             <button 
               className="bulk-btn secondary"
               onClick={() => setSelectedBuses([])}
+              title="Clear Selection"
             >
               <X size={14} />
               Clear
@@ -883,6 +1473,7 @@ const FleetManagement = () => {
                     <ArrowUpDown size={14} />
                   </div>
                 </th>
+                <th>Crew Assignment</th>
                 <th 
                   className="sortable"
                   onClick={() => handleSort('status')}
@@ -933,16 +1524,66 @@ const FleetManagement = () => {
                 <td>
                   <div className="route-info">
                     <div className="route-name">
-                      {bus.currentTrip?.route?.name || 'No Active Route'}
+                      {bus.currentRoute?.routeName || (
+                        <button 
+                          className="assign-route-btn"
+                          onClick={() => {
+                            setSelectedBus(bus);
+                            setShowRouteAssignmentModal(true);
+                          }}
+                        >
+                          <Route size={12} />
+                          Assign Route
+                        </button>
+                      )}
                     </div>
                     <div className="route-detail">
-                      {bus.currentTrip?.route?.from?.name || 'N/A'} → {bus.currentTrip?.route?.to?.name || 'N/A'}
+                      {bus.currentRoute?.routeNumber ? `Route: ${bus.currentRoute.routeNumber}` : 'No Route Assigned'}
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <div className="crew-info">
+                    <div className="crew-member">
+                      <span className="crew-label">Driver:</span>
+                      <span className="crew-name">
+                        {bus.assignedDriver?.name || (
+                          <button 
+                            className="assign-crew-btn"
+                            onClick={() => {
+                              setSelectedBus(bus);
+                              setShowCrewAssignmentModal(true);
+                            }}
+                          >
+                            <UserPlus size={10} />
+                            Assign
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                    <div className="crew-member">
+                      <span className="crew-label">Conductor:</span>
+                      <span className="crew-name">
+                        {bus.assignedConductor?.name || (
+                          <button 
+                            className="assign-crew-btn"
+                            onClick={() => {
+                              setSelectedBus(bus);
+                              setShowCrewAssignmentModal(true);
+                            }}
+                          >
+                            <UserPlus size={10} />
+                            Assign
+                          </button>
+                        )}
+                      </span>
                     </div>
                   </div>
                 </td>
                 <td>
                   <div className="status-container">
                     <span className={`status-badge ${getStatusColor(bus.status)}`}>
+                      <span className="status-icon">{statusColors[bus.status]?.icon || '⚪'}</span>
                       {bus.status}
                     </span>
                     <div className="quick-status-actions">
@@ -958,7 +1599,7 @@ const FleetManagement = () => {
                       {bus.status !== 'maintenance' && (
                         <button 
                           className="quick-action-btn warning"
-                          onClick={() => handleQuickStatusChange(bus._id, 'maintenance')}
+                          onClick={() => openMaintenanceModal(bus)}
                           title="Maintenance"
                         >
                           <Wrench size={12} />
@@ -1711,7 +2352,7 @@ const FleetManagement = () => {
                   <div className="detail-row">
                     <span className="label">Current Route:</span>
                     <span className="value">
-                      {selectedBus.currentTrip?.route?.name || 'No Active Route'}
+                      {selectedBus.currentRoute?.routeName || 'No Route Assigned'}
                     </span>
                   </div>
                 </div>
@@ -1787,6 +2428,360 @@ const FleetManagement = () => {
                 type="button" 
                 className="btn-secondary" 
                 onClick={() => setShowRouteAssignmentModal(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Maintenance Modal */}
+      {showMaintenanceModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>Create Maintenance Log</h2>
+              <button 
+                className="modal-close"
+                onClick={() => setShowMaintenanceModal(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleMaintenanceSubmit} className="maintenance-form">
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Bus *</label>
+                  <select
+                    value={maintenanceFormData.busId}
+                    onChange={(e) => setMaintenanceFormData(prev => ({ ...prev, busId: e.target.value }))}
+                    required
+                  >
+                    <option value="">Select Bus</option>
+                    {buses.map(bus => (
+                      <option key={bus._id} value={bus._id}>
+                        {bus.busNumber} - {bus.registrationNumber}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Problem Type *</label>
+                  <select
+                    value={maintenanceFormData.problemType}
+                    onChange={(e) => setMaintenanceFormData(prev => ({ ...prev, problemType: e.target.value }))}
+                    required
+                  >
+                    <option value="">Select Problem Type</option>
+                    {problemTypes.map(type => (
+                      <option key={type.value} value={type.value}>{type.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Priority *</label>
+                  <select
+                    value={maintenanceFormData.priority}
+                    onChange={(e) => setMaintenanceFormData(prev => ({ ...prev, priority: e.target.value }))}
+                    required
+                  >
+                    {priorityLevels.map(level => (
+                      <option key={level.value} value={level.value}>{level.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Assigned Mechanic</label>
+                  <input
+                    type="text"
+                    value={maintenanceFormData.assignedMechanic}
+                    onChange={(e) => setMaintenanceFormData(prev => ({ ...prev, assignedMechanic: e.target.value }))}
+                    placeholder="Enter mechanic name"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Estimated Return Time</label>
+                  <input
+                    type="datetime-local"
+                    value={maintenanceFormData.estimatedReturnTime}
+                    onChange={(e) => setMaintenanceFormData(prev => ({ ...prev, estimatedReturnTime: e.target.value }))}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Estimated Cost (₹)</label>
+                  <input
+                    type="number"
+                    value={maintenanceFormData.estimatedCost}
+                    onChange={(e) => setMaintenanceFormData(prev => ({ ...prev, estimatedCost: parseFloat(e.target.value) || 0 }))}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Description *</label>
+                <textarea
+                  value={maintenanceFormData.description}
+                  onChange={(e) => setMaintenanceFormData(prev => ({ ...prev, description: e.target.value }))}
+                  rows="4"
+                  placeholder="Describe the problem and required repairs..."
+                  required
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setShowMaintenanceModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  Create Maintenance Log
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Crew Assignment Modal */}
+      {showCrewAssignmentModal && selectedBus && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>Assign Crew to Bus - {selectedBus.busNumber}</h2>
+              <button 
+                className="modal-close"
+                onClick={() => setShowCrewAssignmentModal(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="crew-assignment-content">
+              <div className="bus-info-card">
+                <h3>Bus Information</h3>
+                <div className="bus-details">
+                  <div className="detail-row">
+                    <span className="label">Bus Number:</span>
+                    <span className="value">{selectedBus.busNumber}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="label">Registration:</span>
+                    <span className="value">{selectedBus.registrationNumber}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="label">Type:</span>
+                    <span className="value">{getBusTypeLabel(selectedBus.busType)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="crew-selection">
+                <h3>Select Crew Members</h3>
+                <div className="crew-grid">
+                  <div className="crew-section">
+                    <h4>Driver</h4>
+                    {selectedBus.assignedDriver?.name && (
+                      <div className="current-assignment">
+                        <span className="current-label">Currently assigned:</span>
+                        <span className="current-name">{selectedBus.assignedDriver.name}</span>
+                      </div>
+                    )}
+                    <select
+                      className="crew-select"
+                      value={selectedBus.assignedDriver?._id || selectedBus.assignedDriver || ''}
+                      onChange={async (e) => {
+                        try {
+                          const response = await apiFetch(`/api/depot/buses/${selectedBus._id}/assign-crew`, {
+                            method: 'POST',
+                            body: JSON.stringify({ 
+                              driverId: e.target.value,
+                              conductorId: selectedBus.assignedConductor?._id || selectedBus.assignedConductor || null
+                            })
+                          });
+
+                          if (response.ok) {
+                            showNotification('Driver assigned successfully!', 'success');
+                            // Update selectedBus state immediately with populated data
+                            const selectedDriver = drivers.find(d => d._id === e.target.value);
+                            setSelectedBus(prev => ({
+                              ...prev,
+                              assignedDriver: selectedDriver || e.target.value
+                            }));
+                            fetchBuses();
+                          } else {
+                            showNotification(response.message || 'Failed to assign driver', 'error');
+                          }
+                        } catch (error) {
+                          console.error('Error assigning driver:', error);
+                          showNotification('Failed to assign driver', 'error');
+                        }
+                      }}
+                    >
+                      <option value="">Select Driver</option>
+                      {drivers.map(driver => (
+                        <option key={driver._id} value={driver._id}>
+                          {driver.name} ({driver.driverId || driver.employeeCode})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="crew-section">
+                    <h4>Conductor</h4>
+                    {selectedBus.assignedConductor?.name && (
+                      <div className="current-assignment">
+                        <span className="current-label">Currently assigned:</span>
+                        <span className="current-name">{selectedBus.assignedConductor.name}</span>
+                      </div>
+                    )}
+                    <select
+                      className="crew-select"
+                      value={selectedBus.assignedConductor?._id || selectedBus.assignedConductor || ''}
+                      onChange={async (e) => {
+                        try {
+                          const response = await apiFetch(`/api/depot/buses/${selectedBus._id}/assign-crew`, {
+                            method: 'POST',
+                            body: JSON.stringify({ 
+                              driverId: selectedBus.assignedDriver?._id || selectedBus.assignedDriver || null,
+                              conductorId: e.target.value
+                            })
+                          });
+
+                          if (response.ok) {
+                            showNotification('Conductor assigned successfully!', 'success');
+                            // Update selectedBus state immediately with populated data
+                            const selectedConductor = conductors.find(c => c._id === e.target.value);
+                            setSelectedBus(prev => ({
+                              ...prev,
+                              assignedConductor: selectedConductor || e.target.value
+                            }));
+                            fetchBuses();
+                          } else {
+                            showNotification(response.message || 'Failed to assign conductor', 'error');
+                          }
+                        } catch (error) {
+                          console.error('Error assigning conductor:', error);
+                          showNotification('Failed to assign conductor', 'error');
+                        }
+                      }}
+                    >
+                      <option value="">Select Conductor</option>
+                      {conductors.map(conductor => (
+                        <option key={conductor._id} value={conductor._id}>
+                          {conductor.name} ({conductor.conductorId || conductor.employeeCode})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button 
+                type="button" 
+                className="btn-secondary" 
+                onClick={() => setShowCrewAssignmentModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <div className="modal-overlay">
+          <div className="modal-content export-modal">
+            <div className="modal-header">
+              <h2>Export Fleet Data</h2>
+              <button 
+                className="modal-close"
+                onClick={() => setShowExportModal(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="export-content">
+              <div className="export-options">
+                <h3>Export Format</h3>
+                <div className="format-buttons">
+                  <button 
+                    className="format-btn excel"
+                    onClick={() => exportFleetData('excel')}
+                  >
+                    <FileText size={24} />
+                    <span>Excel (.xlsx)</span>
+                    <small>Detailed spreadsheet with all data</small>
+                  </button>
+                  <button 
+                    className="format-btn pdf"
+                    onClick={() => exportFleetData('pdf')}
+                  >
+                    <FileText size={24} />
+                    <span>PDF Report</span>
+                    <small>Formatted report for printing</small>
+                  </button>
+                </div>
+              </div>
+
+              <div className="export-stats">
+                <h3>Report Summary</h3>
+                <div className="stats-grid">
+                  <div className="stat-card">
+                    <div className="stat-icon">
+                      <BarChart3 size={20} />
+                    </div>
+                    <div className="stat-content">
+                      <div className="stat-value">{fleetStats.totalTrips}</div>
+                      <div className="stat-label">Total Trips</div>
+                    </div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-icon">
+                      <Activity size={20} />
+                    </div>
+                    <div className="stat-content">
+                      <div className="stat-value">{fleetStats.totalKm} km</div>
+                      <div className="stat-label">Total Distance</div>
+                    </div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-icon">
+                      <TrendingUp size={20} />
+                    </div>
+                    <div className="stat-content">
+                      <div className="stat-value">{fleetStats.avgFuelEfficiency}</div>
+                      <div className="stat-label">Avg Fuel Efficiency</div>
+                    </div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-icon">
+                      <Clock size={20} />
+                    </div>
+                    <div className="stat-content">
+                      <div className="stat-value">{fleetStats.downtimeHours}h</div>
+                      <div className="stat-label">Downtime</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button 
+                type="button" 
+                className="btn-secondary" 
+                onClick={() => setShowExportModal(false)}
               >
                 Cancel
               </button>

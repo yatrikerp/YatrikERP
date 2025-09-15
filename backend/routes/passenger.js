@@ -17,11 +17,14 @@ router.get('/dashboard', requireRole(['passenger']), async (req, res) => {
     const userId = req.user._id;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    
+    console.log('🔍 Dashboard API called for user:', userId);
+    console.log('📅 Today date:', today.toISOString());
 
-    // Get upcoming trips (confirmed bookings for future dates)
+    // Get upcoming trips (all bookings for future dates, including pending)
     const upcomingBookings = await Booking.find({
-      passengerId: userId,
-      status: { $in: ['confirmed', 'issued', 'paid'] },
+      createdBy: userId,
+      status: { $in: ['pending', 'confirmed', 'issued', 'paid'] },
       'journey.departureDate': { $gte: today }
     })
     .populate('tripId', 'routeId busId startTime endTime fare capacity')
@@ -31,9 +34,11 @@ router.get('/dashboard', requireRole(['passenger']), async (req, res) => {
     .limit(5)
     .lean();
 
+    console.log('📊 Found upcoming bookings:', upcomingBookings.length);
+
     // Get recent activity (all bookings sorted by creation date)
     const recentBookings = await Booking.find({
-      passengerId: userId
+      createdBy: userId
     })
     .populate('tripId', 'routeId busId startTime endTime fare')
     .populate('tripId.routeId', 'routeName routeNumber startingPoint endingPoint')
@@ -41,10 +46,13 @@ router.get('/dashboard', requireRole(['passenger']), async (req, res) => {
     .limit(10)
     .lean();
 
+    console.log('📋 Found recent bookings:', recentBookings.length);
+
     // Calculate wallet balance (mock for now - would need wallet system)
     const walletBalance = 0; // TODO: Implement wallet system
 
     // Transform upcoming trips data
+    console.log('🔄 Transforming upcoming trips...');
     const upcomingTrips = upcomingBookings.map(booking => {
       const trip = booking.tripId;
       const route = trip?.routeId;
@@ -52,18 +60,24 @@ router.get('/dashboard', requireRole(['passenger']), async (req, res) => {
       return {
         id: booking._id,
         bookingId: booking.bookingId || booking._id.toString().slice(-8).toUpperCase(),
-        route: route ? `${route.startingPoint?.city || route.startingPoint} → ${route.endingPoint?.city || route.endingPoint}` : 'Unknown Route',
-        seatNo: booking.seatNo || 'N/A',
-        date: booking.journey?.departureDate ? new Date(booking.journey.departureDate).toLocaleDateString() : 'N/A',
+        routeName: route?.routeName || 'Unknown Route',
+        from: route?.startingPoint?.city || route?.startingPoint || 'Unknown',
+        to: route?.endingPoint?.city || route?.endingPoint || 'Unknown',
+        departureDate: booking.journey?.departureDate ? new Date(booking.journey.departureDate).toLocaleDateString() : 'N/A',
         departureTime: trip?.startTime || 'N/A',
         status: booking.status,
-        fare: booking.totalAmount || trip?.fare || 0,
+        fare: booking.pricing?.totalAmount || trip?.fare || 0,
         busType: trip?.busId?.busType || 'Standard',
         busNumber: trip?.busId?.busNumber || 'N/A',
-        routeName: route?.routeName || 'Unknown Route',
-        routeNumber: route?.routeNumber || 'N/A'
+        routeNumber: route?.routeNumber || 'N/A',
+        seatNo: booking.seats?.[0]?.seatNumber || 'N/A'
       };
     });
+
+    console.log('✅ Transformed upcoming trips:', upcomingTrips.length);
+    if (upcomingTrips.length > 0) {
+      console.log('📅 Sample upcoming trip:', JSON.stringify(upcomingTrips[0], null, 2));
+    }
 
     // Transform recent activity data
     const recentActivity = recentBookings.map(booking => {
@@ -72,25 +86,27 @@ router.get('/dashboard', requireRole(['passenger']), async (req, res) => {
       
       return {
         id: booking._id,
-        route: route ? `${route.startingPoint?.city || route.startingPoint} → ${route.endingPoint?.city || route.endingPoint}` : 'Unknown Route',
+        routeName: route?.routeName || 'Unknown Route',
+        from: route?.startingPoint?.city || route?.startingPoint || 'Unknown',
+        to: route?.endingPoint?.city || route?.endingPoint || 'Unknown',
         date: new Date(booking.createdAt).toLocaleDateString(),
-        fare: booking.totalAmount || trip?.fare || 0,
+        fare: booking.pricing?.totalAmount || trip?.fare || 0,
         status: booking.status,
         type: 'booking',
         bookingId: booking.bookingId || booking._id.toString().slice(-8).toUpperCase(),
-        seatNo: booking.seatNo || 'N/A',
+        seatNo: booking.seats?.[0]?.seatNumber || 'N/A',
         busType: trip?.busId?.busType || 'Standard'
       };
     });
 
     // Get booking statistics
-    const totalBookings = await Booking.countDocuments({ passengerId: userId });
+    const totalBookings = await Booking.countDocuments({ createdBy: userId });
     const confirmedBookings = await Booking.countDocuments({ 
-      passengerId: userId, 
-      status: { $in: ['confirmed', 'issued', 'paid'] } 
+      createdBy: userId, 
+      status: { $in: ['pending', 'confirmed', 'issued', 'paid'] } 
     });
     const cancelledBookings = await Booking.countDocuments({ 
-      passengerId: userId, 
+      createdBy: userId, 
       status: 'cancelled' 
     });
 
@@ -125,7 +141,7 @@ router.get('/bookings', requireRole(['passenger']), async (req, res) => {
     const userId = req.user._id;
     const { status, limit = 20, page = 1 } = req.query;
 
-    const query = { passengerId: userId };
+    const query = { createdBy: userId };
     if (status) {
       query.status = status;
     }
@@ -151,19 +167,20 @@ router.get('/bookings', requireRole(['passenger']), async (req, res) => {
       return {
         id: booking._id,
         bookingId: booking.bookingId || booking._id.toString().slice(-8).toUpperCase(),
-        route: route ? `${route.startingPoint?.city || route.startingPoint} → ${route.endingPoint?.city || route.endingPoint}` : 'Unknown Route',
         routeName: route?.routeName || 'Unknown Route',
+        from: route?.startingPoint?.city || route?.startingPoint || 'Unknown',
+        to: route?.endingPoint?.city || route?.endingPoint || 'Unknown',
         routeNumber: route?.routeNumber || 'N/A',
-        seatNo: booking.seatNo || 'N/A',
+        seatNo: booking.seats?.[0]?.seatNumber || 'N/A',
         date: booking.journey?.departureDate ? new Date(booking.journey.departureDate).toLocaleDateString() : 'N/A',
         departureTime: trip?.startTime || 'N/A',
         status: booking.status,
-        fare: booking.totalAmount || trip?.fare || 0,
+        fare: booking.pricing?.totalAmount || trip?.fare || 0,
         busType: trip?.busId?.busType || 'Standard',
         busNumber: trip?.busId?.busNumber || 'N/A',
         createdAt: booking.createdAt,
-        paymentStatus: booking.paymentStatus || 'pending',
-        passengerDetails: booking.passengerDetails || {}
+        paymentStatus: booking.payment?.paymentStatus || 'pending',
+        passengerDetails: booking.customer || {}
       };
     });
 

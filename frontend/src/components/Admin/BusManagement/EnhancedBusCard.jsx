@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Bus, MapPin, Wrench, Fuel, Users, Calendar, AlertTriangle,
-  CheckCircle, XCircle, Clock, Edit, Eye, Activity, Gauge,
-  Wifi, Battery, Signal, Thermometer, Zap, Shield, Camera,
-  TrendingUp, TrendingDown, MoreVertical, Star, Award
+  Bus, MapPin, Wrench, Fuel, Users, AlertTriangle,
+  CheckCircle, XCircle, Clock, Edit, Eye, Gauge,
+  Wifi, Battery, Signal, Thermometer, Zap,
+  TrendingUp, TrendingDown, MoreVertical, Star
 } from 'lucide-react';
 
 const EnhancedBusCard = ({ 
@@ -18,6 +18,12 @@ const EnhancedBusCard = ({
   onSelect 
 }) => {
   const [showActions, setShowActions] = useState(false);
+  
+  // Add null check for bus object
+  if (!bus) {
+    return null;
+  }
+  
   const realTimeInfo = realTimeData[bus._id] || {};
   const busInsights = insights[bus._id] || {};
 
@@ -133,21 +139,36 @@ const EnhancedBusCard = ({
                 className="absolute right-0 top-full mt-2 bg-white rounded-lg shadow-lg border border-gray-200 py-2 min-w-[150px] z-20"
               >
                 <button
-                  onClick={() => { onEdit?.(bus); setShowActions(false); }}
+                  onClick={() => { 
+                    if (bus && bus._id) {
+                      onEdit?.(bus); 
+                      setShowActions(false);
+                    }
+                  }}
                   className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
                 >
                   <Edit className="w-4 h-4" />
                   <span>Edit Details</span>
                 </button>
                 <button
-                  onClick={() => { onView?.(bus); setShowActions(false); }}
+                  onClick={() => { 
+                    if (bus && bus._id) {
+                      onView?.(bus); 
+                      setShowActions(false);
+                    }
+                  }}
                   className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
                 >
                   <Eye className="w-4 h-4" />
                   <span>View Details</span>
                 </button>
                 <button
-                  onClick={() => { onAssign?.(bus); setShowActions(false); }}
+                  onClick={() => { 
+                    if (bus && bus._id) {
+                      onAssign?.(bus); 
+                      setShowActions(false);
+                    }
+                  }}
                   className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
                 >
                   <Users className="w-4 h-4" />
@@ -330,7 +351,11 @@ const EnhancedBusCard = ({
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => onEdit?.(bus)}
+          onClick={() => {
+            if (bus && bus._id) {
+              onEdit?.(bus);
+            }
+          }}
           className="p-3 bg-white rounded-full shadow-lg text-blue-600 hover:bg-blue-50"
           title="Edit Bus"
         >
@@ -339,7 +364,11 @@ const EnhancedBusCard = ({
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => onView?.(bus)}
+          onClick={() => {
+            if (bus && bus._id) {
+              onView?.(bus);
+            }
+          }}
           className="p-3 bg-white rounded-full shadow-lg text-green-600 hover:bg-green-50"
           title="View Details"
         >
@@ -348,7 +377,11 @@ const EnhancedBusCard = ({
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => onAssign?.(bus)}
+          onClick={() => {
+            if (bus && bus._id) {
+              onAssign?.(bus);
+            }
+          }}
           className="p-3 bg-white rounded-full shadow-lg text-purple-600 hover:bg-purple-50"
           title="Assign Staff"
         >

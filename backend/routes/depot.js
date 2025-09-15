@@ -1184,14 +1184,13 @@ router.get('/bookings', async (req, res) => {
 
     const bookings = await Booking.find(query)
       .populate('tripId')
-      .populate('passengerId', 'name phone')
       .sort({ createdAt: -1 })
       .lean();
 
     // Transform data to match frontend expectations
     const transformedBookings = bookings.map(booking => ({
       id: booking._id,
-      passenger: booking.passengerId?.name || 'Unknown Passenger',
+      passenger: booking.createdBy?.name || 'Unknown Passenger',
       route: booking.tripId?.routeId?.name || 'Unknown Route',
       seat: `A${Math.floor(Math.random() * 50) + 1}`, // Mock seat for now
       fare: `₹${((booking.fareAmount || 100) * 100).toLocaleString()}`, // Convert to rupees
@@ -1384,9 +1383,11 @@ router.get('/buses', async (req, res) => {
       console.log('Assigned default depot to user:', defaultDepot.depotName);
     }
     
-    // Get buses with basic information
+    // Get buses with basic information including current route and crew
     const buses = await Bus.find({ depotId: req.user.depotId })
-      .select('busNumber registrationNumber busType capacity status lastMaintenance odometerReading lastFuelReading lastFuelDate')
+      .select('busNumber registrationNumber busType capacity status lastMaintenance odometerReading lastFuelReading lastFuelDate currentRoute assignedDriver assignedConductor')
+      .populate('assignedDriver', 'name phone email')
+      .populate('assignedConductor', 'name phone email')
       .lean();
 
     // Get bus counts for stats
@@ -1784,6 +1785,91 @@ router.delete('/buses/:id/assign-route', async (req, res) => {
   }
 });
 
+// POST /api/depot/buses/:id/assign-crew - Assign driver and conductor to bus
+router.post('/buses/:id/assign-crew', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { driverId, conductorId } = req.body;
+    const depotId = req.user.depotId;
+
+    // Validate input
+    if (!driverId && !conductorId) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one crew member (driver or conductor) must be specified'
+      });
+    }
+
+    // Verify bus belongs to this depot
+    const bus = await Bus.findById(id);
+    if (!bus || bus.depotId.toString() !== depotId.toString()) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bus not found or access denied'
+      });
+    }
+
+    // Verify driver exists and has correct role (if provided)
+    let driver = null;
+    if (driverId) {
+      driver = await User.findById(driverId);
+      if (!driver || driver.role !== 'driver') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid driver ID or user is not a driver'
+        });
+      }
+    }
+
+    // Verify conductor exists and has correct role (if provided)
+    let conductor = null;
+    if (conductorId) {
+      conductor = await User.findById(conductorId);
+      if (!conductor || conductor.role !== 'conductor') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid conductor ID or user is not a conductor'
+        });
+      }
+    }
+
+    // Update bus with crew assignments
+    const updateData = {
+      lastUpdated: new Date()
+    };
+
+    if (driverId) {
+      updateData.assignedDriver = driverId;
+    }
+
+    if (conductorId) {
+      updateData.assignedConductor = conductorId;
+    }
+
+    await Bus.findByIdAndUpdate(id, updateData);
+
+    res.json({
+      success: true,
+      message: `Crew assigned to bus ${bus.busNumber} successfully`,
+      data: {
+        busId: id,
+        driverId: driverId || null,
+        conductorId: conductorId || null,
+        driverName: driver ? driver.name : null,
+        conductorName: conductor ? conductor.name : null
+      }
+    });
+
+  } catch (error) {
+    console.error('Crew assignment error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to assign crew to bus',
+      error: error.message
+    });
+  }
+});
+
 // =================================================================
 // 5) Route Management for Depot Managers
 // =================================================================
@@ -2151,5 +2237,407 @@ function generatePNR() {
   const rnd = Math.random().toString(36).slice(2, 7).toUpperCase();
   return 'YTK' + rnd;
 }
+
+// =================================================================
+// 6) Depot Booking Management
+// =================================================================
+
+// GET /api/depot/bookings - Get all bookings for depot routes
+router.get('/bookings', async (req, res) => {
+  try {
+    const depotId = req.user.depotId;
+    const { 
+      page = 1, 
+      limit = 20, 
+      status = '', 
+      startDate = '', 
+      endDate = '', 
+      search = '',
+      routeId = '',
+      busId = ''
+    } = req.query;
+
+    // Build query for depot-specific bookings
+    const query = { depotId: depotId };
+
+    // Add status filter
+    if (status) {
+      query.status = status;
+    }
+
+    // Add date range filter
+    if (startDate || endDate) {
+      query['journey.departureDate'] = {};
+      if (startDate) {
+        query['journey.departureDate'].$gte = new Date(startDate);
+      }
+      if (endDate) {
+        query['journey.departureDate'].$lte = new Date(endDate);
+      }
+    }
+
+    // Add route filter
+    if (routeId) {
+      query.routeId = routeId;
+    }
+
+    // Add bus filter
+    if (busId) {
+      query.busId = busId;
+    }
+
+    // Add search filter
+    if (search) {
+      query.$or = [
+        { bookingId: { $regex: search, $options: 'i' } },
+        { bookingReference: { $regex: search, $options: 'i' } },
+        { 'customer.name': { $regex: search, $options: 'i' } },
+        { 'customer.phone': { $regex: search, $options: 'i' } },
+        { 'customer.email': { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get bookings with populated data
+    const bookings = await Booking.find(query)
+      .populate('routeId', 'routeName routeNumber')
+      .populate('busId', 'busNumber type')
+      .populate('tripId', 'departureTime arrivalTime')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Get total count for pagination
+    const totalBookings = await Booking.countDocuments(query);
+
+    // Calculate pagination info
+    const totalPages = Math.ceil(totalBookings / parseInt(limit));
+
+    // Get booking statistics
+    const stats = await Booking.aggregate([
+      { $match: { depotId: depotId } },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          totalRevenue: { $sum: '$pricing.totalAmount' }
+        }
+      }
+    ]);
+
+    // Get today's bookings
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayBookings = await Booking.countDocuments({
+      depotId: depotId,
+      'journey.departureDate': { $gte: today, $lt: tomorrow }
+    });
+
+    // Get today's revenue
+    const todayRevenue = await Booking.aggregate([
+      {
+        $match: {
+          depotId: depotId,
+          'journey.departureDate': { $gte: today, $lt: tomorrow },
+          status: { $in: ['confirmed', 'completed'] }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$pricing.totalAmount' }
+        }
+      }
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        bookings,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages,
+          totalItems: totalBookings,
+          itemsPerPage: parseInt(limit)
+        },
+        stats: {
+          statusBreakdown: stats,
+          todayBookings,
+          todayRevenue: todayRevenue[0]?.total || 0
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get depot bookings error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch depot bookings',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/depot/bookings/stats - Get booking statistics for depot
+router.get('/bookings/stats', async (req, res) => {
+  try {
+    const depotId = req.user.depotId;
+    const { period = 'today' } = req.query;
+
+    let startDate, endDate;
+    const now = new Date();
+
+    switch (period) {
+      case 'today':
+        startDate = new Date(now);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(now);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'week':
+        startDate = new Date(now);
+        startDate.setDate(startDate.getDate() - 7);
+        endDate = new Date(now);
+        break;
+      case 'month':
+        startDate = new Date(now);
+        startDate.setMonth(startDate.getMonth() - 1);
+        endDate = new Date(now);
+        break;
+      default:
+        startDate = new Date(now);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(now);
+        endDate.setHours(23, 59, 59, 999);
+    }
+
+    // Get booking statistics
+    const stats = await Booking.aggregate([
+      {
+        $match: {
+          depotId: depotId,
+          'journey.departureDate': { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          totalRevenue: { $sum: '$pricing.totalAmount' }
+        }
+      }
+    ]);
+
+    // Get route-wise statistics
+    const routeStats = await Booking.aggregate([
+      {
+        $match: {
+          depotId: depotId,
+          'journey.departureDate': { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $group: {
+          _id: '$routeId',
+          count: { $sum: 1 },
+          totalRevenue: { $sum: '$pricing.totalAmount' }
+        }
+      },
+      {
+        $lookup: {
+          from: 'routes',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'route'
+        }
+      },
+      {
+        $unwind: '$route'
+      },
+      {
+        $project: {
+          routeName: '$route.routeName',
+          routeNumber: '$route.routeNumber',
+          count: 1,
+          totalRevenue: 1
+        }
+      },
+      { $sort: { count: -1 } },
+      { $limit: 10 }
+    ]);
+
+    // Get daily booking trends
+    const dailyTrends = await Booking.aggregate([
+      {
+        $match: {
+          depotId: depotId,
+          'journey.departureDate': { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: '$journey.departureDate' },
+            month: { $month: '$journey.departureDate' },
+            day: { $dayOfMonth: '$journey.departureDate' }
+          },
+          count: { $sum: 1 },
+          revenue: { $sum: '$pricing.totalAmount' }
+        }
+      },
+      {
+        $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 }
+      }
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        period,
+        statusBreakdown: stats,
+        routeBreakdown: routeStats,
+        dailyTrends,
+        summary: {
+          totalBookings: stats.reduce((sum, stat) => sum + stat.count, 0),
+          totalRevenue: stats.reduce((sum, stat) => sum + stat.totalRevenue, 0),
+          averageBookingValue: stats.reduce((sum, stat) => sum + stat.totalRevenue, 0) / Math.max(stats.reduce((sum, stat) => sum + stat.count, 0), 1)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get depot booking stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch booking statistics',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/depot/bookings/:id/status - Update booking status
+router.put('/bookings/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, reason } = req.body;
+    const depotId = req.user.depotId;
+
+    // Validate status
+    const validStatuses = ['pending', 'confirmed', 'cancelled', 'completed', 'no_show'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status'
+      });
+    }
+
+    // Find booking and verify it belongs to this depot
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    if (booking.depotId.toString() !== depotId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Booking does not belong to this depot'
+      });
+    }
+
+    // Update booking status
+    booking.status = status;
+    if (reason) {
+      booking.statusHistory = booking.statusHistory || [];
+      booking.statusHistory.push({
+        status,
+        reason,
+        updatedBy: req.user._id,
+        updatedAt: new Date()
+      });
+    }
+
+    await booking.save();
+
+    res.json({
+      success: true,
+      message: 'Booking status updated successfully',
+      data: booking
+    });
+
+  } catch (error) {
+    console.error('Update booking status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update booking status',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/depot/bookings/:id/check-in - Check in passenger
+router.post('/bookings/:id/check-in', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { boardingPoint, seatAllocated, notes } = req.body;
+    const depotId = req.user.depotId;
+
+    // Find booking and verify it belongs to this depot
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    if (booking.depotId.toString() !== depotId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Booking does not belong to this depot'
+      });
+    }
+
+    if (booking.status !== 'confirmed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only confirmed bookings can be checked in'
+      });
+    }
+
+    // Update check-in information
+    booking.checkIn = {
+      checkedIn: true,
+      checkedInAt: new Date(),
+      checkedInBy: req.user._id,
+      boardingPoint: boardingPoint || 'Main Terminal',
+      seatAllocated: seatAllocated || 'Confirmed',
+      notes: notes || ''
+    };
+
+    await booking.save();
+
+    res.json({
+      success: true,
+      message: 'Passenger checked in successfully',
+      data: booking
+    });
+
+  } catch (error) {
+    console.error('Check-in passenger error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check in passenger',
+      error: error.message
+    });
+  }
+});
 
 module.exports = router;

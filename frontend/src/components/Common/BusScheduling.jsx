@@ -41,23 +41,33 @@ const BusScheduling = ({ depotId, user }) => {
       if (filters.status !== 'all') params.append('status', filters.status);
       if (filters.search) params.append('search', filters.search);
       if (filters.date) params.append('date', filters.date);
+      
+      // Add depotId parameter for depot users
+      if (depotId) {
+        params.append('depotId', depotId);
+      }
 
+      const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
       const response = await fetch(`/api/bus-schedule?${params}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
 
       if (response.ok) {
         const data = await response.json();
         setSchedules(data.data.schedules || []);
+      } else {
+        console.error('Failed to fetch schedules:', response.status);
+        setSchedules([]);
       }
     } catch (error) {
       console.error('Error fetching schedules:', error);
+      setSchedules([]);
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, depotId]);
 
   useEffect(() => {
     console.log('BusScheduling useEffect - fetching data...');
@@ -205,13 +215,20 @@ const BusScheduling = ({ depotId, user }) => {
       const url = editingSchedule ? `/api/bus-schedule/${editingSchedule._id}` : '/api/bus-schedule';
       const method = editingSchedule ? 'PUT' : 'POST';
 
+      // Add depotId to form data for depot users
+      const submitData = {
+        ...formData,
+        ...(depotId && { depotId })
+      };
+
+      const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
       const response = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(submitData)
       });
 
       if (response.ok) {
@@ -254,10 +271,11 @@ const BusScheduling = ({ depotId, user }) => {
     if (!window.confirm('Are you sure you want to delete this schedule?')) return;
 
     try {
+      const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
       const response = await fetch(`/api/bus-schedule/${scheduleId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
 

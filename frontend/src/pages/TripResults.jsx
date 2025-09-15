@@ -73,10 +73,12 @@ const TripResults = () => {
 
   const handleBookNow = (trip) => {
     if (!user) {
-      navigate(`/login?next=/pax/booking/${trip.id}`);
+      navigate(`/login?next=/pax/board-drop/${trip.id}`);
       return;
     }
-    navigate(`/pax/booking/${trip.id}`);
+    navigate(`/pax/board-drop/${trip.id}`, {
+      state: { trip: trip }
+    });
   };
 
   const filteredAndSortedTrips = useMemo(() => {

@@ -1,24 +1,44 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, MapPin, Clock, CheckCircle } from 'lucide-react';
 import { apiFetch } from '../../utils/api';
 
 const OptionRow = ({ time, title, subtitle, selected, onSelect }) => (
   <button
     onClick={onSelect}
-    className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 flex items-center justify-between ${selected ? 'bg-pink-50' : ''}`}
+    className={`w-full text-left p-6 hover:bg-gray-50 transition-colors ${
+      selected ? 'bg-red-50 border-r-4 border-red-600' : ''
+    }`}
   >
-    <div>
-      <div className="text-sm text-gray-900 font-medium">{title}</div>
-      {subtitle && <div className="text-xs text-gray-500">{subtitle}</div>}
+    <div className="flex items-start justify-between">
+      <div className="flex-1">
+        <div className="flex items-center space-x-2 mb-2">
+          <h4 className="font-medium text-gray-900">{title}</h4>
+          {selected && (
+            <CheckCircle className="w-5 h-5 text-red-600" />
+          )}
+        </div>
+        <p className="text-sm text-gray-600 mb-1">{subtitle}</p>
+      </div>
+      <div className="text-right">
+        <div className="text-sm font-medium text-gray-900">
+          {time}
+        </div>
+        <div className="text-xs text-gray-500">
+          {selected ? 'Selected' : 'Available'}
+        </div>
+      </div>
     </div>
-    <div className={`w-5 h-5 rounded-full border ${selected ? 'bg-pink-500 border-pink-500' : 'border-gray-300'}`}></div>
   </button>
 );
 
 const Panel = ({ title, children }) => (
-  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-    <div className="px-4 py-3 text-sm font-semibold text-gray-800 border-b border-gray-100">{title}</div>
-    <div className="divide-y divide-gray-100">
+  <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+    <div className="p-6 border-b border-gray-200">
+      <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
+      <p className="text-sm text-gray-600">Choose your preferred {title.toLowerCase()}</p>
+    </div>
+    <div className="divide-y divide-gray-200">
       {children}
     </div>
   </div>
@@ -57,72 +77,193 @@ export default function BoardDrop() {
   const canContinue = boarding && dropping;
 
   const handleContinue = () => {
-    navigate(`/pax/booking/${tripId}`, {
+    navigate(`/pax/passenger-details/${tripId}`, {
       state: { trip, selectedSeats: state?.selectedSeats || [], boarding, dropping }
     });
   };
 
-  // Auto-redirect once both points are selected
-  useEffect(() => {
-    if (canContinue) {
-      const t = setTimeout(handleContinue, 400);
-      return () => clearTimeout(t);
-    }
-  }, [canContinue]);
+  // Manual continue - no auto-redirect
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-gray-600">Loading...</div>;
   }
 
+  const formatTime = (timeString) => {
+    if (!timeString) return '--:--';
+    const time = new Date(`2000-01-01T${timeString}`);
+    return time.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false 
+    });
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      weekday: 'long',
+      month: 'long', 
+      day: 'numeric' 
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Stepper */}
-        <div className="flex items-center gap-6 text-sm text-gray-600 mb-6">
-          <div className="font-medium text-gray-900">1. Select seats</div>
-          <div className="font-semibold text-pink-600">2. Board/Drop point</div>
-          <div>3. Passenger Info</div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Panel title="Boarding points">
-            {boardingPoints.map((bp) => (
-              <OptionRow
-                key={bp.id}
-                time={bp.time}
-                title={`${bp.time}  ${bp.title}`}
-                subtitle={bp.subtitle}
-                selected={boarding?.id === bp.id}
-                onSelect={() => setBoarding(bp)}
-              />
-            ))}
-          </Panel>
-
-          <Panel title="Dropping points">
-            {droppingPoints.map((dp) => (
-              <OptionRow
-                key={dp.id}
-                time={dp.time}
-                title={`${dp.time}  ${dp.title}`}
-                subtitle={dp.subtitle}
-                selected={dropping?.id === dp.id}
-                onSelect={() => setDropping(dp)}
-              />
-            ))}
-          </Panel>
-        </div>
-
-        {!canContinue && (
-          <div className="mt-6 flex justify-end">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-4xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
             <button
-              onClick={handleContinue}
-              disabled={!canContinue}
-              className="px-6 py-3 rounded-full bg-pink-600 hover:bg-pink-700 text-white font-semibold disabled:bg-pink-300 disabled:cursor-not-allowed"
+              onClick={() => navigate('/pax/search')}
+              className="flex items-center space-x-2 text-gray-600 hover:text-gray-900"
             >
-              Continue to Passenger Info
+              <ArrowLeft className="w-5 h-5" />
+              <span>Back to Search</span>
             </button>
+            <div className="text-sm text-gray-600">
+              Step 2 of 4
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 py-6">
+        {/* Trip Summary */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                {trip.fromCity || trip.routeName} → {trip.toCity || 'Destination'}
+              </h2>
+              <div className="flex items-center space-x-4 text-sm text-gray-600">
+                <div className="flex items-center space-x-1">
+                  <Clock className="w-4 h-4" />
+                  <span>{formatTime(trip.startTime)} - {formatTime(trip.endTime)}</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <MapPin className="w-4 h-4" />
+                  <span>{formatDate(trip.serviceDate)}</span>
+                </div>
+                <span>1 Passenger</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-gray-900">₹{trip.fare || 499}</div>
+              <div className="text-sm text-gray-600">per seat</div>
+              {trip.routeName && (
+                <div className="text-xs text-gray-500 mt-1">{trip.routeName}</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Boarding Points */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+          <div className="p-6 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Select Boarding Point
+            </h3>
+            <p className="text-sm text-gray-600">
+              Choose your preferred boarding point
+            </p>
+          </div>
+          <div className="divide-y divide-gray-200">
+            {boardingPoints.map((point) => (
+              <button
+                key={point.id}
+                onClick={() => setBoarding(point)}
+                className={`w-full text-left p-6 hover:bg-gray-50 transition-colors ${
+                  boarding?.id === point.id ? 'bg-red-50 border-r-4 border-red-600' : ''
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <h4 className="font-medium text-gray-900">{point.title}</h4>
+                      {boarding?.id === point.id && (
+                        <CheckCircle className="w-5 h-5 text-red-600" />
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 mb-1">{point.subtitle}</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-gray-900">
+                      {point.time}
+                    </div>
+                    <div className="text-xs text-gray-500">Pickup time</div>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Drop Points */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+          <div className="p-6 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Select Drop Point
+            </h3>
+            <p className="text-sm text-gray-600">
+              Choose your preferred drop point
+            </p>
+          </div>
+          <div className="divide-y divide-gray-200">
+            {droppingPoints.map((point) => (
+              <button
+                key={point.id}
+                onClick={() => setDropping(point)}
+                className={`w-full text-left p-6 hover:bg-gray-50 transition-colors ${
+                  dropping?.id === point.id ? 'bg-red-50 border-r-4 border-red-600' : ''
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <h4 className="font-medium text-gray-900">{point.title}</h4>
+                      {dropping?.id === point.id && (
+                        <CheckCircle className="w-5 h-5 text-red-600" />
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 mb-1">{point.subtitle}</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-gray-900">
+                      {point.time}
+                    </div>
+                    <div className="text-xs text-gray-500">Drop time</div>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Selection Status */}
+        {canContinue && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-center space-x-2 text-green-800">
+              <CheckCircle className="w-5 h-5" />
+              <span className="font-medium">Both boarding and drop points selected!</span>
+            </div>
           </div>
         )}
+
+        {/* Continue Button */}
+        <div className="flex justify-center">
+          <button
+            onClick={handleContinue}
+            disabled={!canContinue}
+            className={`px-12 py-4 rounded-lg font-semibold text-lg transition-all duration-200 ${
+              canContinue 
+                ? 'bg-pink-600 text-white hover:bg-pink-700 shadow-lg hover:shadow-xl transform hover:-translate-y-1' 
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            {canContinue ? 'Continue to Passenger Details' : 'Select Boarding & Drop Points'}
+          </button>
+        </div>
       </div>
     </div>
   );

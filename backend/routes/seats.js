@@ -3,27 +3,43 @@ const router = express.Router();
 const { auth, requireRole } = require('../middleware/auth');
 
 // Get available seats for a trip
-router.get('/trip/:tripId', auth, async (req, res) => {
+router.get('/trip/:tripId', async (req, res) => {
   try {
     const { tripId } = req.params;
     const { date } = req.query;
 
-    if (!tripId || !date) {
+    if (!tripId) {
       return res.status(400).json({
         success: false,
-        message: 'Trip ID and date are required'
+        message: 'Trip ID is required'
       });
     }
 
-    // Mock seat data - in real implementation, fetch from database
-    const seats = generateSeatMap(tripId, date);
+    // Get trip details to get actual capacity
+    const Trip = require('../models/Trip');
+    const trip = await Trip.findById(tripId).lean();
+    
+    if (!trip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trip not found'
+      });
+    }
+
+    const tripDate = date || trip.serviceDate || new Date().toISOString().split('T')[0];
+    const capacity = trip.capacity || 45;
+    
+    // Generate seat data based on actual trip capacity
+    const seats = generateSeatMap(tripId, tripDate, capacity);
 
     res.json({
       success: true,
       tripId,
-      date,
-      totalSeats: 45,
-      availableSeats: seats.filter(s => s.status === 'available').length,
+      date: tripDate,
+      totalSeats: capacity,
+      availableSeats: seats.filter(s => s.status === 'available' || s.status === 'available_male' || s.status === 'available_female').length,
+      seatPrice: trip.fare || 499,
+      tripFare: trip.fare, // Explicitly include trip fare
       seats: seats
     });
 
@@ -37,7 +53,7 @@ router.get('/trip/:tripId', auth, async (req, res) => {
 });
 
 // Check seat availability
-router.post('/check-availability', auth, async (req, res) => {
+router.post('/check-availability', async (req, res) => {
   try {
     const { tripId, seatNumbers, date } = req.body;
 
@@ -212,19 +228,54 @@ router.get('/layout/:busType', auth, async (req, res) => {
 });
 
 // Helper function to generate seat map
-function generateSeatMap(tripId, date) {
+function generateSeatMap(tripId, date, capacity = 45) {
   const seats = [];
-  const totalSeats = 45;
+  const totalSeats = capacity;
   
-  // Generate 45 seats (5 rows × 9 columns)
-  for (let row = 1; row <= 5; row++) {
-    for (let col = 1; col <= 9; col++) {
-      const seatNumber = `${row}${col.toString().padStart(2, '0')}`;
+  // Calculate rows and seats per row based on capacity
+  let rows, seatsPerRow, lastRowSeats;
+  
+  if (capacity <= 35) {
+    // Small bus: 7 rows × 5 seats per row
+    rows = 7;
+    seatsPerRow = 5;
+    lastRowSeats = 5;
+  } else if (capacity <= 45) {
+    // Standard bus: 9 rows × 5 seats per row
+    rows = 9;
+    seatsPerRow = 5;
+    lastRowSeats = 5;
+  } else {
+    // Large bus: 11 rows × 4 seats per row, last row 5 seats
+    rows = 11;
+    seatsPerRow = 4;
+    lastRowSeats = 5;
+  }
+  
+  let seatCounter = 1;
+  
+  for (let row = 1; row <= rows; row++) {
+    const seatsInRow = row === rows ? lastRowSeats : seatsPerRow;
+    
+    for (let col = 1; col <= seatsInRow; col++) {
+      const seatNumber = seatCounter.toString().padStart(2, '0');
+      
+      // Determine seat status with gender-based restrictions
+      let status = 'available';
       
       // Randomly assign some seats as booked/reserved for demo
-      let status = 'available';
-      if (Math.random() < 0.3) {
-        status = Math.random() < 0.7 ? 'booked' : 'reserved';
+      if (Math.random() < 0.15) {
+        const randomStatus = Math.random();
+        if (randomStatus < 0.4) {
+          status = 'booked';
+        } else if (randomStatus < 0.7) {
+          status = 'booked_male';
+        } else {
+          status = 'booked_female';
+        }
+      } else if (Math.random() < 0.1) {
+        // Some seats are gender-restricted
+        status = Math.random() < 0.5 ? 'available_male' : 'available_female';
       }
       
       seats.push({
@@ -232,10 +283,19 @@ function generateSeatMap(tripId, date) {
         row,
         column: col,
         status,
-        price: 500, // Base price
-        features: getSeatFeatures(row, col)
+        price: 499, // Base price
+        features: getSeatFeatures(row, col),
+        seatType: 'seater' // Default to seater, can be sleeper based on bus type
       });
+      
+      seatCounter++;
+      
+      // Stop if we've reached the capacity
+      if (seatCounter > totalSeats) break;
     }
+    
+    // Stop if we've reached the capacity
+    if (seatCounter > totalSeats) break;
   }
   
   return seats;

@@ -24,7 +24,8 @@ import {
   Database,
   Server,
   Globe,
-  Smartphone
+  Smartphone,
+  Ticket
 } from 'lucide-react';
 
 const AdminLayout = ({ children }) => {
@@ -65,6 +66,12 @@ const AdminLayout = ({ children }) => {
       href: '/admin/trips',
       icon: Calendar,
       current: location.pathname === '/admin/trips'
+    },
+    {
+      name: 'Booking Management',
+      href: '/admin/bookings',
+      icon: Ticket,
+      current: location.pathname === '/admin/bookings'
     },
     {
       name: 'Depot Management',

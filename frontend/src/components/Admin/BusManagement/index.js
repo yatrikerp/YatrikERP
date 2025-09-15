@@ -12,3 +12,9 @@ export { default as AdvancedScheduling } from './AdvancedScheduling';
 export { default as BulkSchedulingSystem } from './BulkSchedulingSystem';
 export { default as DepotCoordination } from './DepotCoordination';
 export { default as KSRTCPerformanceOptimizer } from './KSRTCPerformanceOptimizer';
+
+// Enhanced Operations Components
+export { default as BusOperationsPanel } from './BusOperationsPanel';
+export { default as EmergencySystem } from './EmergencySystem';
+export { default as RealTimeTracking } from './RealTimeTracking';
+export { default as PerformanceMetrics } from './PerformanceMetrics';

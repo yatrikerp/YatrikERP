@@ -137,14 +137,14 @@ router.get('/:id', auth, requireRole(['admin', 'depot_manager', 'driver', 'condu
     }
 
     // Check if user has access to this duty
-    if (req.user.role === 'driver' && duty.driverId._id.toString() !== req.user.driverId) {
+    if (req.user.role === 'driver' && duty.driverId._id.toString() !== (req.user.driverId || req.user._id)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
       });
     }
 
-    if (req.user.role === 'conductor' && duty.conductorId._id.toString() !== req.user.conductorId) {
+    if (req.user.role === 'conductor' && duty.conductorId._id.toString() !== (req.user.conductorId || req.user._id)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -694,14 +694,14 @@ router.post('/:id/location', auth, async (req, res) => {
     }
     
     // Check if user has access to this duty
-    if (req.user.role === 'driver' && duty.driverId.toString() !== req.user.driverId) {
+    if (req.user.role === 'driver' && duty.driverId.toString() !== (req.user.driverId || req.user._id)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
       });
     }
     
-    if (req.user.role === 'conductor' && duty.conductorId.toString() !== req.user.conductorId) {
+    if (req.user.role === 'conductor' && duty.conductorId.toString() !== (req.user.conductorId || req.user._id)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -722,7 +722,7 @@ router.post('/:id/location', auth, async (req, res) => {
       longitude: parseFloat(longitude),
       accuracy: accuracy || 0,
       timestamp: new Date(timestamp || Date.now()),
-      updatedBy: req.user.role === 'driver' ? req.user.driverId : req.user.conductorId
+      updatedBy: req.user.role === 'driver' ? (req.user.driverId || req.user._id) : (req.user.conductorId || req.user._id)
     });
     
     // Keep only last 100 location updates

@@ -71,10 +71,35 @@ router.post('/login', async (req, res) => {
     driver.lockUntil = null;
     driver.lastLogin = new Date();
     
-    // Mark attendance
+    // Initialize automatic location tracking on login
     if (location) {
       await driver.markAttendance('login', location);
+      
+      // Set current location
+      driver.currentLocation = {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        lastUpdated: new Date(),
+        accuracy: location.accuracy || null
+      };
+      
+      // Initialize location tracking session
+      driver.locationTracking = {
+        isActive: true,
+        startedAt: new Date(),
+        sessionId: `session_${Date.now()}`,
+        trackingHistory: [{
+          latitude: location.latitude,
+          longitude: location.longitude,
+          timestamp: new Date(),
+          event: 'login'
+        }]
+      };
     }
+    
+    // Mark driver as online
+    driver.isOnline = true;
+    driver.lastSeen = new Date();
     
     await driver.save();
 
@@ -128,7 +153,8 @@ router.post('/login', async (req, res) => {
 // POST /api/driver/logout - Driver logout with attendance marking
 router.post('/logout', auth, async (req, res) => {
   try {
-    const driver = await Driver.findById(req.user.driverId);
+    const driverId = req.user.driverId || req.user._id;
+    const driver = await Driver.findById(driverId);
     if (!driver) {
       return res.status(404).json({
         success: false,
@@ -195,7 +221,8 @@ router.put('/profile', auth, async (req, res) => {
   try {
     const { name, phone, email, address, emergencyContact } = req.body;
     
-    const driver = await Driver.findById(req.user.driverId);
+    const driverId = req.user.driverId || req.user._id;
+    const driver = await Driver.findById(driverId);
     if (!driver) {
       return res.status(404).json({
         success: false,
@@ -210,7 +237,7 @@ router.put('/profile', auth, async (req, res) => {
     if (address) driver.address = address;
     if (emergencyContact) driver.emergencyContact = emergencyContact;
 
-    driver.updatedBy = req.user.driverId;
+    driver.updatedBy = req.user.driverId || req.user._id;
     await driver.save();
 
     // Log activity
@@ -244,7 +271,10 @@ router.get('/duties', auth, async (req, res) => {
   try {
     const { status, date } = req.query;
     
-    let query = { driverId: req.user.driverId };
+    // Ensure we have the correct driver ID
+    const driverId = req.user.driverId || req.user._id;
+    
+    let query = { driverId: driverId };
     
     if (status) {
       query.status = status;
@@ -282,8 +312,11 @@ router.get('/duties', auth, async (req, res) => {
 // GET /api/driver/duties/current - Get current duty
 router.get('/duties/current', auth, async (req, res) => {
   try {
+    // Ensure we have the correct driver ID
+    const driverId = req.user.driverId || req.user._id;
+    
     const duty = await Duty.findOne({
-      driverId: req.user.driverId,
+      driverId: driverId,
       status: { $in: ['assigned', 'started', 'in-progress', 'on-break'] }
     })
     .populate('conductorId', 'name conductorId')
@@ -320,7 +353,7 @@ router.post('/duties/:dutyId/start', auth, async (req, res) => {
     
     const duty = await Duty.findOne({
       _id: req.params.dutyId,
-      driverId: req.user.driverId,
+      driverId: req.user.driverId || req.user._id,
       status: 'assigned'
     });
 
@@ -335,7 +368,8 @@ router.post('/duties/:dutyId/start', auth, async (req, res) => {
     await duty.startDuty(location);
 
     // Update driver's current duty
-    const driver = await Driver.findById(req.user.driverId);
+    const driverId = req.user.driverId || req.user._id;
+    const driver = await Driver.findById(driverId);
     await driver.startDuty(duty._id, duty.tripId, duty.busId);
 
     // Log activity
@@ -369,7 +403,7 @@ router.post('/duties/:dutyId/end', auth, async (req, res) => {
     
     const duty = await Duty.findOne({
       _id: req.params.dutyId,
-      driverId: req.user.driverId,
+      driverId: req.user.driverId || req.user._id,
       status: { $in: ['started', 'in-progress', 'on-break'] }
     });
 
@@ -384,7 +418,8 @@ router.post('/duties/:dutyId/end', auth, async (req, res) => {
     await duty.completeDuty(location);
 
     // Update driver's duty status
-    const driver = await Driver.findById(req.user.driverId);
+    const driverId = req.user.driverId || req.user._id;
+    const driver = await Driver.findById(driverId);
     await driver.endDuty();
 
     // Log activity
@@ -418,7 +453,7 @@ router.post('/duties/:dutyId/break', auth, async (req, res) => {
     
     const duty = await Duty.findOne({
       _id: req.params.dutyId,
-      driverId: req.user.driverId,
+      driverId: req.user.driverId || req.user._id,
       status: { $in: ['started', 'in-progress'] }
     });
 
@@ -433,7 +468,8 @@ router.post('/duties/:dutyId/break', auth, async (req, res) => {
     await duty.takeBreak(location, duration);
 
     // Log activity
-    const driver = await Driver.findById(req.user.driverId);
+    const driverId = req.user.driverId || req.user._id;
+    const driver = await Driver.findById(driverId);
     await driver.logActivity(
       'break_started',
       `Started break for ${duration} minutes`,
@@ -462,7 +498,7 @@ router.post('/duties/:dutyId/break/end', auth, async (req, res) => {
   try {
     const duty = await Duty.findOne({
       _id: req.params.dutyId,
-      driverId: req.user.driverId,
+      driverId: req.user.driverId || req.user._id,
       status: 'on-break'
     });
 
@@ -477,7 +513,8 @@ router.post('/duties/:dutyId/break/end', auth, async (req, res) => {
     await duty.endBreak();
 
     // Log activity
-    const driver = await Driver.findById(req.user.driverId);
+    const driverId = req.user.driverId || req.user._id;
+    const driver = await Driver.findById(driverId);
     await driver.logActivity(
       'break_ended',
       'Break ended',
@@ -508,7 +545,7 @@ router.post('/duties/:dutyId/delay', auth, async (req, res) => {
     
     const duty = await Duty.findOne({
       _id: req.params.dutyId,
-      driverId: req.user.driverId,
+      driverId: req.user.driverId || req.user._id,
       status: { $in: ['started', 'in-progress'] }
     });
 
@@ -523,7 +560,8 @@ router.post('/duties/:dutyId/delay', auth, async (req, res) => {
     await duty.addDelay(reason, duration, location);
 
     // Log activity
-    const driver = await Driver.findById(req.user.driverId);
+    const driverId = req.user.driverId || req.user._id;
+    const driver = await Driver.findById(driverId);
     await driver.logActivity(
       'delay_reported',
       `Delay reported: ${reason} (${duration} minutes)`,
@@ -554,7 +592,7 @@ router.post('/duties/:dutyId/incident', auth, async (req, res) => {
     
     const duty = await Duty.findOne({
       _id: req.params.dutyId,
-      driverId: req.user.driverId,
+      driverId: req.user.driverId || req.user._id,
       status: { $in: ['started', 'in-progress', 'on-break'] }
     });
 
@@ -566,10 +604,11 @@ router.post('/duties/:dutyId/incident', auth, async (req, res) => {
     }
 
     // Report incident
-    await duty.reportIncident(type, description, severity, location, req.user.driverId);
+    await duty.reportIncident(type, description, severity, location, req.user.driverId || req.user._id);
 
     // Log activity
-    const driver = await Driver.findById(req.user.driverId);
+    const driverId = req.user.driverId || req.user._id;
+    const driver = await Driver.findById(driverId);
     await driver.logActivity(
       'incident_reported',
       `Incident reported: ${type} - ${description}`,
@@ -600,7 +639,7 @@ router.post('/duties/:dutyId/safety-check', auth, async (req, res) => {
     
     const duty = await Duty.findOne({
       _id: req.params.dutyId,
-      driverId: req.user.driverId,
+      driverId: req.user.driverId || req.user._id,
       status: { $in: ['assigned', 'started', 'in-progress'] }
     });
 
@@ -615,14 +654,14 @@ router.post('/duties/:dutyId/safety-check', auth, async (req, res) => {
     if (checkType === 'pre-trip') {
       duty.safety.preTripCheck = {
         completed,
-        completedBy: req.user.driverId,
+        completedBy: req.user.driverId || req.user._id,
         completedAt: new Date(),
         notes
       };
     } else if (checkType === 'post-trip') {
       duty.safety.postTripCheck = {
         completed,
-        completedBy: req.user.driverId,
+        completedBy: req.user.driverId || req.user._id,
         completedAt: new Date(),
         notes
       };
@@ -631,7 +670,8 @@ router.post('/duties/:dutyId/safety-check', auth, async (req, res) => {
     await duty.save();
 
     // Log activity
-    const driver = await Driver.findById(req.user.driverId);
+    const driverId = req.user.driverId || req.user._id;
+    const driver = await Driver.findById(driverId);
     await driver.logActivity(
       'safety_check_completed',
       `${checkType} safety check ${completed ? 'completed' : 'failed'}: ${notes}`,
@@ -662,7 +702,8 @@ router.get('/attendance', auth, async (req, res) => {
   try {
     const { startDate, endDate, status } = req.query;
     
-    const driver = await Driver.findById(req.user.driverId);
+    const driverId = req.user.driverId || req.user._id;
+    const driver = await Driver.findById(driverId);
     if (!driver) {
       return res.status(404).json({
         success: false,
@@ -706,7 +747,8 @@ router.get('/activities', auth, async (req, res) => {
   try {
     const { startDate, endDate, action, relatedEntity, limit = 50 } = req.query;
     
-    const driver = await Driver.findById(req.user.driverId);
+    const driverId = req.user.driverId || req.user._id;
+    const driver = await Driver.findById(driverId);
     if (!driver) {
       return res.status(404).json({
         success: false,
@@ -1044,6 +1086,567 @@ router.get('/license-expiring', auth, requireRole(['admin']), async (req, res) =
 
   } catch (error) {
     console.error('Get expiring licenses error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// New Driver Dashboard API Routes
+
+// GET /api/driver/duties/current - Get current duty assignment with real database integration
+router.get('/duties/current', auth, requireRole(['driver']), async (req, res) => {
+  try {
+    const driverId = req.user.id;
+    
+    // Find current active duty with full population
+    const currentDuty = await Duty.findOne({
+      driverId,
+      status: { $in: ['assigned', 'active'] },
+      date: {
+        $gte: new Date().setHours(0, 0, 0, 0),
+        $lt: new Date().setHours(23, 59, 59, 999)
+      }
+    })
+    .populate('routeId', 'routeName origin destination distance estimatedDuration')
+    .populate('busId', 'busNumber registrationNumber totalSeats fuelCapacity')
+    .populate('tripId', 'tripNumber scheduledDeparture scheduledArrival fare')
+    .populate('depotId', 'depotName depotCode')
+    .populate('assignedBy', 'name role');
+
+    if (!currentDuty) {
+      return res.json({
+        success: true,
+        data: null,
+        message: 'No active duty assigned for today'
+      });
+    }
+
+    // Calculate trip statistics
+    const route = currentDuty.routeId;
+    const bus = currentDuty.busId;
+    const trip = currentDuty.tripId;
+    
+    // Get today's completed duties for this driver
+    const todaysCompletedDuties = await Duty.countDocuments({
+      driverId,
+      status: 'completed',
+      date: {
+        $gte: new Date().setHours(0, 0, 0, 0),
+        $lt: new Date().setHours(23, 59, 59, 999)
+      }
+    });
+
+    // Calculate total distance covered today
+    const completedDuties = await Duty.find({
+      driverId,
+      status: 'completed',
+      date: {
+        $gte: new Date().setHours(0, 0, 0, 0),
+        $lt: new Date().setHours(23, 59, 59, 999)
+      }
+    }).populate('routeId', 'distance');
+
+    const totalDistanceToday = completedDuties.reduce((total, duty) => {
+      return total + (duty.routeId?.distance || 0);
+    }, 0);
+
+    // Calculate today's earnings
+    const todaysEarnings = completedDuties.reduce((total, duty) => {
+      return total + (duty.earnings || 0);
+    }, 0);
+
+    // Calculate trip progress if trip is active
+    let tripProgress = 0;
+    let nextStop = route?.origin || 'Starting Point';
+    
+    if (currentDuty.status === 'active' && currentDuty.startTime) {
+      const tripDuration = trip?.estimatedDuration || route?.estimatedDuration || 120; // minutes
+      const elapsedTime = (new Date() - new Date(currentDuty.startTime)) / (1000 * 60); // minutes
+      tripProgress = Math.min(Math.round((elapsedTime / tripDuration) * 100), 100);
+      
+      // Determine next stop based on progress
+      if (tripProgress < 50) {
+        nextStop = 'Mid-route stops';
+      } else if (tripProgress < 90) {
+        nextStop = route?.destination || 'Final destination';
+      } else {
+        nextStop = 'Arriving at destination';
+      }
+    }
+
+    const dutyData = {
+      _id: currentDuty._id,
+      status: currentDuty.status,
+      busNumber: bus?.busNumber || bus?.registrationNumber || 'N/A',
+      routeName: route?.routeName || 'N/A',
+      origin: route?.origin || 'N/A',
+      destination: route?.destination || 'N/A',
+      totalDistance: route?.distance || 0,
+      completedTrips: todaysCompletedDuties,
+      earnings: todaysEarnings,
+      totalDistanceToday,
+      fuelLevel: bus?.currentFuelLevel || 85, // Default if not tracked
+      currentSpeed: currentDuty.currentSpeed || 0,
+      nextStop,
+      progress: tripProgress,
+      startTime: currentDuty.startTime,
+      endTime: currentDuty.endTime,
+      assignedBy: currentDuty.assignedBy,
+      depot: currentDuty.depotId,
+      tripDetails: {
+        tripNumber: trip?.tripNumber,
+        scheduledDeparture: trip?.scheduledDeparture,
+        scheduledArrival: trip?.scheduledArrival,
+        fare: trip?.fare
+      }
+    };
+
+    res.json({
+      success: true,
+      data: dutyData
+    });
+  } catch (error) {
+    console.error('Error fetching current duty:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// GET /api/driver/notifications - Get driver notifications for new trip assignments
+router.get('/notifications', auth, requireRole(['driver']), async (req, res) => {
+  try {
+    const driverId = req.user.id;
+    
+    // Find unread notifications for this driver
+    const Notification = require('../models/Notification');
+    const notifications = await Notification.find({
+      recipientId: driverId,
+      recipientType: 'driver',
+      isRead: false,
+      type: { $in: ['trip_assigned', 'duty_updated', 'route_changed'] }
+    })
+    .populate('relatedDuty', 'routeId busId tripId')
+    .sort({ createdAt: -1 })
+    .limit(10);
+
+    res.json({
+      success: true,
+      data: notifications,
+      count: notifications.length
+    });
+  } catch (error) {
+    console.error('Error fetching driver notifications:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/driver/duties/:dutyId/start - Start duty/trip with real-time updates
+router.post('/duties/:dutyId/start', auth, requireRole(['driver']), async (req, res) => {
+  try {
+    const { dutyId } = req.params;
+    const driverId = req.user.id;
+
+    const duty = await Duty.findOne({ _id: dutyId, driverId })
+      .populate('routeId busId tripId depotId assignedBy');
+      
+    if (!duty) {
+      return res.status(404).json({
+        success: false,
+        message: 'Duty not found or not assigned to you'
+      });
+    }
+
+    if (duty.status !== 'assigned') {
+      return res.status(400).json({
+        success: false,
+        message: `Duty cannot be started. Current status: ${duty.status}`
+      });
+    }
+
+    // Update duty status
+    duty.status = 'active';
+    duty.startTime = new Date();
+    duty.actualStartTime = new Date();
+    
+    // Initialize trip tracking data
+    duty.tripTracking = {
+      startLocation: null, // Will be updated by GPS
+      currentLocation: null,
+      locationHistory: [],
+      distanceCovered: 0,
+      fuelConsumed: 0
+    };
+
+    await duty.save();
+
+    // Create notification for depot manager and admin about trip start
+    const Notification = require('../models/Notification');
+    
+    // Notify depot manager
+    if (duty.depotId) {
+      await Notification.create({
+        recipientId: duty.depotId,
+        recipientType: 'depot',
+        type: 'trip_started',
+        title: 'Trip Started',
+        message: `Driver ${req.user.name} has started trip on route ${duty.routeId?.routeName}`,
+        relatedDuty: duty._id,
+        createdAt: new Date()
+      });
+    }
+
+    // Notify admin
+    const adminUsers = await require('../models/User').find({ role: 'admin' });
+    for (const admin of adminUsers) {
+      await Notification.create({
+        recipientId: admin._id,
+        recipientType: 'admin',
+        type: 'trip_started',
+        title: 'Trip Started',
+        message: `Driver ${req.user.name} started trip ${duty.routeId?.routeName} (${duty.busId?.busNumber})`,
+        relatedDuty: duty._id,
+        createdAt: new Date()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Trip started successfully',
+      data: duty
+    });
+  } catch (error) {
+    console.error('Error starting trip:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/driver/duties/:dutyId/end - End duty/trip
+router.post('/duties/:dutyId/end', auth, requireRole(['driver']), async (req, res) => {
+  try {
+    const { dutyId } = req.params;
+    const driverId = req.user.id;
+
+    const duty = await Duty.findOne({ _id: dutyId, driverId });
+    if (!duty) {
+      return res.status(404).json({
+        success: false,
+        message: 'Duty not found'
+      });
+    }
+
+    if (duty.status !== 'active') {
+      return res.status(400).json({
+        success: false,
+        message: 'Duty is not active'
+      });
+    }
+
+    duty.status = 'completed';
+    duty.endTime = new Date();
+    
+    // Generate trip report
+    const report = {
+      dutyId: duty._id,
+      driverId,
+      totalDistance: duty.totalDistance || 0,
+      earnings: duty.earnings || 0,
+      fuelConsumed: duty.fuelConsumed || 0,
+      completedAt: new Date()
+    };
+
+    duty.tripReport = report;
+    await duty.save();
+
+    res.json({
+      success: true,
+      message: 'Trip completed successfully',
+      data: { duty, report }
+    });
+  } catch (error) {
+    console.error('Error ending trip:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/driver/duties/:dutyId/location - Update GPS location
+router.post('/duties/:dutyId/location', auth, requireRole(['driver']), async (req, res) => {
+  try {
+    const { dutyId } = req.params;
+    const { lat, lng, timestamp, speed } = req.body;
+    const driverId = req.user.id;
+
+    const duty = await Duty.findOne({ _id: dutyId, driverId, status: 'active' });
+    if (!duty) {
+      return res.status(404).json({
+        success: false,
+        message: 'Active duty not found'
+      });
+    }
+
+    // Update location data
+    duty.currentLocation = {
+      latitude: lat,
+      longitude: lng,
+      timestamp: new Date(timestamp),
+      speed: speed || 0
+    };
+
+    duty.currentSpeed = Math.round((speed || 0) * 3.6); // Convert m/s to km/h
+
+    // Add to location history
+    if (!duty.locationHistory) {
+      duty.locationHistory = [];
+    }
+    
+    duty.locationHistory.push({
+      latitude: lat,
+      longitude: lng,
+      timestamp: new Date(timestamp),
+      speed: speed || 0
+    });
+
+    // Keep only last 100 location points
+    if (duty.locationHistory.length > 100) {
+      duty.locationHistory = duty.locationHistory.slice(-100);
+    }
+
+    await duty.save();
+
+    res.json({
+      success: true,
+      message: 'Location updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating location:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/driver/emergency - Report emergency
+router.post('/emergency', auth, requireRole(['driver']), async (req, res) => {
+  try {
+    const { type, location, dutyId, timestamp } = req.body;
+    const driverId = req.user.id;
+
+    // Create emergency report
+    const emergencyReport = {
+      driverId,
+      dutyId,
+      type,
+      location,
+      timestamp: new Date(timestamp),
+      status: 'reported',
+      reportedAt: new Date()
+    };
+
+    // In a real implementation, this would:
+    // 1. Save to Emergency model
+    // 2. Notify dispatch/control room
+    // 3. Send alerts to relevant authorities
+    // 4. Update duty status if needed
+
+    console.log('Emergency Report:', emergencyReport);
+
+    res.json({
+      success: true,
+      message: `${type} reported successfully. Emergency services have been notified.`,
+      data: emergencyReport
+    });
+  } catch (error) {
+    console.error('Error reporting emergency:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/driver/emergency - Report emergency
+router.post('/emergency', auth, async (req, res) => {
+  try {
+    const { type, location, dutyId, timestamp, driverId, busNumber, routeName } = req.body;
+    
+    // Find the duty for this driver
+    const duty = await Duty.findOne({
+      driverId: req.user.driverId || req.user._id,
+      status: { $in: ['started', 'in-progress'] }
+    }).populate('conductorId').populate('busId').populate('routeId');
+
+    if (!duty) {
+      return res.status(404).json({
+        success: false,
+        message: 'No active duty found'
+      });
+    }
+
+    // Create emergency record
+    const emergency = {
+      type,
+      location: location || {},
+      dutyId: duty._id,
+      driverId: req.user.driverId || req.user._id,
+      conductorId: duty.conductorId?._id,
+      busId: duty.busId?._id,
+      routeId: duty.routeId?._id,
+      reportedAt: new Date(timestamp || Date.now()),
+      status: 'active',
+      priority: type === 'Medical Emergency' ? 'high' : 'medium',
+      details: {
+        busNumber: duty.busId?.busNumber || busNumber,
+        routeName: duty.routeId?.name || routeName,
+        conductorName: duty.conductorId?.name || 'N/A'
+      }
+    };
+
+    // Update duty status to emergency
+    await Duty.findByIdAndUpdate(duty._id, {
+      status: 'emergency',
+      emergency: emergency,
+      lastUpdated: new Date()
+    });
+
+    // Log activity
+    const driver = await Driver.findById(req.user.driverId || req.user._id);
+    await driver.logActivity(
+      'emergency_reported',
+      `Emergency reported: ${type}`,
+      location,
+      'duty',
+      duty._id
+    );
+
+    // TODO: Send notifications to depot manager and admin
+    // TODO: Send SMS/WhatsApp to emergency contacts
+
+    res.json({
+      success: true,
+      message: 'Emergency reported successfully',
+      data: {
+        emergencyId: emergency._id || 'generated',
+        type,
+        reportedAt: emergency.reportedAt,
+        status: 'active'
+      }
+    });
+
+  } catch (error) {
+    console.error('Report emergency error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/driver/duties/:dutyId/eta - Update ETA
+router.post('/duties/:dutyId/eta', auth, async (req, res) => {
+  try {
+    const { etaMinutes, reason, location, timestamp } = req.body;
+    
+    const duty = await Duty.findOne({
+      _id: req.params.dutyId,
+      driverId: req.user.driverId || req.user._id,
+      status: { $in: ['started', 'in-progress'] }
+    });
+
+    if (!duty) {
+      return res.status(404).json({
+        success: false,
+        message: 'Duty not found or cannot update ETA'
+      });
+    }
+
+    // Update ETA
+    await duty.updateETA(etaMinutes, reason, location, req.user.driverId || req.user._id);
+
+    // Log activity
+    const driver = await Driver.findById(req.user.driverId || req.user._id);
+    await driver.logActivity(
+      'eta_updated',
+      `ETA updated: ${etaMinutes} minutes - ${reason || 'No reason provided'}`,
+      location,
+      'duty',
+      duty._id
+    );
+
+    res.json({
+      success: true,
+      message: 'ETA updated successfully',
+      data: {
+        etaMinutes,
+        reason,
+        updatedAt: new Date(timestamp || Date.now())
+      }
+    });
+
+  } catch (error) {
+    console.error('Update ETA error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/driver/duties/:dutyId/delay - Report delay
+router.post('/duties/:dutyId/delay', auth, async (req, res) => {
+  try {
+    const { delayMinutes, reason, location, timestamp } = req.body;
+    
+    const duty = await Duty.findOne({
+      _id: req.params.dutyId,
+      driverId: req.user.driverId || req.user._id,
+      status: { $in: ['started', 'in-progress'] }
+    });
+
+    if (!duty) {
+      return res.status(404).json({
+        success: false,
+        message: 'Duty not found or cannot report delay'
+      });
+    }
+
+    // Add delay
+    await duty.addDelay(reason, delayMinutes, location, req.user.driverId || req.user._id);
+
+    // Log activity
+    const driver = await Driver.findById(req.user.driverId || req.user._id);
+    await driver.logActivity(
+      'delay_reported',
+      `Delay reported: ${reason} (${delayMinutes} minutes)`,
+      location,
+      'duty',
+      duty._id
+    );
+
+    res.json({
+      success: true,
+      message: 'Delay reported successfully',
+      data: {
+        delayMinutes,
+        reason,
+        reportedAt: new Date(timestamp || Date.now())
+      }
+    });
+
+  } catch (error) {
+    console.error('Report delay error:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'

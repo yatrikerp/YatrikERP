@@ -3,9 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 // Notifications removed per request
 import NotificationCenter from '../../components/Common/NotificationCenter';
-import BusScheduling from '../../components/Common/BusScheduling';
-import BookingSystem from '../../components/Common/BookingSystem';
 import BookingManagement from '../../components/Common/BookingManagement';
+import DepotBookingDashboard from '../../components/depot/DepotBookingDashboard';
+import DepotSchedulingDashboard from '../../components/depot/DepotSchedulingDashboard';
 import FleetManagement from './components/FleetManagement';
 import RouteNetwork from './components/RouteNetwork';
 import TripManagement from './components/TripManagement';
@@ -20,7 +20,9 @@ const DepotDashboard = () => {
     totalBuses: 0,
     activeTrips: 0,
     todayRevenue: 0,
-    totalRoutes: 0
+    totalRoutes: 0,
+    todayBookings: 0,
+    totalBookings: 0
   });
   const [depotInfo, setDepotInfo] = useState({
     name: '',
@@ -131,6 +133,33 @@ const DepotDashboard = () => {
       console.error('Error fetching depot info:', error);
     }
   }, [user]);
+
+  const fetchBookingStats = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch('/api/depot/bookings/stats?period=today', {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setDepotStats(prev => ({
+            ...prev,
+            todayBookings: data.data.summary.totalBookings,
+            totalBookings: data.data.summary.totalBookings
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching booking stats:', error);
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
       try {
@@ -260,11 +289,6 @@ const DepotDashboard = () => {
       }
   };
 
-  const handleBookingComplete = (bookingData) => {
-    console.log('Booking completed:', bookingData);
-    // You can add additional logic here like showing a success message
-    // or refreshing the booking management section
-  };
 
   const createSampleBookings = async () => {
     try {
@@ -296,6 +320,7 @@ const DepotDashboard = () => {
 
     fetchData();
     fetchDepotInfo(); // Fetch depot info separately
+    fetchBookingStats(); // Fetch booking stats
 
     const interval = setInterval(async () => {
       setLastUpdated(new Date().toLocaleTimeString());
@@ -352,7 +377,7 @@ const DepotDashboard = () => {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [user, fetchData, fetchDepotInfo]);
+  }, [user, fetchData, fetchDepotInfo, fetchBookingStats]);
 
   if (loading) {
     return (
@@ -430,23 +455,25 @@ const DepotDashboard = () => {
                 </li>
 
                 <li 
-              className={`nav-item ${activeSection === 'scheduling' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('scheduling')}
+              className={`nav-item ${activeSection === 'scheduling-dashboard' ? 'active' : ''}`}
+                  onClick={() => setActiveSection('scheduling-dashboard')}
                 >
               <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
                   </svg>
-              <span>Bus Scheduling</span>
+              <span>Scheduling Dashboard</span>
                 </li>
 
+
+
                 <li 
-              className={`nav-item ${activeSection === 'booking-system' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('booking-system')}
+              className={`nav-item ${activeSection === 'booking-dashboard' ? 'active' : ''}`}
+                  onClick={() => setActiveSection('booking-dashboard')}
                 >
               <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm2 6a2 2 0 114 0 2 2 0 01-4 0zm8 0a2 2 0 114 0 2 2 0 01-4 0z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
                   </svg>
-              <span>New Booking</span>
+              <span>Booking Dashboard</span>
                 </li>
 
                 <li 
@@ -674,6 +701,26 @@ const DepotDashboard = () => {
                     </svg>
                   </div>
                 </div>
+
+                <div className="kpi-card">
+                    <div className="kpi-content">
+                      <div className="kpi-header">
+                        <h3>{depotStats.todayBookings}</h3>
+                        <div className="kpi-trend">
+                          <svg className="trend-icon up" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
+                          </svg>
+                          <span>12% from yesterday</span>
+                        </div>
+                      </div>
+                      <p className="kpi-label">Today's Bookings</p>
+                    </div>
+                  <div className="kpi-icon purple">
+                    <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -842,17 +889,19 @@ const DepotDashboard = () => {
               </div>
             )}
 
-            {/* Bus Scheduling Section */}
-            {activeSection === 'scheduling' && (
-              <div className="module-container scheduling-module">
-                <BusScheduling depotId={user?.depotId} />
+
+
+            {/* Booking Dashboard Section */}
+            {activeSection === 'booking-dashboard' && (
+              <div className="module-container booking-dashboard-module">
+                <DepotBookingDashboard depotId={user?.depotId} user={user} />
               </div>
             )}
 
-            {/* New Booking Section */}
-            {activeSection === 'booking-system' && (
-              <div className="module-container new-booking-module">
-                <BookingSystem user={user} onBookingComplete={handleBookingComplete} />
+            {/* Scheduling Dashboard Section */}
+            {activeSection === 'scheduling-dashboard' && (
+              <div className="module-container scheduling-dashboard-module">
+                <DepotSchedulingDashboard depotId={user?.depotId} user={user} />
               </div>
             )}
 

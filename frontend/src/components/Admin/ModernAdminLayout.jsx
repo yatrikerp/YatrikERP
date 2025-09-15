@@ -26,7 +26,8 @@ import {
   Database,
   Server,
   Monitor,
-  Smartphone
+  Smartphone,
+  Ticket
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -52,6 +53,7 @@ const ModernAdminLayout = ({ children }) => {
     { name: 'Bus Management', href: '/admin/buses', icon: Bus },
     { name: 'Route Management', href: '/admin/routes', icon: Route },
     { name: 'Trip Management', href: '/admin/trips', icon: Calendar },
+    { name: 'Booking Management', href: '/admin/bookings', icon: Ticket },
     { name: 'Depot Management', href: '/admin/depots', icon: Building2 },
     { name: 'Driver Management', href: '/admin/drivers', icon: UserCheck },
     { name: 'Conductor Management', href: '/admin/conductors', icon: UserCog },

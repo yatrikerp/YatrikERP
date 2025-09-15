@@ -10,6 +10,7 @@ const PaxBooking = () => {
   const selectedSeats = useMemo(() => state?.selectedSeats || [], [state?.selectedSeats]);
   const boarding = state?.boarding || null;
   const dropping = state?.dropping || null;
+  const passengerDetails = useMemo(() => state?.passengerDetails || null, [state?.passengerDetails]);
   
   const [trip, setTrip] = useState(state?.trip || null);
   const [fare, setFare] = useState(null);
@@ -49,6 +50,8 @@ const PaxBooking = () => {
       return;
     }
     
+    console.log('🎫 Creating booking with passenger details:', passengerDetails);
+    
     // Create proper booking data structure that matches backend model requirements
     const departureDate = trip.serviceDate || new Date().toISOString().split('T')[0];
     const departureTime = trip.startTime || '08:00';
@@ -64,11 +67,11 @@ const PaxBooking = () => {
       busId: tripId,
       depotId: tripId,
       customer: {
-        name: 'Guest Passenger',
-        email: 'guest@example.com',
-        phone: '9999999999',
-        age: 25,
-        gender: 'male'
+        name: passengerDetails?.name || 'Guest Passenger',
+        email: passengerDetails?.email || 'guest@example.com',
+        phone: passengerDetails?.phone || '9999999999',
+        age: parseInt(passengerDetails?.age) || 25,
+        gender: passengerDetails?.gender || 'male'
       },
       journey: {
         from: trip.fromCity || 'Mumbai',
@@ -84,9 +87,9 @@ const PaxBooking = () => {
         seatType: 'seater',
         seatPosition: 'window', // Required field
         price: baseFare,
-        passengerName: `Passenger ${idx+1}`,
-        passengerAge: 25,
-        passengerGender: 'male'
+        passengerName: passengerDetails?.name || `Passenger ${idx+1}`,
+        passengerAge: parseInt(passengerDetails?.age) || 25,
+        passengerGender: passengerDetails?.gender || 'male'
       })),
       pricing: {
         baseFare: baseFare,
@@ -381,7 +384,7 @@ const PaxBooking = () => {
               <div className="text-sm text-gray-500">Amount</div>
               <div className="text-2xl font-bold">₹{(fare || 0) * Math.max(1, selectedSeats.length || 1)}</div>
         </div>
-            <button onClick={confirm} className="mt-4 w-full rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3">Continue booking</button>
+            <button onClick={confirm} className="mt-4 w-full rounded-full bg-pink-600 hover:bg-pink-700 text-white font-semibold py-3">Continue booking</button>
             <button 
               onClick={async () => {
                 console.log('🚀 Test mode: Skipping payment verification');

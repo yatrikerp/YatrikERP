@@ -30,7 +30,7 @@ router.post('/create-order', auth, async (req, res) => {
       return res.status(404).json({ message: 'Booking not found' });
     }
     
-    if (booking.passengerId.toString() !== req.user._id.toString()) {
+    if (booking.createdBy.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Not authorized to pay for this booking' });
     }
     
@@ -187,7 +187,7 @@ router.post('/refund', auth, async (req, res) => {
       return res.status(404).json({ message: 'Booking not found' });
     }
     
-    if (booking.passengerId.toString() !== req.user._id.toString()) {
+    if (booking.createdBy.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Not authorized to refund this booking' });
     }
     
@@ -358,7 +358,7 @@ router.post('/mock', auth, async (req, res) => {
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
-    if (booking.passengerId.toString() !== req.user._id.toString()) {
+    if (booking.createdBy.toString() !== req.user._id.toString()) {
       return res.status(403).json({ success: false, message: 'Not authorized for this booking' });
     }
 

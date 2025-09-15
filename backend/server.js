@@ -151,6 +151,7 @@ app.use('/api/booking', require('./routes/booking'));
 app.use('/api/routes', require('./routes/routes'));
 app.use('/api/trips', require('./routes/trips'));
 app.use('/api/status', require('./routes/status'));
+app.use('/api/search', require('./routes/search'));
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {

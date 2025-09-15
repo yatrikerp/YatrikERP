@@ -18,13 +18,10 @@ const PassengerDashboard = () => {
   const [recentActivity, setRecentActivity] = useState([]);
   const [walletBalance, setWalletBalance] = useState(0);
   const [popularRoutes, setPopularRoutes] = useState([]);
-  const [availableTrips, setAvailableTrips] = useState([]);
-  const [debugInfo, setDebugInfo] = useState(null);
 
   useEffect(() => {
     fetchDashboardData();
     fetchPopularRoutes();
-    fetchAvailableTrips();
   }, []);
 
   const fetchDashboardData = async () => {
@@ -88,37 +85,6 @@ const PassengerDashboard = () => {
     }
   };
 
-  const fetchAvailableTrips = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.log('No token found for fetching trips');
-        return;
-      }
-
-      const response = await fetch('/api/passenger/trips/all', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setAvailableTrips(data.data.trips || []);
-          setDebugInfo(data.data.debug);
-          console.log('Available trips:', data.data.trips);
-        }
-      } else {
-        console.error('Failed to fetch available trips:', response.statusText);
-        setAvailableTrips([]);
-      }
-    } catch (error) {
-      console.error('Error fetching available trips:', error);
-      setAvailableTrips([]);
-    }
-  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -192,64 +158,6 @@ const PassengerDashboard = () => {
           </div>
         </div>
 
-        {/* Available Trips Section */}
-        {availableTrips.length > 0 && (
-          <div className="mb-8">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Available Trips</h2>
-                  <p className="text-gray-600">Trips created by admin and depot users</p>
-                </div>
-                <div className="text-sm text-gray-500">
-                  {availableTrips.length} trips available
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {availableTrips.slice(0, 6).map((trip) => (
-                  <div key={trip.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-semibold text-gray-900">{trip.routeName}</span>
-                      <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(trip.status)}`}>
-                        {trip.status}
-                      </span>
-                    </div>
-                    <div className="text-sm text-gray-600 mb-2">
-                      {trip.from} → {trip.to}
-                    </div>
-                    <div className="text-sm text-gray-500 mb-2">
-                      <div>Date: {new Date(trip.serviceDate).toLocaleDateString()}</div>
-                      <div>Time: {trip.departureTime}</div>
-                      <div>Bus: {trip.busNumber} ({trip.busType})</div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-lg font-bold text-pink-600">₹{trip.fare}</span>
-                      <span className="text-sm text-gray-500">{trip.availableSeats} seats left</span>
-                    </div>
-                    <button
-                      onClick={() => navigate('/passenger/search')}
-                      className="w-full mt-3 bg-gradient-to-r from-pink-600 to-pink-700 text-white py-2 px-4 rounded-lg hover:from-pink-700 hover:to-pink-800 transition-all duration-200 text-sm font-medium"
-                    >
-                      Book Now
-                    </button>
-                  </div>
-                ))}
-              </div>
-              
-              {availableTrips.length > 6 && (
-                <div className="text-center mt-4">
-                  <button
-                    onClick={() => navigate('/passenger/search')}
-                    className="text-pink-600 hover:text-pink-700 font-medium"
-                  >
-                    View All {availableTrips.length} Trips →
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -399,15 +307,6 @@ const PassengerDashboard = () => {
           </div>
         )}
 
-        {/* Debug Info Panel */}
-        {debugInfo && (
-          <div className="mt-8 bg-gray-100 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Debug Information</h3>
-            <pre className="text-xs text-gray-600 overflow-auto">
-              {JSON.stringify(debugInfo, null, 2)}
-            </pre>
-          </div>
-        )}
       </div>
     </div>
   );
