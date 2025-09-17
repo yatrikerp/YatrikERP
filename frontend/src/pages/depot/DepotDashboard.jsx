@@ -10,6 +10,8 @@ import FleetManagement from './components/FleetManagement';
 import RouteNetwork from './components/RouteNetwork';
 import TripManagement from './components/TripManagement';
 import StaffManagement from './components/StaffManagement';
+import BusScheduling from '../../components/depot/BusScheduling';
+import BusSchedulingTest from '../../components/depot/BusSchedulingTest';
 import './depot.modern.css';
 
 const DepotDashboard = () => {
@@ -39,8 +41,8 @@ const DepotDashboard = () => {
     frontend: 'unknown'
   });
   const [lastUpdated, setLastUpdated] = useState('');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSection, setActiveSection] = useState('dashboard');
+  const [sideMenuOpen, setSideMenuOpen] = useState(true); // Always open
   const location = useLocation();
 
   useEffect(() => {
@@ -97,10 +99,6 @@ const DepotDashboard = () => {
     setShowProfileDropdown(false);
     // TODO: Navigate to depot settings
     console.log('Depot Settings clicked');
-  };
-
-  const toggleSidebar = () => {
-    setSidebarCollapsed(!sidebarCollapsed);
   };
 
   const fetchDepotInfo = useCallback(async () => {
@@ -390,146 +388,13 @@ const DepotDashboard = () => {
 
   return (
     <div className="admin-dashboard">
-      {/* Dark Sidebar */}
-      <div className={`admin-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-        <div className="sidebar-header">
-          <h2>Depot Panel</h2>
-          <div className="depot-info">
-            <div className="depot-name">{depotInfo.name || 'Yatrik Depot'}</div>
-            <div className="depot-location">📍 {depotInfo.location || 'Kerala, India'}</div>
-            <div className="depot-manager">👤 {depotInfo.manager || user?.name || 'Depot Manager'}</div>
-        </div>
-      </div>
-
-        <nav className="sidebar-nav">
-          <ul className="nav-menu">
-            <li 
-              className={`nav-item ${activeSection === 'dashboard' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('dashboard')}
-                >
-              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                  </svg>
-              <span>Dashboard</span>
-                </li>
-
-                <li 
-              className={`nav-item ${activeSection === 'buses' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('buses')}
-                >
-              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-                  </svg>
-              <span>Fleet Management</span>
-                </li>
-            
-                <li 
-              className={`nav-item ${activeSection === 'routes' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('routes')}
-                >
-              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                  </svg>
-              <span>Route Network</span>
-                </li>
-            
-                <li 
-              className={`nav-item ${activeSection === 'trips' ? 'active' : ''}`}
-                  onClick={() => { setActiveSection('trips'); navigate('/depot/trips'); }}
-                >
-              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                  </svg>
-              <span>Trip Management</span>
-                </li>
-            
-                <li 
-              className={`nav-item ${activeSection === 'crew' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('crew')}
-                >
-              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
-                  </svg>
-              <span>Staff Management</span>
-                </li>
-
-                <li 
-              className={`nav-item ${activeSection === 'scheduling-dashboard' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('scheduling-dashboard')}
-                >
-              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                  </svg>
-              <span>Scheduling Dashboard</span>
-                </li>
-
-
-
-                <li 
-              className={`nav-item ${activeSection === 'booking-dashboard' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('booking-dashboard')}
-                >
-              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                  </svg>
-              <span>Booking Dashboard</span>
-                </li>
-
-                <li 
-              className={`nav-item ${activeSection === 'booking-management' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('booking-management')}
-                >
-              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                  </svg>
-              <span>Booking Management</span>
-                </li>
-
-                <li 
-              className={`nav-item ${activeSection === 'reports' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('reports')}
-                >
-              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                  </svg>
-              <span>Reports</span>
-                </li>
-            
-                <li 
-              className={`nav-item ${activeSection === 'monitoring' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('monitoring')}
-                >
-              <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-                  </svg>
-              <span>Live Monitoring</span>
-                </li>
-              </ul>
-        </nav>
-        
-        <div className="sidebar-footer">
-          <div className="user-profile">
-            <div className="user-avatar">
-              {user?.name?.charAt(0) || 'D'}
-            </div>
-                      <div className="user-info">
-            <div className="user-name">{depotInfo.manager || user?.name || 'Depot Manager'}</div>
-            <div className="user-role">Manager</div>
-          </div>
-            </div>
-            <button className="logout-btn" onClick={handleLogout}>
-              <svg className="logout-icon" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1V4a1 1 0 00-1-1H3zm7.707 3.293a1 1 0 010 1.414L9.414 9H17a1 1 0 110 2H9.414l1.293 1.293a1 1 0 01-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-            </button>
-          </div>
+      {/* Top Navigation Bar */}
+      <div className="top-navigation">
+        <div className="nav-left">
+          {/* Clean header - no depot branding */}
         </div>
 
-        {/* Top Header */}
-        <div className="top-header">
-          {/* Left Section - Search Bar */}
-          <div className="header-left">
+        <div className="nav-center">
             <div className="search-container">
               <svg className="search-icon" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414L10.89 9.89A6 6 0 012 8z" clipRule="evenodd" />
@@ -542,8 +407,7 @@ const DepotDashboard = () => {
             </div>
           </div>
 
-          {/* Center Section - System Status Indicators */}
-          <div className="header-center">
+        <div className="nav-right">
             <div className="status-indicators">
               <div className="status-item status-online">
                 <svg className="status-icon" fill="currentColor" viewBox="0 0 20 20">
@@ -577,338 +441,361 @@ const DepotDashboard = () => {
                 <div className="status-dot dot-green"></div>
               </div>
             </div>
+
+          <div className="user-profile">
+            <div className="user-avatar">
+              {user?.name?.charAt(0) || 'A'}
+            </div>
+            <div className="user-info">
+              <div className="user-name">{depotInfo.manager || user?.name || 'Admin Yatrik'}</div>
+            </div>
+            <button className="logout-btn" onClick={handleLogout}>
+              <svg className="logout-icon" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1V4a1 1 0 00-1-1H3zm7.707 3.293a1 1 0 010 1.414L9.414 9H17a1 1 0 110 2H9.414l1.293 1.293a1 1 0 01-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+
+      {/* Side Menu */}
+      <div className={`side-menu ${sideMenuOpen ? 'open' : ''}`}>
+        <div className="side-menu-content">
+          <div className="menu-section">
+            <h4>Management</h4>
+            <div className="menu-items">
+              <div className="menu-item" onClick={() => { setActiveSection('routes'); setSideMenuOpen(false); }}>
+                <svg className="menu-item-icon" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                </svg>
+                <span>Route Management</span>
+              </div>
+              <div className="menu-item" onClick={() => { setActiveSection('trips'); setSideMenuOpen(false); }}>
+                <svg className="menu-item-icon" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                </svg>
+                <span>Trip Management</span>
+              </div>
+              <div className="menu-item" onClick={() => { setActiveSection('crew'); setSideMenuOpen(false); }}>
+                <svg className="menu-item-icon" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
+                </svg>
+                <span>Staff Management</span>
+              </div>
+            </div>
           </div>
 
+          <div className="menu-section">
+            <h4>Operations</h4>
+            <div className="menu-items">
+              <div className="menu-item" onClick={() => { setActiveSection('scheduling'); setSideMenuOpen(false); }}>
+                <svg className="menu-item-icon" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                </svg>
+                <span>Bus Scheduling</span>
+              </div>
+              <div className="menu-item" onClick={() => { setActiveSection('fares'); setSideMenuOpen(false); }}>
+                <svg className="menu-item-icon" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4zM18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" />
+                </svg>
+                <span>Fare Management</span>
+              </div>
+              <div className="menu-item" onClick={() => { setActiveSection('reports'); setSideMenuOpen(false); }}>
+                <svg className="menu-item-icon" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 14.414l2.293 2.293a1 1 0 001.414-1.414L12.414 14H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span>Reports & Analytics</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="menu-section">
+            <h4>Quick Actions</h4>
+            <div className="menu-items">
+              <div className="menu-item" onClick={() => { setActiveSection('dashboard'); setSideMenuOpen(false); }}>
+                <svg className="menu-item-icon" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                </svg>
+                <span>Dashboard Overview</span>
+              </div>
+              <div className="menu-item" onClick={() => { setActiveSection('routes'); setSideMenuOpen(false); }}>
+                <svg className="menu-item-icon" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                </svg>
+                <span>Add New Route</span>
+              </div>
+            </div>
+          </div>
+        </div>
         </div>
 
         {/* Main Content */}
-      <div className="main-content">
+      <div className={`main-content ${sideMenuOpen ? 'with-side-menu' : ''}`}>
 
         {/* Dashboard Content */}
         <div className="dashboard-content">
             {activeSection === 'dashboard' && (
               <>
-                {/* Dashboard Header with Quick Actions */}
+                {/* Clean Dashboard Header */}
                 <div className="dashboard-header">
-                  <div className="header-left">
-                    <h1>{depotInfo.name || 'Yatrik Depot'} Dashboard</h1>
-                    <p className="welcome-text">Welcome back, <span className="welcome-name">{depotInfo.manager || user?.name || 'Depot Manager'}</span>.</p>
+                  <div className="dashboard-title-section">
+                    <h1 className="dashboard-title">Dashboard</h1>
+                    <p className="dashboard-subtitle">Dashboard</p>
                   </div>
-                  <div className="header-right"></div>
-                  <div className="quick-actions-grid">
-                    <button className="quick-action blue" onClick={() => setActiveSection('buses')}>
-                      <span className="qa-title">Add Bus</span>
+                  <div className="quick-actions-section">
+                    <button className="quick-action-btn add-user" onClick={() => setActiveSection('crew')}>
+                      <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
+                      </svg>
+                      <span>Add User</span>
                     </button>
-                    <button className="quick-action green" onClick={() => setActiveSection('scheduling')}>
-                      <span className="qa-title">Schedule Trip</span>
+                    <button className="quick-action-btn schedule-trip" onClick={() => setActiveSection('scheduling')}>
+                      <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                      </svg>
+                      <span>Schedule Trip</span>
                     </button>
-                    <button className="quick-action purple" onClick={() => setActiveSection('reports')}>
-                      <span className="qa-title">View Reports</span>
+                    <button className="quick-action-btn view-reports" onClick={() => setActiveSection('reports')}>
+                      <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+                      </svg>
+                      <span>View Reports</span>
                     </button>
-                    <button className="quick-action orange qa-bottom-left" onClick={() => setActiveSection('dashboard')}>
-                      <span className="qa-title">System Status</span>
+                    <button className="quick-action-btn system-status" onClick={() => setActiveSection('status')}>
+                      <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <span>System Status</span>
                     </button>
                   </div>
                 </div>
 
-
-
-
-
-
-
-
-            {/* KPI Cards */}
-            <div className="kpi-section">
-              <div className="kpi-grid">
-                <div className="kpi-card">
-                    <div className="kpi-content">
-                      <div className="kpi-header">
-                        <h3>{depotStats.totalBuses}</h3>
-                        <div className="kpi-trend">
-                          <svg className="trend-icon up" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
-                          </svg>
-                          <span>12% from last month</span>
-                        </div>
+                {/* New Grid Layout Dashboard */}
+                <div className="dashboard-grid">
+                  {/* Top Row: 4 Statistic Cards */}
+                  <div className="stats-row">
+                    <div className="stat-card">
+                      <div className="stat-icon buses">
+                        <svg fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+                          <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+                        </svg>
                       </div>
-                      <p className="kpi-label">Total Buses</p>
-                    </div>
-                  <div className="kpi-icon blue">
-                    <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                      <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="kpi-card">
-                    <div className="kpi-content">
-                      <div className="kpi-header">
-                        <h3>{depotStats.activeTrips}</h3>
-                        <div className="kpi-trend">
-                          <svg className="trend-icon up" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
-                          </svg>
-                          <span>8% from last month</span>
-                        </div>
+                      <div className="stat-content">
+                        <div className="stat-value">{depotStats.totalBuses}</div>
+                        <div className="stat-label">Total Buses</div>
                       </div>
-                      <p className="kpi-label">Running Trips</p>
                     </div>
-                  <div className="kpi-icon green">
-                    <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                </div>
 
-                <div className="kpi-card">
-                    <div className="kpi-content">
-                      <div className="kpi-header">
-                        <h3>₹{Number(depotStats.todayRevenue || 0).toLocaleString()}</h3>
-                        <div className="kpi-trend">
-                          <svg className="trend-icon up" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
-                          </svg>
-                          <span>15% from last month</span>
-                        </div>
+                    <div className="stat-card">
+                      <div className="stat-icon trips">
+                        <svg fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                        </svg>
                       </div>
-                      <p className="kpi-label">Today's Revenue</p>
+                      <div className="stat-content">
+                        <div className="stat-value">{depotStats.activeTrips}</div>
+                        <div className="stat-label">Active Trips</div>
+                      </div>
                     </div>
-                  <div className="kpi-icon yellow">
-                    <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4zM18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" />
-                    </svg>
+
+                    <div className="stat-card">
+                      <div className="stat-icon revenue">
+                        <svg fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4zM18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" />
+                        </svg>
+                      </div>
+                      <div className="stat-content">
+                        <div className="stat-value">₹{Number(depotStats.todayRevenue || 0).toLocaleString()}</div>
+                        <div className="stat-label">Revenue Today</div>
+                      </div>
+                    </div>
+
+                    <div className="stat-card">
+                      <div className="stat-icon crew">
+                        <svg fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
+                        </svg>
+                      </div>
+                      <div className="stat-content">
+                        <div className="stat-value">{depotStats.totalDrivers || 0}</div>
+                        <div className="stat-label">Crew on Duty</div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="kpi-card">
-                  <div className="kpi-content">
-                      <div className="kpi-header">
-                    <h3>{depotStats.totalRoutes}</h3>
-                        <div className="kpi-trend">
-                          <svg className="trend-icon down" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M12 13a1 1 0 100 2h5a1 1 0 001-1v-5a1 1 0 10-2 0v2.586l-4.293-4.293a1 1 0 00-1.414 0L8 9.586l-4.293-4.293a1 1 0 00-1.414 1.414l5 5a1 1 0 001.414 0L11 9.414 14.586 13H12z" clipRule="evenodd" />
-                          </svg>
-                          <span>5% from last month</span>
+                  {/* Middle Row: Live Tracking Map + Quick Actions */}
+                  <div className="main-content-row">
+                    <div className="live-tracking-map">
+                      <div className="map-header">
+                        <h3>Live Tracking</h3>
+                        <div className="live-indicator">
+                          <div className="live-dot"></div>
+                          <span>Live</span>
                         </div>
                       </div>
-                    <p className="kpi-label">Total Routes</p>
-                  </div>
-                  <div className="kpi-icon red">
-                    <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="kpi-card">
-                    <div className="kpi-content">
-                      <div className="kpi-header">
-                        <h3>{depotStats.todayBookings}</h3>
-                        <div className="kpi-trend">
-                          <svg className="trend-icon up" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
-                          </svg>
-                          <span>12% from yesterday</span>
+                      <div className="map-container">
+                        <div className="map-overlay">
+                          <div className="map-type-indicator">Basic Map View</div>
+                          <div className="map-background"></div>
+                          {liveTrackingData.map((trip, index) => (
+                            <div
+                              key={trip._id || index}
+                              className="trip-marker"
+                              style={{
+                                left: `${20 + (index * 15) % 80}%`,
+                                top: `${30 + (index * 20) % 60}%`
+                              }}
+                            >
+                              <div className="marker-pulse"></div>
+                              <div className={`marker-icon ${trip.status === 'running' ? 'bg-green-500' : trip.status === 'completed' ? 'bg-blue-500' : 'bg-orange-500'}`}>
+                                {trip.busId?.busNumber?.charAt(0) || 'B'}
+                              </div>
+                              <div className="marker-info">
+                                <div className="marker-bus">{trip.busId?.busNumber || 'N/A'}</div>
+                                <div className="marker-status">{trip.status || 'unknown'}</div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                      <p className="kpi-label">Today's Bookings</p>
                     </div>
-                  <div className="kpi-icon purple">
-                    <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            {/* Live Tracking */}
-            <div className="live-tracking-section">
-                <div className="section-header">
-                  <h3>Live Tracking</h3>
-              <div className="live-indicator">
-                    <div className="live-dot"></div>
-                    <span>Live</span>
-                  </div>
-              </div>
-              <div className="live-tracking-container">
-                <div className="map-area">
-                  <div className="map-container">
-                    <div className="map-overlay">
-                      <div className="map-type-indicator">Basic Map View</div>
-                      <div className="map-background"></div>
-                      {liveTrackingData.map((trip, index) => (
-                        <div
-                          key={trip._id || index}
-                          className="trip-marker"
-                          style={{
-                            left: `${20 + (index * 15) % 80}%`,
-                            top: `${30 + (index * 20) % 60}%`
-                          }}
-                        >
-                          <div className="marker-pulse"></div>
-                          <div className={`marker-icon ${trip.status === 'running' ? 'bg-green-500' : trip.status === 'completed' ? 'bg-blue-500' : 'bg-orange-500'}`}>
-                            {trip.busId?.busNumber?.charAt(0) || 'B'}
+                    <div className="quick-actions-panel">
+                      <h3>Quick Actions</h3>
+                      <div className="action-cards">
+                        <div className="action-card" onClick={() => setActiveSection('routes')}>
+                          <div className="action-icon add-route">
+                            <svg fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                            </svg>
                           </div>
-                          <div className="marker-info">
-                            <div className="marker-bus">{trip.busId?.busNumber || 'N/A'}</div>
-                            <div className="marker-status">{trip.status || 'unknown'}</div>
+                          <div className="action-content">
+                            <div className="action-title">Add Route</div>
+                            <div className="action-description">Create new bus route</div>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
 
-                <div className="trip-info-panel">
-                  <div className="panel-header">
-                    <h4>Active Trips</h4>
-                    <div className="trip-count">{liveTrackingData.length}</div>
-                  </div>
-                  <div className="trips-list">
-                    {liveTrackingData.slice(0, 5).map((trip, index) => (
-                      <div key={trip._id || index} className="trip-card">
-                        <div className="trip-header">
-                          <div className="trip-id">Trip {trip._id?.slice(-6) || index + 1}</div>
-                          <div className={`trip-status-badge ${trip.status === 'running' ? 'bg-green-500' : trip.status === 'completed' ? 'bg-blue-500' : 'bg-orange-500'}`}>
-                            {trip.status || 'unknown'}
+                        <div className="action-card" onClick={() => setActiveSection('crew')}>
+                          <div className="action-icon assign-crew">
+                            <svg fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
+                            </svg>
+                          </div>
+                          <div className="action-content">
+                            <div className="action-title">Assign Crew</div>
+                            <div className="action-description">Manage staff assignments</div>
                           </div>
                         </div>
-                        <div className="trip-details">
-                          <div className="trip-info">
-                            <span className="info-label">Route:</span>
-                            <span className="info-value">{trip.routeId?.name || 'N/A'}</span>
+
+                        <div className="action-card" onClick={() => setActiveSection('fares')}>
+                          <div className="action-icon approve-passes">
+                            <svg fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
                           </div>
-                          <div className="trip-info">
-                            <span className="info-label">Bus:</span>
-                            <span className="info-value">{trip.busId?.busNumber || 'N/A'}</span>
-                          </div>
-                          <div className="trip-info">
-                            <span className="info-label">Driver:</span>
-                            <span className="info-value">{trip.driver || 'N/A'}</span>
+                          <div className="action-content">
+                            <div className="action-title">Approve Passes</div>
+                            <div className="action-description">Review fare approvals</div>
                           </div>
                         </div>
                       </div>
-                    ))}
+                    </div>
+                  </div>
+
+                  {/* Bottom Row: Charts/Reports */}
+                  <div className="charts-row">
+                    <div className="chart-card fuel-usage">
+                      <h4>Fuel Usage</h4>
+                      <div className="chart-placeholder">
+                        <div className="chart-bar" style={{height: '60%'}}></div>
+                        <div className="chart-bar" style={{height: '80%'}}></div>
+                        <div className="chart-bar" style={{height: '45%'}}></div>
+                        <div className="chart-bar" style={{height: '90%'}}></div>
+                        <div className="chart-bar" style={{height: '70%'}}></div>
+                      </div>
+                      <div className="chart-info">
+                        <span>This Week: 1,250L</span>
+                        <span className="trend-up">+12%</span>
+                      </div>
+                    </div>
+
+                    <div className="chart-card trip-stats">
+                      <h4>Trip Statistics</h4>
+                      <div className="stats-grid">
+                        <div className="mini-stat">
+                          <div className="mini-value">89%</div>
+                          <div className="mini-label">On Time</div>
+                        </div>
+                        <div className="mini-stat">
+                          <div className="mini-value">156</div>
+                          <div className="mini-label">Completed</div>
+                        </div>
+                        <div className="mini-stat">
+                          <div className="mini-value">12</div>
+                          <div className="mini-label">Delayed</div>
+                        </div>
+                        <div className="mini-stat">
+                          <div className="mini-value">2</div>
+                          <div className="mini-label">Cancelled</div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-
-            {/* Reports Section */}
-            <div className="reports-section">
-                <div className="section-header">
-                  <h3>Recent Trips</h3>
-              <div className="reports-filter">
-                <select className="filter-select">
-                  <option>All Trips</option>
-                  <option>Today's Trips</option>
-                  <option>This Week</option>
-                  <option>This Month</option>
-                </select>
-                  </div>
-              </div>
-              <div className="reports-table">
-                <table className="trips-table">
-                  <thead>
-                    <tr>
-                      <th>Trip ID</th>
-                      <th>Route</th>
-                      <th>Bus</th>
-                      <th>Crew</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentTrips.map((trip, index) => (
-                      <tr key={trip._id || index}>
-                        <td>Trip {trip._id?.slice(-6) || index + 1}</td>
-                        <td>
-                          <div className="route-info">
-                            <div className="route-name">{trip.routeId?.name || 'N/A'}</div>
-                            <div className="route-code">{trip.routeId?.code || 'N/A'}</div>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="bus-info">
-                            <div className="bus-number">{trip.busId?.busNumber || 'N/A'}</div>
-                            <div className="bus-type">{trip.busId?.type || 'N/A'}</div>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="crew-info">
-                            <div className="crew-driver">{trip.driver || 'N/A'}</div>
-                            <div className="crew-conductor">{trip.conductor || 'N/A'}</div>
-                          </div>
-                        </td>
-                        <td>
-                          <div className={`status-badge ${trip.status === 'running' ? 'bg-green-500' : trip.status === 'completed' ? 'bg-blue-500' : 'bg-orange-500'}`}>
-                            {trip.status || 'unknown'}
-                          </div>
-                        </td>
-                        <td>
-                            <button className="action-btn-small">View</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
               </>
             )}
 
-            {/* Fleet Management Section */}
-            {activeSection === 'buses' && (
-              <div className="module-container fleet-module">
-                <FleetManagement />
-              </div>
-            )}
-
-            {/* Route Network Section */}
+            {/* Routes Section */}
             {activeSection === 'routes' && (
               <div className="module-container route-module">
                 <RouteNetwork />
               </div>
             )}
 
-            {/* Trip Management Section */}
+            {/* Trips Section */}
             {activeSection === 'trips' && (
               <div className="module-container trip-module">
                 <TripManagement />
               </div>
             )}
 
-            {/* Staff Management Section */}
+            {/* Crew Section */}
             {activeSection === 'crew' && (
               <div className="module-container staff-module">
                 <StaffManagement />
               </div>
             )}
 
-
-
-            {/* Booking Dashboard Section */}
-            {activeSection === 'booking-dashboard' && (
-              <div className="module-container booking-dashboard-module">
-                <DepotBookingDashboard depotId={user?.depotId} user={user} />
+            {/* Fares Section */}
+            {activeSection === 'fares' && (
+              <div className="module-container fares-module">
+                <div className="section-placeholder">
+                  <h3>Fares Management</h3>
+                  <p>Fare management functionality will be implemented here.</p>
+                </div>
               </div>
             )}
 
-            {/* Scheduling Dashboard Section */}
-            {activeSection === 'scheduling-dashboard' && (
-              <div className="module-container scheduling-dashboard-module">
-                <DepotSchedulingDashboard depotId={user?.depotId} user={user} />
+            {/* Scheduling Section */}
+            {activeSection === 'scheduling' && (
+              <div className="module-container scheduling-module">
+                <BusScheduling />
+                <div style={{ marginTop: '40px', padding: '20px', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+                  <h3>API Test (Development Only)</h3>
+                  <BusSchedulingTest />
+                </div>
               </div>
             )}
 
-            {/* Booking Management Section */}
-            {activeSection === 'booking-management' && (
-              <div className="module-container booking-mgmt-module">
-                <BookingManagement depotId={user?.depotId} user={user} />
+            {/* Reports Section */}
+            {activeSection === 'reports' && (
+              <div className="module-container reports-module">
+                <div className="section-placeholder">
+                  <h3>Reports & Analytics</h3>
+                  <p>Comprehensive reporting dashboard will be implemented here.</p>
+                </div>
               </div>
             )}
         </div>

@@ -386,19 +386,15 @@ router.get('/trips/search', async (req, res) => {
   try {
     const { from, to, date } = req.query;
 
-    if (!from || !to || !date) {
-      return res.status(400).json({
-        success: false,
-        message: 'From, to, and date are required'
-      });
-    }
-
-    const searchDate = new Date(date);
+    // If no date provided, use today's date
+    const searchDate = date ? new Date(date) : new Date();
     searchDate.setHours(0, 0, 0, 0);
     const nextDay = new Date(searchDate);
     nextDay.setDate(nextDay.getDate() + 1);
 
-    // First, search for trips on the specified date
+    console.log('🔍 Passenger trip search:', { from, to, date: searchDate.toDateString() });
+
+    // Get ALL scheduled trips for the specified date (or today if no date)
     const trips = await Trip.find({
       serviceDate: { $gte: searchDate, $lt: nextDay },
       status: { $in: ['scheduled', 'running'] },
@@ -406,25 +402,39 @@ router.get('/trips/search', async (req, res) => {
     })
     .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
     .populate('busId', 'busNumber busType capacity')
+    .populate('driverId', 'name phone')
+    .populate('conductorId', 'name phone')
+    .populate('depotId', 'depotName')
+    .sort({ startTime: 1 }) // Sort by departure time
     .lean();
 
-    // Filter trips by route (more flexible matching)
-    const filteredTrips = trips.filter(trip => {
-      const route = trip.routeId;
-      if (!route) return false;
-      
-      const startCity = route.startingPoint?.city || route.startingPoint || '';
-      const endCity = route.endingPoint?.city || route.endingPoint || '';
-      const routeName = route.routeName || '';
-      
-      // More flexible matching - check if search terms appear anywhere in the route
-      const fromMatch = startCity.toLowerCase().includes(from.toLowerCase()) || 
-                       routeName.toLowerCase().includes(from.toLowerCase());
-      const toMatch = endCity.toLowerCase().includes(to.toLowerCase()) || 
-                     routeName.toLowerCase().includes(to.toLowerCase());
-      
-      return fromMatch && toMatch;
-    });
+    console.log(`📅 Found ${trips.length} scheduled trips for ${searchDate.toDateString()}`);
+
+    // If from/to parameters are provided, filter trips; otherwise show all
+    let filteredTrips = trips;
+    
+    if (from && to) {
+      console.log(`🔍 Filtering trips from "${from}" to "${to}"`);
+      filteredTrips = trips.filter(trip => {
+        const route = trip.routeId;
+        if (!route) return false;
+        
+        const startCity = route.startingPoint?.city || route.startingPoint || '';
+        const endCity = route.endingPoint?.city || route.endingPoint || '';
+        const routeName = route.routeName || '';
+        
+        // More flexible matching - check if search terms appear anywhere in the route
+        const fromMatch = startCity.toLowerCase().includes(from.toLowerCase()) || 
+                         routeName.toLowerCase().includes(from.toLowerCase());
+        const toMatch = endCity.toLowerCase().includes(to.toLowerCase()) || 
+                       routeName.toLowerCase().includes(to.toLowerCase());
+        
+        return fromMatch && toMatch;
+      });
+      console.log(`✅ Filtered to ${filteredTrips.length} matching trips`);
+    } else {
+      console.log(`📋 Showing all ${trips.length} scheduled trips (no from/to filter)`);
+    }
 
     // Always show available routes for Kerala destinations
     let availableRoutes = [];
@@ -461,9 +471,13 @@ router.get('/trips/search', async (req, res) => {
     const transformedTrips = filteredTrips.map(trip => {
       const route = trip.routeId;
       const bus = trip.busId;
+      const driver = trip.driverId;
+      const conductor = trip.conductorId;
+      const depot = trip.depotId;
       
       return {
         id: trip._id,
+        tripNumber: `TRP${trip._id.toString().slice(-6).toUpperCase()}`,
         routeName: route?.routeName || 'Unknown Route',
         routeNumber: route?.routeNumber || 'N/A',
         from: route?.startingPoint?.city || route?.startingPoint || 'Unknown',
@@ -473,27 +487,52 @@ router.get('/trips/search', async (req, res) => {
         fare: trip.fare || 0,
         availableSeats: trip.availableSeats || trip.capacity || 0,
         totalSeats: trip.capacity || 0,
+        bookedSeats: trip.bookedSeats || 0,
         busType: bus?.busType || 'Standard',
         busNumber: bus?.busNumber || 'N/A',
+        driver: driver ? `${driver.name} (${driver.phone})` : 'Not Assigned',
+        conductor: conductor ? `${conductor.name} (${conductor.phone})` : 'Not Assigned',
+        depot: depot?.depotName || 'Unknown Depot',
         status: trip.status,
         serviceDate: trip.serviceDate,
-        bookingOpen: trip.bookingOpen
+        bookingOpen: trip.bookingOpen,
+        // Additional useful information
+        duration: trip.endTime && trip.startTime ? 
+          calculateDuration(trip.startTime, trip.endTime) : 'N/A',
+        occupancyRate: trip.capacity > 0 ? 
+          Math.round((trip.bookedSeats || 0) / trip.capacity * 100) : 0
       };
     });
+
+    // Helper function to calculate duration
+    function calculateDuration(startTime, endTime) {
+      const [startHour, startMin] = startTime.split(':').map(Number);
+      const [endHour, endMin] = endTime.split(':').map(Number);
+      const startMinutes = startHour * 60 + startMin;
+      const endMinutes = endHour * 60 + endMin;
+      const durationMinutes = endMinutes - startMinutes;
+      
+      if (durationMinutes < 0) return 'N/A'; // Handle overnight trips
+      
+      const hours = Math.floor(durationMinutes / 60);
+      const minutes = durationMinutes % 60;
+      return `${hours}h ${minutes}m`;
+    }
 
     res.json({
       success: true,
       data: {
         trips: transformedTrips,
         availableRoutes: availableRoutes,
-        searchParams: { from, to, date },
+        searchParams: { from, to, date: searchDate.toDateString() },
         totalFound: transformedTrips.length,
         routesFound: availableRoutes.length,
-        message: filteredTrips.length === 0 && availableRoutes.length > 0 
-          ? `No trips scheduled for ${date}, but ${availableRoutes.length} route(s) available. Contact depot to schedule trips.`
-          : filteredTrips.length === 0 
-          ? 'No trips or routes found for your search criteria.'
-          : `Found ${filteredTrips.length} trip(s) available for booking.`
+        searchType: from && to ? 'filtered' : 'all_scheduled',
+        message: from && to 
+          ? (filteredTrips.length === 0 
+              ? `No trips found from "${from}" to "${to}" on ${searchDate.toDateString()}. Showing all ${trips.length} scheduled trips instead.`
+              : `Found ${filteredTrips.length} trip(s) from "${from}" to "${to}". Showing ${trips.length} total scheduled trips.`)
+          : `Showing all ${trips.length} scheduled trips for ${searchDate.toDateString()}.`
       }
     });
 
@@ -502,6 +541,105 @@ router.get('/trips/search', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to search trips',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/passenger/trips/all - Get all scheduled trips (no search filters)
+router.get('/trips/all', async (req, res) => {
+  try {
+    const { date } = req.query;
+    
+    // If no date provided, use today's date
+    const searchDate = date ? new Date(date) : new Date();
+    searchDate.setHours(0, 0, 0, 0);
+    const nextDay = new Date(searchDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    console.log(`📋 Getting all scheduled trips for ${searchDate.toDateString()}`);
+
+    // Get ALL scheduled trips for the specified date
+    const trips = await Trip.find({
+      serviceDate: { $gte: searchDate, $lt: nextDay },
+      status: { $in: ['scheduled', 'running'] },
+      bookingOpen: true
+    })
+    .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+    .populate('busId', 'busNumber busType capacity')
+    .populate('driverId', 'name phone')
+    .populate('conductorId', 'name phone')
+    .populate('depotId', 'depotName')
+    .sort({ startTime: 1 }) // Sort by departure time
+    .lean();
+
+    console.log(`📅 Found ${trips.length} scheduled trips for ${searchDate.toDateString()}`);
+
+    const transformedTrips = trips.map(trip => {
+      const route = trip.routeId;
+      const bus = trip.busId;
+      const driver = trip.driverId;
+      const conductor = trip.conductorId;
+      const depot = trip.depotId;
+      
+      return {
+        id: trip._id,
+        tripNumber: `TRP${trip._id.toString().slice(-6).toUpperCase()}`,
+        routeName: route?.routeName || 'Unknown Route',
+        routeNumber: route?.routeNumber || 'N/A',
+        from: route?.startingPoint?.city || route?.startingPoint || 'Unknown',
+        to: route?.endingPoint?.city || route?.endingPoint || 'Unknown',
+        departureTime: trip.startTime,
+        arrivalTime: trip.endTime,
+        fare: trip.fare || 0,
+        availableSeats: trip.availableSeats || trip.capacity || 0,
+        totalSeats: trip.capacity || 0,
+        bookedSeats: trip.bookedSeats || 0,
+        busType: bus?.busType || 'Standard',
+        busNumber: bus?.busNumber || 'N/A',
+        driver: driver ? `${driver.name} (${driver.phone})` : 'Not Assigned',
+        conductor: conductor ? `${conductor.name} (${conductor.phone})` : 'Not Assigned',
+        depot: depot?.depotName || 'Unknown Depot',
+        status: trip.status,
+        serviceDate: trip.serviceDate,
+        bookingOpen: trip.bookingOpen,
+        duration: trip.endTime && trip.startTime ? 
+          calculateDuration(trip.startTime, trip.endTime) : 'N/A',
+        occupancyRate: trip.capacity > 0 ? 
+          Math.round((trip.bookedSeats || 0) / trip.capacity * 100) : 0
+      };
+    });
+
+    // Helper function to calculate duration
+    function calculateDuration(startTime, endTime) {
+      const [startHour, startMin] = startTime.split(':').map(Number);
+      const [endHour, endMin] = endTime.split(':').map(Number);
+      const startMinutes = startHour * 60 + startMin;
+      const endMinutes = endHour * 60 + endMin;
+      const durationMinutes = endMinutes - startMinutes;
+      
+      if (durationMinutes < 0) return 'N/A'; // Handle overnight trips
+      
+      const hours = Math.floor(durationMinutes / 60);
+      const minutes = durationMinutes % 60;
+      return `${hours}h ${minutes}m`;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        trips: transformedTrips,
+        totalTrips: trips.length,
+        searchDate: searchDate.toDateString(),
+        message: `Showing all ${trips.length} scheduled trips for ${searchDate.toDateString()}`
+      }
+    });
+
+  } catch (error) {
+    console.error('Get all trips error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get all trips',
       error: error.message
     });
   }

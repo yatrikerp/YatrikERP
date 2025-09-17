@@ -1799,13 +1799,20 @@ router.post('/trips', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid time format. Use HH:MM' });
     }
 
-    // Parse serviceDate (supports YYYY-MM-DD and DD-MM-YYYY)
+    // Parse serviceDate (supports multiple formats)
     const parseServiceDate = (val) => {
       if (!val) return null;
       if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
       if (typeof val === 'string') {
+        // Handle DD-MM-YYYY format
         const ddmmyyyy = /^(\d{2})-(\d{2})-(\d{4})$/;
+        // Handle YYYY-MM-DD format
         const yyyymmdd = /^(\d{4})-(\d{2})-(\d{2})$/;
+        // Handle DD/MM/YYYY format
+        const ddmmyyyySlash = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+        // Handle YYYY/MM/DD format
+        const yyyymmddSlash = /^(\d{4})\/(\d{2})\/(\d{2})$/;
+        
         if (ddmmyyyy.test(val)) {
           const [, dd, mm, yyyy] = val.match(ddmmyyyy);
           const iso = `${yyyy}-${mm}-${dd}`;
@@ -1816,6 +1823,18 @@ router.post('/trips', async (req, res) => {
           const d = new Date(val + 'T00:00:00Z');
           return isNaN(d.getTime()) ? null : d;
         }
+        if (ddmmyyyySlash.test(val)) {
+          const [, dd, mm, yyyy] = val.match(ddmmyyyySlash);
+          const iso = `${yyyy}-${mm}-${dd}`;
+          const d = new Date(iso + 'T00:00:00Z');
+          return isNaN(d.getTime()) ? null : d;
+        }
+        if (yyyymmddSlash.test(val)) {
+          const d = new Date(val + 'T00:00:00Z');
+          return isNaN(d.getTime()) ? null : d;
+        }
+        
+        // Try to parse as-is (handles various other formats)
         const d = new Date(val);
         return isNaN(d.getTime()) ? null : d;
       }
@@ -1824,7 +1843,10 @@ router.post('/trips', async (req, res) => {
 
     const parsedServiceDate = parseServiceDate(serviceDate);
     if (!parsedServiceDate) {
-      return res.status(400).json({ success: false, message: 'Invalid service date format. Use YYYY-MM-DD' });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid service date format. Supported formats: DD-MM-YYYY, YYYY-MM-DD, DD/MM/YYYY, YYYY/MM/DD' 
+      });
     }
 
     // Create trip object with required fields
@@ -1959,8 +1981,15 @@ router.put('/trips/:id', async (req, res) => {
     
     console.log('🚌 PUT /api/admin/trips/:id - Update trip request received');
     console.log('📝 Trip ID:', id);
-    console.log('📦 Update data:', updateData);
+    console.log('📦 Update data:', JSON.stringify(updateData, null, 2));
     console.log('👤 User:', req.user);
+    console.log('🔍 Raw request body:', JSON.stringify(req.body, null, 2));
+    
+    // Log each field individually for debugging
+    console.log('🔍 Individual field analysis:');
+    Object.keys(updateData).forEach(key => {
+      console.log(`  ${key}:`, updateData[key], `(type: ${typeof updateData[key]})`);
+    });
 
     // Validate ObjectId format
     if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
@@ -1984,14 +2013,40 @@ router.put('/trips/:id', async (req, res) => {
     delete updateData.createdBy;
     delete updateData._id;
 
+    // Validate ObjectId fields if provided
+    const objectIdFields = ['routeId', 'busId', 'driverId', 'conductorId'];
+    for (const field of objectIdFields) {
+      if (updateData[field] !== undefined && updateData[field] !== null && updateData[field] !== '') {
+        console.log(`🔍 Validating ${field}:`, updateData[field]);
+        if (!updateData[field].match(/^[0-9a-fA-F]{24}$/)) {
+          console.log(`❌ Invalid ${field} format:`, updateData[field]);
+          return res.status(400).json({
+            success: false,
+            message: `Invalid ${field} format. Must be a valid ObjectId.`,
+            field: field,
+            value: updateData[field]
+          });
+        }
+        console.log(`✅ ${field} validation passed`);
+      }
+    }
+
     // Parse serviceDate if provided
     if (updateData.serviceDate) {
+      console.log('📅 Parsing service date:', updateData.serviceDate, 'Type:', typeof updateData.serviceDate);
       const parseServiceDate = (val) => {
         if (!val) return null;
         if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
         if (typeof val === 'string') {
+          // Handle DD-MM-YYYY format
           const ddmmyyyy = /^(\d{2})-(\d{2})-(\d{4})$/;
+          // Handle YYYY-MM-DD format
           const yyyymmdd = /^(\d{4})-(\d{2})-(\d{2})$/;
+          // Handle DD/MM/YYYY format
+          const ddmmyyyySlash = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+          // Handle YYYY/MM/DD format
+          const yyyymmddSlash = /^(\d{4})\/(\d{2})\/(\d{2})$/;
+          
           if (ddmmyyyy.test(val)) {
             const [, dd, mm, yyyy] = val.match(ddmmyyyy);
             const iso = `${yyyy}-${mm}-${dd}`;
@@ -2002,6 +2057,18 @@ router.put('/trips/:id', async (req, res) => {
             const d = new Date(val + 'T00:00:00Z');
             return isNaN(d.getTime()) ? null : d;
           }
+          if (ddmmyyyySlash.test(val)) {
+            const [, dd, mm, yyyy] = val.match(ddmmyyyySlash);
+            const iso = `${yyyy}-${mm}-${dd}`;
+            const d = new Date(iso + 'T00:00:00Z');
+            return isNaN(d.getTime()) ? null : d;
+          }
+          if (yyyymmddSlash.test(val)) {
+            const d = new Date(val + 'T00:00:00Z');
+            return isNaN(d.getTime()) ? null : d;
+          }
+          
+          // Try to parse as-is (handles various other formats)
           const d = new Date(val);
           return isNaN(d.getTime()) ? null : d;
         }
@@ -2009,42 +2076,53 @@ router.put('/trips/:id', async (req, res) => {
       };
 
       const parsedServiceDate = parseServiceDate(updateData.serviceDate);
+      console.log('📅 Parsed service date result:', parsedServiceDate);
       if (!parsedServiceDate) {
+        console.log('❌ Date parsing failed for:', updateData.serviceDate);
         return res.status(400).json({ 
           success: false, 
-          message: 'Invalid service date format. Use YYYY-MM-DD' 
+          message: 'Invalid service date format. Supported formats: DD-MM-YYYY, YYYY-MM-DD, DD/MM/YYYY, YYYY/MM/DD' 
         });
       }
       updateData.serviceDate = parsedServiceDate;
+      console.log('✅ Service date successfully parsed and updated');
     }
 
     // Validate time format if provided
     if (updateData.startTime || updateData.endTime) {
+      console.log('⏰ Validating times - Start:', updateData.startTime, 'End:', updateData.endTime);
       const timeRe = /^\d{2}:\d{2}$/;
       if (updateData.startTime && !timeRe.test(updateData.startTime)) {
+        console.log('❌ Invalid start time format:', updateData.startTime);
         return res.status(400).json({ 
           success: false, 
           message: 'Invalid start time format. Use HH:MM' 
         });
       }
       if (updateData.endTime && !timeRe.test(updateData.endTime)) {
+        console.log('❌ Invalid end time format:', updateData.endTime);
         return res.status(400).json({ 
           success: false, 
           message: 'Invalid end time format. Use HH:MM' 
         });
       }
+      console.log('✅ Time validation passed');
     }
 
     // Validate fare if provided
     if (updateData.fare !== undefined) {
+      console.log('💰 Validating fare:', updateData.fare, 'Type:', typeof updateData.fare);
       const fare = typeof updateData.fare === 'number' ? updateData.fare : Number(updateData.fare);
+      console.log('💰 Converted fare:', fare);
       if (isNaN(fare) || fare < 0) {
+        console.log('❌ Invalid fare amount:', updateData.fare);
         return res.status(400).json({ 
           success: false, 
           message: 'Invalid fare amount' 
         });
       }
       updateData.fare = fare;
+      console.log('✅ Fare validation passed');
     }
 
     // Update the trip
@@ -2070,10 +2148,48 @@ router.put('/trips/:id', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Trip update error:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      tripId: req.params.id,
+      updateData: req.body,
+      user: req.user
+    });
+    
+    // Check for specific validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: validationErrors,
+        details: error.errors
+      });
+    }
+    
+    // Check for CastError (invalid ObjectId)
+    if (error.name === 'CastError') {
+      console.log('❌ CastError details:', {
+        path: error.path,
+        value: error.value,
+        kind: error.kind,
+        message: error.message
+      });
+      return res.status(400).json({
+        success: false,
+        message: `Invalid data format for field '${error.path}'. Expected ${error.kind}, got '${error.value}'`,
+        field: error.path,
+        value: error.value,
+        expectedType: error.kind
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Failed to update trip',
-      error: error.message
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });

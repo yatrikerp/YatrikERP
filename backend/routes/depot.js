@@ -338,6 +338,60 @@ router.get('/routes', async (req, res) => {
 // 2) Trip Management for Depot Managers
 // =================================================================
 
+// GET /api/depot/trips - Get trips for depot (Depot Manager)
+router.get('/trips', async (req, res) => {
+  try {
+    const depotId = req.user.depotId;
+    const { date } = req.query;
+
+    if (!depotId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No depot assigned to user'
+      });
+    }
+
+    // Build query
+    let query = { depotId };
+    if (date) {
+      const searchDate = new Date(date);
+      searchDate.setHours(0, 0, 0, 0);
+      const nextDate = new Date(searchDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      query.serviceDate = { $gte: searchDate, $lt: nextDate };
+    }
+
+    // Get trips with populated data
+    const trips = await Trip.find(query)
+      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+      .populate('busId', 'busNumber busType registrationNumber capacity')
+      .populate('driverId', 'name phone licenseNumber')
+      .populate('conductorId', 'name phone employeeId')
+      .sort({ serviceDate: 1, startTime: 1 })
+      .lean();
+
+    res.json({
+      success: true,
+      data: {
+        trips,
+        stats: {
+          totalTrips: trips.length,
+          scheduledTrips: trips.filter(t => t.status === 'scheduled').length,
+          runningTrips: trips.filter(t => t.status === 'running').length,
+          completedTrips: trips.filter(t => t.status === 'completed').length
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get depot trips error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch trips'
+    });
+  }
+});
+
 // POST /api/depot/trips - Create new trip (Depot Manager)
 router.post('/trips', async (req, res) => {
   try {
@@ -490,6 +544,185 @@ router.post('/trips', async (req, res) => {
       message: 'Failed to create trip',
       error: error.message,
       details: error.stack
+    });
+  }
+});
+
+// PUT /api/depot/trips/:id - Update trip (Depot Manager)
+router.put('/trips/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      routeId,
+      busId,
+      driverId,
+      conductorId,
+      serviceDate,
+      startTime,
+      endTime,
+      fare,
+      capacity,
+      notes,
+      status
+    } = req.body;
+
+    const depotId = req.user.depotId;
+
+    if (!depotId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No depot assigned to user'
+      });
+    }
+
+    // Find the trip and verify it belongs to this depot
+    const existingTrip = await Trip.findOne({ _id: id, depotId });
+    if (!existingTrip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trip not found or does not belong to this depot'
+      });
+    }
+
+    // Check if trip is already running or completed (only allow status updates)
+    if ((existingTrip.status === 'running' || existingTrip.status === 'completed') && 
+        (routeId || busId || serviceDate || startTime || endTime)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot modify running or completed trips. Only status updates allowed.'
+      });
+    }
+
+    // If bus is being changed, check availability
+    if (busId && busId !== existingTrip.busId.toString()) {
+      const bus = await Bus.findById(busId);
+      if (!bus || !bus.depotId || bus.depotId.toString() !== depotId.toString()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Bus does not belong to this depot'
+        });
+      }
+
+      // Check if new bus is available for the date
+      const conflictingTrip = await Trip.findOne({
+        busId,
+        serviceDate: serviceDate ? new Date(serviceDate) : existingTrip.serviceDate,
+        status: { $in: ['scheduled', 'running'] },
+        _id: { $ne: id }
+      });
+
+      if (conflictingTrip) {
+        return res.status(400).json({
+          success: false,
+          message: 'Bus is already assigned to another trip on this date'
+        });
+      }
+
+      // Release old bus
+      await Bus.findByIdAndUpdate(existingTrip.busId, {
+        currentTrip: null,
+        status: 'available'
+      });
+
+      // Assign new bus
+      await Bus.findByIdAndUpdate(busId, {
+        currentTrip: id,
+        status: 'assigned'
+      });
+    }
+
+    // Update trip
+    const updateData = {};
+    if (routeId) updateData.routeId = routeId;
+    if (busId) updateData.busId = busId;
+    if (driverId !== undefined) updateData.driverId = driverId;
+    if (conductorId !== undefined) updateData.conductorId = conductorId;
+    if (serviceDate) updateData.serviceDate = new Date(serviceDate);
+    if (startTime) updateData.startTime = startTime;
+    if (endTime) updateData.endTime = endTime;
+    if (fare !== undefined) updateData.fare = fare;
+    if (capacity !== undefined) updateData.capacity = capacity;
+    if (notes !== undefined) updateData.notes = notes;
+    if (status) updateData.status = status;
+    updateData.updatedBy = req.user._id;
+
+    const updatedTrip = await Trip.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true }
+    )
+    .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+    .populate('busId', 'busNumber busType registrationNumber capacity')
+    .populate('driverId', 'name phone licenseNumber')
+    .populate('conductorId', 'name phone employeeId')
+    .lean();
+
+    res.json({
+      success: true,
+      message: 'Trip updated successfully',
+      data: updatedTrip
+    });
+
+  } catch (error) {
+    console.error('Update trip error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update trip',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/depot/trips/:id - Delete trip (Depot Manager)
+router.delete('/trips/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const depotId = req.user.depotId;
+
+    if (!depotId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No depot assigned to user'
+      });
+    }
+
+    // Find the trip and verify it belongs to this depot
+    const trip = await Trip.findOne({ _id: id, depotId });
+    if (!trip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trip not found or does not belong to this depot'
+      });
+    }
+
+    // Check if trip is already running or completed
+    if (trip.status === 'running' || trip.status === 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete running or completed trips'
+      });
+    }
+
+    // Update bus status back to available
+    await Bus.findByIdAndUpdate(trip.busId, {
+      currentTrip: null,
+      status: 'available'
+    });
+
+    // Delete the trip
+    await Trip.findByIdAndDelete(id);
+
+    res.json({
+      success: true,
+      message: 'Trip deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Delete trip error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete trip',
+      error: error.message
     });
   }
 });
@@ -1414,6 +1647,86 @@ router.get('/buses', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch depot buses'
+    });
+  }
+});
+
+// GET /api/depot/drivers - Get all drivers for depot
+router.get('/drivers', async (req, res) => {
+  try {
+    const depotId = req.user.depotId;
+    
+    if (!depotId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No depot assigned to user'
+      });
+    }
+    
+    // Get all drivers in the depot
+    const drivers = await User.find({
+      role: 'driver',
+      depotId: depotId,
+      status: 'active'
+    })
+    .select('name phone email licenseNumber staffDetails')
+    .lean();
+
+    res.json({
+      success: true,
+      data: {
+        drivers,
+        stats: {
+          totalDrivers: drivers.length
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get depot drivers error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch depot drivers'
+    });
+  }
+});
+
+// GET /api/depot/conductors - Get all conductors for depot
+router.get('/conductors', async (req, res) => {
+  try {
+    const depotId = req.user.depotId;
+    
+    if (!depotId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No depot assigned to user'
+      });
+    }
+    
+    // Get all conductors in the depot
+    const conductors = await User.find({
+      role: 'conductor',
+      depotId: depotId,
+      status: 'active'
+    })
+    .select('name phone email staffDetails')
+    .lean();
+
+    res.json({
+      success: true,
+      data: {
+        conductors,
+        stats: {
+          totalConductors: conductors.length
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get depot conductors error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch depot conductors'
     });
   }
 });

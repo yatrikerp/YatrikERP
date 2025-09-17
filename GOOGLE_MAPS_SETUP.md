@@ -56,6 +56,7 @@ Navigate to "APIs & Services" → "Library" and enable these APIs:
    ```
    Application restrictions: HTTP referrers (web sites)
    
+   
    Website restrictions:
    ✅ http://localhost:3000/*
    ✅ https://yourdomain.com/*
