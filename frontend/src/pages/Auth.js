@@ -152,8 +152,8 @@ const Auth = ({ initialMode = 'login' }) => {
     else if (!/^[a-zA-Z\s]+$/.test(signupForm.name.trim())) errors.name = 'Name can only contain letters and spaces';
     if (!signupForm.email.trim()) errors.email = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupForm.email.trim())) errors.email = 'Please enter a valid email address';
-    if (!signupForm.phone.trim()) errors.phone = 'Phone number is required';
-    else if (!/^[\+]?[^\s]{7,16}$/.test(signupForm.phone.trim())) errors.phone = 'Please enter a valid phone number';
+    if (!signupForm.phone.trim()) errors.phone = 'Mobile number is required';
+    else if (!/^\+91[6-9][0-9]{9}$/.test(signupForm.phone.trim())) errors.phone = 'Mobile number must be in format (+91) followed by 10 digits starting with 6-9';
     if (!signupForm.password) errors.password = 'Password is required';
     else if (signupForm.password.length < 8) errors.password = 'Password must be at least 8 characters';
     if (!signupForm.confirmPassword) errors.confirmPassword = 'Please confirm your password';
@@ -285,6 +285,34 @@ const Auth = ({ initialMode = 'login' }) => {
     setForgotPasswordForm(prev => ({ ...prev, [field]: value }));
     if (forgotPasswordErrors[field]) setForgotPasswordErrors(prev => ({ ...prev, [field]: '' }));
   }, [forgotPasswordErrors]);
+
+  // Special handler for phone field to restrict to numbers only
+  const handlePhoneChange = useCallback((e) => {
+    let value = e.target.value;
+    
+    // Simple approach: just filter out non-numeric characters except + at start
+    if (value.length > 0) {
+      if (value.startsWith('+')) {
+        // Keep + and only numbers after it
+        value = '+' + value.slice(1).replace(/[^0-9]/g, '');
+      } else {
+        // Remove all non-numeric characters
+        value = value.replace(/[^0-9]/g, '');
+      }
+    }
+    
+    // Limit to 13 characters (+91 + 10 digits)
+    if (value.length > 13) {
+      value = value.slice(0, 13);
+    }
+    
+    setSignupForm(prev => ({ ...prev, phone: value }));
+    
+    // Clear any existing errors when user types
+    if (signupErrors.phone) {
+      setSignupErrors(prev => ({ ...prev, phone: '' }));
+    }
+  }, [signupErrors.phone]);
 
 
 
@@ -418,7 +446,18 @@ const Auth = ({ initialMode = 'login' }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <InputField id="name" label="Full Name" type="text" autoComplete="name" value={signupForm.name} onChange={(e) => handleSignupChange('name', e.target.value)} error={signupErrors.name} disabled={isSigningUp} />
                   <InputField id="email" label="Email address" type="email" autoComplete="email" value={signupForm.email} onChange={(e) => handleSignupChange('email', e.target.value)} error={signupErrors.email} disabled={isSigningUp} />
-                  <InputField id="phone" label="Phone Number" type="tel" autoComplete="tel" value={signupForm.phone} onChange={(e) => handleSignupChange('phone', e.target.value)} error={signupErrors.phone} disabled={isSigningUp} />
+                  <InputField 
+                    id="phone" 
+                    label="Mobile Number" 
+                    type="tel" 
+                    autoComplete="tel" 
+                    placeholder="+91 9876543210" 
+                    value={signupForm.phone} 
+                    onChange={handlePhoneChange} 
+                    error={signupErrors.phone} 
+                    disabled={isSigningUp}
+                    maxLength="13"
+                  />
                   <PasswordField id="password" label="Password" autoComplete="new-password" value={signupForm.password} onChange={(e) => handleSignupChange('password', e.target.value)} error={signupErrors.password} disabled={isSigningUp} />
                 </div>
                 <PasswordField id="confirmPassword" label="Confirm Password" autoComplete="new-password" value={signupForm.confirmPassword} onChange={(e) => handleSignupChange('confirmPassword', e.target.value)} error={signupErrors.confirmPassword} disabled={isSigningUp} />

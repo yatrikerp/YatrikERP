@@ -215,6 +215,36 @@ function App() {
                 <DepotDashboard />
               </RequireAuth>
             } />
+          <Route path="/depot/fleet-management" element={
+            <RequireAuth roles={['depot_manager']}>
+                <DepotDashboard />
+              </RequireAuth>
+            } />
+          <Route path="/depot/route-management" element={
+            <RequireAuth roles={['depot_manager']}>
+                <DepotDashboard />
+              </RequireAuth>
+            } />
+          <Route path="/depot/booking-management" element={
+            <RequireAuth roles={['depot_manager']}>
+                <DepotDashboard />
+              </RequireAuth>
+            } />
+          <Route path="/depot/staff-management" element={
+            <RequireAuth roles={['depot_manager']}>
+                <DepotDashboard />
+              </RequireAuth>
+            } />
+          <Route path="/depot/bus-scheduling" element={
+            <RequireAuth roles={['depot_manager']}>
+                <DepotDashboard />
+              </RequireAuth>
+            } />
+          <Route path="/depot/reports-analytics" element={
+            <RequireAuth roles={['depot_manager']}>
+                <DepotDashboard />
+              </RequireAuth>
+            } />
             
             {/* Passenger Routes */}
           <Route path="/pax" element={

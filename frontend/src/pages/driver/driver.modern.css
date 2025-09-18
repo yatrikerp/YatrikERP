@@ -6,6 +6,77 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   overflow: hidden;
   display: flex;
+  position: relative;
+}
+
+/* Ensure proper layout structure */
+.driver-dashboard * {
+  box-sizing: border-box;
+}
+
+/* Fix main content area */
+.driver-main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.driver-content-area {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+  background: #f8fafc;
+}
+
+/* Fix responsive layout */
+@media (max-width: 1024px) {
+  .driver-sidebar {
+    width: 280px;
+  }
+  
+  .driver-sidebar.collapsed {
+    width: 70px;
+  }
+}
+
+@media (max-width: 768px) {
+  .driver-dashboard {
+    flex-direction: column;
+  }
+  
+  .driver-sidebar {
+    width: 100%;
+    height: auto;
+    order: 2;
+  }
+  
+  .driver-main-content {
+    order: 1;
+    height: calc(100vh - 200px);
+  }
+  
+  .driver-content-area {
+    padding: 1rem;
+  }
+}
+
+/* Fix scrollbar styling */
+.driver-content-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.driver-content-area::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.driver-content-area::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.driver-content-area::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .driver-loading {

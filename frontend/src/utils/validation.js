@@ -30,17 +30,15 @@ export const ROLE_EMAIL_PATTERNS = {
   }
 };
 
-// Phone number validation
+// Phone number validation - Indian mobile format
 export const PHONE_VALIDATION = {
-  pattern: /^[\+]?[0-9]{7,15}$/,
-  minLength: 7,
-  maxLength: 15,
-  description: 'Phone number must be 7-15 digits, optionally starting with +',
+  pattern: /^\+91[6-9][0-9]{9}$/,
+  minLength: 13, // +91 + 10 digits
+  maxLength: 13,
+  description: 'Mobile number must be in format (+91) followed by 10 digits starting with 6-9',
   test: (phone) => {
     const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
-    return /^[\+]?[0-9]{7,15}$/.test(cleanPhone) && 
-           cleanPhone.length >= 7 && 
-           cleanPhone.length <= 15;
+    return /^\+91[6-9][0-9]{9}$/.test(cleanPhone);
   }
 };
 
@@ -88,7 +86,7 @@ export const validateField = (fieldName, value) => {
       if (!value.trim()) {
         errors.push('Phone number is required');
       } else if (!PHONE_VALIDATION.test(value)) {
-        errors.push('Please enter a valid phone number (7-15 digits)');
+        errors.push('Mobile number must be in format (+91) followed by 10 digits starting with 6-9');
       }
       break;
       

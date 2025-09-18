@@ -652,7 +652,17 @@ const DepotSchedulingDashboard = ({ depotId, user }) => {
                       </div>
                       <div className="info-content">
                         <span className="info-label">Driver</span>
-                        <span className="info-value">{schedule.driverId?.name || 'AI Driver'}</span>
+                        <span className="info-value">{schedule.driverId?.name || 'Unknown Driver'}</span>
+                      </div>
+                    </div>
+                    <div className="smart-info-item">
+                      <div className="info-icon-wrapper">
+                        <Users size={16} />
+                        <div className="icon-pulse"></div>
+                      </div>
+                      <div className="info-content">
+                        <span className="info-label">Conductor</span>
+                        <span className="info-value">{schedule.conductorId?.name || 'Unknown Conductor'}</span>
                       </div>
                     </div>
                   </div>

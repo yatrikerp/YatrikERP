@@ -33,6 +33,15 @@ const BusScheduling = () => {
     fetchData();
   }, [selectedDate]);
 
+  // Debug: Log when data arrays change
+  useEffect(() => {
+    console.log('Data arrays updated:');
+    console.log('Routes count:', routes.length);
+    console.log('Buses count:', buses.length);
+    console.log('Drivers count:', drivers.length);
+    console.log('Conductors count:', conductors.length);
+  }, [routes, buses, drivers, conductors]);
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -43,8 +52,12 @@ const BusScheduling = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const routesData = await routesResponse.json();
+      console.log('Routes API response:', routesData);
       if (routesData.success) {
         setRoutes(routesData.data.routes || []);
+      } else {
+        console.error('Failed to fetch routes:', routesData.message);
+        setRoutes([]);
       }
 
       // Fetch buses
@@ -52,8 +65,12 @@ const BusScheduling = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const busesData = await busesResponse.json();
+      console.log('Buses API response:', busesData);
       if (busesData.success) {
         setBuses(busesData.data.buses || []);
+      } else {
+        console.error('Failed to fetch buses:', busesData.message);
+        setBuses([]);
       }
 
       // Fetch drivers from depot endpoint
@@ -61,8 +78,12 @@ const BusScheduling = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const driversData = await driversResponse.json();
+      console.log('Drivers API response:', driversData);
       if (driversData.success) {
         setDrivers(driversData.data.drivers || []);
+      } else {
+        console.error('Failed to fetch drivers:', driversData.message);
+        setDrivers([]);
       }
 
       // Fetch conductors from depot endpoint
@@ -70,8 +91,12 @@ const BusScheduling = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const conductorsData = await conductorsResponse.json();
+      console.log('Conductors API response:', conductorsData);
       if (conductorsData.success) {
         setConductors(conductorsData.data.conductors || []);
+      } else {
+        console.error('Failed to fetch conductors:', conductorsData.message);
+        setConductors([]);
       }
 
       // Fetch schedules for selected date
@@ -79,9 +104,26 @@ const BusScheduling = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const schedulesData = await schedulesResponse.json();
+      console.log('Schedules API response:', schedulesData);
       if (schedulesData.success) {
-        setSchedules(schedulesData.data.trips || []);
+        const trips = schedulesData.data.trips || [];
+        console.log('Trips data:', trips);
+        if (trips.length > 0) {
+          console.log('First trip structure:', trips[0]);
+          console.log('Route ID type:', typeof trips[0].routeId, trips[0].routeId);
+          console.log('Bus ID type:', typeof trips[0].busId, trips[0].busId);
+          console.log('Driver ID type:', typeof trips[0].driverId, trips[0].driverId);
+          console.log('Conductor ID type:', typeof trips[0].conductorId, trips[0].conductorId);
+        }
+        setSchedules(trips);
       }
+
+      // Debug: Log the fetched data arrays
+      console.log('Fetched data arrays:');
+      console.log('Routes:', routes);
+      console.log('Buses:', buses);
+      console.log('Drivers:', drivers);
+      console.log('Conductors:', conductors);
 
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -234,22 +276,30 @@ const BusScheduling = () => {
   };
 
   const getRouteName = (routeId) => {
-    const route = routes.find(r => r._id === routeId);
+    // Handle both object and string routeId
+    const actualRouteId = routeId?._id || routeId;
+    const route = routes.find(r => r._id === actualRouteId);
     return route ? `${route.routeNumber} - ${route.routeName}` : 'Unknown Route';
   };
 
   const getBusNumber = (busId) => {
-    const bus = buses.find(b => b._id === busId);
+    // Handle both object and string busId
+    const actualBusId = busId?._id || busId;
+    const bus = buses.find(b => b._id === actualBusId);
     return bus ? bus.busNumber : 'Unknown Bus';
   };
 
   const getDriverName = (driverId) => {
-    const driver = drivers.find(d => d._id === driverId);
+    // Handle both object and string driverId
+    const actualDriverId = driverId?._id || driverId;
+    const driver = drivers.find(d => d._id === actualDriverId);
     return driver ? driver.name : 'Unknown Driver';
   };
 
   const getConductorName = (conductorId) => {
-    const conductor = conductors.find(c => c._id === conductorId);
+    // Handle both object and string conductorId
+    const actualConductorId = conductorId?._id || conductorId;
+    const conductor = conductors.find(c => c._id === actualConductorId);
     return conductor ? conductor.name : 'Unknown Conductor';
   };
 
@@ -346,7 +396,7 @@ const BusScheduling = () => {
                     <option value="">Select Driver</option>
                     {drivers.map(driver => (
                       <option key={driver._id} value={driver._id}>
-                        {driver.name} {driver.licenseNumber ? `(License: ${driver.licenseNumber})` : ''}
+                        {driver.name} {driver.licenseNumber ? `(License: ${driver.licenseNumber})` : driver.staffDetails?.licenseNumber ? `(License: ${driver.staffDetails.licenseNumber})` : ''}
                       </option>
                     ))}
                   </select>
@@ -504,13 +554,21 @@ const BusScheduling = () => {
             <h4>No schedules found</h4>
             <p>No trips are scheduled for this date. Click "Schedule New Trip" to add one.</p>
           </div>
+        ) : routes.length === 0 || buses.length === 0 || drivers.length === 0 ? (
+          <div className="empty-state">
+            <svg className="empty-icon" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+            </svg>
+            <h4>Loading reference data...</h4>
+            <p>Please wait while we load routes, buses, and drivers information.</p>
+          </div>
         ) : (
           <div className="schedules-grid">
             {schedules.map(schedule => (
               <div key={schedule._id} className="schedule-card">
                 <div className="schedule-header">
                   <div className="schedule-info">
-                    <h4>{getRouteName(schedule.routeId)}</h4>
+                    <h4>{schedule.routeId?.routeName || 'Unknown Route'}</h4>
                     <p className="schedule-time">
                       {schedule.startTime} - {schedule.endTime}
                     </p>

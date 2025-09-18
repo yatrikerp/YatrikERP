@@ -331,12 +331,12 @@ function SignupForm({ onSuccess }) {
     
     // Phone validation with detailed checks
     if (!formData.phone.trim()) {
-      showPopup('Please enter your phone number', 'warning');
+      showPopup('Please enter your mobile number', 'warning');
       return;
     }
     
     if (!PHONE_VALIDATION.test(formData.phone)) {
-      showPopup(`Phone number must be ${PHONE_VALIDATION.minLength}-${PHONE_VALIDATION.maxLength} digits. ${PHONE_VALIDATION.description}`, 'warning');
+      showPopup(PHONE_VALIDATION.description, 'warning');
       return;
     }
     
@@ -489,7 +489,7 @@ function SignupForm({ onSuccess }) {
         <option value="admin">Admin</option>
       </select>
 
-      <label htmlFor="su-phone" className="login-label">Phone number</label>
+      <label htmlFor="su-phone" className="login-label">Mobile number</label>
       <input 
         id="su-phone" 
         name="phone" 
@@ -497,9 +497,10 @@ function SignupForm({ onSuccess }) {
         className="login-input" 
         value={formData.phone} 
         onChange={handleChange} 
-        placeholder="Enter 10-digit phone number"
-        pattern="[6-9][0-9]{9}"
-        title="Please enter a valid 10-digit phone number starting with 6-9"
+        placeholder="+91 9876543210"
+        pattern="\+91[6-9][0-9]{9}"
+        title="Please enter a valid mobile number in format (+91) followed by 10 digits starting with 6-9"
+        maxLength="13"
         required 
       />
       <ValidationFeedback
@@ -508,7 +509,7 @@ function SignupForm({ onSuccess }) {
         isValid={!fieldErrors.phone || fieldErrors.phone.length === 0}
         isTouched={touchedFields.phone}
         errorMessage={fieldErrors.phone?.[0]}
-        successMessage="Phone number format is valid"
+        successMessage="Mobile number format is valid"
       />
 
       <label htmlFor="su-password" className="login-label">Password</label>

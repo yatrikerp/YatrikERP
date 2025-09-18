@@ -155,7 +155,7 @@ const BusScheduling = ({ depotId, user }) => {
   const fetchDrivers = async () => {
     try {
       const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
-      const response = await fetch('/api/driver/all', {
+      const response = await fetch('/api/depot/drivers', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -164,7 +164,9 @@ const BusScheduling = ({ depotId, user }) => {
       if (response.ok) {
         const data = await response.json();
         console.log('Drivers API response:', data);
-        if (data.success && Array.isArray(data.data)) {
+        if (data.success && data.data && Array.isArray(data.data.drivers)) {
+          setDrivers(data.data.drivers);
+        } else if (data.success && Array.isArray(data.data)) {
           setDrivers(data.data);
         } else {
           console.warn('Unexpected drivers data structure:', data);
@@ -183,7 +185,7 @@ const BusScheduling = ({ depotId, user }) => {
   const fetchConductors = async () => {
     try {
       const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
-      const response = await fetch('/api/conductor/all', {
+      const response = await fetch('/api/depot/conductors', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -192,7 +194,9 @@ const BusScheduling = ({ depotId, user }) => {
       if (response.ok) {
         const data = await response.json();
         console.log('Conductors API response:', data);
-        if (data.success && Array.isArray(data.data)) {
+        if (data.success && data.data && Array.isArray(data.data.conductors)) {
+          setConductors(data.data.conductors);
+        } else if (data.success && Array.isArray(data.data)) {
           setConductors(data.data);
         } else {
           console.warn('Unexpected conductors data structure:', data);
@@ -591,7 +595,7 @@ const BusScheduling = ({ depotId, user }) => {
                     <option value="">Select Driver</option>
                     {Array.isArray(drivers) && drivers.map(driver => (
                       <option key={driver._id} value={driver._id}>
-                        {driver.name} - {driver.drivingLicense?.licenseNumber || driver.employeeCode || driver.driverId}
+                        {driver.name} - {driver.licenseNumber || driver.staffDetails?.licenseNumber || driver.employeeCode || driver.driverId}
                       </option>
                     ))}
                   </select>
@@ -606,7 +610,7 @@ const BusScheduling = ({ depotId, user }) => {
                     <option value="">Select Conductor</option>
                     {Array.isArray(conductors) && conductors.map(conductor => (
                       <option key={conductor._id} value={conductor._id}>
-                        {conductor.name} - {conductor.employeeCode || conductor.conductorId}
+                        {conductor.name} - {conductor.staffDetails?.employeeCode || conductor.employeeCode || conductor.conductorId}
                       </option>
                     ))}
                   </select>

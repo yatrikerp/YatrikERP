@@ -8,31 +8,150 @@ import {
   Play, 
   LogOut,
   Activity,
-  RefreshCw,
-  Fuel,
   AlertTriangle,
   Bus,
   Bell,
-  Wrench,
   AlertCircle,
   Users,
   QrCode,
-  Settings
+  Camera,
+  Route,
+  Building,
+  Ticket,
+  Plus,
+  Wifi,
+  WifiOff,
+  Volume2,
+  VolumeX,
+  Monitor,
+  Smartphone,
+  Menu,
+  X,
+  Clock,
+  XCircle,
+  Search,
+  ArrowUpDown
 } from 'lucide-react';
 
 const ConductorDashboard = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   
-  // State management
+  // Core State Management - Updated v2
   const [refreshInterval, setRefreshInterval] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [dutyStatus, setDutyStatus] = useState('assigned'); // not_assigned, assigned, active, completed
   const [currentTime, setCurrentTime] = useState(new Date());
   const [notifications] = useState(3);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  
+  // Responsive View Mode State
+  const [viewMode, setViewMode] = useState('desktop'); // desktop, mobile
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // Duty Workflow State
+  const [dutyStatus, setDutyStatus] = useState('assigned'); // not_assigned, assigned, active, completed
+  const [currentDuty, setCurrentDuty] = useState(null);
+  const [activeView, setActiveView] = useState('dashboard'); // dashboard, passengers, scanning
+  
+  // Trip Information
+  const [tripInfo, setTripInfo] = useState({
+    routeName: 'Kochi → Alappuzha',
+    routeNumber: 'KL-07-CD-5678',
+    depotName: 'Kochi Depot',
+    dutyId: 'DUTY-2024-001',
+    busNumber: 'KL-07-CD-5678',
+    startTime: '09:00',
+    endTime: '10:30',
+    totalSeats: 45,
+    currentStop: 'Cherthala Junction',
+    nextStop: 'Alappuzha Central',
+    progress: 60
+  });
+  
+  // Passenger Management
+  const [passengers, setPassengers] = useState([
+    { id: 1, name: 'John Doe', seat: 'A1', boardingStop: 'Kochi Central', destination: 'Alappuzha', status: 'boarded', pnr: 'PNR123456' },
+    { id: 2, name: 'Jane Smith', seat: 'A2', boardingStop: 'Edappally', destination: 'Alappuzha', status: 'boarded', pnr: 'PNR123457' },
+    { id: 3, name: 'Bob Wilson', seat: 'B1', boardingStop: 'Cherthala', destination: 'Alappuzha', status: 'expected', pnr: 'PNR123458' },
+    { id: 4, name: 'Alice Johnson', seat: 'B2', boardingStop: 'Kochi Central', destination: 'Alappuzha', status: 'expected', pnr: 'PNR123459' },
+    { id: 5, name: 'Charlie Brown', seat: 'C1', boardingStop: 'Edappally', destination: 'Alappuzha', status: 'no_show', pnr: 'PNR123460' },
+    { id: 6, name: 'Diana Prince', seat: 'C2', boardingStop: 'Cherthala', destination: 'Alappuzha', status: 'boarded', pnr: 'PNR123461' }
+  ]);
+  const [passengerFilter, setPassengerFilter] = useState('all'); // all, boarded, expected, no_show
+  const [sortBy, setSortBy] = useState('seat'); // seat, name, stop, status, pnr
+  const [searchQuery, setSearchQuery] = useState(''); // Search passengers by name, PNR, or seat
+  
+  // QR Scanning
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanResult, setScanResult] = useState(null);
+  const [scanHistory, setScanHistory] = useState([]);
+  
+  // Vacant Seat Booking
+  const [showVacantBooking, setShowVacantBooking] = useState(false);
+  const [availableSeats, setAvailableSeats] = useState(['A3', 'A4', 'B2', 'B3', 'C1', 'C2']);
+  
+  // Alerts and Notifications
+  const [alerts, setAlerts] = useState([
+    { id: 1, type: 'warning', message: 'Invalid ticket scanned', time: '2 min ago' },
+    { id: 2, type: 'error', message: 'Duplicate ticket detected', time: '5 min ago' },
+    { id: 3, type: 'info', message: 'Passenger request: Seat change', time: '8 min ago' }
+  ]);
 
-  // Refresh dashboard data
+  // Helper Functions
+  const playSound = useCallback((type) => {
+    if (!soundEnabled) return;
+    // Add actual sound implementation here
+    console.log(`Playing ${type} sound`);
+  }, [soundEnabled]);
+
+  // Toggle View Mode Function
+  const toggleViewMode = useCallback(() => {
+    setViewMode(prev => prev === 'desktop' ? 'mobile' : 'desktop');
+    playSound('toggle');
+  }, [playSound]);
+
+  // Toggle Mobile Menu Function
+  const toggleMobileMenu = useCallback(() => {
+    setIsMobileMenuOpen(prev => !prev);
+    playSound('menu');
+  }, [playSound]);
+
+  // Workflow Functions
+  const startDuty = useCallback(() => {
+    setDutyStatus('active');
+    setCurrentDuty({
+      id: tripInfo.dutyId,
+      startTime: new Date(),
+      route: tripInfo.routeName,
+      bus: tripInfo.busNumber
+    });
+    playSound('success');
+  }, [tripInfo, playSound]);
+
+  const endDuty = useCallback(() => {
+    setDutyStatus('completed');
+    playSound('success');
+  }, [playSound]);
+
+  const startQRScan = useCallback(() => {
+    setIsScanning(true);
+    setScanResult(null);
+    // Simulate QR scan
+    setTimeout(() => {
+      const mockResult = {
+        success: Math.random() > 0.2, // 80% success rate
+        pnr: 'PNR' + Math.random().toString().substr(2, 8),
+        passenger: 'Sample Passenger',
+        seat: 'A' + Math.floor(Math.random() * 5 + 1)
+      };
+      setScanResult(mockResult);
+      setIsScanning(false);
+      setScanHistory(prev => [mockResult, ...prev.slice(0, 9)]);
+      playSound(mockResult.success ? 'success' : 'error');
+    }, 2000);
+  }, [playSound]);
+
   const refreshDashboard = useCallback(async () => {
     setIsRefreshing(true);
     try {
@@ -49,6 +168,20 @@ const ConductorDashboard = () => {
     logout();
     navigate('/login');
   }, [logout, navigate]);
+
+  // Online/Offline detection
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Initialize dashboard
   useEffect(() => {
@@ -91,547 +224,584 @@ const ConductorDashboard = () => {
   }
 
   return (
-    <div className="conductor-dashboard">
-      {/* Compact Header */}
-      <div className="dashboard-header">
-        <div className="header-left">
-          <div className="logo-section">
-            <div className="logo-icon">
-              <Bus size={14} />
+    <div className={`conductor-dashboard ${viewMode === 'mobile' ? 'mobile-view' : 'desktop-view'}`}>
+      {/* Browser Top Bar */}
+      <div className="browser-top-bar">
+        <div className="browser-controls">
+          <div className="browser-info">
+            <span className="page-title">YATRIK ERP - Smart Bus Travel Management</span>
+          </div>
+          <div className="browser-right">
+            <button className="notification-btn-browser" title="Notifications">
+              <Bell size={14} />
+              {notifications > 0 && (
+                <span className="notification-badge-browser">{notifications}</span>
+              )}
+            </button>
+            <div className="browser-time">
+              {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
-            <div className="logo-text">
-              <h1>YATRIK ERP</h1>
-            </div>
+            <button 
+              className={`view-mode-btn-browser ${viewMode === 'mobile' ? 'mobile-active' : 'desktop-active'}`}
+              onClick={toggleViewMode}
+              title={`Currently in ${viewMode === 'desktop' ? 'Desktop' : 'Mobile'} View - Click to switch to ${viewMode === 'desktop' ? 'Mobile' : 'Desktop'} View`}
+            >
+              {viewMode === 'desktop' ? 'DESKTOP' : 'MOBILE'}
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* Header Section - Efficient Layout */}
+      <div className="dashboard-header">
+        {/* Left: Branding */}
+        <div className="header-left">
+          {viewMode === 'mobile' && (
+            <button 
+              className="mobile-menu-btn"
+              onClick={toggleMobileMenu}
+              title="Toggle Menu"
+            >
+              {isMobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
+          )}
+          <div className="logo-section">
+            <div className="logo-icon">
+              <Bus size={18} />
+            </div>
+            <div className="logo-text">
+              <h1>CONDUCTOR DASHBOARD</h1>
+            </div>
+          </div>
+        </div>
+
+        {/* Center: Conductor Info & Time */}
         <div className="header-center">
-          <div className="current-time">
-            {currentTime.toLocaleTimeString()}
+          <div className="conductor-profile">
+            <div className="conductor-details">
+              <span className="conductor-name">{user?.name || 'Joel'}</span>
+              <span className="conductor-id">ID: {user?.id?.slice(-8) || '2ff588c8'}</span>
             </div>
-          <div className="duty-status-indicator">
-            <div className={`duty-status-dot ${dutyStatus}`}></div>
-            <span className="duty-status-text">
-              {dutyStatus === 'not_assigned' ? 'Off' : 
-               dutyStatus === 'assigned' ? 'Ready' :
-               dutyStatus === 'active' ? 'Active' : 'Done'}
-              </span>
-              </div>
+            <div className="connection-status">
+              {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
+              <span>{isOnline ? 'Online' : 'Offline'}</span>
             </div>
+          </div>
+        </div>
             
+        {/* Right: Controls */}
         <div className="header-right">
-          <button className="notification-btn">
-            <Bell size={14} />
-            {notifications > 0 && (
-              <span className="notification-badge">{notifications}</span>
-            )}
-              </button>
-          <button className="logout-btn-header" onClick={handleLogout}>
-            <LogOut size={12} />
+          <button 
+            className={`sound-btn ${soundEnabled ? 'active' : ''}`}
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            title={soundEnabled ? 'Sound On' : 'Sound Off'}
+          >
+            {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+          </button>
+          <button className="logout-btn-header" onClick={handleLogout} title="Logout">
+            <LogOut size={16} />
           </button>
         </div>
       </div>
 
-
-      {/* 3-Column Main Layout */}
-      <div className="dashboard-content">
+      {/* Trip Context Bar */}
+      <div className="trip-context-bar">
+        <div className="trip-info-main">
+          <div className="route-info">
+            <Route size={16} />
+            <span className="route-name">{tripInfo.routeName}</span>
+            <span className="route-number">{tripInfo.routeNumber}</span>
+          </div>
+          <div className="depot-info">
+            <Building size={16} />
+            <span>{tripInfo.depotName}</span>
+          </div>
+          <div className="duty-info">
+            <span className="duty-id">Duty: {tripInfo.dutyId}</span>
+            <span className="bus-number">Bus: {tripInfo.busNumber}</span>
+          </div>
+        </div>
         
-        {/* Conditional Content Based on Active Tab */}
-        {activeTab === 'dashboard' && (
-          <>
-            {/* Left Sidebar - Profile & Controls */}
-            <div className="left-sidebar">
-          {/* Conductor Profile */}
-          <div className="compact-card profile-card">
-            <div className="card-header">
-              <h3>Conductor Profile</h3>
+        <div className="trip-status">
+          <div className="current-stop">
+            <MapPin size={14} />
+            <span>Now: {tripInfo.currentStop}</span>
+          </div>
+          <div className="next-stop">
+            <span>Next: {tripInfo.nextStop}</span>
             </div>
-            <div className="card-content">
-              <div className="profile-info">
-                <h4>{user?.name || 'Joel'}</h4>
-                <p>ID: {user?.id?.slice(-8) || '88c8'}</p>
-                <div className="status-badge">
-                  <div className={`status-dot ${dutyStatus}`}></div>
-                  <span>{dutyStatus === 'active' ? 'On Duty' : 'Ready'}</span>
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${tripInfo.progress}%` }}></div>
                 </div>
               </div>
+        
+        <div className="duty-status-indicator">
+          <div className={`duty-status-dot ${dutyStatus}`}></div>
+          <span className="duty-status-text">
+            {dutyStatus === 'not_assigned' ? 'No Duty' : 
+             dutyStatus === 'assigned' ? 'Ready' :
+             dutyStatus === 'active' ? 'On Duty' : 'Completed'}
+          </span>
             </div>
           </div>
           
-          {/* Vehicle Status & Duty Controls */}
-          <div className="compact-card vehicle-controls-card">
-            <div className="card-header">
-              <h3>Vehicle & Controls</h3>
+      {/* Navigation Tabs */}
+      <div className={`dashboard-nav ${viewMode === 'mobile' ? 'mobile-nav' : ''}`}>
+        <button 
+          className={`nav-tab ${activeView === 'dashboard' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveView('dashboard');
+            if (viewMode === 'mobile') setIsMobileMenuOpen(false);
+          }}
+        >
+          <Activity size={16} />
+          <span>Dashboard</span>
+        </button>
+        <button 
+          className={`nav-tab ${activeView === 'passengers' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveView('passengers');
+            if (viewMode === 'mobile') setIsMobileMenuOpen(false);
+          }}
+        >
+          <Users size={16} />
+          <span>Passengers</span>
+        </button>
+        <button 
+          className={`nav-tab ${activeView === 'scanning' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveView('scanning');
+            if (viewMode === 'mobile') setIsMobileMenuOpen(false);
+          }}
+        >
+          <QrCode size={16} />
+          <span>Scan Tickets</span>
+        </button>
                 </div>
-            <div className="card-content">
-              <div className="status-grid-compact">
-                <div className="status-item-compact">
-                  <CheckCircle size={14} />
-                  <span>Engine: Normal</span>
-                </div>
-                <div className="status-item-compact">
-                  <MapPin size={14} />
-                  <span>GPS: Active</span>
-                </div>
-                <div className="status-item-compact">
-                  <Fuel size={14} />
-                  <span>Fuel: 85%</span>
-                </div>
-                <div className="status-item-compact">
-                  <Activity size={14} />
-                  <span>Speed: 0 km/h</span>
-                </div>
-              </div>
-              <div className="duty-controls">
-                      <button 
-                  className="duty-btn primary"
-                onClick={() => {
-                  if (dutyStatus === 'assigned') {
-                    setDutyStatus('active');
-                  } else if (dutyStatus === 'active') {
-                    setDutyStatus('completed');
-                  }
-                }}
-                disabled={dutyStatus === 'not_assigned'}
+
+      {/* Mobile Menu Overlay */}
+      {viewMode === 'mobile' && isMobileMenuOpen && (
+        <div className="mobile-menu-overlay">
+          <div className="mobile-menu-content">
+            <div className="mobile-menu-header">
+              <h3>Menu</h3>
+              <button 
+                className="close-menu-btn"
+                onClick={toggleMobileMenu}
               >
-                  <Play size={16} />
-                {dutyStatus === 'assigned' ? 'Start Duty' : 
-                   dutyStatus === 'active' ? 'End Duty' : 'No Duty'}
+                <X size={20} />
+              </button>
+                </div>
+            <div className="mobile-menu-items">
+              <button 
+                className={`mobile-menu-item ${activeView === 'dashboard' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveView('dashboard');
+                  setIsMobileMenuOpen(false);
+                }}
+              >
+                <Activity size={20} />
+                <span>Dashboard</span>
+              </button>
+                      <button 
+                className={`mobile-menu-item ${activeView === 'passengers' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveView('passengers');
+                  setIsMobileMenuOpen(false);
+                }}
+              >
+                <Users size={20} />
+                <span>Passengers</span>
                       </button>
                       <button 
-                  className="duty-btn secondary"
-                onClick={refreshDashboard}
-                disabled={isRefreshing}
-                      >
-                  <RefreshCw size={14} className={isRefreshing ? 'spinning' : ''} />
-                  Refresh
+                className={`mobile-menu-item ${activeView === 'scanning' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveView('scanning');
+                  setIsMobileMenuOpen(false);
+                }}
+              >
+                <QrCode size={20} />
+                <span>Scan Tickets</span>
                       </button>
-              </div>
             </div>
+          </div>
+            </div>
+      )}
+
+      {/* Main Content */}
+      <div className="dashboard-content">
+        {/* Dashboard View */}
+        {activeView === 'dashboard' && (
+          <div className="dashboard-view">
+            {/* Quick Actions */}
+            <div className="quick-actions">
+              <button 
+                className={`quick-action-btn ${dutyStatus === 'active' ? 'end-duty' : 'start-duty'}`}
+                onClick={dutyStatus === 'active' ? endDuty : startDuty}
+              >
+                <div className="action-icon">
+                  {dutyStatus === 'active' ? <CheckCircle size={24} /> : <Play size={24} />}
+              </div>
+                <div className="action-text">
+                  <span className="action-title">
+                    {dutyStatus === 'active' ? 'End Duty' : 'Start Duty'}
+                  </span>
+                  <span className="action-subtitle">
+                    {dutyStatus === 'active' ? 'Complete your duty' : 'Begin ticket scanning'}
+                  </span>
+            </div>
+              </button>
+
+              <button 
+                className="quick-action-btn scan-tickets"
+                onClick={() => setActiveView('scanning')}
+              >
+                <div className="action-icon">
+                  <QrCode size={24} />
+                </div>
+                <div className="action-text">
+                  <span className="action-title">Scan Tickets</span>
+                  <span className="action-subtitle">QR code validation</span>
+                </div>
+              </button>
+
+              <button 
+                className="quick-action-btn passenger-list"
+                onClick={() => setActiveView('passengers')}
+              >
+                <div className="action-icon">
+                  <Users size={24} />
+                </div>
+                <div className="action-text">
+                  <span className="action-title">Passenger List</span>
+                  <span className="action-subtitle">Manage passengers</span>
+                </div>
+              </button>
+
+              <button 
+                className="quick-action-btn vacant-seats"
+                onClick={() => setShowVacantBooking(true)}
+              >
+                <div className="action-icon">
+                  <Plus size={24} />
+                </div>
+                <div className="action-text">
+                  <span className="action-title">Vacant Seats</span>
+                  <span className="action-subtitle">Sell available seats</span>
+                </div>
+              </button>
           </div>
 
-          {/* ETA Controls */}
-          <div className="compact-card eta-card">
-            <div className="card-header">
-              <h3>ETA Management</h3>
+            {/* Live Status Widgets */}
+            <div className="status-widgets">
+              <div className="status-widget">
+                <div className="widget-header">
+                  <Users size={16} />
+                  <span>Passengers</span>
             </div>
-            <div className="card-content">
-              <div className="eta-buttons">
-                <button className="eta-btn on-time">On Time</button>
-                <button className="eta-btn delay">+10min</button>
-                <button className="eta-btn delay">+20min</button>
-                <button className="eta-btn major-delay">+30min</button>
-              </div>
-            </div>
-                      </div>
-                      </div>
-
-        {/* Center Content - Trip Status & Performance */}
-        <div className="center-content">
-          {/* Trip Status Header */}
-          <div className="trip-status-header">
-            <h2>Current Trip Status</h2>
-            <p>Kochi → Alappuzha • KL-07-CD-5678</p>
-                    </div>
-                    
-          {/* Performance Summary - 2x2 Grid */}
-          <div className="compact-card performance-card">
-            <div className="card-header">
-              <h3>Performance Summary</h3>
-            </div>
-            <div className="card-content">
-              <div className="performance-grid">
-                <div className="perf-item">
-                  <div className="perf-icon" style={{background: '#00A86B'}}>
-                    <CheckCircle size={16} />
+                <div className="widget-content">
+                  <div className="stat-row">
+                    <span className="stat-label">Boarded:</span>
+                    <span className="stat-value boarded">{passengers.filter(p => p.status === 'boarded').length}</span>
                   </div>
-                  <div className="perf-data">
-                    <div className="perf-value">98%</div>
-                    <div className="perf-label">On-Time</div>
+                  <div className="stat-row">
+                    <span className="stat-label">Expected:</span>
+                    <span className="stat-value expected">{passengers.filter(p => p.status === 'expected').length}</span>
                   </div>
-                </div>
-                <div className="perf-item">
-                  <div className="perf-icon" style={{background: '#1976D2'}}>
-                    <Users size={16} />
-                  </div>
-                  <div className="perf-data">
-                    <div className="perf-value">47</div>
-                    <div className="perf-label">Passengers</div>
-                  </div>
-                </div>
-                <div className="perf-item">
-                  <div className="perf-icon" style={{background: '#FFB300'}}>
-                    <Fuel size={16} />
-                  </div>
-                  <div className="perf-data">
-                    <div className="perf-value">12.5L</div>
-                    <div className="perf-label">Fuel Used</div>
-                  </div>
-                      </div>
-                <div className="perf-item">
-                  <div className="perf-icon" style={{background: '#E91E63'}}>
-                    <Activity size={16} />
-                    </div>
-                  <div className="perf-data">
-                    <div className="perf-value">45</div>
-                    <div className="perf-label">Avg Speed</div>
-          </div>
-          </div>
-                      </div>
-                      </div>
-                    </div>
-                    
-          {/* Live Bus Status - Half Height */}
-          <div className="compact-card bus-status-card">
-          <div className="card-header">
-              <h3>Live Bus Status</h3>
-          </div>
-          <div className="card-content">
-              <div className="status-info-grid">
-                <div className="info-row">
-                  <span className="info-label">Location:</span>
-                  <span className="info-value">Cherthala Junction</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Next Stop:</span>
-                  <span className="info-value">2.3 km (5 min)</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Passengers:</span>
-                  <span className="info-value">23/45 seats</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Progress:</span>
-                  <span className="info-value">60% Complete</span>
-                </div>
-              </div>
-              <div className="progress-bar-container">
-                <div className="progress-bar" style={{ width: '60%' }}></div>
-              </div>
-            </div>
-          </div>
-
-          {/* Trip Progress */}
-          <div className="compact-card trip-progress-card">
-            <div className="card-header">
-              <h3>Route Timeline</h3>
-            </div>
-            <div className="card-content">
-              <div className="timeline-compact">
-                <div className="timeline-stop completed">
-                  <div className="stop-dot"></div>
-                  <div className="stop-info">
-                    <span className="stop-name">Kochi Central</span>
-                    <span className="stop-time">09:00</span>
-                  </div>
-                </div>
-                <div className="timeline-stop completed">
-                  <div className="stop-dot"></div>
-                  <div className="stop-info">
-                    <span className="stop-name">Edappally</span>
-                    <span className="stop-time">09:15</span>
-                  </div>
-                </div>
-                <div className="timeline-stop current">
-                  <div className="stop-dot"></div>
-                  <div className="stop-info">
-                    <span className="stop-name">Cherthala</span>
-                    <span className="stop-time">09:30</span>
-              </div>
-                </div>
-                <div className="timeline-stop pending">
-                  <div className="stop-dot"></div>
-                  <div className="stop-info">
-                    <span className="stop-name">Alappuzha</span>
-                    <span className="stop-time">09:45</span>
-                  </div>
-                </div>
-              </div>
+                  <div className="stat-row">
+                    <span className="stat-label">Total Seats:</span>
+                    <span className="stat-value total">{tripInfo.totalSeats}</span>
             </div>
           </div>
         </div>
 
-        {/* Right Sidebar - Passengers & Maintenance */}
-        <div className="right-sidebar">
-          {/* Recent Passengers */}
-          <div className="compact-card passengers-card">
-          <div className="card-header">
-              <h3>Recent Passengers</h3>
-          </div>
-          <div className="card-content">
-              <div className="passengers-list">
-                <div className="passenger-item">
-                  <div className="passenger-info">
-                    <span className="passenger-name">Rajesh Kumar</span>
-                    <span className="passenger-details">A12 • ₹45</span>
-                  </div>
+              <div className="status-widget">
+                <div className="widget-header">
+                  <MapPin size={16} />
+                  <span>Route Status</span>
                 </div>
-                <div className="passenger-item">
-                  <div className="passenger-info">
-                    <span className="passenger-name">Priya Menon</span>
-                    <span className="passenger-details">B08 • ₹25</span>
+                <div className="widget-content">
+                  <div className="stat-row">
+                    <span className="stat-label">Current:</span>
+                    <span className="stat-value current">{tripInfo.currentStop}</span>
                   </div>
-                </div>
-                <div className="passenger-item">
-                  <div className="passenger-info">
-                    <span className="passenger-name">Suresh Nair</span>
-                    <span className="passenger-details">C15 • ₹35</span>
+                  <div className="stat-row">
+                    <span className="stat-label">Next:</span>
+                    <span className="stat-value next">{tripInfo.nextStop}</span>
                   </div>
-                </div>
-                <div className="passenger-item">
-                  <div className="passenger-info">
-                    <span className="passenger-name">Anita Raj</span>
-                    <span className="passenger-details">A05 • ₹40</span>
-                  </div>
-                </div>
+                  <div className="stat-row">
+                    <span className="stat-label">Progress:</span>
+                    <span className="stat-value progress">{tripInfo.progress}%</span>
               </div>
             </div>
           </div>
 
-          {/* Maintenance Alerts */}
-          <div className="compact-card maintenance-card">
-            <div className="card-header">
-              <h3>Maintenance Alerts</h3>
+              <div className="status-widget">
+                <div className="widget-header">
+                  <Ticket size={16} />
+                  <span>Tickets Scanned</span>
             </div>
-            <div className="card-content">
-              <div className="alerts-list">
-                <div className="alert-item warning">
-                  <div className="alert-icon">
-                    <Wrench size={12} />
+                <div className="widget-content">
+                  <div className="stat-row">
+                    <span className="stat-label">Today:</span>
+                    <span className="stat-value scanned">{scanHistory.filter(s => s.success).length}</span>
                   </div>
-                  <div className="alert-info">
-                    <span className="alert-title">Oil Change Due</span>
-                    <span className="alert-time">500 km remaining</span>
+                  <div className="stat-row">
+                    <span className="stat-label">Failed:</span>
+                    <span className="stat-value failed">{scanHistory.filter(s => !s.success).length}</span>
+                  </div>
+                  <div className="stat-row">
+                    <span className="stat-label">Success Rate:</span>
+                    <span className="stat-value success">
+                      {scanHistory.length > 0 ? Math.round((scanHistory.filter(s => s.success).length / scanHistory.length) * 100) : 0}%
+                    </span>
                   </div>
                 </div>
-                <div className="alert-item info">
-                  <div className="alert-icon">
-                    <CheckCircle size={12} />
-                  </div>
-                  <div className="alert-info">
-                    <span className="alert-title">Tire Pressure OK</span>
-                    <span className="alert-time">All normal</span>
-                  </div>
-                </div>
-                <div className="alert-item critical">
-                  <div className="alert-icon">
-                    <AlertCircle size={12} />
-              </div>
-                  <div className="alert-info">
-                    <span className="alert-title">Engine Check</span>
-                    <span className="alert-time">Minor vibration</span>
-              </div>
               </div>
             </div>
-          </div>
-        </div>
 
-          {/* Today's Summary */}
-          <div className="compact-card summary-card">
-          <div className="card-header">
-              <h3>Today's Summary</h3>
-          </div>
-          <div className="card-content">
-              <div className="summary-stats">
-                <div className="summary-item">
-                  <span className="summary-label">Distance</span>
-                  <span className="summary-value">125km</span>
+            {/* Trip Progress Indicator */}
+            <div className="trip-progress">
+              <div className="progress-header">
+                <h3>Trip Progress</h3>
+                <span className="progress-percentage">{tripInfo.progress}% Complete</span>
+              </div>
+              <div className="progress-bar-large">
+                <div className="progress-fill-large" style={{ width: `${tripInfo.progress}%` }}></div>
+              </div>
+              <div className="progress-stops">
+                <div className="stop-item completed">
+                  <div className="stop-dot"></div>
+                  <span>Kochi Central</span>
                 </div>
-                <div className="summary-item">
-                  <span className="summary-label">Earnings</span>
-                  <span className="summary-value">₹1,850</span>
+                <div className="stop-item completed">
+                  <div className="stop-dot"></div>
+                  <span>Edappally</span>
                 </div>
-                <div className="summary-item">
-                  <span className="summary-label">Trips</span>
-                  <span className="summary-value">3</span>
+                <div className="stop-item current">
+                  <div className="stop-dot"></div>
+                  <span>Cherthala</span>
                 </div>
-                <div className="summary-item">
-                  <span className="summary-label">Fuel</span>
-                  <span className="summary-value">85%</span>
+                <div className="stop-item pending">
+                  <div className="stop-dot"></div>
+                  <span>Alappuzha</span>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-          </>
-        )}
 
-        {/* GPS Tracking Tab */}
-        {activeTab === 'gps' && (
-          <div className="tab-content">
-            <div className="tab-header">
-              <h2>GPS Tracking</h2>
-              <p>Real-time vehicle location and route tracking</p>
+            {/* Alerts/Notifications */}
+            {alerts.length > 0 && (
+              <div className="alerts-section">
+                <div className="alerts-header">
+                  <AlertTriangle size={16} />
+                  <span>Recent Alerts</span>
+          </div>
+                <div className="alerts-list">
+                  {alerts.slice(0, 3).map(alert => (
+                    <div key={alert.id} className={`alert-item ${alert.type}`}>
+                      <div className="alert-icon">
+                        {alert.type === 'error' ? <AlertCircle size={14} /> :
+                         alert.type === 'warning' ? <AlertTriangle size={14} /> :
+                         <Bell size={14} />}
                       </div>
-            <div className="compact-card">
-              <div className="card-header">
-                <h3>Current Location</h3>
+                      <div className="alert-content">
+                        <span className="alert-message">{alert.message}</span>
+                        <span className="alert-time">{alert.time}</span>
                       </div>
-              <div className="card-content">
-                <div className="location-info">
-                  <div className="info-row">
-                    <span className="info-label">Current Position:</span>
-                    <span className="info-value">Cherthala Junction</span>
                   </div>
-                  <div className="info-row">
-                    <span className="info-label">Speed:</span>
-                    <span className="info-value">45 km/h</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Direction:</span>
-                    <span className="info-value">North-East</span>
-                  </div>
+                  ))}
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
-        {/* Fuel Monitor Tab */}
-        {activeTab === 'fuel' && (
-          <div className="tab-content">
-            <div className="tab-header">
-              <h2>Fuel Monitor</h2>
-              <p>Vehicle fuel consumption and efficiency tracking</p>
-            </div>
-            <div className="compact-card">
-              <div className="card-header">
-                <h3>Fuel Status</h3>
-                </div>
-              <div className="card-content">
-                <div className="fuel-info">
-                  <div className="fuel-gauge">
-                    <div className="fuel-level" style={{width: '85%'}}></div>
-                      </div>
-                  <div className="fuel-stats">
-                    <div className="stat-item">
-                      <span className="stat-label">Current Level:</span>
-                      <span className="stat-value">85%</span>
-                    </div>
-                    <div className="stat-item">
-                      <span className="stat-label">Consumption:</span>
-                      <span className="stat-value">12.5L/100km</span>
-                </div>
-                </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Maintenance Tab */}
-        {activeTab === 'maintenance' && (
-          <div className="tab-content">
-            <div className="tab-header">
-              <h2>Maintenance</h2>
-              <p>Vehicle maintenance schedule and alerts</p>
-            </div>
-            <div className="compact-card">
-              <div className="card-header">
-                <h3>Maintenance Schedule</h3>
-              </div>
-              <div className="card-content">
-                <div className="maintenance-list">
-                  <div className="maintenance-item urgent">
-                    <Wrench size={16} />
-                    <div className="maintenance-info">
-                      <span className="maintenance-title">Oil Change Due</span>
-                      <span className="maintenance-desc">500 km remaining</span>
-                    </div>
-                  </div>
-                  <div className="maintenance-item normal">
-                    <CheckCircle size={16} />
-                    <div className="maintenance-info">
-                      <span className="maintenance-title">Tire Check</span>
-                      <span className="maintenance-desc">All normal</span>
-                    </div>
-                  </div>
-                </div>
-                        </div>
-            </div>
-          </div>
-        )}
-
-        {/* Ticket Scan Tab */}
-        {activeTab === 'tickets' && (
-          <div className="tab-content">
-            <div className="tab-header">
-              <h2>Ticket Scanning</h2>
-              <p>QR code scanning and ticket validation</p>
-        </div>
-            <div className="compact-card">
-            <div className="card-header">
-                <h3>QR Scanner</h3>
-              </div>
-            <div className="card-content">
-                <div className="scanner-area">
-                  <div className="qr-scanner-placeholder">
-                    <QrCode size={48} />
-                    <p>Position QR code within the frame</p>
-                    <button className="scan-btn">Start Scanning</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Passengers Tab */}
-        {activeTab === 'passengers' && (
-          <div className="tab-content">
-            <div className="tab-header">
+        {/* Passengers View */}
+        {activeView === 'passengers' && (
+          <div className="passengers-view">
+            <div className="view-header">
               <h2>Passenger Management</h2>
-              <p>Current passengers and seat management</p>
+              <p>Manage current passengers and seat assignments</p>
             </div>
-            <div className="compact-card">
-              <div className="card-header">
-                <h3>Current Passengers</h3>
-            </div>
-              <div className="card-content">
-                <div className="passenger-summary">
-                  <div className="summary-stat">
-                    <span className="stat-number">23</span>
-                    <span className="stat-label">Current Passengers</span>
+            
+            <div className="passenger-management">
+              <div className="passenger-controls">
+                <div className="filter-controls">
+                  <button 
+                    className={`filter-btn ${passengerFilter === 'all' ? 'active' : ''}`}
+                    onClick={() => setPassengerFilter('all')}
+                  >
+                    <Users size={16} />
+                    <span>All</span>
+                    <span className="filter-count">{passengers.length}</span>
+                  </button>
+                  <button 
+                    className={`filter-btn ${passengerFilter === 'boarded' ? 'active' : ''}`}
+                    onClick={() => setPassengerFilter('boarded')}
+                  >
+                    <CheckCircle size={16} />
+                    <span>Boarded</span>
+                    <span className="filter-count">{passengers.filter(p => p.status === 'boarded').length}</span>
+                  </button>
+                  <button 
+                    className={`filter-btn ${passengerFilter === 'expected' ? 'active' : ''}`}
+                    onClick={() => setPassengerFilter('expected')}
+                  >
+                    <Clock size={16} />
+                    <span>Expected</span>
+                    <span className="filter-count">{passengers.filter(p => p.status === 'expected').length}</span>
+                  </button>
+                  <button 
+                    className={`filter-btn ${passengerFilter === 'no_show' ? 'active' : ''}`}
+                    onClick={() => setPassengerFilter('no_show')}
+                  >
+                    <XCircle size={16} />
+                    <span>No Show</span>
+                    <span className="filter-count">{passengers.filter(p => p.status === 'no_show').length}</span>
+                  </button>
+                </div>
+                
+                <div className="search-sort-controls">
+                  <div className="search-control">
+                    <Search size={16} />
+                    <input 
+                      type="text"
+                      placeholder="Search passengers..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="search-input"
+                    />
                   </div>
-                  <div className="summary-stat">
-                    <span className="stat-number">45</span>
-                    <span className="stat-label">Total Seats</span>
+                  
+                  <div className="sort-control">
+                    <ArrowUpDown size={16} />
+                    <select 
+                      value={sortBy} 
+                      onChange={(e) => setSortBy(e.target.value)}
+                      className="sort-select"
+                    >
+                      <option value="seat">Sort by Seat</option>
+                      <option value="name">Sort by Name</option>
+                      <option value="stop">Sort by Stop</option>
+                      <option value="status">Sort by Status</option>
+                      <option value="pnr">Sort by PNR</option>
+                    </select>
                   </div>
-                  <div className="summary-stat">
-                    <span className="stat-number">22</span>
-                    <span className="stat-label">Available Seats</span>
-            </div>
-          </div>
-            </div>
+                </div>
+              </div>
+              
+              <div className="passenger-list">
+                {passengers
+                  .filter(p => {
+                    // Status filter
+                    const statusMatch = passengerFilter === 'all' || p.status === passengerFilter;
+                    
+                    // Search filter
+                    const searchMatch = !searchQuery || 
+                      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      p.pnr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      p.seat.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      p.boardingStop.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      p.destination.toLowerCase().includes(searchQuery.toLowerCase());
+                    
+                    return statusMatch && searchMatch;
+                  })
+                  .sort((a, b) => {
+                    switch(sortBy) {
+                      case 'seat': return a.seat.localeCompare(b.seat);
+                      case 'name': return a.name.localeCompare(b.name);
+                      case 'stop': return a.boardingStop.localeCompare(b.boardingStop);
+                      case 'status': return a.status.localeCompare(b.status);
+                      case 'pnr': return a.pnr.localeCompare(b.pnr);
+                      default: return 0;
+                    }
+                  })
+                  .map(passenger => (
+                    <div key={passenger.id} className={`passenger-item ${passenger.status}`}>
+                      <div className="passenger-info">
+                        <div className="passenger-name">{passenger.name}</div>
+                        <div className="passenger-details">
+                          <span className="seat">Seat: {passenger.seat}</span>
+                          <span className="pnr">PNR: {passenger.pnr}</span>
+                        </div>
+                        <div className="passenger-route">
+                          {passenger.boardingStop} → {passenger.destination}
+                        </div>
+                      </div>
+                      <div className="passenger-status">
+                        <span className={`status-badge ${passenger.status}`}>
+                          {passenger.status === 'boarded' ? '✓ Boarded' : 
+                           passenger.status === 'expected' ? '⏳ Expected' : '❌ No Show'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Settings Tab */}
-        {activeTab === 'settings' && (
-          <div className="tab-content">
-            <div className="tab-header">
-              <h2>Settings</h2>
-              <p>Application preferences and configurations</p>
+        {/* Scanning View */}
+        {activeView === 'scanning' && (
+          <div className="scanning-view">
+            <div className="view-header">
+              <h2>QR Ticket Scanning</h2>
+              <p>Scan passenger tickets for validation</p>
             </div>
-            <div className="compact-card">
-              <div className="card-header">
-                <h3>Preferences</h3>
+            
+            <div className="qr-scanning-section">
+              <div className="scan-area">
+                <div className={`scan-camera ${isScanning ? 'scanning' : ''}`}>
+                  <Camera size={48} />
+                  {isScanning ? (
+                    <div className="scanning-overlay">
+                      <div className="scan-line"></div>
+                      <p>Scanning...</p>
+                    </div>
+                  ) : (
+                    <p>Tap to start scanning</p>
+                  )}
+                </div>
+                
+                <button 
+                  className={`scan-btn ${isScanning ? 'scanning' : ''}`}
+                  onClick={startQRScan}
+                  disabled={isScanning}
+                >
+                  {isScanning ? 'Scanning...' : 'Start QR Scan'}
+                </button>
               </div>
-              <div className="card-content">
-                <div className="settings-list">
-                  <div className="setting-item">
-                    <span className="setting-label">Notifications</span>
-                    <button className="toggle-btn active">ON</button>
-          </div>
-                  <div className="setting-item">
-                    <span className="setting-label">Auto Refresh</span>
-                    <button className="toggle-btn active">ON</button>
-        </div>
-                  <div className="setting-item">
-                    <span className="setting-label">Sound Alerts</span>
-                    <button className="toggle-btn">OFF</button>
+              
+              {scanResult && (
+                <div className={`scan-result ${scanResult.success ? 'success' : 'error'}`}>
+                  <div className="result-icon">
+                    {scanResult.success ? <CheckCircle size={24} /> : <AlertCircle size={24} />}
                   </div>
+                  <div className="result-details">
+                    <h4>{scanResult.success ? 'Ticket Validated!' : 'Scan Failed'}</h4>
+                    {scanResult.success ? (
+                      <div className="ticket-info">
+                        <p><strong>PNR:</strong> {scanResult.pnr}</p>
+                        <p><strong>Passenger:</strong> {scanResult.passenger}</p>
+                        <p><strong>Seat:</strong> {scanResult.seat}</p>
+                </div>
+                    ) : (
+                      <p>Invalid or duplicate ticket. Please try again.</p>
+                    )}
+            </div>
+          </div>
+        )}
+
+              <div className="scan-history">
+                <h4>Recent Scans</h4>
+                <div className="history-list">
+                  {scanHistory.slice(0, 5).map((scan, index) => (
+                    <div key={index} className={`history-item ${scan.success ? 'success' : 'error'}`}>
+                      <span className="scan-time">{new Date().toLocaleTimeString()}</span>
+                      <span className="scan-pnr">{scan.pnr}</span>
+                      <span className="scan-status">{scan.success ? '✓' : '✗'}</span>
+            </div>
+                  ))}
                 </div>
               </div>
             </div>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, Users, Wrench, Fuel, MapPin, Settings, Download, Upload,
-  AlertTriangle, CheckCircle, Clock, Star, Zap, Shield
+  AlertTriangle, CheckCircle, Clock, Star, Zap, Shield, BarChart
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -180,7 +180,7 @@ const BulkOperations = ({
       id: 'performance_analysis',
       title: 'Performance Analysis',
       description: 'Generate performance report for selected buses',
-      icon: BarChart3,
+      icon: BarChart,
       color: 'teal',
       fields: [
         {

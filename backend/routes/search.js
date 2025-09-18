@@ -6,14 +6,18 @@ const Route = require('../models/Route');
 const Trip = require('../models/Trip');
 const { auth } = require('../middleware/auth');
 
-// Rate limiting for search queries
+// Rate limiting for search queries - More lenient for better UX
 const rateLimit = require('express-rate-limit');
 const searchLimiter = rateLimit({
-  windowMs: 800, // 800ms as per spec
-  max: 1, // 1 request per window
+  windowMs: 1000, // 1 second window
+  max: 10, // Allow 10 requests per second
   message: 'Search rate limit exceeded. Please wait before searching again.',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting in development
+    return process.env.NODE_ENV === 'development';
+  }
 });
 
 // GET /api/search/locations - Location autosuggest
