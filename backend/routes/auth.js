@@ -8,8 +8,48 @@ const DepotUser = require('../models/DepotUser');
 const Driver = require('../models/Driver');
 const Conductor = require('../models/Conductor');
 const { sendEmail } = require('../config/email');
+const { queueEmail } = require('../services/emailQueue');
 const { validateRegistrationEmail, validateProfileUpdateEmail } = require('../middleware/emailValidation');
 const { userValidations, handleValidationErrors } = require('../middleware/validation');
+
+// POST /api/auth/check-email - Check if email exists
+router.post('/check-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email is required'
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email format'
+      });
+    }
+
+    // Check if user exists
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    
+    res.json({
+      success: true,
+      exists: !!existingUser,
+      message: existingUser ? 'Email already exists' : 'Email available'
+    });
+
+  } catch (error) {
+    console.error('Email check error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error during email check'
+    });
+  }
+});
 
 // POST /api/auth/register
 router.post('/register', userValidations.register, handleValidationErrors, validateRegistrationEmail, async (req, res) => {
@@ -25,15 +65,12 @@ router.post('/register', userValidations.register, handleValidationErrors, valid
       });
     }
 
-    // Hash password before saving
-    const hashedPassword = await bcrypt.hash(password, 12);
-    
-    // Create user
+    // Create user (password will be hashed by the model's pre-save middleware)
     const user = new User({ 
       name, 
       email, 
       phone, 
-      password: hashedPassword, 
+      password, // Let the model handle hashing
       role,
       authProvider: 'local' // Ensure authProvider is set for validation
     });
@@ -45,6 +82,13 @@ router.post('/register', userValidations.register, handleValidationErrors, valid
       process.env.JWT_SECRET || 'secret',
       { expiresIn: '7d' }
     );
+
+    // Queue welcome email for instant processing (non-blocking)
+    queueEmail(email, 'registrationWelcome', {
+      userName: user.name,
+      userEmail: user.email
+    });
+    console.log('📧 Welcome email queued for:', email);
 
     res.status(201).json({
       success: true,
@@ -63,33 +107,105 @@ router.post('/register', userValidations.register, handleValidationErrors, valid
 
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ message: "Missing fields" });
+  try {
+    const { email, password } = req.body;
+    
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Email and password are required" 
+      });
+    }
 
-  const user = await User.findOne({ email }).select('+password');
-  if (!user || !user.password) return res.status(400).json({ message: "Invalid email" });
+    // Find user with password field included
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    if (!user) {
+      return res.status(401).json({ 
+        success: false,
+        message: "Invalid email or password" 
+      });
+    }
 
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) return res.status(400).json({ message: "Invalid password" });
+    // Check if account is locked
+    if (user.isLocked && user.isLocked()) {
+      return res.status(423).json({ 
+        success: false,
+        message: 'Account is temporarily locked due to multiple failed login attempts' 
+      });
+    }
 
-  // Optional: block logins for inactive accounts
-  if (user.status && user.status !== 'active') {
-    return res.status(403).json({ message: 'Account is not active' });
+    // Check account status
+    if (user.status && user.status !== 'active') {
+      return res.status(403).json({ 
+        success: false,
+        message: `Account is ${user.status}. Please contact administrator.` 
+      });
+    }
+
+    // Use the model's built-in password comparison method
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      // Increment login attempts
+      await user.incLoginAttempts();
+      return res.status(401).json({ 
+        success: false,
+        message: "Invalid email or password" 
+      });
+    }
+
+    // Reset login attempts on successful login
+    if (user.loginAttempts > 0) {
+      user.loginAttempts = 0;
+      user.lockUntil = undefined;
+    }
+    user.lastLogin = new Date();
+    await user.save();
+
+    const token = jwt.sign(
+      {
+        userId: user._id,
+        role: (user.role || 'passenger').toUpperCase(),
+        name: user.name,
+        email: user.email
+      },
+      process.env.JWT_SECRET || 'secret',
+      { expiresIn: '7d' }
+    );
+
+    // Queue login notification email for instant processing (non-blocking)
+    const clientIP = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || 'Unknown';
+    const loginTime = new Date().toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    
+    queueEmail(user.email, 'loginNotification', {
+      userName: user.name,
+      loginTime: loginTime,
+      ipAddress: clientIP
+    });
+    console.log('📧 Login notification email queued for:', user.email);
+
+    const { password: _removed, ...safeUser } = user.toObject();
+    res.json({ 
+      success: true,
+      token, 
+      user: safeUser 
+    });
+
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Login failed. Please try again.' 
+    });
   }
-
-  const token = jwt.sign(
-    {
-      userId: user._id,
-      role: (user.role || 'passenger').toUpperCase(),
-      name: user.name,
-      email: user.email
-    },
-    process.env.JWT_SECRET || 'secret',
-    { expiresIn: '7d' }
-  );
-
-  const { password: _removed, ...safeUser } = user.toObject();
-  res.json({ token, user: safeUser });
 });
 
 // POST /api/auth/forgot-password

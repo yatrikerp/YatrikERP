@@ -140,6 +140,7 @@ app.use('/api/depot-auth', require('./routes/depotAuth'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/depot', require('./routes/depot'));
 app.use('/api/passenger', require('./routes/passenger'));
+app.use('/api/users', require('./routes/users'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/bus-schedule', require('./routes/busSchedule'));
 app.use('/api/driver', require('./routes/driver'));
@@ -151,6 +152,7 @@ app.use('/api/booking', require('./routes/booking'));
 app.use('/api/routes', require('./routes/routes'));
 app.use('/api/trips', require('./routes/trips'));
 app.use('/api/status', require('./routes/status'));
+app.use('/api/email', require('./routes/emailStatus'));
 app.use('/api/search', require('./routes/search'));
 
 // Health check endpoint

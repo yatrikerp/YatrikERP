@@ -25,3 +25,5 @@ export const handleGoogleAuth = () => {
     alert('Google authentication failed. Please try again.');
   }
 };
+
+

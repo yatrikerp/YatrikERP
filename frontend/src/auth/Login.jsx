@@ -356,13 +356,6 @@ function SignupForm({ onSuccess }) {
       return;
     }
     
-    // Role-based email validation
-    const role = formData.role || 'passenger';
-    const emailValidation = validateRoleEmail(formData.email, role);
-    if (!emailValidation.isValid) {
-      showPopup(emailValidation.message, 'warning');
-      return;
-    }
     
     setIsLoading(true);
     setError('');
@@ -473,21 +466,6 @@ function SignupForm({ onSuccess }) {
         successMessage="Email format is valid"
       />
       
-      <label htmlFor="su-role" className="login-label">Role</label>
-      <select 
-        id="su-role" 
-        name="role" 
-        className="login-input" 
-        value={formData.role} 
-        onChange={handleChange}
-        required
-      >
-        <option value="passenger">Passenger</option>
-        <option value="conductor">Conductor</option>
-        <option value="driver">Driver</option>
-        <option value="depot_manager">Depot Manager</option>
-        <option value="admin">Admin</option>
-      </select>
 
       <label htmlFor="su-phone" className="login-label">Mobile number</label>
       <input 

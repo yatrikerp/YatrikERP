@@ -17,7 +17,7 @@ const userValidations = {
       .withMessage('Must be a valid email address'),
     
     body('phone')
-      .matches(/^[6-9]\d{9}$/)
+      .matches(/^(\+91)?[6-9]\d{9}$/)
       .withMessage('Phone number must be a valid 10-digit Indian mobile number'),
     
     body('password')
@@ -87,7 +87,7 @@ const validateConductorData = [
     .withMessage('Name must be between 2 and 100 characters'),
   
   body('phone')
-    .matches(/^[6-9]\d{9}$/)
+    .matches(/^(\+91)?[6-9]\d{9}$/)
     .withMessage('Phone number must be a valid 10-digit Indian mobile number'),
   
   body('email')
@@ -128,7 +128,7 @@ const validateConductorData = [
   
   body('emergencyContact.phone')
     .optional()
-    .matches(/^[6-9]\d{9}$/)
+    .matches(/^(\+91)?[6-9]\d{9}$/)
     .withMessage('Emergency contact phone must be a valid 10-digit Indian mobile number'),
   
   body('emergencyContact.relationship')
@@ -173,7 +173,7 @@ const validateDriverData = [
     .withMessage('Name must be between 2 and 100 characters'),
   
   body('phone')
-    .matches(/^[6-9]\d{9}$/)
+    .matches(/^(\+91)?[6-9]\d{9}$/)
     .withMessage('Phone number must be a valid 10-digit Indian mobile number'),
   
   body('email')
@@ -236,7 +236,7 @@ const validateDriverData = [
   
   body('emergencyContact.phone')
     .optional()
-    .matches(/^[6-9]\d{9}$/)
+    .matches(/^(\+91)?[6-9]\d{9}$/)
     .withMessage('Emergency contact phone must be a valid 10-digit Indian mobile number'),
   
   body('emergencyContact.relationship')

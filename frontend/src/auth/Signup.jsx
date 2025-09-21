@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Signup = () => {
@@ -17,16 +17,118 @@ const Signup = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   
+  // Email validation states
+  const [emailStatus, setEmailStatus] = useState('idle'); // 'idle', 'checking', 'available', 'exists', 'error'
+  const [emailMessage, setEmailMessage] = useState('');
+  
   const { signup } = useAuth();
   const navigate = useNavigate();
+  const emailTimeoutRef = useRef(null);
+
+  // Email validation function
+  const validateEmail = async (email) => {
+    console.log('🔍 validateEmail called with:', email);
+    
+    if (!email || email.length < 5) {
+      console.log('❌ Email too short or empty');
+      setEmailStatus('idle');
+      setEmailMessage('');
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
+    if (!emailRegex.test(email)) {
+      console.log('❌ Invalid email format');
+      setEmailStatus('error');
+      setEmailMessage('Invalid email format');
+      return;
+    }
+
+    console.log('✅ Email validation passed, proceeding with API call');
+    setEmailStatus('checking');
+    setEmailMessage('Checking email...');
+
+    try {
+      console.log('📡 Making API call to /api/auth/check-email');
+      const response = await fetch('/api/auth/check-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      console.log('📡 Response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('📦 Response data:', data);
+
+      if (data.success) {
+        if (data.exists) {
+          console.log('❌ Email exists');
+          setEmailStatus('exists');
+          setEmailMessage('❌ Email already exists');
+        } else {
+          console.log('✅ Email available');
+          setEmailStatus('available');
+          setEmailMessage('✅ Email available');
+        }
+      } else {
+        console.log('❌ API returned error:', data.error);
+        setEmailStatus('error');
+        setEmailMessage(data.error || 'Error checking email');
+      }
+    } catch (error) {
+      console.error('❌ Email validation error:', error);
+      setEmailStatus('error');
+      setEmailMessage(`Network error: ${error.message}`);
+    }
+  };
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
+    
+    console.log('📝 Form field changed:', name, '=', value);
+    
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: value
     });
     setError(''); // Clear error when user types
+
+    // Handle email validation with debouncing
+    if (name === 'email') {
+      console.log('📧 Email field changed, setting up validation timeout');
+      
+      // Clear previous timeout
+      if (emailTimeoutRef.current) {
+        clearTimeout(emailTimeoutRef.current);
+        console.log('⏰ Cleared previous timeout');
+      }
+
+      // Set new timeout for email validation
+      emailTimeoutRef.current = setTimeout(() => {
+        console.log('⏰ Timeout triggered, calling validateEmail');
+        validateEmail(value);
+      }, 300); // 300ms delay to avoid too many API calls
+      
+      console.log('⏰ New timeout set for 300ms');
+    }
   };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (emailTimeoutRef.current) {
+        clearTimeout(emailTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -46,6 +148,13 @@ const Signup = () => {
       return;
     }
 
+    // Check if email is available
+    if (emailStatus === 'exists') {
+      setError('Email already exists. Please use a different email.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       await signup(formData);
       navigate('/dashboard');
@@ -53,6 +162,38 @@ const Signup = () => {
       setError(err.message || 'Signup failed. Please try again.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Get border color based on email status
+  const getEmailBorderColor = () => {
+    switch (emailStatus) {
+      case 'available':
+        return 'border-green-500 focus:ring-green-500';
+      case 'exists':
+        return 'border-red-500 focus:ring-red-500';
+      case 'error':
+        return 'border-red-500 focus:ring-red-500';
+      case 'checking':
+        return 'border-blue-500 focus:ring-blue-500';
+      default:
+        return 'border-gray-300 focus:ring-blue-500';
+    }
+  };
+
+  // Get text color for email message
+  const getEmailMessageColor = () => {
+    switch (emailStatus) {
+      case 'available':
+        return 'text-green-600';
+      case 'exists':
+        return 'text-red-600';
+      case 'error':
+        return 'text-red-600';
+      case 'checking':
+        return 'text-blue-600';
+      default:
+        return 'text-gray-600';
     }
   };
 
@@ -96,21 +237,53 @@ const Signup = () => {
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                 Email Address
               </label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                placeholder="Enter your email address"
-              />
+              <div className="relative">
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                  className={`w-full px-4 py-3 pr-12 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${getEmailBorderColor()}`}
+                  placeholder="Enter your email address"
+                />
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  {emailStatus === 'checking' && (
+                    <Loader2 size={20} className="text-blue-500 animate-spin" />
+                  )}
+                  {emailStatus === 'available' && (
+                    <CheckCircle size={20} className="text-green-500" />
+                  )}
+                  {emailStatus === 'exists' && (
+                    <XCircle size={20} className="text-red-500" />
+                  )}
+                  {emailStatus === 'error' && (
+                    <XCircle size={20} className="text-red-500" />
+                  )}
+                </div>
+              </div>
+              {emailMessage && (
+                <div className={`mt-2 text-sm ${getEmailMessageColor()}`}>
+                  {emailMessage}
+                </div>
+              )}
+              {/* Temporary test button */}
+              <button
+                type="button"
+                onClick={() => {
+                  console.log('🧪 Manual test triggered');
+                  validateEmail(formData.email);
+                }}
+                className="mt-2 px-3 py-1 text-xs bg-purple-500 text-white rounded hover:bg-purple-600"
+              >
+                Test Email Validation
+              </button>
             </div>
 
             <div>
               <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                Phone Number
+                Mobile Number
               </label>
               <input
                 type="tel"
@@ -120,7 +293,7 @@ const Signup = () => {
                 onChange={handleChange}
                 required
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                placeholder="Enter your phone number"
+                placeholder="Enter your mobile number"
               />
             </div>
 
@@ -194,7 +367,7 @@ const Signup = () => {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || emailStatus === 'checking' || emailStatus === 'exists'}
               className="w-full bg-gradient-to-r from-red-500 to-pink-600 text-white py-3 px-4 rounded-lg font-medium hover:from-red-600 hover:to-pink-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Creating Account...' : 'Create Account'}

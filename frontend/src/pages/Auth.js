@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import AuthLayout from '../components/Auth/AuthLayout';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FaGoogle } from 'react-icons/fa';
@@ -33,6 +33,76 @@ const Auth = ({ initialMode = 'login' }) => {
   const [forgotPasswordErrors, setForgotPasswordErrors] = useState({});
   const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  
+  // Email validation states
+  const [emailStatus, setEmailStatus] = useState('idle'); // 'idle', 'checking', 'available', 'exists', 'error'
+  const [emailMessage, setEmailMessage] = useState('');
+  const emailTimeoutRef = useRef(null);
+
+  // Email validation function
+  const validateEmail = async (email) => {
+    console.log('🔍 validateEmail called with:', email);
+    
+    if (!email || email.length < 5) {
+      console.log('❌ Email too short or empty');
+      setEmailStatus('idle');
+      setEmailMessage('');
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
+    if (!emailRegex.test(email)) {
+      console.log('❌ Invalid email format');
+      setEmailStatus('error');
+      setEmailMessage('Invalid email format');
+      return;
+    }
+
+    console.log('✅ Email validation passed, proceeding with API call');
+    setEmailStatus('checking');
+    setEmailMessage('Checking email...');
+
+    try {
+      console.log('📡 Making API call to /api/auth/check-email');
+      const response = await fetch('/api/auth/check-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      console.log('📡 Response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('📦 Response data:', data);
+
+      if (data.success) {
+        if (data.exists) {
+          console.log('❌ Email exists');
+          setEmailStatus('exists');
+          setEmailMessage('❌ Email already exists');
+        } else {
+          console.log('✅ Email available');
+          setEmailStatus('available');
+          setEmailMessage('✅ Email available');
+        }
+      } else {
+        console.log('❌ API returned error:', data.error);
+        setEmailStatus('error');
+        setEmailMessage(data.error || 'Error checking email');
+      }
+    } catch (error) {
+      console.error('❌ Email validation error:', error);
+      setEmailStatus('error');
+      setEmailMessage(`Network error: ${error.message}`);
+    }
+  };
   
   // Optimized login flow - no extra API calls for depot users
   const fetchProfileAndLogin = async (userFromLogin, token) => {
@@ -153,7 +223,7 @@ const Auth = ({ initialMode = 'login' }) => {
     if (!signupForm.email.trim()) errors.email = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupForm.email.trim())) errors.email = 'Please enter a valid email address';
     if (!signupForm.phone.trim()) errors.phone = 'Mobile number is required';
-    else if (!/^\+91[6-9][0-9]{9}$/.test(signupForm.phone.trim())) errors.phone = 'Mobile number must be in format (+91) followed by 10 digits starting with 6-9';
+    else if (!/^[6-9][0-9]{9}$/.test(signupForm.phone.trim())) errors.phone = 'Enter valid 10-digit Indian mobile number';
     if (!signupForm.password) errors.password = 'Password is required';
     else if (signupForm.password.length < 8) errors.password = 'Password must be at least 8 characters';
     if (!signupForm.confirmPassword) errors.confirmPassword = 'Please confirm your password';
@@ -227,7 +297,7 @@ const Auth = ({ initialMode = 'login' }) => {
     if (!validateSignupForm()) return;
     setIsSigningUp(true);
     try {
-      const payload = { name: signupForm.name, email: signupForm.email, phone: signupForm.phone, password: signupForm.password };
+      const payload = { name: signupForm.name, email: signupForm.email, phone: '+91' + signupForm.phone, password: signupForm.password, role: 'passenger' };
       const res = await apiFetch('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) });
       if (!res.ok) { toast.error(res.message || 'Registration failed'); return; }
       const user = res.data.data?.user || res.data.user;
@@ -279,6 +349,25 @@ const Auth = ({ initialMode = 'login' }) => {
   const handleSignupChange = useCallback((field, value) => {
     setSignupForm(prev => ({ ...prev, [field]: value }));
     if (signupErrors[field]) setSignupErrors(prev => ({ ...prev, [field]: '' }));
+    
+    // Handle email validation with debouncing
+    if (field === 'email') {
+      console.log('📧 Email field changed:', value);
+      
+      // Clear previous timeout
+      if (emailTimeoutRef.current) {
+        clearTimeout(emailTimeoutRef.current);
+        console.log('⏰ Cleared previous timeout');
+      }
+
+      // Set new timeout for email validation
+      emailTimeoutRef.current = setTimeout(() => {
+        console.log('⏰ Timeout triggered, calling validateEmail');
+        validateEmail(value);
+      }, 300); // 300ms delay to avoid too many API calls
+      
+      console.log('⏰ New timeout set for 300ms');
+    }
   }, [signupErrors]);
 
   const handleForgotPasswordChange = useCallback((field, value) => {
@@ -286,33 +375,56 @@ const Auth = ({ initialMode = 'login' }) => {
     if (forgotPasswordErrors[field]) setForgotPasswordErrors(prev => ({ ...prev, [field]: '' }));
   }, [forgotPasswordErrors]);
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (emailTimeoutRef.current) {
+        clearTimeout(emailTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Special handler for phone field to restrict to numbers only
   const handlePhoneChange = useCallback((e) => {
     let value = e.target.value;
     
-    // Simple approach: just filter out non-numeric characters except + at start
-    if (value.length > 0) {
-      if (value.startsWith('+')) {
-        // Keep + and only numbers after it
-        value = '+' + value.slice(1).replace(/[^0-9]/g, '');
-      } else {
-        // Remove all non-numeric characters
-        value = value.replace(/[^0-9]/g, '');
-      }
-    }
+    // Extract only numbers
+    const numbersOnly = value.replace(/[^0-9]/g, '');
     
-    // Limit to 13 characters (+91 + 10 digits)
-    if (value.length > 13) {
-      value = value.slice(0, 13);
+    if (numbersOnly.length > 0) {
+      // If user types 10 digits, show them as-is (no +91 prefix in display)
+      if (numbersOnly.length <= 10) {
+        value = numbersOnly;
+      }
+      // If user types more than 10 digits, take only first 10
+      else {
+        value = numbersOnly.slice(0, 10);
+      }
+    } else {
+      value = '';
     }
     
     setSignupForm(prev => ({ ...prev, phone: value }));
     
-    // Clear any existing errors when user types
-    if (signupErrors.phone) {
+    // Real-time validation
+    if (value.trim()) {
+      // Check if it's exactly 10 digits
+      if (value.length === 10) {
+        // Check if it starts with 6, 7, 8, or 9
+        if (/^[6-9]/.test(value)) {
+          setSignupErrors(prev => ({ ...prev, phone: '' }));
+        } else {
+          setSignupErrors(prev => ({ ...prev, phone: 'Mobile number must start with 6, 7, 8, or 9' }));
+        }
+      } else if (value.length < 10) {
+        setSignupErrors(prev => ({ ...prev, phone: 'Enter 10-digit mobile number' }));
+      } else {
+        setSignupErrors(prev => ({ ...prev, phone: 'Enter valid 10-digit Indian mobile number' }));
+      }
+    } else {
       setSignupErrors(prev => ({ ...prev, phone: '' }));
     }
-  }, [signupErrors.phone]);
+  }, []);
 
 
 
@@ -445,18 +557,35 @@ const Auth = ({ initialMode = 'login' }) => {
               <form className="space-y-2 login-form-compact" onSubmit={onSubmitSignup}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <InputField id="name" label="Full Name" type="text" autoComplete="name" value={signupForm.name} onChange={(e) => handleSignupChange('name', e.target.value)} error={signupErrors.name} disabled={isSigningUp} />
-                  <InputField id="email" label="Email address" type="email" autoComplete="email" value={signupForm.email} onChange={(e) => handleSignupChange('email', e.target.value)} error={signupErrors.email} disabled={isSigningUp} />
+                  <div>
+                    <InputField 
+                      id="email" 
+                      label="Email address" 
+                      type="email" 
+                      autoComplete="email" 
+                      value={signupForm.email} 
+                      onChange={(e) => handleSignupChange('email', e.target.value)} 
+                      error={signupErrors.email} 
+                      disabled={isSigningUp}
+                      className={`${emailStatus === 'available' ? 'border-green-500' : emailStatus === 'exists' ? 'border-red-500' : emailStatus === 'checking' ? 'border-blue-500' : ''}`}
+                    />
+                    {emailMessage && (
+                      <div className={`mt-1 text-sm ${emailStatus === 'available' ? 'text-green-600' : emailStatus === 'exists' ? 'text-red-600' : emailStatus === 'checking' ? 'text-blue-600' : 'text-gray-600'}`}>
+                        {emailMessage}
+                      </div>
+                    )}
+                  </div>
                   <InputField 
                     id="phone" 
                     label="Mobile Number" 
                     type="tel" 
                     autoComplete="tel" 
-                    placeholder="+91 9876543210" 
+                    placeholder="9876543210" 
                     value={signupForm.phone} 
                     onChange={handlePhoneChange} 
                     error={signupErrors.phone} 
                     disabled={isSigningUp}
-                    maxLength="13"
+                    maxLength="10"
                   />
                   <PasswordField id="password" label="Password" autoComplete="new-password" value={signupForm.password} onChange={(e) => handleSignupChange('password', e.target.value)} error={signupErrors.password} disabled={isSigningUp} />
                 </div>

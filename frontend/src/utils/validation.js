@@ -32,13 +32,13 @@ export const ROLE_EMAIL_PATTERNS = {
 
 // Phone number validation - Indian mobile format
 export const PHONE_VALIDATION = {
-  pattern: /^\+91[6-9][0-9]{9}$/,
-  minLength: 13, // +91 + 10 digits
-  maxLength: 13,
-  description: 'Mobile number must be in format (+91) followed by 10 digits starting with 6-9',
+  pattern: /^[6-9][0-9]{9}$/,
+  minLength: 10, // 10 digits
+  maxLength: 10,
+  description: 'Enter valid 10-digit Indian mobile number',
   test: (phone) => {
     const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
-    return /^\+91[6-9][0-9]{9}$/.test(cleanPhone);
+    return /^[6-9][0-9]{9}$/.test(cleanPhone);
   }
 };
 
@@ -84,9 +84,9 @@ export const validateField = (fieldName, value) => {
       
     case 'phone':
       if (!value.trim()) {
-        errors.push('Phone number is required');
+        errors.push('Mobile number is required');
       } else if (!PHONE_VALIDATION.test(value)) {
-        errors.push('Mobile number must be in format (+91) followed by 10 digits starting with 6-9');
+        errors.push('Enter valid 10-digit Indian mobile number');
       }
       break;
       

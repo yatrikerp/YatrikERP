@@ -6,6 +6,8 @@ const Booking = require('../models/Booking');
 const Trip = require('../models/Trip');
 const Bus = require('../models/Bus');
 const Route = require('../models/Route');
+const { sendEmail } = require('../config/email');
+const { queueEmail } = require('../services/emailQueue');
 
 // Helper function to create role-based auth middleware
 const authRole = (roles) => [auth, requireRole(roles)];
@@ -84,6 +86,22 @@ router.post('/', auth, async (req, res) => {
     });
 
     await booking.save();
+
+    // Queue booking confirmation email for instant processing (non-blocking)
+    const bookingData = {
+      bookingId: booking.bookingId,
+      bookingReference: booking.bookingReference,
+      customer: booking.customer,
+      journey: booking.journey,
+      seats: booking.seats,
+      pricing: booking.pricing,
+      bus: trip.busId,
+      route: trip.routeId,
+      trip: trip
+    };
+    
+    queueEmail(booking.customer.email, 'ticketConfirmation', bookingData);
+    console.log('📧 Booking confirmation email queued for:', booking.customer.email);
 
     res.status(201).json({
       success: true,

@@ -5,6 +5,104 @@ const Trip = require('../models/Trip');
 const FarePolicy = require('../models/FarePolicy');
 const GPSPing = require('../models/GPSPing');
 
+// GET /api/trips/all - Get all scheduled trips
+router.get('/all', async (req, res) => {
+  try {
+    console.log('🚌 Fetching all scheduled trips');
+    
+    const routes = await Route.find({}).lean();
+    const policy = await FarePolicy.findOne({ active: true }).lean();
+    
+    // Get date filter from query params
+    const { date } = req.query;
+    let dateFilter = {};
+    
+    if (date) {
+      // Filter by specific date
+      const targetDate = new Date(date);
+      const startOfDay = new Date(targetDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(targetDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      dateFilter = {
+        serviceDate: { 
+          $gte: startOfDay, 
+          $lte: endOfDay 
+        }
+      };
+    } else {
+      // Get all trips from today onwards
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      dateFilter = { serviceDate: { $gte: today } };
+    }
+    
+    const trips = await Trip.find({ 
+      ...dateFilter,
+      status: { $in: ['scheduled', 'running'] }
+    })
+    .populate('routeId', 'routeName startingPoint endingPoint totalDistance')
+    .populate('busId', 'busNumber busType capacity amenities')
+    .populate('driverId', 'name')
+    .populate('conductorId', 'name')
+    .sort({ serviceDate: 1, startTime: 1 })
+    .lean();
+    
+    console.log('🚌 Found trips:', trips.length);
+
+    const baseFare = policy?.baseFare ?? 50;
+    const perKm = policy?.perKm ?? 2;
+
+    // Transform trips for frontend
+    const transformedTrips = trips.map(trip => {
+      const route = routes.find(r => r._id.toString() === trip.routeId._id.toString());
+      
+      return {
+        _id: trip._id,
+        routeName: route?.routeName || trip.routeId?.routeName || 'Unknown Route',
+        fromCity: typeof route?.startingPoint === 'object' ? 
+          (route.startingPoint?.city || route.startingPoint?.location || 'Unknown') : 
+          (route?.startingPoint || trip.routeId?.startingPoint || 'Unknown'),
+        toCity: typeof route?.endingPoint === 'object' ? 
+          (route.endingPoint?.city || route.endingPoint?.location || 'Unknown') : 
+          (route?.endingPoint || trip.routeId?.endingPoint || 'Unknown'),
+        startTime: trip.startTime,
+        endTime: trip.endTime,
+        date: trip.serviceDate,
+        fare: trip.fare || (route?.totalDistance ? baseFare + (route.totalDistance * perKm) : baseFare),
+        availableSeats: trip.availableSeats || trip.capacity || 0,
+        capacity: trip.capacity || trip.busId?.capacity?.total || 0,
+        busType: trip.busId?.busType || 'AC Sleeper',
+        operator: 'Kerala State Transport',
+        amenities: trip.busId?.amenities || ['Wifi', 'Charging', 'Refreshments'],
+        distanceKm: route?.totalDistance || 0,
+        rating: 4.5,
+        totalRatings: 128,
+        status: trip.status,
+        driver: trip.driverId?.name || 'TBD',
+        conductor: trip.conductorId?.name || 'TBD'
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        trips: transformedTrips,
+        total: transformedTrips.length
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching all trips:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch trips',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/trips/search?from&to&date
 router.get('/search', async (req, res) => {
   try {
@@ -79,8 +177,12 @@ router.get('/search', async (req, res) => {
         capacity: t.capacity,
         availableSeats: t.availableSeats,
         bookedSeats: t.bookedSeats,
-        fromCity: route?.startingPoint?.city || '',
-        toCity: route?.endingPoint?.city || ''
+        fromCity: typeof route?.startingPoint === 'object' ? 
+          (route.startingPoint?.city || route.startingPoint?.location || 'Unknown') : 
+          (route?.startingPoint || 'Unknown'),
+        toCity: typeof route?.endingPoint === 'object' ? 
+          (route.endingPoint?.city || route.endingPoint?.location || 'Unknown') : 
+          (route?.endingPoint || 'Unknown')
       };
     });
     

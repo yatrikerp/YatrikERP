@@ -90,6 +90,7 @@ import PassengerTicketsList from './pages/passenger/TicketsList';
 import PassengerWallet from './pages/passenger/Wallet';
 import PassengerRecommendations from './pages/passenger/Recommendations';
 import PassengerProfile from './pages/passenger/Profile';
+import AvailableTrips from './pages/passenger/AvailableTrips';
 
 import './index.css';
 
@@ -348,6 +349,14 @@ function App() {
             <RequireAuth roles={['passenger']}>
               <PassengerLayout>
                 <PassengerResults />
+              </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/passenger/available-trips" element={
+            <RequireAuth roles={['passenger']}>
+              <PassengerLayout>
+                <AvailableTrips />
               </PassengerLayout>
             </RequireAuth>
           } />

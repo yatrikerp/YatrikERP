@@ -172,13 +172,22 @@ const PassengerDashboard = () => {
                 <Bus className="w-6 h-6 text-pink-600" />
               </div>
             </div>
-            <button
-              onClick={() => navigate('/passenger/search')}
-              className="w-full bg-gradient-to-r from-pink-600 to-pink-700 text-white py-3 px-4 rounded-lg hover:from-pink-700 hover:to-pink-800 transition-all duration-200 flex items-center justify-center space-x-2 font-semibold"
-            >
-              <Search className="w-5 h-5" />
-              <span>Search & Book Trip</span>
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={() => navigate('/passenger/search')}
+                className="w-full bg-gradient-to-r from-pink-600 to-pink-700 text-white py-3 px-4 rounded-lg hover:from-pink-700 hover:to-pink-800 transition-all duration-200 flex items-center justify-center space-x-2 font-semibold"
+              >
+                <Search className="w-5 h-5" />
+                <span>Search & Book Trip</span>
+              </button>
+              <button
+                onClick={() => navigate('/passenger/available-trips')}
+                className="w-full bg-white border border-pink-300 text-pink-600 py-2 px-4 rounded-lg hover:bg-pink-50 transition-all duration-200 flex items-center justify-center space-x-2 font-medium text-sm"
+              >
+                <Bus className="w-4 h-4" />
+                <span>View All Available Trips</span>
+              </button>
+            </div>
           </div>
 
           {/* Wallet Balance Card */}

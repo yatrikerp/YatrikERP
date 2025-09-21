@@ -5,6 +5,8 @@ const Booking = require('../models/Booking');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
+const { sendEmail } = require('../config/email');
+const { queueEmail } = require('../services/emailQueue');
 const Razorpay = require('razorpay');
 const QRCode = require('qrcode');
 const Ticket = require('../models/Ticket');
@@ -135,12 +137,33 @@ router.post('/verify', auth, async (req, res) => {
     await transaction.save();
     
     // Update booking status
-    const booking = await Booking.findById(transaction.metadata.bookingId);
+    const booking = await Booking.findById(transaction.metadata.bookingId)
+      .populate('tripId', 'serviceDate startTime endTime fare capacity')
+      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+      .populate('busId', 'busNumber busType')
+      .populate('depotId', 'depotName');
+    
     if (booking) {
       booking.status = 'paid';
       booking.paymentStatus = 'completed';
       booking.paymentReference.razorpayPaymentId = razorpay_payment_id;
       await booking.save();
+      
+      // Queue payment confirmation email for instant processing (non-blocking)
+      const bookingData = {
+        bookingId: booking.bookingId,
+        bookingReference: booking.bookingReference,
+        customer: booking.customer,
+        journey: booking.journey,
+        seats: booking.seats,
+        pricing: booking.pricing,
+        bus: booking.busId,
+        route: booking.routeId,
+        trip: booking.tripId
+      };
+      
+      queueEmail(booking.customer.email, 'ticketConfirmation', bookingData);
+      console.log('📧 Payment confirmation email queued for:', booking.customer.email);
     }
     
     // Log audit

@@ -119,13 +119,22 @@ const PassengerResults = () => {
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <button 
-            onClick={() => navigate('/passenger/search')}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4"
-          >
-            <ArrowRight className="w-4 h-4 rotate-180" />
-            Back to Search
-          </button>
+          <div className="flex items-center justify-between mb-4">
+            <button 
+              onClick={() => navigate('/passenger/search')}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
+            >
+              <ArrowRight className="w-4 h-4 rotate-180" />
+              Back to Search
+            </button>
+            <button 
+              onClick={() => navigate('/passenger/available-trips')}
+              className="flex items-center gap-2 bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 transition-colors text-sm font-medium"
+            >
+              <Bus className="w-4 h-4" />
+              View All Scheduled Trips
+            </button>
+          </div>
           <h1 className="text-3xl font-bold text-gray-900">Available Trips</h1>
           <p className="text-gray-600 mt-2">
             {params.get('from')} → {params.get('to')} • {new Date(params.get('date')).toDateString()}
@@ -147,7 +156,10 @@ const PassengerResults = () => {
                         </div>
                         <div>
                           <h3 className="text-xl font-semibold text-gray-900">{trip.routeName}</h3>
-                          <p className="text-gray-600">{trip.fromCity} → {trip.toCity}</p>
+                          <p className="text-gray-600">
+                            {typeof trip.fromCity === 'object' ? trip.fromCity?.city || trip.fromCity?.location || 'Unknown' : trip.fromCity} → 
+                            {typeof trip.toCity === 'object' ? trip.toCity?.city || trip.toCity?.location || 'Unknown' : trip.toCity}
+                          </p>
                         </div>
                       </div>
 
