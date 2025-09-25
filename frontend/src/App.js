@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import QueryProvider from './providers/QueryProvider';
+import { initializeCacheManager } from './utils/cacheManager';
 import RequireAuth from './guards/RequireAuth';
 import AppShell from './components/Layout/AppShell';
 import AdminLayout from './components/Admin/AdminLayout';
@@ -69,6 +70,12 @@ import AdminPaymentHistory from './pages/admin/AdminPaymentHistory';
 import AdminRevenue from './pages/admin/AdminRevenue';
 import RedirectDashboard from './pages/RedirectDashboard';
 
+// New Streamlined Components
+import MassSchedulingDashboard from './pages/admin/MassSchedulingDashboard';
+import StreamlinedBusManagement from './pages/admin/StreamlinedBusManagement';
+import StreamlinedRouteManagement from './pages/admin/StreamlinedRouteManagement';
+import StreamlinedTripManagement from './pages/admin/StreamlinedTripManagement';
+
 // Passenger Pages (Legacy - keeping for reference)
 // import PassengerDashboardSimple from './pages/pax/PassengerDashboardSimple';
 // import PassengerBooking from './pages/pax/Booking';
@@ -95,6 +102,11 @@ import AvailableTrips from './pages/passenger/AvailableTrips';
 import './index.css';
 
 function App() {
+  // Initialize cache manager on app startup
+  useEffect(() => {
+    initializeCacheManager();
+  }, []);
+
   return (
     <>
     <QueryProvider>
@@ -498,6 +510,39 @@ function App() {
             </RequireAuth>
           } />
 
+          {/* New Streamlined Management Routes */}
+          <Route path="/admin/mass-scheduling" element={
+            <RequireAuth roles={['admin']}>
+              <AdminLayout>
+                <MassSchedulingDashboard />
+              </AdminLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/admin/streamlined-buses" element={
+            <RequireAuth roles={['admin']}>
+              <AdminLayout>
+                <StreamlinedBusManagement />
+              </AdminLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/admin/streamlined-routes" element={
+            <RequireAuth roles={['admin']}>
+              <AdminLayout>
+                <StreamlinedRouteManagement />
+              </AdminLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/admin/streamlined-trips" element={
+            <RequireAuth roles={['admin']}>
+              <AdminLayout>
+                <StreamlinedTripManagement />
+              </AdminLayout>
+            </RequireAuth>
+          } />
+
           <Route path="/admin/depot-management" element={
             <RequireAuth roles={['admin']}>
               <AdminLayout>
@@ -694,6 +739,7 @@ function App() {
       </Router>
     </AuthProvider>
     </QueryProvider>
+    {/* CacheTestPanel removed for production and dashboards */}
     <Toaster
       position="top-right"
       toastOptions={{

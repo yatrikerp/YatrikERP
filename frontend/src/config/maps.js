@@ -1,7 +1,7 @@
 // Google Maps API Configuration
 export const GOOGLE_MAPS_CONFIG = {
-  // Replace with your actual Google Maps API key from Google Cloud Console
-  API_KEY: process.env.REACT_APP_GOOGLE_MAPS_API_KEY || 'YOUR_GOOGLE_MAPS_API_KEY_HERE',
+  // Vite env key (must be defined as VITE_GOOGLE_MAPS_API_KEY in .env)
+  API_KEY: (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GOOGLE_MAPS_API_KEY) || 'YOUR_GOOGLE_MAPS_API_KEY_HERE',
   
   // Default map options
   DEFAULT_ZOOM: 13,
@@ -25,7 +25,7 @@ export const GOOGLE_MAPS_CONFIG = {
 // Helper function to generate Google Maps embed URL
 export const generateMapsEmbedUrl = (lat, lng, zoom = 13, apiKey = GOOGLE_MAPS_CONFIG.API_KEY) => {
   if (!apiKey || apiKey === 'YOUR_GOOGLE_MAPS_API_KEY_HERE') {
-    console.warn('Google Maps API key not configured. Please add REACT_APP_GOOGLE_MAPS_API_KEY to your .env file');
+    console.warn('Google Maps API key not configured. Please add VITE_GOOGLE_MAPS_API_KEY to your frontend .env');
     return null;
   }
   
@@ -44,6 +44,6 @@ export const generateDirectionsUrl = (origin, destination, apiKey = GOOGLE_MAPS_
 
 // Helper function to check if API key is configured
 export const isMapsApiConfigured = () => {
-  const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+  const apiKey = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GOOGLE_MAPS_API_KEY) || undefined;
   return apiKey && apiKey !== 'YOUR_GOOGLE_MAPS_API_KEY_HERE' && apiKey.length > 10;
 };

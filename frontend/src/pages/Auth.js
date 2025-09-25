@@ -39,6 +39,9 @@ const Auth = ({ initialMode = 'login' }) => {
   const [emailMessage, setEmailMessage] = useState('');
   const emailTimeoutRef = useRef(null);
 
+  // Disable all non-email fields until email is confirmed available
+  const otherDisabled = emailStatus !== 'available';
+
   // Email validation function
   const validateEmail = async (email) => {
     console.log('🔍 validateEmail called with:', email);
@@ -556,7 +559,7 @@ const Auth = ({ initialMode = 'login' }) => {
             <div className="max-w-lg mx-auto">
               <form className="space-y-2 login-form-compact" onSubmit={onSubmitSignup}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <InputField id="name" label="Full Name" type="text" autoComplete="name" value={signupForm.name} onChange={(e) => handleSignupChange('name', e.target.value)} error={signupErrors.name} disabled={isSigningUp} />
+                  <InputField id="name" label="Full Name" type="text" autoComplete="name" value={signupForm.name} onChange={(e) => handleSignupChange('name', e.target.value)} error={signupErrors.name} disabled={isSigningUp || otherDisabled} />
                   <div>
                     <InputField 
                       id="email" 
@@ -584,14 +587,14 @@ const Auth = ({ initialMode = 'login' }) => {
                     value={signupForm.phone} 
                     onChange={handlePhoneChange} 
                     error={signupErrors.phone} 
-                    disabled={isSigningUp}
+                    disabled={isSigningUp || otherDisabled}
                     maxLength="10"
                   />
-                  <PasswordField id="password" label="Password" autoComplete="new-password" value={signupForm.password} onChange={(e) => handleSignupChange('password', e.target.value)} error={signupErrors.password} disabled={isSigningUp} />
+                  <PasswordField id="password" label="Password" autoComplete="new-password" value={signupForm.password} onChange={(e) => handleSignupChange('password', e.target.value)} error={signupErrors.password} disabled={isSigningUp || otherDisabled} />
                 </div>
-                <PasswordField id="confirmPassword" label="Confirm Password" autoComplete="new-password" value={signupForm.confirmPassword} onChange={(e) => handleSignupChange('confirmPassword', e.target.value)} error={signupErrors.confirmPassword} disabled={isSigningUp} />
+                <PasswordField id="confirmPassword" label="Confirm Password" autoComplete="new-password" value={signupForm.confirmPassword} onChange={(e) => handleSignupChange('confirmPassword', e.target.value)} error={signupErrors.confirmPassword} disabled={isSigningUp || otherDisabled} />
                 <div>
-                  <button type="submit" className="w-full flex justify-center py-1.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 btn-transition login-form-compact" disabled={isSigningUp}>
+                  <button type="submit" className="w-full flex justify-center py-1.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 btn-transition login-form-compact" disabled={isSigningUp || otherDisabled || emailStatus === 'checking'}>
                     {isSigningUp ? (<div className="flex items-center space-x-2"><LoadingSpinner size="sm" color="white" /><span>Creating account...</span></div>) : ('Create Account')}
                   </button>
                 </div>

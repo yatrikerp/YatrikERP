@@ -213,14 +213,15 @@ router.post('/', authRole(['admin']), async (req, res) => {
 // Update depot (admin only)
 router.put('/:id', authRole(['admin']), async (req, res) => {
   try {
-    const depotData = {
-      ...req.body,
-      updatedBy: req.user.id
-    };
-
+    const { assignedStaff, ...depotData } = req.body;
+    
+    // Update depot basic information
     const depot = await Depot.findByIdAndUpdate(
       req.params.id,
-      depotData,
+      {
+        ...depotData,
+        updatedBy: req.user.id
+      },
       { new: true, runValidators: true }
     ).populate('updatedBy', 'name email');
 
@@ -231,10 +232,64 @@ router.put('/:id', authRole(['admin']), async (req, res) => {
       });
     }
 
+    // Handle staff assignments if provided
+    if (assignedStaff && Array.isArray(assignedStaff)) {
+      const User = require('../models/User');
+      
+      console.log(`🔄 Processing staff assignments for depot ${depot.depotName}:`, {
+        depotId: req.params.id,
+        assignedStaff: assignedStaff,
+        staffCount: assignedStaff.length
+      });
+      
+      try {
+        // First, remove all staff from this depot
+        const removeResult = await User.updateMany(
+          { depotId: req.params.id, role: { $in: ['driver', 'conductor'] } },
+          { $unset: { depotId: 1 } }
+        );
+        console.log(`🗑️ Removed ${removeResult.modifiedCount} staff from depot`);
+        
+        // Then assign the new staff to this depot
+        if (assignedStaff.length > 0) {
+          const assignResult = await User.updateMany(
+            { _id: { $in: assignedStaff }, role: { $in: ['driver', 'conductor'] } },
+            { depotId: req.params.id }
+          );
+          console.log(`✅ Assigned ${assignResult.modifiedCount} staff to depot`);
+        }
+        
+        // Verify the assignments
+        const verifyStaff = await User.find({ depotId: req.params.id, role: { $in: ['driver', 'conductor'] } });
+        console.log(`🔍 Verification: ${verifyStaff.length} staff now assigned to depot ${depot.depotName}`);
+        console.log(`🔍 Assigned staff details:`, verifyStaff.map(s => ({ name: s.name, role: s.role, depotId: s.depotId })));
+        
+      } catch (staffError) {
+        console.error('Error updating staff assignments:', staffError);
+        // Don't fail the entire request if staff update fails
+      }
+    }
+
+    // Get updated depot with staff count
+    const updatedDepot = await Depot.findById(req.params.id)
+      .populate('assignedStaff', 'name email role')
+      .lean();
+    
+    // Get actual staff count for this depot
+    const staffCount = await User.countDocuments({ 
+      depotId: req.params.id, 
+      role: { $in: ['driver', 'conductor'] } 
+    });
+    
+    console.log(`📊 Final verification - Depot ${depot.depotName} now has ${staffCount} staff assigned`);
+
     res.json({
       success: true,
       message: 'Depot updated successfully',
-      data: depot
+      data: {
+        ...depot.toObject(),
+        staffCount: staffCount
+      }
     });
   } catch (error) {
     console.error('Error updating depot:', error);

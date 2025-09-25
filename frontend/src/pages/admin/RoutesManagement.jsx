@@ -16,7 +16,9 @@ import {
   Building,
   Users,
   TrendingUp,
-  MoreVertical
+  MoreVertical,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import AnimatedCard from '../../components/pax/AnimatedCard';
 import GlassCard from '../../components/pax/GlassCard';
@@ -42,6 +44,11 @@ const RoutesManagement = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('grid'); // grid, list, map
   
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(24);
+  const [total, setTotal] = useState(0);
+
   // New route form state
   const [newRoute, setNewRoute] = useState({
     routeNumber: '',
@@ -125,66 +132,68 @@ const RoutesManagement = () => {
     });
   };
 
-  // Helper function to reload routes from database
-  const reloadRoutes = async () => {
+  // Load data with pagination and filters
+  const fetchRoutes = async () => {
     try {
-      const routesRes = await apiFetch('/api/admin/routes');
-      const routesRaw = (routesRes?.data?.routes || routesRes?.data?.data?.routes || routesRes?.data || []);
+      setLoading(true);
+      const params = new URLSearchParams();
+      params.set('page', String(page));
+      params.set('limit', String(limit));
+      if (searchQuery) params.set('search', searchQuery.trim());
+      if (filters.fromCity) params.set('fromCity', filters.fromCity.trim());
+      if (filters.toCity) params.set('toCity', filters.toCity.trim());
+      if (filters.depotId) params.set('depotId', filters.depotId);
+      if (filters.status) params.set('status', filters.status);
+
+      const routesRes = await apiFetch('/api/admin/routes?' + params.toString());
+      const payload = routesRes?.data?.data || routesRes?.data || {};
+      const routesRaw = payload.routes || payload.routeList || Array.isArray(payload) ? payload : [];
       const normalizedRoutes = normalizeRoutes(routesRaw);
       setRoutes(normalizedRoutes);
-      console.log('Routes reloaded from database:', normalizedRoutes);
-    } catch (error) {
-      console.error('Error reloading routes:', error);
-      window.alert('Failed to reload routes from database');
+      const pagination = payload.pagination || payload.meta || {};
+      setTotal(pagination.total || (routesRes?.data?.total) || normalizedRoutes.length);
+    } catch (e) {
+      console.error('Failed to load routes', e);
+      setRoutes([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Load live data
+  const fetchDepots = async () => {
+    try {
+      clearApiCache();
+      const depotsRes = await apiFetch('/api/admin/depots?showAll=true&_=' + Date.now());
+      const depotsRaw = depotsRes?.data?.depots || depotsRes?.data?.data?.depots || depotsRes?.data || [];
+      const normalizedDepots = (depotsRaw || []).map((d) => ({
+        id: d._id || d.id,
+        depotCode: d.depotCode || d.code || '',
+        depotName: d.depotName || d.name || 'Unknown Depot',
+        location: { 
+          city: d.location?.city || d.address?.city || 'Unknown City',
+          state: d.location?.state || d.address?.state || '',
+          address: d.location?.address || d.address?.address || ''
+        },
+        capacity: d.capacity || { totalBuses: 0, availableBuses: 0, maintenanceBuses: 0 },
+        status: d.status || 'active'
+      }));
+      setDepots(normalizedDepots);
+    } catch (e) {
+      console.error('Failed to load depots', e);
+      setDepots([]);
+    }
+  };
+
+  // Initial load
   useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        clearApiCache();
-        const [routesRes, depotsRes] = await Promise.all([
-          apiFetch('/api/admin/routes?limit=500&_=' + Date.now()),
-          apiFetch('/api/admin/depots?showAll=true&_=' + Date.now())
-        ]);
-
-        const routesRaw = (routesRes?.data?.routes || routesRes?.data?.data?.routes || routesRes?.data || []);
-        const normalizedRoutes = normalizeRoutes(routesRaw);
-        setRoutes(normalizedRoutes);
-
-        const depotsRaw = (depotsRes?.data?.depots || depotsRes?.data?.data?.depots || depotsRes?.data || []);
-        console.log('Raw depots data:', depotsRaw);
-        
-        const normalizedDepots = (depotsRaw || []).map((d) => ({
-          id: d._id || d.id,
-          depotCode: d.depotCode || d.code || '',
-          depotName: d.depotName || d.name || 'Unknown Depot',
-          location: { 
-            city: d.location?.city || d.address?.city || 'Unknown City',
-            state: d.location?.state || d.address?.state || '',
-            address: d.location?.address || d.address?.address || ''
-          },
-          capacity: d.capacity || { totalBuses: 0, availableBuses: 0, maintenanceBuses: 0 },
-          status: d.status || 'active'
-        }));
-
-        console.log('Normalized depots:', normalizedDepots);
-        setDepots(normalizedDepots);
-      } catch (e) {
-        console.error('Failed to load routes/depots', e);
-        setRoutes([]);
-        setDepots([]);
-        
-        // Show error message to user
-        window.alert('Failed to load depot data. Please refresh the page and try again.');
-      } finally {
-      setLoading(false);
-      }
-    };
-    load();
+    fetchDepots();
   }, []);
+
+  // Reload when filters/page/limit change
+  useEffect(() => {
+    fetchRoutes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, limit, searchQuery, filters.fromCity, filters.toCity, filters.depotId, filters.status]);
 
   // Handle route input changes
   const handleRouteInputChange = (e) => {
@@ -288,7 +297,7 @@ const RoutesManagement = () => {
 
       if (response.ok && response.data?.success) {
         // Reload routes from database
-        await reloadRoutes();
+        await fetchRoutes();
 
         // Reset form
         setNewRoute({
@@ -401,7 +410,7 @@ const RoutesManagement = () => {
 
       if (response.ok && response.data?.success) {
         // Reload routes from database
-        await reloadRoutes();
+        await fetchRoutes();
 
         // Reset form and close modal
         setEditingRoute(null);
@@ -486,7 +495,7 @@ const RoutesManagement = () => {
 
       if (response.ok && response.data?.success) {
         // Reload routes from database
-        await reloadRoutes();
+        await fetchRoutes();
         window.alert(`Route ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully!`);
       } else {
         const errorMessage = response.data?.message || response.message || 'Failed to update route status';
@@ -813,7 +822,7 @@ const RoutesManagement = () => {
                {viewMode === 'grid' ? 'List View' : 'Grid View'}
              </button>
              <button
-               onClick={reloadRoutes}
+               onClick={fetchRoutes}
                disabled={loading}
                className="bg-green-100 text-green-700 px-3 py-2 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50 text-sm"
              >
@@ -888,48 +897,35 @@ const RoutesManagement = () => {
                 type="text"
                 placeholder="Search routes..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => { setPage(1); setSearchQuery(e.target.value); }}
                 className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
             </div>
           </div>
-          
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <select
               value={filters.fromCity}
-              onChange={(e) => setFilters({ ...filters, fromCity: e.target.value })}
+              onChange={(e) => { setPage(1); setFilters({ ...filters, fromCity: e.target.value }); }}
               className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             >
               <option value="">From City</option>
-              <option value="Kochi">Kochi</option>
-              <option value="Thiruvananthapuram">Thiruvananthapuram</option>
-              <option value="Kozhikode">Kozhikode</option>
-              <option value="Alappuzha">Alappuzha</option>
-              <option value="Kollam">Kollam</option>
-              <option value="Thrissur">Thrissur</option>
-              <option value="Kottayam">Kottayam</option>
-              <option value="Palakkad">Palakkad</option>
+              {[...new Set(routes.map(r => r.startingPoint.city).filter(Boolean))].slice(0,100).map(city => (
+                <option key={city} value={city}>{city}</option>
+              ))}
             </select>
-            
             <select
               value={filters.toCity}
-              onChange={(e) => setFilters({ ...filters, toCity: e.target.value })}
+              onChange={(e) => { setPage(1); setFilters({ ...filters, toCity: e.target.value }); }}
               className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             >
               <option value="">To City</option>
-              <option value="Kochi">Kochi</option>
-              <option value="Thiruvananthapuram">Thiruvananthapuram</option>
-              <option value="Kozhikode">Kozhikode</option>
-              <option value="Alappuzha">Alappuzha</option>
-              <option value="Kollam">Kollam</option>
-              <option value="Thrissur">Thrissur</option>
-              <option value="Kottayam">Kottayam</option>
-              <option value="Palakkad">Palakkad</option>
+              {[...new Set(routes.map(r => r.endingPoint.city).filter(Boolean))].slice(0,100).map(city => (
+                <option key={city} value={city}>{city}</option>
+              ))}
             </select>
-            
             <select
               value={filters.depotId}
-              onChange={(e) => setFilters({ ...filters, depotId: e.target.value })}
+              onChange={(e) => { setPage(1); setFilters({ ...filters, depotId: e.target.value }); }}
               className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             >
               <option value="">All Depots</option>
@@ -937,10 +933,9 @@ const RoutesManagement = () => {
                 <option key={depot.id} value={depot.id}>{depot.depotName}</option>
               ))}
             </select>
-            
             <select
               value={filters.status}
-              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              onChange={(e) => { setPage(1); setFilters({ ...filters, status: e.target.value }); }}
               className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             >
               <option value="">All Status</option>
@@ -952,6 +947,22 @@ const RoutesManagement = () => {
           </div>
         </div>
       </GlassCard>
+
+      {/* Pagination Controls */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm text-gray-600">{total} total · Page {page}</div>
+        <div className="flex items-center space-x-2">
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-2 py-1 border rounded disabled:opacity-50">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <select value={limit} onChange={(e) => { setPage(1); setLimit(parseInt(e.target.value) || 24); }} className="px-2 py-1 border rounded">
+            {[12,24,48,96].map(n => <option key={n} value={n}>{n}/page</option>)}
+          </select>
+          <button onClick={() => setPage(p => p + 1)} disabled={routes.length < limit && page * limit >= total} className="px-2 py-1 border rounded disabled:opacity-50">
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
 
       {/* Routes Grid/List */}
       <div className="space-y-4">
@@ -1311,7 +1322,7 @@ const RoutesManagement = () => {
                   </option>
                   {depots.map(depot => (
                     <option key={depot.id} value={depot.id}>
-                      {depot.depotName} - {depot.location.city}
+                      {depot.depotName} - {depot.location?.city || depot.location?.address || 'Location not set'}
                     </option>
                   ))}
                 </select>
@@ -1566,7 +1577,7 @@ const RoutesManagement = () => {
                   </option>
                   {depots.map(depot => (
                     <option key={depot.id} value={depot.id}>
-                      {depot.depotName} - {depot.location.city}
+                      {depot.depotName} - {depot.location?.city || depot.location?.address || 'Location not set'}
                     </option>
                   ))}
                 </select>

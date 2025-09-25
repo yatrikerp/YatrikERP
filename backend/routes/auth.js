@@ -83,12 +83,14 @@ router.post('/register', userValidations.register, handleValidationErrors, valid
       { expiresIn: '7d' }
     );
 
-    // Queue welcome email for instant processing (non-blocking)
-    queueEmail(email, 'registrationWelcome', {
-      userName: user.name,
-      userEmail: user.email
-    });
-    console.log('📧 Welcome email queued for:', email);
+    // Queue welcome email ONLY for passengers
+    if (String(user.role || '').toLowerCase() === 'passenger') {
+      queueEmail(email, 'registrationWelcome', {
+        userName: user.name,
+        userEmail: user.email
+      });
+      console.log('📧 Welcome email queued for passenger:', email);
+    }
 
     res.status(201).json({
       success: true,
@@ -173,7 +175,7 @@ router.post("/login", async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Queue login notification email for instant processing (non-blocking)
+    // Queue login notification email ONLY for passengers (not depot/driver/conductor/admin)
     const clientIP = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || 'Unknown';
     const loginTime = new Date().toLocaleString('en-IN', {
       timeZone: 'Asia/Kolkata',
@@ -185,12 +187,14 @@ router.post("/login", async (req, res) => {
       second: '2-digit'
     });
     
-    queueEmail(user.email, 'loginNotification', {
-      userName: user.name,
-      loginTime: loginTime,
-      ipAddress: clientIP
-    });
-    console.log('📧 Login notification email queued for:', user.email);
+    if (String(user.role || '').toLowerCase() === 'passenger' || String(user.role || '').toLowerCase() === 'user') {
+      queueEmail(user.email, 'loginNotification', {
+        userName: user.name,
+        loginTime: loginTime,
+        ipAddress: clientIP
+      });
+      console.log('📧 Login notification email queued for passenger:', user.email);
+    }
 
     const { password: _removed, ...safeUser } = user.toObject();
     res.json({ 

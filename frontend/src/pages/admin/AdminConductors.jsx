@@ -21,8 +21,10 @@ import {
   Bus,
   UserCheck,
   UserX,
-  Filter
+  Filter,
+  UserPlus
 } from 'lucide-react';
+import BulkAssignmentModal from '../../components/Admin/BulkAssignmentModal';
 
 
 const AdminConductors = () => {
@@ -37,6 +39,7 @@ const AdminConductors = () => {
   const [viewingConductor, setViewingConductor] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [conductorToDelete, setConductorToDelete] = useState(null);
+  const [showBulkAssignment, setShowBulkAssignment] = useState(false);
 
   const [conductorForm, setConductorForm] = useState({
     name: '',
@@ -420,6 +423,13 @@ const AdminConductors = () => {
             className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
           >
             <span>Debug All Staff</span>
+          </button>
+          <button
+            onClick={() => setShowBulkAssignment(true)}
+            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Bulk Assign</span>
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
@@ -817,6 +827,17 @@ const AdminConductors = () => {
           </div>
         </div>
       )}
+
+      {/* Bulk Assignment Modal */}
+      <BulkAssignmentModal
+        isOpen={showBulkAssignment}
+        onClose={() => setShowBulkAssignment(false)}
+        staffType="conductors"
+        onAssign={(data) => {
+          console.log('Bulk assignment completed:', data);
+          fetchData(true); // Refresh data
+        }}
+      />
     </div>
   );
 };

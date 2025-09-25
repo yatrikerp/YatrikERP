@@ -970,9 +970,9 @@ table tr:hover {
 
 /* Main Content */
 .main-content {
-  width: calc(100vw - 320px); /* Full viewport width minus side menu */
-  margin-left: 320px; /* Always pushed by side menu */
-  margin-top: 0; /* No header, so no top margin needed */
+  width: calc(100% - 320px); /* Use container width instead of viewport to prevent underlap */
+  margin-left: 320px; /* Start after fixed sidebar */
+  margin-top: 0; /* No fixed top header in this layout */
   min-height: 100vh; /* Full viewport height */
   max-width: none;
   display: flex;
@@ -1003,7 +1003,7 @@ table tr:hover {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
   position: fixed;
   top: 0;
-  left: 280px; /* Start after sidebar */
+  left: 320px; /* Align with 320px fixed sidebar */
   right: 0;
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
@@ -3080,7 +3080,7 @@ table tr:hover {
 .top-header {
   position: fixed;
   top: 0;
-  left: 280px; /* Account for sidebar width */
+  left: 320px; /* Account for 320px sidebar width */
   right: 0;
   height: 70px;
   min-width: 1160px; /* Fixed desktop width */
@@ -3387,6 +3387,6 @@ table tr:hover {
 /* Adjust main content to account for fixed header and sidebar */
 .main-content {
   margin-top: 0;
-  margin-left: 280px; /* Account for sidebar width */
+  margin-left: 320px; /* Account for fixed 320px sidebar width */
   padding-top: 0;
 }

@@ -6,7 +6,7 @@ import { apiFetch } from '../utils/api';
 import RoleTestPanel from '../components/Common/RoleTestPanel';
 import { handleGoogleAuth } from '../config/googleAuth';
 import ErrorPopup from '../components/Common/ErrorPopup';
-import { validateField, validateRoleEmail, PHONE_VALIDATION, PASSWORD_VALIDATION, NAME_VALIDATION } from '../utils/validation';
+import { validateField, PHONE_VALIDATION, PASSWORD_VALIDATION } from '../utils/validation';
 import ValidationFeedback from '../components/Common/ValidationFeedback';
 import loginImage from '../assets/login.png';
 import '../styles/login.css';
@@ -18,7 +18,7 @@ const Login = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [, setError] = useState('');
   const [showErrorPopup, setShowErrorPopup] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [errorType, setErrorType] = useState('error');
@@ -262,6 +262,10 @@ export default Login;
 
 function SignupForm({ onSuccess }) {
   const { login } = useAuth();
+  // Track email availability status for disabling other fields
+  const [emailStatus, setEmailStatus] = useState('idle'); // idle | checking | available | exists | error
+  const [emailMessage, setEmailMessage] = useState('');
+  const emailTimeoutRef = React.useRef(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -273,7 +277,7 @@ function SignupForm({ onSuccess }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [, setError] = useState('');
   const [showErrorPopup, setShowErrorPopup] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [errorType, setErrorType] = useState('error');
@@ -295,6 +299,36 @@ function SignupForm({ onSuccess }) {
     } else if (name === 'email') {
       const errors = validateField('email', value);
       setFieldErrors(prev => ({ ...prev, email: errors }));
+      // Debounced email availability check
+      if (emailTimeoutRef.current) clearTimeout(emailTimeoutRef.current);
+      emailTimeoutRef.current = setTimeout(async () => {
+        if (!value || errors.length > 0) {
+          setEmailStatus('idle');
+          setEmailMessage('');
+          return;
+        }
+        try {
+          setEmailStatus('checking');
+          setEmailMessage('Checking email...');
+          const res = await apiFetch('/api/auth/check-email', {
+            method: 'POST',
+            body: JSON.stringify({ email: value })
+          });
+          if (res.ok && res.data?.exists === false) {
+            setEmailStatus('available');
+            setEmailMessage('Email available');
+          } else if (res.ok && (res.data?.exists === true || res.data?.message?.includes('exists'))) {
+            setEmailStatus('exists');
+            setEmailMessage('Email already exists');
+          } else {
+            setEmailStatus('error');
+            setEmailMessage(res.message || 'Error checking email');
+          }
+        } catch (err) {
+          setEmailStatus('error');
+          setEmailMessage(err.message || 'Error checking email');
+        }
+      }, 300);
     } else if (name === 'phone') {
       const errors = validateField('phone', value);
       setFieldErrors(prev => ({ ...prev, phone: errors }));
@@ -306,6 +340,8 @@ function SignupForm({ onSuccess }) {
       // Just track that it's been touched
     }
   };
+
+  const otherDisabled = emailStatus !== 'available';
 
   const showPopup = (message, type = 'error') => {
     setErrorMessage(message);
@@ -434,6 +470,7 @@ function SignupForm({ onSuccess }) {
         className="login-input" 
         value={formData.name} 
         onChange={handleChange} 
+        disabled={otherDisabled}
         placeholder="Enter your full name"
         required 
       />
@@ -457,6 +494,11 @@ function SignupForm({ onSuccess }) {
         placeholder="admin@yatrik.com"
         required 
       />
+      {emailMessage && (
+        <div className={`login-hint ${emailStatus === 'exists' ? 'text-red-600' : emailStatus === 'available' ? 'text-green-600' : 'text-gray-500'}`}>
+          {emailMessage}
+        </div>
+      )}
       <ValidationFeedback
         field="email"
         value={formData.email}
@@ -475,6 +517,7 @@ function SignupForm({ onSuccess }) {
         className="login-input" 
         value={formData.phone} 
         onChange={handleChange} 
+        disabled={otherDisabled}
         placeholder="+91 9876543210"
         pattern="\+91[6-9][0-9]{9}"
         title="Please enter a valid mobile number in format (+91) followed by 10 digits starting with 6-9"
@@ -499,6 +542,7 @@ function SignupForm({ onSuccess }) {
           className="login-input" 
           value={formData.password} 
           onChange={handleChange} 
+          disabled={otherDisabled}
           placeholder="Enter strong password"
           required 
         />
@@ -524,6 +568,7 @@ function SignupForm({ onSuccess }) {
           className="login-input" 
           value={formData.confirmPassword} 
           onChange={handleChange} 
+          disabled={otherDisabled}
           placeholder="Confirm your password"
           required 
         />
@@ -540,7 +585,7 @@ function SignupForm({ onSuccess }) {
         successMessage="Passwords match"
       />
 
-      <button type="submit" disabled={isLoading} className="login-btn login-btn--primary">
+      <button type="submit" disabled={isLoading || otherDisabled || emailStatus === 'checking'} className="login-btn login-btn--primary">
         {isLoading ? (
           <div className="flex items-center space-x-2">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import locationService from '../services/locationService';
+import { clearAllCaches } from '../utils/cacheManager';
 
 const AuthContext = createContext();
 
@@ -163,25 +164,83 @@ export const AuthProvider = ({ children }) => {
     if (isLoggingOut) return; // Prevent multiple logout calls
     
     setIsLoggingOut(true);
+    console.log('🚪 Starting logout process...');
     
-    // Stop location tracking for drivers
-    if (user?.role === 'driver') {
-      locationService.stopTracking();
-      console.log('Location tracking stopped for driver logout');
+    try {
+      // Stop location tracking for drivers
+      if (user?.role === 'driver') {
+        locationService.stopTracking();
+        console.log('📍 Location tracking stopped for driver logout');
+      }
+      
+      // Clear state immediately for instant UI response
+      setUser(null);
+      console.log('👤 User state cleared');
+      
+      // Clear all caches and storage comprehensively
+      console.log('🧹 Starting comprehensive cache clearing...');
+      const cacheCleared = await clearAllCaches();
+      
+      if (cacheCleared) {
+        console.log('✅ All caches cleared successfully during logout');
+      } else {
+        console.warn('⚠️ Some caches may not have been cleared completely');
+      }
+      
+      // Additional cleanup for specific user roles
+      if (user?.role === 'driver') {
+        // Clear any driver-specific data
+        try {
+          localStorage.removeItem('driver_location');
+          localStorage.removeItem('driver_status');
+          localStorage.removeItem('active_duty');
+        } catch (error) {
+          console.warn('Error clearing driver-specific data:', error);
+        }
+      } else if (user?.role === 'conductor') {
+        // Clear any conductor-specific data
+        try {
+          localStorage.removeItem('conductor_tickets');
+          localStorage.removeItem('conductor_status');
+        } catch (error) {
+          console.warn('Error clearing conductor-specific data:', error);
+        }
+      } else if (user?.role === 'depot_manager') {
+        // Clear any depot-specific data
+        try {
+          localStorage.removeItem('depot_schedule');
+          localStorage.removeItem('depot_fleet');
+        } catch (error) {
+          console.warn('Error clearing depot-specific data:', error);
+        }
+      } else if (user?.role === 'admin') {
+        // Clear any admin-specific data
+        try {
+          localStorage.removeItem('admin_dashboard_cache');
+          localStorage.removeItem('admin_reports_cache');
+        } catch (error) {
+          console.warn('Error clearing admin-specific data:', error);
+        }
+      }
+      
+      console.log('🎉 Logout process completed successfully');
+      
+    } catch (error) {
+      console.error('❌ Error during logout process:', error);
+      // Still clear basic storage even if cache clearing fails
+      try {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('depotToken');
+        localStorage.removeItem('depotUser');
+        localStorage.removeItem('depotInfo');
+        localStorage.removeItem('currentDutyId');
+      } catch (fallbackError) {
+        console.error('❌ Error during fallback storage clearing:', fallbackError);
+      }
+    } finally {
+      setIsLoggingOut(false);
     }
-    
-    // Clear state immediately for instant UI response
-    setUser(null);
-    
-    // Clear localStorage - handle both regular and depot authentication
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('depotToken');
-    localStorage.removeItem('depotUser');
-    localStorage.removeItem('depotInfo');
-    localStorage.removeItem('currentDutyId');
-    
-    setIsLoggingOut(false);
   }, [isLoggingOut, user]);
 
   const value = {

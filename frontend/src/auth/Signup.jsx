@@ -165,6 +165,9 @@ const Signup = () => {
     }
   };
 
+  // Compute disabled state for other fields
+  const otherDisabled = emailStatus !== 'available';
+
   // Get border color based on email status
   const getEmailBorderColor = () => {
     switch (emailStatus) {
@@ -228,6 +231,7 @@ const Signup = () => {
                 value={formData.name}
                 onChange={handleChange}
                 required
+                disabled={otherDisabled}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 placeholder="Enter your full name"
               />
@@ -292,6 +296,7 @@ const Signup = () => {
                 value={formData.phone}
                 onChange={handleChange}
                 required
+                disabled={otherDisabled}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 placeholder="Enter your mobile number"
               />
@@ -306,6 +311,7 @@ const Signup = () => {
                 name="role"
                 value={formData.role}
                 onChange={handleChange}
+                disabled={otherDisabled}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               >
                 <option value="passenger">Passenger</option>
@@ -327,6 +333,7 @@ const Signup = () => {
                   value={formData.password}
                   onChange={handleChange}
                   required
+                  disabled={otherDisabled}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors pr-12"
                   placeholder="Create a password"
                 />
@@ -352,6 +359,7 @@ const Signup = () => {
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   required
+                  disabled={otherDisabled}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors pr-12"
                   placeholder="Confirm your password"
                 />
@@ -367,7 +375,7 @@ const Signup = () => {
 
             <button
               type="submit"
-              disabled={isLoading || emailStatus === 'checking' || emailStatus === 'exists'}
+              disabled={isLoading || otherDisabled || emailStatus === 'checking'}
               className="w-full bg-gradient-to-r from-red-500 to-pink-600 text-white py-3 px-4 rounded-lg font-medium hover:from-red-600 hover:to-pink-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Creating Account...' : 'Create Account'}

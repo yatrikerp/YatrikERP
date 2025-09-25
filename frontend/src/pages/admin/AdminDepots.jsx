@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { apiFetch, clearApiCache } from '../../utils/api';
 import { 
   Plus, 
@@ -32,7 +32,7 @@ const AdminDepots = () => {
   const [loading, setLoading] = useState(true);
   const [editingDepot, setEditingDepot] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  // const [showEditModal, setShowEditModal] = useState(false); // Removed unused state
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewingDepot, setViewingDepot] = useState(null);
   const [deleteConfirmModal, setDeleteConfirmModal] = useState(false);
@@ -50,30 +50,11 @@ const AdminDepots = () => {
     capacity: { buses: 0, staff: 0 },
     status: 'active',
     createLogin: false,
-    login: { email: '', password: '' }
+    login: { email: '', password: '' },
+    assignedStaff: []
   });
 
-  // Auto-generate depot login email when createLogin is enabled or name/code changes
-  useEffect(() => {
-    if (!depotForm.createLogin) return;
-    const email = makeDepotEmail(depotForm.code, depotForm.name);
-    setDepotForm(prev => ({ ...prev, login: { ...prev.login, email } }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [depotForm.createLogin, depotForm.name, depotForm.code]);
-
-  useEffect(() => {
-    fetchData();
-  }, [showInactiveDepots]);
-
-  // Real-time polling every 30s
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchData(true);
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [showInactiveDepots]);
-
-  const fetchData = async (isAuto = false) => {
+  const fetchData = useCallback(async (isAuto = false) => {
     try {
       setLoading(true);
       if (!isAuto) clearApiCache();
@@ -87,17 +68,27 @@ const AdminDepots = () => {
       if (depotsRes?.ok) {
         const depotsData = depotsRes.data || {};
         const raw = depotsData.depots || depotsData.data?.depots || [];
+        console.log('🏢 Raw depot data from API:', raw);
         const normalized = (raw || []).map(d => ({
           _id: d._id || d.id,
           code: d.code || d.depotCode || '',
           name: d.name || d.depotName || d.code || 'Depot',
-          address: d.address || d.location || {},
-          contact: d.contact || {},
+          address: {
+            street: d.address?.street || d.location?.address || 'Address not available',
+            city: d.address?.city || d.location?.city || 'City not available',
+            state: d.address?.state || d.location?.state || 'State not available',
+            pincode: d.address?.pincode || d.location?.pincode || '000000'
+          },
+          contact: {
+            phone: d.contact?.phone || 'Contact not available',
+            email: d.contact?.email || 'Email not available'
+          },
           manager: d.manager || d.createdBy || null,
           capacity: d.capacity || { buses: 0, staff: 0 },
           status: d.status || 'active',
           createdAt: d.createdAt
         }));
+        console.log('🏢 Normalized depot data:', normalized);
         setDepots(normalized);
       } else {
         setDepots([]);
@@ -116,13 +107,35 @@ const AdminDepots = () => {
           depotId: u.depotId || (typeof u.depot === 'object' ? u.depot?._id : u.depot) || null,
           status: u.status || 'active'
         }));
+        console.log('👥 All users loaded:', normalizedUsers);
+        console.log('👥 Users with depot assignments:', normalizedUsers.filter(u => u.depotId));
         setUsers(normalizedUsers);
       } else {
         setUsers([]);
       }
     } catch (error) { console.error('❌ Error fetching data:', error); alert('Network error while fetching data. Please check your connection.'); }
     finally { setLoading(false); }
-  };
+  }, [showInactiveDepots]);
+
+  // Auto-generate depot login email when createLogin is enabled or name/code changes
+  useEffect(() => {
+    if (!depotForm.createLogin) return;
+    const email = makeDepotEmail(depotForm.code, depotForm.name);
+    setDepotForm(prev => ({ ...prev, login: { ...prev.login, email } }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [depotForm.createLogin, depotForm.name, depotForm.code]);
+
+  useEffect(() => {
+    fetchData();
+  }, [showInactiveDepots, fetchData]);
+
+  // Real-time polling every 30s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchData(true);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const handleManualRefresh = () => {
     fetchData();
@@ -224,7 +237,12 @@ const AdminDepots = () => {
   };
 
   const openEditDepot = (depot) => {
+    console.log('🔍 Opening edit for depot:', depot);
     setEditingDepot(depot);
+    const depotUsers = getUsersByDepot(depot._id);
+    console.log('👥 Current staff for depot:', depotUsers);
+    console.log('👥 Staff IDs to assign:', depotUsers.map(user => user._id));
+    
     setDepotForm({
       code: depot.depotCode || depot.code || '',
       name: depot.depotName || depot.name || '',
@@ -234,7 +252,8 @@ const AdminDepots = () => {
       capacity: depot.capacity || { buses: 0, staff: 0 },
       status: depot.status || 'active',
       createLogin: false,
-      login: { email: '', password: '' }
+      login: { email: '', password: '' },
+      assignedStaff: depotUsers.map(user => user._id)
     });
   };
 
@@ -354,13 +373,22 @@ const AdminDepots = () => {
         status: depotForm.status
       };
 
+      console.log('🔄 Updating depot with staff assignments:', {
+        depotId: editingDepot._id,
+        assignedStaff: depotForm.assignedStaff,
+        staffCount: depotForm.assignedStaff.length
+      });
+
       const response = await fetch(`/api/admin/depots/${editingDepot._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify(depotData)
+        body: JSON.stringify({
+          ...depotData,
+          assignedStaff: depotForm.assignedStaff
+        })
       });
 
       if (response.ok) {
@@ -373,10 +401,84 @@ const AdminDepots = () => {
           )
         );
         
-        alert('Depot updated successfully');
+        // Refresh users data to show updated depot assignments
+        console.log('🔄 Refreshing data after depot update...');
+        
+        // Small delay to ensure backend processing is complete
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Force refresh both depots and users data
+        console.log('🔄 Starting data refresh...');
+        const ts = Date.now();
+        const [depotsRes, usersRes] = await Promise.all([
+          apiFetch(`/api/admin/depots?showAll=${showInactiveDepots}&_=${ts}`),
+          apiFetch(`/api/admin/users?_=${ts}`)
+        ]);
+        
+        console.log('🔄 API responses:', { depotsRes: depotsRes?.ok, usersRes: usersRes?.ok });
+        
+        // Update depots
+        if (depotsRes?.ok) {
+          const depotsData = depotsRes.data || {};
+          const raw = depotsData.depots || depotsData.data?.depots || [];
+          console.log('🔄 Raw depot data from refresh:', raw);
+          const normalized = (raw || []).map(d => ({
+            _id: d._id || d.id,
+            code: d.code || d.depotCode || '',
+            name: d.name || d.depotName || d.code || 'Depot',
+            address: {
+              street: d.address?.street || d.location?.address || 'Address not available',
+              city: d.address?.city || d.location?.city || 'City not available',
+              state: d.address?.state || d.location?.state || 'State not available',
+              pincode: d.address?.pincode || d.location?.pincode || '000000'
+            },
+            contact: {
+              phone: d.contact?.phone || 'Contact not available',
+              email: d.contact?.email || 'Email not available'
+            },
+            manager: d.manager || d.createdBy || null,
+            capacity: d.capacity || { buses: 0, staff: 0 },
+            status: d.status || 'active',
+            createdAt: d.createdAt
+          }));
+          console.log('🔄 Updated depot data after assignment:', normalized);
+          setDepots(normalized);
+        } else {
+          console.error('❌ Failed to fetch depot data:', depotsRes);
+        }
+        
+        // Update users
+        if (usersRes?.ok) {
+          const usersData = usersRes.data || {};
+          const rawUsers = usersData.users || usersData.data?.users || [];
+          console.log('🔄 Raw user data from refresh:', rawUsers);
+          const normalizedUsers = (rawUsers || []).map(u => ({
+            _id: u._id || u.id,
+            name: u.name || u.fullName || 'Unnamed',
+            email: u.email || '',
+            phone: u.phone || '',
+            role: u.role || 'user',
+            depotId: u.depotId || (typeof u.depot === 'object' ? u.depot?._id : u.depot) || null,
+            status: u.status || 'active'
+          }));
+          console.log('🔄 Updated user data after assignment:', normalizedUsers);
+          console.log('🔄 Users with depot assignments:', normalizedUsers.filter(u => u.depotId));
+          setUsers(normalizedUsers);
+        } else {
+          console.error('❌ Failed to fetch user data:', usersRes);
+        }
+        
+        alert(`Depot updated successfully! Assigned ${depotForm.assignedStaff.length} staff members to ${depotForm.name}`);
+        
+        // Close modal and reset form
         setEditingDepot(null);
         resetDepotForm();
-        // No need to call fetchData() - depot already updated in UI
+        
+        // Force another refresh after alert is closed
+        setTimeout(() => {
+          console.log('🔄 Final refresh after alert...');
+          fetchData();
+        }, 500);
       } else {
         const errorData = await response.json();
         alert(errorData.error || 'Failed to update depot');
@@ -408,15 +510,24 @@ const AdminDepots = () => {
       },
       status: 'active',
       createLogin: false,
-      login: { email: '', password: '' }
+      login: { email: '', password: '' },
+      assignedStaff: []
     });
   };
 
   const getUsersByDepot = (depotId) => {
-    return users.filter(user => 
+    const depotUsers = users.filter(user => 
       user.depotId === depotId && 
       ['conductor', 'driver', 'depot_manager'].includes(user.role)
     );
+    console.log(`🔍 Users for depot ${depotId}:`, depotUsers);
+    return depotUsers;
+  };
+
+  const getDepotName = (depotId) => {
+    if (!depotId) return 'Unassigned';
+    const depot = depots.find(d => d._id === depotId);
+    return depot ? (depot.depotName || depot.name) : 'Unknown Depot';
   };
 
   const getStatusBadge = (status) => {
@@ -616,10 +727,12 @@ const AdminDepots = () => {
             (depot.location?.pincode || depot.address?.pincode || '').toLowerCase().includes(searchTerm.toLowerCase())
           )
           .map((depot) => {
+            console.log(`🏢 Processing depot: ${depot.depotName || depot.name} (ID: ${depot._id})`);
             const depotUsers = getUsersByDepot(depot._id);
             const filteredUsers = roleFilter === 'all' 
               ? depotUsers 
               : depotUsers.filter(user => user.role === roleFilter);
+            console.log(`👥 Filtered users for ${depot.depotName || depot.name}:`, filteredUsers);
             
             return (
               <div key={depot._id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -639,8 +752,8 @@ const AdminDepots = () => {
                           <span className="font-medium">Code: {depot.depotCode || depot.code}</span>
                           <span className="flex items-center">
                             <MapPin className="w-4 h-4 mr-1" />
-                            {depot.location?.address || depot.address?.street ? 
-                              `${depot.location?.address || depot.address?.street}, ${depot.location?.city || depot.address?.city}, ${depot.location?.state || depot.address?.state} - ${depot.location?.pincode || depot.address?.pincode}` : 
+                            {depot.address?.street ? 
+                              `${depot.address.street}, ${depot.address.city}, ${depot.address.state} - ${depot.address.pincode}` : 
                               'Address not available'
                             }
                           </span>
@@ -663,7 +776,19 @@ const AdminDepots = () => {
                       </div>
                       <div className="text-right">
                         <div className="text-sm text-gray-500">Staff</div>
-                        <div className="text-lg font-semibold text-gray-900">{depotUsers.length}</div>
+                        <div className="text-lg font-semibold text-gray-900 flex items-center">
+                          {depotUsers.length}
+                          <button
+                            onClick={() => {
+                              console.log('🔄 Manual refresh for depot:', depot._id);
+                              fetchData();
+                            }}
+                            className="ml-2 text-blue-500 hover:text-blue-700 p-1"
+                            title="Refresh staff data"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                       <div className="flex items-center space-x-2">
                         <button
@@ -775,8 +900,8 @@ const AdminDepots = () => {
 
       {/* Create/Edit Depot Modal */}
       {(showCreateModal || editingDepot) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto lg:ml-64">
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-2xl font-bold text-gray-900">
                 {editingDepot ? 'Edit Depot' : 'Create New Depot'}
@@ -911,6 +1036,110 @@ const AdminDepots = () => {
                   />
                 </div>
               </div>
+
+              {/* Staff Assignment Section */}
+              <div className="border-t border-gray-200 pt-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Assign Staff to Depot</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Select Staff Members
+                    </label>
+                    <span className="text-sm text-gray-500">
+                      {depotForm.assignedStaff.length} staff selected
+                    </span>
+                  </div>
+                  
+                  <div className="border border-gray-200 rounded-lg max-h-64 overflow-y-auto">
+                    {users.filter(user => user.role === 'driver' || user.role === 'conductor').length === 0 ? (
+                      <div className="p-4 text-center text-gray-500">
+                        No drivers or conductors available
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-200">
+                        {users
+                          .filter(user => user.role === 'driver' || user.role === 'conductor')
+                          .map((user) => (
+                            <div
+                              key={user._id}
+                              className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
+                                depotForm.assignedStaff.includes(user._id) ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                              }`}
+                              onClick={() => {
+                                setDepotForm(prev => ({
+                                  ...prev,
+                                  assignedStaff: prev.assignedStaff.includes(user._id)
+                                    ? prev.assignedStaff.filter(id => id !== user._id)
+                                    : [...prev.assignedStaff, user._id]
+                                }));
+                              }}
+                            >
+                              <div className="flex items-center space-x-3">
+                                <input
+                                  type="checkbox"
+                                  checked={depotForm.assignedStaff.includes(user._id)}
+                                  onChange={() => {}}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                  <span className="text-white font-semibold text-sm">
+                                    {user.name?.charAt(0)?.toUpperCase() || 'U'}
+                                  </span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center space-x-2">
+                                    <p className="text-sm font-medium text-gray-900 truncate">
+                                      {user.name}
+                                    </p>
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                      user.role === 'driver' 
+                                        ? 'bg-green-100 text-green-800' 
+                                        : 'bg-purple-100 text-purple-800'
+                                    }`}>
+                                      {user.role}
+                                    </span>
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                      user.status === 'active' 
+                                        ? 'bg-green-100 text-green-800' 
+                                        : 'bg-red-100 text-red-800'
+                                    }`}>
+                                      {user.status}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-gray-500 truncate">
+                                    {user.email} • {user.phone}
+                                  </p>
+                                  <p className="text-xs text-gray-400">
+                                    {user.employeeCode || 'No ID'} • Current Depot: {getDepotName(user.depotId)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {depotForm.assignedStaff.length > 0 && (
+                    <div className="bg-blue-50 rounded-lg p-4">
+                      <h4 className="text-sm font-medium text-blue-900 mb-2">Selected Staff:</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {depotForm.assignedStaff.map(staffId => {
+                          const staff = users.find(u => u._id === staffId);
+                          return staff ? (
+                            <span
+                              key={staffId}
+                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                            >
+                              {staff.name} ({staff.role})
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
               
               {/* Insert credentials section below existing inputs */}
               <div className="rounded-lg border border-gray-200 p-4 bg-gray-50">
@@ -958,8 +1187,8 @@ const AdminDepots = () => {
 
       {/* View Depot Modal */}
       {showViewModal && viewingDepot && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto lg:ml-64">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <div>
@@ -1089,8 +1318,8 @@ const AdminDepots = () => {
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmModal && depotToDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full lg:ml-64">
             <div className="p-6">
               <h3 className="text-xl font-bold text-red-900 mb-4">Confirm Deletion</h3>
               <p className="text-gray-700 mb-6">

@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { apiFetch, clearApiCache } from '../../utils/api';
 import { 
   Bus, 
   Plus, 
   Search, 
-  Filter, 
   MapPin, 
   Wrench, 
   Fuel, 
@@ -18,7 +17,6 @@ import {
   BarChart3, 
   Eye, 
   Edit, 
-  Trash2, 
   RefreshCw, 
   Download,
   Upload,
@@ -27,15 +25,7 @@ import {
   Route,
   UserCheck,
   Gauge,
-  Thermometer,
-  Zap,
-  Shield,
-  FileText,
-  Camera,
-  Satellite,
-  Wifi,
-  Battery,
-  Signal
+  X
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -50,10 +40,11 @@ const AdminBuses = () => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResults, setImportResults] = useState(null);
   const [selectedBus, setSelectedBus] = useState(null);
   const [depots, setDepots] = useState([]);
-  const [drivers, setDrivers] = useState([]);
-  const [conductors, setConductors] = useState([]);
   const [viewMode, setViewMode] = useState('grid'); // grid, list, map
   const [analytics, setAnalytics] = useState({
     totalBuses: 0,
@@ -64,25 +55,31 @@ const AdminBuses = () => {
     fuelEfficiency: 0,
     maintenanceCost: 0
   });
+  const [newBus, setNewBus] = useState({
+    busNumber: '',
+    registrationNumber: '',
+    depotId: '',
+    status: 'active',
+    busType: 'standard',
+    capacity: { total: 40, seater: 40, sleeper: 0 },
+    specifications: { mileage: 0 }
+  });
 
   // Real-time data refresh
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [realTimeData, setRealTimeData] = useState({});
 
   useEffect(() => {
-    fetchBuses();
-    fetchDepots();
-    fetchDrivers();
-    fetchConductors();
-    fetchAnalytics();
-    
-    // Set up real-time updates
+    (async () => {
+      await Promise.all([fetchBuses(), fetchDepots(), fetchAnalytics()]);
+      setLastUpdate(new Date());
+    })();
     const interval = setInterval(() => {
       fetchRealTimeData();
       setLastUpdate(new Date());
-    }, 30000); // Update every 30 seconds
-
+    }, 30000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Debounce search input
@@ -94,6 +91,7 @@ const AdminBuses = () => {
   // Refetch buses on filters/pagination change
   useEffect(() => {
     fetchBuses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, depotFilter, debouncedSearch, page, limit]);
 
   const fetchBuses = async () => {
@@ -112,7 +110,6 @@ const AdminBuses = () => {
         const data = response.data || {};
         const payload = data.buses ? { buses: data.buses, pagination: data.pagination } : (data.data || {});
         const { buses: incoming = [], pagination } = payload;
-        // Validate and sanitize bus data
         const validBuses = (incoming || []).map(bus => {
           const depotRef = bus.depotId;
           const normalizedDepotId = depotRef && typeof depotRef === 'object' ? depotRef._id : depotRef || null;
@@ -130,8 +127,6 @@ const AdminBuses = () => {
         });
         setBuses(validBuses);
         if (pagination) {
-          // server provides total/pages
-          // keep page within bounds if needed
           if (page > (pagination.pages || page)) setPage(1);
         }
       } else {
@@ -150,10 +145,8 @@ const AdminBuses = () => {
 
   const fetchDepots = async () => {
     try {
-      // Ensure fresh list that matches Depot Management (includes inactive)
       clearApiCache();
       const response = await apiFetch(`/api/admin/depots?showAll=true&_=${Date.now()}`);
-      
       if (response?.ok) {
         const data = response.data || {};
         const list = data.depots || data.data?.depots || [];
@@ -169,75 +162,9 @@ const AdminBuses = () => {
     }
   };
 
-  const fetchDrivers = async () => {
-    try {
-      const response = await apiFetch('/api/admin/all-drivers');
-      let normalized = [];
-      if (response?.ok) {
-        const data = response.data || {};
-        const raw = data.drivers || data.data?.drivers || data?.data || [];
-        normalized = (raw || []).map(d => ({
-          _id: d._id || d.id,
-          name: d.name || d.fullName || d.employeeName || 'Unnamed',
-          phone: d.phone || d.mobile || '',
-          email: d.email || '',
-          status: d.status || 'active',
-          depotId: d.depotId || (typeof d.depot === 'object' ? d.depot?._id : d.depot) || null
-        }));
-      }
-      if (!normalized.length) {
-        const alt = await apiFetch('/api/admin/drivers');
-        if (alt?.ok) {
-          const data = alt.data || {};
-          const raw = data.drivers || data.data?.drivers || data?.data || [];
-          normalized = (raw || []).map(d => ({
-            _id: d._id || d.id,
-            name: d.name || d.fullName || d.employeeName || 'Unnamed',
-            phone: d.phone || d.mobile || '',
-            email: d.email || '',
-            status: d.status || 'active',
-            depotId: d.depotId || (typeof d.depot === 'object' ? d.depot?._id : d.depot) || null
-          }));
-        }
-      }
-      if (!normalized.length) {
-        try { toast.warning('No drivers returned from API'); } catch {}
-      }
-      setDrivers(normalized);
-    } catch (error) {
-      console.error('Error fetching drivers:', error);
-    }
-  };
-
-  const fetchConductors = async () => {
-    try {
-      const response = await apiFetch('/api/admin/conductors');
-      let normalized = [];
-      if (response?.ok) {
-        const data = response.data || {};
-        const raw = data.conductors || data.data?.conductors || data?.data || [];
-        normalized = (raw || []).map(c => ({
-          _id: c._id || c.id,
-          name: c.name || c.fullName || c.employeeName || 'Unnamed',
-          phone: c.phone || c.mobile || '',
-          email: c.email || '',
-          status: c.status || 'active',
-          depotId: c.depotId || (typeof c.depot === 'object' ? c.depot?._id : c.depot) || null
-        }));
-      }
-      if (!normalized.length) {
-        try { toast.warning('No conductors returned from API'); } catch {}
-      }
-      setConductors(normalized);
-    } catch (error) {
-      console.error('Error fetching conductors:', error);
-    }
-  };
-
   const fetchAnalytics = async () => {
     try {
       const response = await apiFetch('/api/admin/buses/analytics');
-      
       if (response?.ok) {
         const data = response.data || {};
         setAnalytics(data.analytics || data.data?.analytics || {});
@@ -250,7 +177,6 @@ const AdminBuses = () => {
   const fetchRealTimeData = async () => {
     try {
       const response = await apiFetch('/api/admin/buses/realtime');
-      
       if (response?.ok) {
         const data = response.data || {};
         setRealTimeData(data.realTimeData || data.data?.realTimeData || {});
@@ -386,6 +312,15 @@ const AdminBuses = () => {
             <button
               onClick={() => {
                 setSelectedBus(bus);
+                setNewBus({
+                  busNumber: bus.busNumber || '',
+                  registrationNumber: bus.registrationNumber || '',
+                  depotId: bus.depotId || '',
+                  status: bus.status || 'active',
+                  busType: bus.busType || 'standard',
+                  capacity: { total: bus.capacity?.total || 40, seater: bus.capacity?.seater || 40, sleeper: bus.capacity?.sleeper || 0 },
+                  specifications: { mileage: bus.specifications?.mileage || 0 }
+                });
                 setShowEditModal(true);
               }}
               className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -411,8 +346,6 @@ const AdminBuses = () => {
   };
 
   const BusList = ({ bus }) => {
-    const realTimeInfo = realTimeData[bus._id] || {};
-    
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow">
         <div className="flex items-center justify-between">
@@ -442,7 +375,22 @@ const AdminBuses = () => {
               </span>
             </div>
             <div className="flex space-x-2">
-              <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
+              <button
+                onClick={() => {
+                  setSelectedBus(bus);
+                  setNewBus({
+                    busNumber: bus.busNumber || '',
+                    registrationNumber: bus.registrationNumber || '',
+                    depotId: bus.depotId || '',
+                    status: bus.status || 'active',
+                    busType: bus.busType || 'standard',
+                    capacity: { total: bus.capacity?.total || 40, seater: bus.capacity?.seater || 40, sleeper: bus.capacity?.sleeper || 0 },
+                    specifications: { mileage: bus.specifications?.mileage || 0 }
+                  });
+                  setShowEditModal(true);
+                }}
+                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+              >
                 <Edit className="w-4 h-4" />
               </button>
               <button className="p-2 text-green-600 hover:bg-green-50 rounded-lg">
@@ -453,6 +401,178 @@ const AdminBuses = () => {
         </div>
       </div>
     );
+  };
+
+  const handleCreateBus = async () => {
+    try {
+      if (!newBus.busNumber || !newBus.registrationNumber) {
+        toast.error('Bus number and registration are required');
+        return;
+      }
+      const payload = {
+        ...newBus,
+        capacity: {
+          total: Number(newBus.capacity.total) || 0,
+          seater: Number(newBus.capacity.seater) || 0,
+          sleeper: Number(newBus.capacity.sleeper) || 0
+        },
+        specifications: { mileage: Number(newBus.specifications?.mileage) || 0 }
+      };
+      const res = await apiFetch('/api/admin/buses', { method: 'POST', body: JSON.stringify(payload) });
+      if (res?.ok) {
+        toast.success('Bus added');
+        setShowAddModal(false);
+        setNewBus({ busNumber: '', registrationNumber: '', depotId: '', status: 'active', busType: 'standard', capacity: { total: 40, seater: 40, sleeper: 0 }, specifications: { mileage: 0 } });
+        fetchBuses();
+        fetchAnalytics();
+      } else {
+        toast.error(res?.message || 'Failed to add bus');
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to add bus');
+    }
+  };
+
+  const handleUpdateBus = async () => {
+    try {
+      if (!selectedBus?._id) return;
+      const payload = {
+        status: newBus.status,
+        depotId: newBus.depotId || null,
+        busType: newBus.busType,
+        capacity: {
+          total: Number(newBus.capacity.total) || 0,
+          seater: Number(newBus.capacity.seater) || 0,
+          sleeper: Number(newBus.capacity.sleeper) || 0
+        },
+        specifications: { mileage: Number(newBus.specifications?.mileage) || 0 }
+      };
+      const res = await apiFetch(`/api/admin/buses/${selectedBus._id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      if (res?.ok) {
+        toast.success('Bus updated');
+        setShowEditModal(false);
+        setSelectedBus(null);
+        fetchBuses();
+        fetchAnalytics();
+      } else {
+        toast.error(res?.message || 'Failed to update bus');
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to update bus');
+    }
+  };
+
+  const exportClientCSV = () => {
+    try {
+      const rows = filteredBuses.map(b => ({
+        busNumber: b.busNumber,
+        registrationNumber: b.registrationNumber,
+        status: b.status,
+        depot: b.depotName || depots.find(d => d._id === b.depotId)?.name || '',
+        capacityTotal: b.capacity?.total || 0,
+        busType: b.busType || ''
+      }));
+      const header = Object.keys(rows[0] || { busNumber: '', registrationNumber: '', status: '', depot: '', capacityTotal: '', busType: '' });
+      const csv = [header.join(','), ...rows.map(r => header.map(h => String(r[h] ?? '').replace(/"/g, '""')).map(v => v.includes(',') ? `"${v}"` : v).join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'buses.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      toast.error('CSV export failed');
+    }
+  };
+
+  const exportFromServer = async (format) => {
+    try {
+      const res = await apiFetch(`/api/admin/buses/export/${format}`, { method: 'GET' });
+      if (res?.ok) {
+        // Backend returns JSON placeholder; fall back to client CSV
+        if (format === 'excel' || format === 'pdf') {
+          toast.success(`${format.toUpperCase()} export prepared (demo). Falling back to CSV download.`);
+        }
+        exportClientCSV();
+      } else {
+        exportClientCSV();
+      }
+    } catch (_) {
+      exportClientCSV();
+    }
+  };
+
+  const parseCSV = (text) => {
+    const lines = text.trim().split(/\r?\n/);
+    if (!lines.length) return [];
+    const headers = lines[0].split(',').map(h => h.trim());
+    return lines.slice(1).map(line => {
+      const cols = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+          else { inQuotes = !inQuotes; }
+        } else if (ch === ',' && !inQuotes) {
+          cols.push(current); current = '';
+        } else {
+          current += ch;
+        }
+      }
+      cols.push(current);
+      const obj = {};
+      headers.forEach((h, idx) => obj[h] = (cols[idx] || '').trim());
+      return obj;
+    });
+  };
+
+  const handleImport = async (file) => {
+    try {
+      if (!file) return;
+      setImporting(true);
+      setImportResults(null);
+      const text = await file.text();
+      const rows = parseCSV(text);
+      if (!rows.length) {
+        toast.error('No rows found in CSV');
+        setImporting(false);
+        return;
+      }
+      // Expect headers: busNumber,registrationNumber,depotId,status,busType,capacityTotal
+      const tasks = rows.map((r, idx) => {
+        const payload = {
+          busNumber: r.busNumber || r.BusNumber || r.bus_no || `BUS_${Date.now()}_${idx}`,
+          registrationNumber: r.registrationNumber || r.RegNo || r.registration || '',
+          depotId: r.depotId || '',
+          status: r.status || 'active',
+          busType: r.busType || 'standard',
+          capacity: { total: Number(r.capacityTotal || r.capacity || 40), seater: Number(r.capacityTotal || 40), sleeper: 0 },
+          specifications: { mileage: Number(r.mileage || 0) }
+        };
+        return apiFetch('/api/admin/buses', { method: 'POST', body: JSON.stringify(payload), suppressError: true });
+      });
+      const results = await Promise.allSettled(tasks);
+      const summary = {
+        total: results.length,
+        success: results.filter(r => r.status === 'fulfilled' && r.value?.ok).length,
+        failed: results.filter(r => !(r.status === 'fulfilled' && r.value?.ok)).length
+      };
+      setImportResults(summary);
+      toast.success(`Import completed: ${summary.success}/${summary.total}`);
+      fetchBuses();
+      fetchAnalytics();
+    } catch (e) {
+      console.error(e);
+      toast.error('Import failed');
+    } finally {
+      setImporting(false);
+    }
   };
 
   if (loading) {
@@ -490,7 +610,7 @@ const AdminBuses = () => {
             </select>
           </div>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => { setNewBus({ busNumber: '', registrationNumber: '', depotId: '', status: 'active', busType: 'standard', capacity: { total: 40, seater: 40, sleeper: 0 }, specifications: { mileage: 0 } }); setShowAddModal(true); }}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
           >
             <Plus className="w-4 h-4" />
@@ -621,11 +741,11 @@ const AdminBuses = () => {
             Fleet Overview ({filteredBuses.length} buses)
           </h3>
           <div className="flex items-center space-x-3">
-            <button className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 flex items-center space-x-2">
+            <button onClick={() => exportFromServer('excel')} className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 flex items-center space-x-2">
               <Download className="w-4 h-4" />
               <span>Export</span>
             </button>
-            <button className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 flex items-center space-x-2">
+            <button onClick={() => setShowImportModal(true)} className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 flex items-center space-x-2">
               <Upload className="w-4 h-4" />
               <span>Import</span>
             </button>
@@ -702,22 +822,55 @@ const AdminBuses = () => {
         </div>
       </div>
 
-      {/* Add/Edit Bus Modal Placeholder */}
+      {/* Add/Edit Bus Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-2xl mx-4">
-            <h3 className="text-xl font-semibold text-gray-900 mb-4">Add New Bus</h3>
-            <p className="text-gray-600 mb-4">Bus creation form will be implemented here</p>
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Cancel
-              </button>
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                Add Bus
-              </button>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold text-gray-900">Add New Bus</h3>
+              <button onClick={() => setShowAddModal(false)} className="p-1 text-gray-500 hover:text-gray-700"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Bus Number</label>
+                <input value={newBus.busNumber} onChange={e => setNewBus({ ...newBus, busNumber: e.target.value })} className="w-full border rounded-lg px-3 py-2" placeholder="BUS-1001" />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Registration Number</label>
+                <input value={newBus.registrationNumber} onChange={e => setNewBus({ ...newBus, registrationNumber: e.target.value })} className="w-full border rounded-lg px-3 py-2" placeholder="KL-01-AB-1234" />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Depot</label>
+                <select value={newBus.depotId} onChange={e => setNewBus({ ...newBus, depotId: e.target.value })} className="w-full border rounded-lg px-3 py-2">
+                  <option value="">Select depot</option>
+                  {depots.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Status</label>
+                <select value={newBus.status} onChange={e => setNewBus({ ...newBus, status: e.target.value })} className="w-full border rounded-lg px-3 py-2">
+                  <option value="active">Active</option>
+                  <option value="maintenance">Maintenance</option>
+                  <option value="retired">Retired</option>
+                  <option value="suspended">Suspended</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Bus Type</label>
+                <input value={newBus.busType} onChange={e => setNewBus({ ...newBus, busType: e.target.value })} className="w-full border rounded-lg px-3 py-2" placeholder="standard" />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Mileage (km/l)</label>
+                <input type="number" value={newBus.specifications.mileage} onChange={e => setNewBus({ ...newBus, specifications: { ...newBus.specifications, mileage: e.target.value } })} className="w-full border rounded-lg px-3 py-2" />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Capacity Total</label>
+                <input type="number" value={newBus.capacity.total} onChange={e => setNewBus({ ...newBus, capacity: { ...newBus.capacity, total: e.target.value, seater: e.target.value } })} className="w-full border rounded-lg px-3 py-2" />
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button onClick={() => setShowAddModal(false)} className="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+              <button onClick={handleCreateBus} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Add Bus</button>
             </div>
           </div>
         </div>
@@ -726,18 +879,65 @@ const AdminBuses = () => {
       {showEditModal && selectedBus && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-2xl mx-4">
-            <h3 className="text-xl font-semibold text-gray-900 mb-4">Edit Bus: {selectedBus.busNumber}</h3>
-            <p className="text-gray-600 mb-4">Bus editing form will be implemented here</p>
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Cancel
-              </button>
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                Save Changes
-              </button>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold text-gray-900">Edit Bus: {selectedBus.busNumber}</h3>
+              <button onClick={() => setShowEditModal(false)} className="p-1 text-gray-500 hover:text-gray-700"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Depot</label>
+                <select value={newBus.depotId} onChange={e => setNewBus({ ...newBus, depotId: e.target.value })} className="w-full border rounded-lg px-3 py-2">
+                  <option value="">Select depot</option>
+                  {depots.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Status</label>
+                <select value={newBus.status} onChange={e => setNewBus({ ...newBus, status: e.target.value })} className="w-full border rounded-lg px-3 py-2">
+                  <option value="active">Active</option>
+                  <option value="maintenance">Maintenance</option>
+                  <option value="retired">Retired</option>
+                  <option value="suspended">Suspended</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Bus Type</label>
+                <input value={newBus.busType} onChange={e => setNewBus({ ...newBus, busType: e.target.value })} className="w-full border rounded-lg px-3 py-2" />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Mileage (km/l)</label>
+                <input type="number" value={newBus.specifications.mileage} onChange={e => setNewBus({ ...newBus, specifications: { ...newBus.specifications, mileage: e.target.value } })} className="w-full border rounded-lg px-3 py-2" />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Capacity Total</label>
+                <input type="number" value={newBus.capacity.total} onChange={e => setNewBus({ ...newBus, capacity: { ...newBus.capacity, total: e.target.value, seater: e.target.value } })} className="w-full border rounded-lg px-3 py-2" />
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button onClick={() => setShowEditModal(false)} className="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+              <button onClick={handleUpdateBus} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-2xl mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold text-gray-900">Bulk Import Buses</h3>
+              <button onClick={() => setShowImportModal(false)} className="p-1 text-gray-500 hover:text-gray-700"><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-gray-600 text-sm mb-4">Upload a CSV with headers: <span className="font-mono">busNumber,registrationNumber,depotId,status,busType,capacityTotal</span></p>
+            <div className="flex items-center space-x-3">
+              <input type="file" accept=".csv" onChange={e => handleImport(e.target.files?.[0])} disabled={importing} />
+              {importing && <span className="text-blue-600 text-sm">Importing...</span>}
+              {importResults && (
+                <span className="text-sm text-gray-700">Done: {importResults.success}/{importResults.total} imported</span>
+              )}
+            </div>
+            <div className="flex justify-end mt-6">
+              <button onClick={() => setShowImportModal(false)} className="px-4 py-2 text-gray-600 hover:text-gray-800">Close</button>
             </div>
           </div>
         </div>

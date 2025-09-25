@@ -27,7 +27,7 @@ async function testRouteAssignment() {
       console.log('No bus found in this depot. Please create a bus first.');
       return;
     }
-    console.log('Found bus:', bus.busNumber);
+        console.log('Found bus:', bus.busNumber);
 
     // Find a route
     const route = await Route.findOne({ status: 'active' });

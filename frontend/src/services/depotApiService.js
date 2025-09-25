@@ -1,3 +1,4 @@
+import { apiFetch } from '../utils/api';
 // Depot API Service - Centralized API calls for depot dashboard
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -26,6 +27,22 @@ const handleApiResponse = async (response) => {
   return response.json();
 };
 
+// Prefer cached api client for GET requests to ensure instant UI when switching tabs
+const getViaCachedClient = async (endpointWithQuery) => {
+  // apiFetch expects path starting with '/api'
+  const path = endpointWithQuery.startsWith('/api')
+    ? endpointWithQuery
+    : `/api${endpointWithQuery.startsWith('/') ? '' : '/'}${endpointWithQuery}`;
+
+  const res = await apiFetch(path, { method: 'GET' });
+  if (res && res.ok) {
+    return res.data;
+  }
+  // Fallback error behavior similar to handleApiResponse
+  const message = (res && res.message) || 'Request failed';
+  throw new Error(message);
+};
+
 // =================================================================
 // 1. FLEET MANAGEMENT APIs
 // =================================================================
@@ -34,18 +51,12 @@ export const fleetApiService = {
   // Get all buses for depot
   getBuses: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/buses${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/buses${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Get bus details
   getBusDetails: async (busId) => {
-    const response = await fetch(`${API_BASE_URL}/depot/buses/${busId}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/buses/${busId}`);
   },
 
   // Add new bus
@@ -80,10 +91,7 @@ export const fleetApiService = {
   // Get bus maintenance logs
   getMaintenanceLogs: async (busId, params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/buses/${busId}/maintenance${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/buses/${busId}/maintenance${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Add maintenance log
@@ -107,14 +115,10 @@ export const routeApiService = {
     try {
       // First try depot-specific routes
       const queryParams = new URLSearchParams(params).toString();
-      const response = await fetch(`${API_BASE_URL}/depot/routes${queryParams ? `?${queryParams}` : ''}`, {
-        headers: getAuthHeaders()
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
+      try {
+        const data = await getViaCachedClient(`/depot/routes${queryParams ? `?${queryParams}` : ''}`);
         return data;
-      } else {
+      } catch (_) {
         // Fallback to admin routes if depot routes fail
         console.log('Depot routes failed, trying admin routes...');
         return await routeApiService.getAdminRoutes(params);
@@ -128,18 +132,12 @@ export const routeApiService = {
   // Get routes from admin API as fallback
   getAdminRoutes: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/admin/routes${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/admin/routes${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Get route details
   getRouteDetails: async (routeId) => {
-    const response = await fetch(`${API_BASE_URL}/depot/routes/${routeId}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/routes/${routeId}`);
   },
 
   // Add new route
@@ -188,10 +186,7 @@ export const tripApiService = {
   // Get all trips for depot
   getTrips: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/trips${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/trips${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Get trip details
@@ -259,10 +254,7 @@ export const bookingApiService = {
   // Get all bookings for depot
   getBookings: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/bookings${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/bookings${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Get booking details
@@ -276,10 +268,7 @@ export const bookingApiService = {
   // Get tickets for depot
   getTickets: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/tickets${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/tickets${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Validate ticket
@@ -305,10 +294,7 @@ export const bookingApiService = {
   // Get booking statistics
   getBookingStats: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/bookings/stats${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/bookings/stats${queryParams ? `?${queryParams}` : ''}`);
   }
 };
 
@@ -320,28 +306,19 @@ export const staffApiService = {
   // Get all drivers
   getDrivers: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/drivers${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/drivers${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Get all conductors
   getConductors: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/conductors${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/conductors${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Get crew assignments
   getCrewAssignments: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/crew${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/crew${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Add driver
@@ -412,10 +389,7 @@ export const schedulingApiService = {
   // Get bus schedules
   getBusSchedules: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/schedules${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/schedules${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Create bus schedule
@@ -474,64 +448,43 @@ export const schedulingApiService = {
 export const reportsApiService = {
   // Get depot dashboard data
   getDashboardData: async () => {
-    const response = await fetch(`${API_BASE_URL}/depot/dashboard`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/dashboard`);
   },
 
   // Get revenue reports
   getRevenueReports: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/reports/revenue${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/reports/revenue${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Get trip reports
   getTripReports: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/reports/trips${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/reports/trips${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Get booking reports
   getBookingReports: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/reports/bookings${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/reports/bookings${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Get fuel reports
   getFuelReports: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/reports/fuel${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/reports/fuel${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Get maintenance reports
   getMaintenanceReports: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/reports/maintenance${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/reports/maintenance${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Get staff performance reports
   getStaffPerformanceReports: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/reports/staff-performance${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/reports/staff-performance${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Export reports
@@ -551,28 +504,19 @@ export const reportsApiService = {
 export const depotApiService = {
   // Get depot information
   getDepotInfo: async () => {
-    const response = await fetch(`${API_BASE_URL}/depot/info`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/info`);
   },
 
   // Get depot statistics
   getDepotStats: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/stats${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/stats${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Get fuel logs
   getFuelLogs: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/fuel${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/fuel${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Record fuel fill-up
@@ -588,10 +532,7 @@ export const depotApiService = {
   // Get notifications
   getNotifications: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${API_BASE_URL}/depot/notifications${queryParams ? `?${queryParams}` : ''}`, {
-      headers: getAuthHeaders()
-    });
-    return handleApiResponse(response);
+    return getViaCachedClient(`/depot/notifications${queryParams ? `?${queryParams}` : ''}`);
   },
 
   // Mark notification as read

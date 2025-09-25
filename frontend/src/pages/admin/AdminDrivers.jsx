@@ -22,8 +22,10 @@ import {
   UserCheck,
   UserX,
   Filter,
-  Car
+  Car,
+  UserPlus
 } from 'lucide-react';
+import BulkAssignmentModal from '../../components/Admin/BulkAssignmentModal';
 
 
 const AdminDrivers = () => {
@@ -38,6 +40,7 @@ const AdminDrivers = () => {
   const [viewingDriver, setViewingDriver] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [driverToDelete, setDriverToDelete] = useState(null);
+  const [showBulkAssignment, setShowBulkAssignment] = useState(false);
 
   const [driverForm, setDriverForm] = useState({
     name: '',
@@ -459,6 +462,13 @@ const AdminDrivers = () => {
             className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
           >
             <span>Debug All Staff</span>
+          </button>
+          <button
+            onClick={() => setShowBulkAssignment(true)}
+            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Bulk Assign</span>
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
@@ -897,6 +907,17 @@ const AdminDrivers = () => {
           </div>
         </div>
       )}
+
+      {/* Bulk Assignment Modal */}
+      <BulkAssignmentModal
+        isOpen={showBulkAssignment}
+        onClose={() => setShowBulkAssignment(false)}
+        staffType="drivers"
+        onAssign={(data) => {
+          console.log('Bulk assignment completed:', data);
+          fetchData(true); // Refresh data
+        }}
+      />
     </div>
   );
 };

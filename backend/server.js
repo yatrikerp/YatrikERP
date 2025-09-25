@@ -138,6 +138,7 @@ db.once('open', () => {
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/depot-auth', require('./routes/depotAuth'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/admin', require('./routes/bulkAssignment'));
 app.use('/api/depot', require('./routes/depot'));
 app.use('/api/passenger', require('./routes/passenger'));
 app.use('/api/users', require('./routes/users'));
@@ -151,9 +152,12 @@ app.use('/api/tracking', require('./routes/tracking'));
 app.use('/api/booking', require('./routes/booking'));
 app.use('/api/routes', require('./routes/routes'));
 app.use('/api/trips', require('./routes/trips'));
+app.use('/api/stops', require('./routes/stops'));
 app.use('/api/status', require('./routes/status'));
 app.use('/api/email', require('./routes/emailStatus'));
 app.use('/api/search', require('./routes/search'));
+app.use('/api/auto-scheduler', require('./routes/autoScheduler'));
+app.use('/api/alerts', require('./routes/alerts'));
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {

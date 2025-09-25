@@ -52,10 +52,11 @@ const TripManagement = () => {
         },
       });
 
-      if (response.success) {
-        setAssignedTrips(response.data);
+      if (response.ok && response.data?.success) {
+        const tripsData = response.data.data || response.data;
+        setAssignedTrips(tripsData);
         // Check if there's an active trip
-        const activeTrip = response.data.find(trip => 
+        const activeTrip = tripsData.find(trip => 
           trip.status === 'started' || trip.status === 'in-progress'
         );
         if (activeTrip) {

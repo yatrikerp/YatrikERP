@@ -69,6 +69,14 @@ const QRCodeScanner = ({
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       
       try {
+        // Ensure jsQR exists; attempt dynamic import with local fallback
+        if (!window.jsQR) {
+          try {
+            await import(/* @vite-ignore */ '/vendor/jsqr.min.js');
+          } catch (_) {
+            try { await import('jsqr'); } catch (e) { /* ignore */ }
+          }
+        }
         // Try to detect QR code using jsQR if available
         if (window.jsQR) {
           const qrCode = window.jsQR(imageData.data, imageData.width, imageData.height);

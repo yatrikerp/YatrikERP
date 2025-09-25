@@ -1,4 +1,5 @@
 import { handleError } from './errorHandler';
+import { clearAllCaches } from './cacheManager';
 
 // Cache for API responses to improve performance
 const apiCache = new Map();
@@ -41,6 +42,13 @@ export async function apiFetch(path, options = {}) {
   
   // Dynamic timeout based on endpoint
   const getTimeout = (path) => {
+    // Heavy admin lists can be slow on first load; allow more time
+    if (path.includes('/admin/trips')) {
+      return 60000; // 60 seconds for trips
+    }
+    if (path.includes('/admin/buses') || path.includes('/admin/routes') || path.includes('/admin/depots')) {
+      return 40000; // 40 seconds for large lists
+    }
     if (path.includes('/dashboard') || path.includes('/recent-activities')) {
       return 30000; // 30 seconds for dashboard endpoints
     }
@@ -84,11 +92,14 @@ export async function apiFetch(path, options = {}) {
       
       // Handle authentication errors
       if (res.status === 401 || res.status === 403) {
+        console.log('🔐 Authentication error detected, clearing all caches...');
         try {
-          localStorage.removeItem('depotToken');
-          localStorage.removeItem('depotUser');
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
+          // Clear all caches on authentication error
+          clearAllCaches().then(() => {
+            console.log('✅ All caches cleared after authentication error');
+          }).catch(err => {
+            console.warn('⚠️ Error clearing caches after auth error:', err);
+          });
         } catch {}
         // Show error message before redirect
         handleError(error);
@@ -99,8 +110,10 @@ export async function apiFetch(path, options = {}) {
           }, 2000);
         }
       } else {
-        // Handle other errors with popup
-        handleError(error);
+        // Allow callers to suppress global error handling for optional/non-critical calls
+        if (!options.suppressError) {
+          handleError(error);
+        }
       }
       
       return { ok: false, status: res.status, message, data };

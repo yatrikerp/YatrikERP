@@ -5,12 +5,29 @@ import toast from 'react-hot-toast';
 const RAZORPAY_KEY_ID = 'rzp_test_1DP5mmOlF5G5ag';
 
 class PaymentService {
-  // Initialize Razorpay
-  static initializeRazorpay() {
+  // Initialize Razorpay with CDN + local fallback loader
+  static async initializeRazorpay() {
     if (typeof window !== 'undefined' && window.Razorpay) {
       return window.Razorpay;
     }
-    throw new Error('Razorpay not loaded');
+    const loadScript = (src) => new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+    // Try CDN first
+    let ok = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
+    if (!ok) {
+      console.warn('Razorpay CDN unavailable; using local fallback');
+      ok = await loadScript('/vendor/razorpay.checkout.js');
+    }
+    if (!ok || !window.Razorpay) {
+      throw new Error('Razorpay script failed to load');
+    }
+    return window.Razorpay;
   }
 
   // Create payment order
@@ -40,7 +57,7 @@ class PaymentService {
   // Process payment
   static async processPayment(orderData, userDetails = {}) {
     try {
-      const Razorpay = this.initializeRazorpay();
+      const Razorpay = await this.initializeRazorpay();
 
       const options = {
         key: RAZORPAY_KEY_ID,

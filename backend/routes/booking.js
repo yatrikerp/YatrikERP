@@ -87,8 +87,8 @@ router.post('/', auth, async (req, res) => {
 
     await booking.save();
 
-    // Queue booking confirmation email for instant processing (non-blocking)
-    const bookingData = {
+    // Queue booking confirmation email ONLY for passenger-created bookings
+    const emailData = {
       bookingId: booking.bookingId,
       bookingReference: booking.bookingReference,
       customer: booking.customer,
@@ -100,8 +100,13 @@ router.post('/', auth, async (req, res) => {
       trip: trip
     };
     
-    queueEmail(booking.customer.email, 'ticketConfirmation', bookingData);
-    console.log('📧 Booking confirmation email queued for:', booking.customer.email);
+    const requesterRole = (req.user?.role || 'passenger').toString().toLowerCase();
+    if (requesterRole === 'passenger' || requesterRole === 'user') {
+      queueEmail(booking.customer.email, 'ticketConfirmation', emailData);
+      console.log('📧 Booking confirmation email queued for passenger:', booking.customer.email);
+    } else {
+      console.log(`ℹ️ Skipping booking email; requester role is ${requesterRole}`);
+    }
 
     res.status(201).json({
       success: true,

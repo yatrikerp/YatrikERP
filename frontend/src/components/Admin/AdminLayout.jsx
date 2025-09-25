@@ -25,7 +25,11 @@ import {
   Server,
   Globe,
   Smartphone,
-  Ticket
+  Ticket,
+  Zap,
+  Sparkles,
+  Layers,
+  TrendingUp
 } from 'lucide-react';
 
 const AdminLayout = ({ children }) => {
@@ -44,28 +48,34 @@ const AdminLayout = ({ children }) => {
       current: location.pathname === '/admin'
     },
     {
+      name: 'Mass Scheduling',
+      href: '/admin/mass-scheduling',
+      icon: Sparkles,
+      current: location.pathname === '/admin/mass-scheduling'
+    },
+    {
+      name: 'Bus Management',
+      href: '/admin/streamlined-buses',
+      icon: Bus,
+      current: location.pathname === '/admin/streamlined-buses'
+    },
+    {
+      name: 'Route Management',
+      href: '/admin/streamlined-routes',
+      icon: Route,
+      current: location.pathname === '/admin/streamlined-routes'
+    },
+    {
+      name: 'Trip Management',
+      href: '/admin/streamlined-trips',
+      icon: Calendar,
+      current: location.pathname === '/admin/streamlined-trips'
+    },
+    {
       name: 'User Management',
       href: '/admin/users',
       icon: Users,
       current: location.pathname === '/admin/users'
-    },
-    {
-      name: 'Bus Management',
-      href: '/admin/buses',
-      icon: Bus,
-      current: location.pathname === '/admin/buses'
-    },
-    {
-      name: 'Route Management',
-      href: '/admin/routes',
-      icon: Route,
-      current: location.pathname === '/admin/routes'
-    },
-    {
-      name: 'Trip Management',
-      href: '/admin/trips',
-      icon: Calendar,
-      current: location.pathname === '/admin/trips'
     },
     {
       name: 'Booking Management',
@@ -124,10 +134,10 @@ const AdminLayout = ({ children }) => {
   ];
 
   const quickActions = [
-    { name: 'Add User', href: '/admin/users', icon: Users, color: 'bg-blue-500' },
-    { name: 'Schedule Trip', href: '/admin/trips', icon: Calendar, color: 'bg-green-500' },
-    { name: 'View Reports', href: '/admin/reports', icon: BarChart3, color: 'bg-purple-500' },
-    { name: 'System Status', href: '/admin/system-status', icon: Activity, color: 'bg-orange-500' }
+    { name: 'Mass Scheduling', href: '/admin/mass-scheduling', icon: Sparkles, color: 'bg-purple-500' },
+    { name: 'Buses', href: '/admin/streamlined-buses', icon: Bus, color: 'bg-blue-500' },
+    { name: 'Routes', href: '/admin/streamlined-routes', icon: Route, color: 'bg-green-500' },
+    { name: 'Trips', href: '/admin/streamlined-trips', icon: Calendar, color: 'bg-orange-500' }
   ];
 
   const systemMetrics = [
@@ -181,17 +191,28 @@ const AdminLayout = ({ children }) => {
               <Link
                 key={item.name}
                 to={item.href}
-                className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                className={`group flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                   item.current
                     ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700'
                     : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
                 }`}
                 onClick={() => setSidebarOpen(false)}
               >
-                <item.icon className={`mr-3 h-5 w-5 ${
-                  item.current ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-500'
-                }`} />
-                {item.name}
+                <div className="flex items-center">
+                  <item.icon className={`mr-3 h-5 w-5 ${
+                    item.current ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-500'
+                  }`} />
+                  {item.name}
+                </div>
+                {item.badge && (
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                    item.badge === 'NEW' ? 'bg-purple-100 text-purple-800' :
+                    item.badge === 'IMPROVED' ? 'bg-green-100 text-green-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {item.badge}
+                  </span>
+                )}
               </Link>
             ))}
           </nav>
@@ -212,16 +233,27 @@ const AdminLayout = ({ children }) => {
               <Link
                 key={item.name}
                 to={item.href}
-                className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                className={`group flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                   item.current
                     ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700'
                     : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
                 }`}
               >
-                <item.icon className={`mr-3 h-5 w-5 ${
-                  item.current ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-500'
-                }`} />
-                {item.name}
+                <div className="flex items-center">
+                  <item.icon className={`mr-3 h-5 w-5 ${
+                    item.current ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-500'
+                  }`} />
+                  {item.name}
+                </div>
+                {item.badge && (
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                    item.badge === 'NEW' ? 'bg-purple-100 text-purple-800' :
+                    item.badge === 'IMPROVED' ? 'bg-green-100 text-green-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {item.badge}
+                  </span>
+                )}
               </Link>
             ))}
           </nav>

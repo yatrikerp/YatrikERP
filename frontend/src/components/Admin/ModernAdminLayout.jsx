@@ -50,9 +50,6 @@ const ModernAdminLayout = ({ children }) => {
   const navigation = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'User Management', href: '/admin/users', icon: Users },
-    { name: 'Bus Management', href: '/admin/buses', icon: Bus },
-    { name: 'Route Management', href: '/admin/routes', icon: Route },
-    { name: 'Trip Management', href: '/admin/trips', icon: Calendar },
     { name: 'Booking Management', href: '/admin/bookings', icon: Ticket },
     { name: 'Depot Management', href: '/admin/depots', icon: Building2 },
     { name: 'Driver Management', href: '/admin/drivers', icon: UserCheck },
