@@ -55,6 +55,9 @@ export async function apiFetch(path, options = {}) {
     if (path.includes('/admin/') || path.includes('/depot/')) {
       return 20000; // 20 seconds for admin/depot endpoints
     }
+    if (path.includes('/auto-scheduler/')) {
+      return 90000; // 90 seconds for mass scheduling endpoints
+    }
     return 10000; // 10 seconds for other endpoints
   };
   
@@ -101,8 +104,10 @@ export async function apiFetch(path, options = {}) {
             console.warn('⚠️ Error clearing caches after auth error:', err);
           });
         } catch {}
-        // Show error message before redirect
-        handleError(error);
+        // Show error message before redirect (unless suppressed)
+        if (!options.suppressError) {
+          handleError(error);
+        }
         // Redirect to login
         if (typeof window !== 'undefined') {
           setTimeout(() => {
@@ -136,11 +141,15 @@ export async function apiFetch(path, options = {}) {
         message: `Request timed out after ${timeout/1000} seconds. Please try again.`, 
         code: 'TIMEOUT' 
       };
-      handleError(timeoutError);
+      if (!options.suppressError) {
+        handleError(timeoutError);
+      }
       return { ok: false, status: 408, message: 'Request timeout', data: null };
     }
     const networkError = { message: 'Network error. Please check your connection.', code: 'NETWORK_ERROR' };
-    handleError(networkError);
+    if (!options.suppressError) {
+      handleError(networkError);
+    }
     return { ok: false, status: 0, message: 'Network error', data: null };
   }
 }

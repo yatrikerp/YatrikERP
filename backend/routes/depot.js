@@ -2552,7 +2552,376 @@ function generatePNR() {
 }
 
 // =================================================================
-// 6) Depot Booking Management
+// 6) Bus Schedule Management for Depot Managers
+// =================================================================
+
+// GET /api/depot/schedules - Get bus schedules for depot
+router.get('/schedules', async (req, res) => {
+  try {
+    const depotId = req.user.depotId;
+    const {
+      page = 1,
+      limit = 20,
+      date,
+      routeId,
+      busId,
+      status,
+      search,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    const skip = (page - 1) * limit;
+    const filter = { depotId };
+
+    // Apply filters
+    if (date) {
+      const searchDate = new Date(date);
+      searchDate.setHours(0, 0, 0, 0);
+      const nextDate = new Date(searchDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      filter.serviceDate = { $gte: searchDate, $lt: nextDate };
+    }
+    if (routeId) filter.routeId = routeId;
+    if (busId) filter.busId = busId;
+    if (status) filter.status = status;
+    if (search) {
+      filter.$or = [
+        { 'routeId.routeName': { $regex: search, $options: 'i' } },
+        { 'busId.busNumber': { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Build sort object
+    const sort = {};
+    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    const [schedules, total] = await Promise.all([
+      Trip.find(filter)
+        .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+        .populate('busId', 'busNumber busType registrationNumber capacity')
+        .populate('driverId', 'name phone licenseNumber')
+        .populate('conductorId', 'name phone employeeId')
+        .sort(sort)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Trip.countDocuments(filter)
+    ]);
+
+    // Transform schedules data to match frontend expectations
+    const transformedSchedules = schedules.map(trip => {
+      const serviceDate = new Date(trip.serviceDate);
+      const departureTime = trip.startTime ? new Date(serviceDate.getFullYear(), serviceDate.getMonth(), serviceDate.getDate(), 
+        parseInt(trip.startTime.split(':')[0]), parseInt(trip.startTime.split(':')[1])) : null;
+      const arrivalTime = trip.endTime ? new Date(serviceDate.getFullYear(), serviceDate.getMonth(), serviceDate.getDate(), 
+        parseInt(trip.endTime.split(':')[0]), parseInt(trip.endTime.split(':')[1])) : null;
+
+      return {
+        ...trip,
+        scheduleId: trip._id,
+        tripNumber: `TRP${trip._id.toString().slice(-6).toUpperCase()}`,
+        departureTime: departureTime,
+        arrivalTime: arrivalTime,
+        routeId: {
+          ...trip.routeId,
+          routeName: trip.routeId?.routeName || 'Unknown Route',
+          routeNumber: trip.routeId?.routeNumber || 'N/A'
+        },
+        busId: {
+          ...trip.busId,
+          busNumber: trip.busId?.busNumber || 'N/A',
+          busType: trip.busId?.busType || 'Standard',
+          capacity: trip.busId?.capacity || { total: 35 }
+        },
+        driverId: trip.driverId ? {
+          ...trip.driverId,
+          name: trip.driverId.name || 'Unknown Driver'
+        } : null,
+        conductorId: trip.conductorId ? {
+          ...trip.conductorId,
+          name: trip.conductorId.name || 'Unknown Conductor'
+        } : null
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        schedules: transformedSchedules,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get depot schedules error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch schedules',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/depot/schedules - Create new schedule
+router.post('/schedules', async (req, res) => {
+  try {
+    const {
+      routeId,
+      busId,
+      driverId,
+      conductorId,
+      serviceDate,
+      startTime,
+      endTime,
+      fare,
+      capacity,
+      notes
+    } = req.body;
+
+    const depotId = req.user.depotId;
+
+    // Validation
+    if (!routeId || !busId || !serviceDate || !startTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: routeId, busId, serviceDate, startTime'
+      });
+    }
+
+    // Validate route belongs to this depot
+    const route = await Route.findById(routeId);
+    if (!route || !route.depot || route.depot.depotId.toString() !== depotId.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route does not belong to this depot'
+      });
+    }
+
+    // Validate bus belongs to this depot
+    const bus = await Bus.findById(busId);
+    if (!bus || !bus.depotId || bus.depotId.toString() !== depotId.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bus does not belong to this depot'
+      });
+    }
+
+    // Check bus availability for the date
+    const existingSchedule = await Trip.findOne({
+      busId,
+      serviceDate: new Date(serviceDate),
+      status: { $in: ['scheduled', 'running'] }
+    });
+
+    if (existingSchedule) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bus is already assigned to another schedule on this date'
+      });
+    }
+
+    // Create schedule (trip)
+    const schedule = await Trip.create({
+      routeId,
+      busId,
+      driverId,
+      conductorId,
+      serviceDate: new Date(serviceDate),
+      startTime,
+      endTime,
+      fare: fare || 0,
+      capacity: capacity || bus.capacity.total,
+      status: 'scheduled',
+      depotId,
+      createdBy: req.user._id,
+      notes
+    });
+
+    // Update bus status
+    await Bus.findByIdAndUpdate(busId, {
+      currentTrip: schedule._id,
+      status: 'assigned'
+    });
+
+    // Populate the schedule data for response
+    const populatedSchedule = await Trip.findById(schedule._id)
+      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+      .populate('busId', 'busNumber busType registrationNumber capacity')
+      .populate('driverId', 'name phone licenseNumber')
+      .populate('conductorId', 'name phone employeeId')
+      .lean();
+
+    res.status(201).json({
+      success: true,
+      message: 'Schedule created successfully',
+      data: {
+        ...populatedSchedule,
+        scheduleId: populatedSchedule._id
+      }
+    });
+
+  } catch (error) {
+    console.error('Create schedule error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create schedule',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/depot/schedules/:id - Update schedule
+router.put('/schedules/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    const depotId = req.user.depotId;
+
+    // Verify schedule belongs to this depot
+    const existingSchedule = await Trip.findById(id);
+    if (!existingSchedule || existingSchedule.depotId.toString() !== depotId.toString()) {
+      return res.status(404).json({
+        success: false,
+        message: 'Schedule not found or access denied'
+      });
+    }
+
+    // Check if schedule is already running or completed (only allow status updates)
+    if ((existingSchedule.status === 'running' || existingSchedule.status === 'completed') && 
+        (updateData.routeId || updateData.busId || updateData.serviceDate || updateData.startTime || updateData.endTime)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot modify running or completed schedules. Only status updates allowed.'
+      });
+    }
+
+    // If bus is being changed, check availability
+    if (updateData.busId && updateData.busId !== existingSchedule.busId.toString()) {
+      const bus = await Bus.findById(updateData.busId);
+      if (!bus || !bus.depotId || bus.depotId.toString() !== depotId.toString()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Bus does not belong to this depot'
+        });
+      }
+
+      // Check if new bus is available for the date
+      const conflictingSchedule = await Trip.findOne({
+        busId: updateData.busId,
+        serviceDate: updateData.serviceDate ? new Date(updateData.serviceDate) : existingSchedule.serviceDate,
+        status: { $in: ['scheduled', 'running'] },
+        _id: { $ne: id }
+      });
+
+      if (conflictingSchedule) {
+        return res.status(400).json({
+          success: false,
+          message: 'Bus is already assigned to another schedule on this date'
+        });
+      }
+
+      // Release old bus
+      await Bus.findByIdAndUpdate(existingSchedule.busId, {
+        currentTrip: null,
+        status: 'available'
+      });
+
+      // Assign new bus
+      await Bus.findByIdAndUpdate(updateData.busId, {
+        currentTrip: id,
+        status: 'assigned'
+      });
+    }
+
+    // Remove immutable fields
+    delete updateData.depotId;
+    delete updateData.createdBy;
+
+    const schedule = await Trip.findByIdAndUpdate(
+      id,
+      { ...updateData, updatedBy: req.user._id },
+      { new: true, runValidators: true }
+    )
+    .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+    .populate('busId', 'busNumber busType registrationNumber capacity')
+    .populate('driverId', 'name phone licenseNumber')
+    .populate('conductorId', 'name phone employeeId')
+    .lean();
+
+    res.json({
+      success: true,
+      message: 'Schedule updated successfully',
+      data: {
+        ...schedule,
+        scheduleId: schedule._id
+      }
+    });
+
+  } catch (error) {
+    console.error('Update schedule error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update schedule',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/depot/schedules/:id - Delete schedule
+router.delete('/schedules/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const depotId = req.user.depotId;
+
+    // Verify schedule belongs to this depot
+    const schedule = await Trip.findById(id);
+    if (!schedule || schedule.depotId.toString() !== depotId.toString()) {
+      return res.status(404).json({
+        success: false,
+        message: 'Schedule not found or access denied'
+      });
+    }
+
+    // Check if schedule is already running or completed
+    if (schedule.status === 'running' || schedule.status === 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete running or completed schedules'
+      });
+    }
+
+    // Update bus status back to available
+    await Bus.findByIdAndUpdate(schedule.busId, {
+      currentTrip: null,
+      status: 'available'
+    });
+
+    // Delete the schedule
+    await Trip.findByIdAndDelete(id);
+
+    res.json({
+      success: true,
+      message: 'Schedule deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Delete schedule error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete schedule',
+      error: error.message
+    });
+  }
+});
+
+// =================================================================
+// 7) Depot Booking Management
 // =================================================================
 
 // GET /api/depot/bookings - Get all bookings for depot routes

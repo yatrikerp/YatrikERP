@@ -61,7 +61,51 @@ const routeSchema = new mongoose.Schema({
     min: 0
   },
   
-  // Intermediate Stops
+  // Enhanced Intermediate Stops with Distance from Previous
+  stops: [{
+    stopName: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    city: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    location: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    stopNumber: {
+      type: Number,
+      required: true
+    },
+    distanceFromPrev: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    distanceFromStart: {
+      type: Number,
+      required: true
+    },
+    estimatedArrival: {
+      type: Number, // minutes from start
+      required: true
+    },
+    coordinates: {
+      latitude: Number,
+      longitude: Number
+    },
+    isActive: {
+      type: Boolean,
+      default: true
+    }
+  }],
+
+  // Legacy intermediateStops for backward compatibility
   intermediateStops: [{
     city: {
       type: String,
@@ -175,7 +219,7 @@ const routeSchema = new mongoose.Schema({
     busType: String
   }],
   
-  // Pricing Information
+  // Enhanced Pricing Information
   baseFare: {
     type: Number,
     required: true,
@@ -191,6 +235,27 @@ const routeSchema = new mongoose.Schema({
     toStop: String,
     fare: Number
   }],
+  
+  // Auto-generated Fare Matrix for Stop-to-Stop Pricing
+  fareMatrix: {
+    type: Map,
+    of: Map,
+    default: new Map()
+  },
+  
+  // Fare calculation metadata
+  fareCalculation: {
+    lastCalculated: {
+      type: Date,
+      default: Date.now
+    },
+    farePerKmUsed: {
+      type: Number
+    },
+    totalStops: {
+      type: Number
+    }
+  },
   
   // Route Features
   features: [{
@@ -291,6 +356,103 @@ routeSchema.statics.findByDepot = function(depotId) {
     'depot.depotId': depotId,
     isActive: true
   });
+};
+
+// Method to calculate fare matrix for all stop combinations
+routeSchema.methods.calculateFareMatrix = function(farePerKm) {
+  const stops = this.stops || this.intermediateStops;
+  if (!stops || stops.length === 0) {
+    return new Map();
+  }
+
+  const fareMatrix = new Map();
+  const ratePerKm = farePerKm || this.farePerKm || 0;
+
+  // Add start and end points to stops array for calculation
+  const allStops = [
+    {
+      stopName: this.startingPoint.location,
+      distanceFromStart: 0,
+      stopNumber: 0
+    },
+    ...stops,
+    {
+      stopName: this.endingPoint.location,
+      distanceFromStart: this.totalDistance,
+      stopNumber: stops.length + 1
+    }
+  ];
+
+  // Calculate fare for each stop-to-stop combination
+  for (let i = 0; i < allStops.length; i++) {
+    const fromStop = allStops[i];
+    const stopMap = new Map();
+    
+    for (let j = i + 1; j < allStops.length; j++) {
+      const toStop = allStops[j];
+      const distance = toStop.distanceFromStart - fromStop.distanceFromStart;
+      const fare = Math.round(distance * ratePerKm * 100) / 100; // Round to 2 decimal places
+      
+      stopMap.set(toStop.stopName, {
+        distance: distance,
+        fare: fare,
+        fromStopNumber: fromStop.stopNumber,
+        toStopNumber: toStop.stopNumber
+      });
+    }
+    
+    if (stopMap.size > 0) {
+      fareMatrix.set(fromStop.stopName, stopMap);
+    }
+  }
+
+  // Update fare calculation metadata
+  this.fareMatrix = fareMatrix;
+  this.fareCalculation = {
+    lastCalculated: new Date(),
+    farePerKmUsed: ratePerKm,
+    totalStops: allStops.length
+  };
+
+  return fareMatrix;
+};
+
+// Method to get fare between two stops
+routeSchema.methods.getFareBetweenStops = function(fromStopName, toStopName) {
+  if (!this.fareMatrix || this.fareMatrix.size === 0) {
+    // Calculate fare matrix if not exists
+    this.calculateFareMatrix();
+  }
+
+  const fromStopMap = this.fareMatrix.get(fromStopName);
+  if (!fromStopMap) {
+    return null;
+  }
+
+  const fareData = fromStopMap.get(toStopName);
+  return fareData ? fareData.fare : null;
+};
+
+// Method to get all stops for this route
+routeSchema.methods.getAllStops = function() {
+  const stops = this.stops || this.intermediateStops;
+  return [
+    {
+      stopName: this.startingPoint.location,
+      city: this.startingPoint.city,
+      stopNumber: 0,
+      distanceFromStart: 0,
+      isActive: true
+    },
+    ...stops,
+    {
+      stopName: this.endingPoint.location,
+      city: this.endingPoint.city,
+      stopNumber: stops.length + 1,
+      distanceFromStart: this.totalDistance,
+      isActive: true
+    }
+  ];
 };
 
 const Route = mongoose.model('Route', routeSchema);

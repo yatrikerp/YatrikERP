@@ -12,6 +12,7 @@
     "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "start": "cd backend && npm start",
     "start:production": "cd backend && npm start",
+    "test:e2e": "mocha \"tests/e2e/**/*.spec.js\" --timeout 90000 --reporter mochawesome",
     "deploy:docker": "docker-compose up -d --build",
     "deploy:docker:stop": "docker-compose down",
     "deploy:docker:logs": "docker-compose logs -f",
@@ -33,6 +34,11 @@
   "author": "YATRIK ERP Team",
   "license": "MIT",
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "chromedriver": "^131.0.0",
+    "dotenv": "^16.4.5",
+    "mocha": "^10.7.3",
+    "mochawesome": "^7.1.3",
+    "selenium-webdriver": "^4.24.0"
   }
 }

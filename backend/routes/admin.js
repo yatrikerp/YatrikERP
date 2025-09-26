@@ -1609,6 +1609,243 @@ router.delete('/routes/:id', async (req, res) => {
   }
 });
 
+// =================================================================
+// Enhanced Route Management - Fare Calculation & Stop Management
+// =================================================================
+
+// POST /api/admin/routes/:id/fare-matrix - Calculate fare matrix for route
+router.post('/routes/:id/fare-matrix', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { farePerKm } = req.body;
+
+    console.log('💰 POST /api/admin/routes/:id/fare-matrix - Calculate fare matrix');
+    console.log('🆔 Route ID:', id);
+    console.log('💵 Fare per KM:', farePerKm);
+
+    // Validate ObjectId format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid route ID format'
+      });
+    }
+
+    // Find route
+    const route = await Route.findById(id);
+    if (!route) {
+      return res.status(404).json({
+        success: false,
+        message: 'Route not found'
+      });
+    }
+
+    // Get fare per km from request, route, or fare policy
+    let ratePerKm = farePerKm;
+    if (!ratePerKm) {
+      ratePerKm = route.farePerKm;
+    }
+    if (!ratePerKm) {
+      // Get from fare policy
+      const FarePolicy = require('../models/FarePolicy');
+      const farePolicy = await FarePolicy.findOne({ active: true });
+      ratePerKm = farePolicy ? farePolicy.perKm : 0;
+    }
+
+    if (!ratePerKm || ratePerKm <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Fare per km not configured. Please set fare policy or provide farePerKm in request.'
+      });
+    }
+
+    // Calculate fare matrix
+    const fareMatrix = route.calculateFareMatrix(ratePerKm);
+    
+    // Save route with updated fare matrix
+    await route.save();
+
+    // Convert Map to Object for JSON response
+    const fareMatrixObject = {};
+    fareMatrix.forEach((stopMap, fromStop) => {
+      fareMatrixObject[fromStop] = {};
+      stopMap.forEach((fareData, toStop) => {
+        fareMatrixObject[fromStop][toStop] = fareData;
+      });
+    });
+
+    // Get all stops for the route
+    const allStops = route.getAllStops();
+
+    res.json({
+      success: true,
+      message: 'Fare matrix calculated successfully',
+      data: {
+        routeId: route._id,
+        routeName: route.routeName,
+        farePerKm: ratePerKm,
+        totalStops: allStops.length,
+        stops: allStops,
+        fareMatrix: fareMatrixObject,
+        lastCalculated: route.fareCalculation.lastCalculated
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Fare matrix calculation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to calculate fare matrix',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/routes/:id/fare-matrix - Get existing fare matrix
+router.get('/routes/:id/fare-matrix', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    console.log('💰 GET /api/admin/routes/:id/fare-matrix - Get fare matrix');
+    console.log('🆔 Route ID:', id);
+
+    // Validate ObjectId format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid route ID format'
+      });
+    }
+
+    // Find route
+    const route = await Route.findById(id);
+    if (!route) {
+      return res.status(404).json({
+        success: false,
+        message: 'Route not found'
+      });
+    }
+
+    // Get all stops for the route
+    const allStops = route.getAllStops();
+
+    // Convert Map to Object for JSON response
+    const fareMatrixObject = {};
+    if (route.fareMatrix && route.fareMatrix.size > 0) {
+      route.fareMatrix.forEach((stopMap, fromStop) => {
+        fareMatrixObject[fromStop] = {};
+        stopMap.forEach((fareData, toStop) => {
+          fareMatrixObject[fromStop][toStop] = fareData;
+        });
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        routeId: route._id,
+        routeName: route.routeName,
+        farePerKm: route.farePerKm,
+        totalStops: allStops.length,
+        stops: allStops,
+        fareMatrix: fareMatrixObject,
+        lastCalculated: route.fareCalculation?.lastCalculated || null
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Get fare matrix error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get fare matrix',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/admin/routes/:id/stops - Add stops to route
+router.post('/routes/:id/stops', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { stops } = req.body;
+
+    console.log('🚏 POST /api/admin/routes/:id/stops - Add stops to route');
+    console.log('🆔 Route ID:', id);
+    console.log('🚏 Stops:', stops);
+
+    // Validate ObjectId format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid route ID format'
+      });
+    }
+
+    // Find route
+    const route = await Route.findById(id);
+    if (!route) {
+      return res.status(404).json({
+        success: false,
+        message: 'Route not found'
+      });
+    }
+
+    // Validate stops data
+    if (!stops || !Array.isArray(stops)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Stops must be an array'
+      });
+    }
+
+    // Process and add stops
+    const processedStops = stops.map((stop, index) => ({
+      stopName: stop.stopName || stop.name,
+      city: stop.city,
+      location: stop.location,
+      stopNumber: route.stops.length + index + 1,
+      distanceFromPrev: stop.distanceFromPrev || 0,
+      distanceFromStart: stop.distanceFromStart || 0,
+      estimatedArrival: stop.estimatedArrival || 0,
+      coordinates: stop.coordinates || {},
+      isActive: stop.isActive !== false
+    }));
+
+    // Add stops to route
+    route.stops.push(...processedStops);
+
+    // Recalculate total distance if needed
+    if (processedStops.length > 0) {
+      const lastStop = processedStops[processedStops.length - 1];
+      if (lastStop.distanceFromStart > route.totalDistance) {
+        route.totalDistance = lastStop.distanceFromStart;
+      }
+    }
+
+    // Save route
+    await route.save();
+
+    res.json({
+      success: true,
+      message: 'Stops added successfully',
+      data: {
+        routeId: route._id,
+        stopsAdded: processedStops.length,
+        totalStops: route.stops.length,
+        stops: route.stops
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Add stops error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add stops',
+      error: error.message
+    });
+  }
+});
+
 // Stops
 router.get('/stops', async (req, res) => {
   try {
@@ -3158,6 +3395,267 @@ router.delete('/trips/:id', async (req, res) => {
       message: 'Failed to delete trip from database',
       error: error.message,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// =================================================================
+// Enhanced Trip Management - Seat Layout & Fare Integration
+// =================================================================
+
+// POST /api/admin/trips/:id/generate-seat-layout - Generate seat layout for trip
+router.post('/trips/:id/generate-seat-layout', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { busCapacity, busType } = req.body;
+
+    console.log('🪑 POST /api/admin/trips/:id/generate-seat-layout - Generate seat layout');
+    console.log('🆔 Trip ID:', id);
+    console.log('🚌 Bus Capacity:', busCapacity);
+    console.log('🚌 Bus Type:', busType);
+
+    // Validate ObjectId format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid trip ID format'
+      });
+    }
+
+    // Find trip
+    const trip = await Trip.findById(id).populate('busId');
+    if (!trip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trip not found'
+      });
+    }
+
+    // Get bus capacity and type
+    let capacity = busCapacity;
+    let type = busType;
+
+    if (!capacity && trip.busId) {
+      capacity = trip.busId.capacity?.total || trip.capacity;
+    }
+
+    if (!type && trip.busId) {
+      type = trip.busId.busType || 'ac_seater';
+    }
+
+    if (!capacity) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bus capacity is required'
+      });
+    }
+
+    // Generate seat layout
+    const seatLayout = trip.generateSeatLayout(capacity, type);
+
+    // Update trip capacity if different
+    if (capacity !== trip.capacity) {
+      trip.capacity = capacity;
+      trip.availableSeats = capacity - trip.bookedSeats;
+    }
+
+    // Save trip
+    await trip.save();
+
+    res.json({
+      success: true,
+      message: 'Seat layout generated successfully',
+      data: {
+        tripId: trip._id,
+        busCapacity: capacity,
+        busType: type,
+        seatLayout: seatLayout,
+        totalSeats: seatLayout.totalSeats,
+        availableSeats: trip.availableSeats,
+        bookedSeats: trip.bookedSeats
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Generate seat layout error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate seat layout',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/admin/trips/:id/populate-fare-map - Populate stop fare map from route
+router.post('/trips/:id/populate-fare-map', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    console.log('💰 POST /api/admin/trips/:id/populate-fare-map - Populate fare map');
+    console.log('🆔 Trip ID:', id);
+
+    // Validate ObjectId format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid trip ID format'
+      });
+    }
+
+    // Find trip
+    const trip = await Trip.findById(id).populate('routeId');
+    if (!trip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trip not found'
+      });
+    }
+
+    // Populate stop fare map from route
+    await trip.populateStopFareMap();
+
+    // Convert Map to Object for JSON response
+    const fareMapObject = {};
+    if (trip.stopFareMap && trip.stopFareMap.size > 0) {
+      trip.stopFareMap.forEach((stopMap, fromStop) => {
+        fareMapObject[fromStop] = {};
+        stopMap.forEach((fareData, toStop) => {
+          fareMapObject[fromStop][toStop] = fareData;
+        });
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Stop fare map populated successfully',
+      data: {
+        tripId: trip._id,
+        routeId: trip.routeId._id,
+        routeName: trip.routeId.routeName,
+        stopFareMap: fareMapObject
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Populate fare map error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to populate fare map',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/trips/:id/seat-layout - Get seat layout for trip
+router.get('/trips/:id/seat-layout', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    console.log('🪑 GET /api/admin/trips/:id/seat-layout - Get seat layout');
+    console.log('🆔 Trip ID:', id);
+
+    // Validate ObjectId format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid trip ID format'
+      });
+    }
+
+    // Find trip
+    const trip = await Trip.findById(id);
+    if (!trip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trip not found'
+      });
+    }
+
+    if (!trip.seatLayout || !trip.seatLayout.layout) {
+      return res.status(404).json({
+        success: false,
+        message: 'Seat layout not generated for this trip'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        tripId: trip._id,
+        seatLayout: trip.seatLayout,
+        availableSeats: trip.getAvailableSeats(),
+        totalSeats: trip.capacity,
+        bookedSeats: trip.bookedSeats,
+        availableSeatsCount: trip.availableSeats
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Get seat layout error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get seat layout',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/trips/:id/fare-map - Get stop fare map for trip
+router.get('/trips/:id/fare-map', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    console.log('💰 GET /api/admin/trips/:id/fare-map - Get fare map');
+    console.log('🆔 Trip ID:', id);
+
+    // Validate ObjectId format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid trip ID format'
+      });
+    }
+
+    // Find trip
+    const trip = await Trip.findById(id).populate('routeId');
+    if (!trip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trip not found'
+      });
+    }
+
+    // Convert Map to Object for JSON response
+    const fareMapObject = {};
+    if (trip.stopFareMap && trip.stopFareMap.size > 0) {
+      trip.stopFareMap.forEach((stopMap, fromStop) => {
+        fareMapObject[fromStop] = {};
+        stopMap.forEach((fareData, toStop) => {
+          fareMapObject[fromStop][toStop] = fareData;
+        });
+      });
+    }
+
+    // Get all stops from route
+    const allStops = trip.routeId.getAllStops();
+
+    res.json({
+      success: true,
+      data: {
+        tripId: trip._id,
+        routeId: trip.routeId._id,
+        routeName: trip.routeId.routeName,
+        stops: allStops,
+        stopFareMap: fareMapObject
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Get fare map error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get fare map',
+      error: error.message
     });
   }
 });

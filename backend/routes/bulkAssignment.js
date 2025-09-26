@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
-const Route = require('../models/Route');
+const RouteModel = require('../models/Route');
 const Depot = require('../models/Depot');
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 
 // Bulk assign staff to routes
 router.post('/bulk-assign-staff', auth, async (req, res) => {
@@ -30,7 +30,7 @@ router.post('/bulk-assign-staff', auth, async (req, res) => {
     }
 
     // Verify route exists and belongs to depot
-    const route = await Route.findById(routeId);
+    const route = await RouteModel.findById(routeId);
     if (!route) {
       return res.status(404).json({ error: 'Route not found' });
     }
@@ -79,7 +79,7 @@ router.post('/bulk-assign-staff', auth, async (req, res) => {
       }
     };
 
-    await Route.findByIdAndUpdate(routeId, routeUpdate);
+    await RouteModel.findByIdAndUpdate(routeId, routeUpdate);
 
     // Log the assignment
     console.log(`Bulk assigned ${updatedStaff.length} ${staffType} to route ${routeId} in depot ${depotId}`);
@@ -119,7 +119,7 @@ router.get('/route-assignments/:routeId', auth, async (req, res) => {
   try {
     const { routeId } = req.params;
 
-    const route = await Route.findById(routeId)
+    const route = await RouteModel.findById(routeId)
       .populate('assignedDrivers', 'name email phone employeeCode status')
       .populate('assignedConductors', 'name email phone employeeCode status');
 
@@ -170,7 +170,7 @@ router.delete('/remove-staff-from-route', auth, async (req, res) => {
       }
     };
 
-    await Route.findByIdAndUpdate(routeId, routeUpdate);
+    await RouteModel.findByIdAndUpdate(routeId, routeUpdate);
 
     // Clear route assignment from staff
     const staffUpdate = {

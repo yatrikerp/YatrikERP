@@ -271,7 +271,10 @@ const PaxBooking = () => {
         }
       };
 
-      const rzp = new window.Razorpay(options);
+      // Ensure Razorpay script is loaded and use the constructor returned
+      const { default: PaymentService } = await import('../../utils/paymentService');
+      const RazorpayClass = await PaymentService.initializeRazorpay();
+      const rzp = new RazorpayClass(options);
       rzp.open();
     } catch (e) {
       console.error('Payment init error:', e);

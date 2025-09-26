@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+// import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Calendar, Plus, Upload, Download, Search, Filter, 
   Edit, Trash2, Eye, CheckCircle,
   RefreshCw, Users, Clock,
-  X, DollarSign, Bus, Play, Sparkles
+  X, DollarSign, Bus, Play, Sparkles,
+  CalendarDays, Timer, UserCheck
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { apiFetch } from '../../utils/api';
@@ -20,14 +21,39 @@ const StreamlinedTripManagement = () => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState('');
-  const location = useLocation();
+  const [dateFilter, setDateFilter] = useState(() => new Date().toISOString().slice(0,10));
+  // const location = useLocation(); // unused
 
   // Pagination
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(24);
   const [total, setTotal] = useState(0);
   const [routeFilter, setRouteFilter] = useState('all');
+  const [viewMode, setViewMode] = useState('all'); // all | live
+  // Assign modal state
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignMode, setAssignMode] = useState('now'); // now | date
+  const [assignForm, setAssignForm] = useState({
+    tripId: '',
+    routeId: '',
+    busId: '',
+    driverId: '',
+    scheduledDate: '',
+    scheduledTime: ''
+  });
+
+  // Live scheduling modal & auto-schedule
+  const [showLiveScheduleModal, setShowLiveScheduleModal] = useState(false);
+  const [autoDailyKerala, setAutoDailyKerala] = useState(() => {
+    try { return localStorage.getItem('autoDailyKerala') === 'true'; } catch { return false; }
+  });
+  const [liveScheduleForm, setLiveScheduleForm] = useState({
+    targetDate: '',
+    tripsPerRoute: 3,
+    timeGap: 30,
+    keralaOnly: true,
+    scheduleAllDay: true
+  });
   
   // Form states
   const [showSingleAddModal, setShowSingleAddModal] = useState(false);
@@ -74,7 +100,30 @@ const StreamlinedTripManagement = () => {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, limit, searchTerm, statusFilter, dateFilter]);
+
+  useEffect(() => {
+    if (!autoDailyKerala) return;
+    try {
+      const today = new Date().toISOString().slice(0,10);
+      const lastRun = localStorage.getItem('autoDailyKerala.lastRun');
+      if (lastRun === today) return; // already ran today
+      (async () => {
+        try {
+          await apiFetch('/api/auto-scheduler/mass-schedule', {
+            method: 'POST',
+            body: JSON.stringify({ date: today, maxTripsPerRoute: 4, timeGap: 30, autoAssignCrew: true, autoAssignBuses: true, optimizeForDemand: true, region: 'KERALA' })
+          });
+          localStorage.setItem('autoDailyKerala.lastRun', today);
+          await startTripsForDate(today);
+        } catch (e) {
+          console.error('Auto daily Kerala scheduling failed', e);
+        }
+      })();
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoDailyKerala]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -84,9 +133,27 @@ const StreamlinedTripManagement = () => {
       params.set('limit', String(limit));
       if (searchTerm) params.set('search', searchTerm.trim());
       if (statusFilter !== 'all') params.set('status', statusFilter);
+
+      // Date filtering for admin backend expects dateFrom/dateTo
+      const addRangeFor = (yyyyMmDd) => {
+        const d = new Date(yyyyMmDd);
+        const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).toISOString();
+        const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).toISOString();
+        params.set('dateFrom', start);
+        params.set('dateTo', end);
+      };
+
       if (dateFilter) {
-        params.set('serviceDate', dateFilter);
-        params.set('date', dateFilter); // backend compatibility
+        addRangeFor(dateFilter);
+      }
+      if (viewMode === 'live' && !dateFilter) {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        const todayStr = `${yyyy}-${mm}-${dd}`;
+        addRangeFor(todayStr);
+        params.set('status', 'running');
       }
 
       // Try with params first
@@ -127,11 +194,19 @@ const StreamlinedTripManagement = () => {
 
       // Normalize routes
       const routesRaw = routesRes?.data?.data?.routes || routesRes?.data?.routes || routesRes?.routes || [];
-      const normalizedRoutes = routesRaw.map(r => ({
-        ...r,
-        routeNumber: r.routeNumber || r.code || '',
-        routeName: r.routeName || r.name || ''
-      }));
+      const normalizedRoutes = routesRaw.map(r => {
+        const sp = r.startingPoint || r.from || {};
+        const ep = r.endingPoint || r.to || {};
+        const startPlace = typeof sp === 'object' ? (sp.location || sp.city || '') : (sp || '');
+        const endPlace = typeof ep === 'object' ? (ep.location || ep.city || '') : (ep || '');
+        return {
+          ...r,
+          routeNumber: r.routeNumber || r.code || '',
+          routeName: r.routeName || r.name || '',
+          startPlace,
+          endPlace
+        };
+      });
 
       // Normalize buses
       const busesRaw = busesRes?.data?.data?.buses || busesRes?.data?.buses || busesRes?.buses || [];
@@ -349,14 +424,14 @@ const StreamlinedTripManagement = () => {
   // Removed batch operation function - simplified for core CRUD focus
 
   // Helper functions
-  const calculateEndTime = (startTime, durationMinutes) => {
-    if (!startTime || !durationMinutes) return '';
-    const [hours, minutes] = startTime.split(':').map(Number);
-    const totalMinutes = hours * 60 + minutes + durationMinutes;
-    const endHours = Math.floor(totalMinutes / 60) % 24;
-    const endMinutes = totalMinutes % 60;
-    return `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
-  };
+  // const calculateEndTime = (startTime, durationMinutes) => {
+  //   if (!startTime || !durationMinutes) return '';
+  //   const [hours, minutes] = startTime.split(':').map(Number);
+  //   const totalMinutes = hours * 60 + minutes + durationMinutes;
+  //   const endHours = Math.floor(totalMinutes / 60) % 24;
+  //   const endMinutes = totalMinutes % 60;
+  //   return `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+  // };
 
   const resetForm = () => {
     setTripForm({
@@ -394,6 +469,62 @@ const StreamlinedTripManagement = () => {
       optimizeForDemand: true,
       generateReports: true
     });
+  };
+
+  const openAssignModal = (mode, preset = {}) => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mi = String(now.getMinutes()).padStart(2, '0');
+    setAssignMode(mode);
+    setAssignForm({
+      tripId: preset._id || '',
+      routeId: (preset.routeId && (preset.routeId._id || preset.routeId)) || '',
+      busId: (preset.busId && (preset.busId._id || preset.busId)) || '',
+      driverId: (preset.driverId && (preset.driverId._id || preset.driverId)) || '',
+      scheduledDate: mode === 'now' ? `${yyyy}-${mm}-${dd}` : '',
+      scheduledTime: mode === 'now' ? `${hh}:${mi}` : ''
+    });
+    setShowAssignModal(true);
+  };
+
+  const handleAssignSubmit = async () => {
+    try {
+      if (!assignForm.routeId || !assignForm.busId || !assignForm.driverId) {
+        toast.error('Route, bus and driver are required');
+        return;
+      }
+      if (!assignForm.scheduledDate || !assignForm.scheduledTime) {
+        toast.error('Please select date and time');
+        return;
+      }
+      setLoading(true);
+      const res = await apiFetch('/api/admin/assign-trip', {
+        method: 'POST',
+        body: JSON.stringify({
+          driverId: assignForm.driverId,
+          routeId: assignForm.routeId,
+          busId: assignForm.busId,
+          tripId: assignForm.tripId || undefined,
+          scheduledDate: assignForm.scheduledDate,
+          scheduledTime: assignForm.scheduledTime
+        })
+      });
+      if (res?.ok || res?.success) {
+        toast.success('Assignment saved');
+        setShowAssignModal(false);
+        fetchData();
+      } else {
+        toast.error(res?.message || 'Failed to assign');
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to assign');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const openEditModal = (trip) => {
@@ -501,6 +632,13 @@ const StreamlinedTripManagement = () => {
             <div>
               <h3 className="font-semibold text-gray-900">{routeNumber}</h3>
               <p className="text-sm text-gray-500">{routeName}</p>
+              <p className="text-xs text-gray-500">
+                {(routes.find(r=> (r._id||r.id) === (routeObj?._id||routeObj?.id))?.startPlace || routeObj?.startingPoint?.location || routeObj?.startingPoint?.city || '')}
+                {" 														"}
+                →
+                {" "}
+                {(routes.find(r=> (r._id||r.id) === (routeObj?._id||routeObj?.id))?.endPlace || routeObj?.endingPoint?.location || routeObj?.endingPoint?.city || '')}
+              </p>
             </div>
           </div>
           <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(trip.status)}`}>
@@ -553,6 +691,20 @@ const StreamlinedTripManagement = () => {
               title="View Details"
             >
               <Eye className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => openAssignModal('now', trip)}
+              className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+              title="Assign Now"
+            >
+              <UserCheck className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => openAssignModal('date', trip)}
+              className="p-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+              title="Assign for Date"
+            >
+              <CalendarDays className="w-4 h-4" />
             </button>
           </div>
           <div className="text-xs text-gray-500">
@@ -730,6 +882,94 @@ const StreamlinedTripManagement = () => {
     </AnimatePresence>
   );
 
+  const startKeralaMassSchedule = async () => {
+    try {
+      setLoading(true);
+      const today = liveScheduleForm.targetDate || new Date().toISOString().slice(0,10);
+      // Filter depots/routes on backend by Kerala; we'll send a hint
+      const res = await apiFetch('/api/auto-scheduler/mass-schedule', {
+        method: 'POST',
+        body: JSON.stringify({
+          date: today,
+          depotIds: [],
+          maxTripsPerRoute: liveScheduleForm.tripsPerRoute,
+          timeGap: liveScheduleForm.timeGap,
+          autoAssignCrew: true,
+          autoAssignBuses: true,
+          optimizeForDemand: true,
+          generateReports: true,
+          region: liveScheduleForm.keralaOnly ? 'KERALA' : undefined,
+          scheduleAllDay: liveScheduleForm.scheduleAllDay
+        })
+      });
+      if (res?.ok || res?.success || res?.data?.success) {
+        toast.success('Kerala trips scheduled');
+        setShowLiveScheduleModal(false);
+        // enable live view after scheduling
+        setViewMode('live');
+        fetchData();
+      } else {
+        toast.error(res?.message || 'Scheduling failed');
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error('Scheduling failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startTripsForDate = async (targetDateStr) => {
+    try {
+      setLoading(true);
+      const d = targetDateStr ? new Date(targetDateStr) : new Date();
+      const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).toISOString();
+      const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).toISOString();
+
+      const params = new URLSearchParams();
+      params.set('page', '1');
+      params.set('limit', '1000');
+      params.set('status', 'scheduled');
+      params.set('dateFrom', start);
+      params.set('dateTo', end);
+      const res = await apiFetch('/api/admin/trips?' + params.toString(), { suppressError: true });
+      const payload = res?.data?.data || res?.data || {};
+      const tripsRaw = payload.trips || payload.data || [];
+      const tripIds = (tripsRaw || []).map(t => t._id || t.id).filter(Boolean);
+
+      if (!Array.isArray(tripIds) || tripIds.length === 0) {
+        toast('No scheduled trips found for the selected date');
+        return;
+      }
+
+      let success = 0;
+      let fail = 0;
+      const ids = [...tripIds];
+      const concurrency = 10;
+      const runBatch = async () => {
+        const batch = ids.splice(0, concurrency);
+        await Promise.all(batch.map(async (id) => {
+          const r = await apiFetch(`/api/admin/trips/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'running' }) });
+          if (r?.ok || r?.success) success++; else fail++;
+        }));
+      };
+      while (ids.length > 0) { // eslint-disable-line no-unmodified-loop-condition
+        await runBatch();
+      }
+
+      toast.success(`Started ${success} trips${fail ? `, ${fail} failed` : ''}`);
+      setStatusFilter('running');
+      setViewMode('live');
+      setDateFilter(targetDateStr);
+      await fetchData();
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to start trips');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -745,6 +985,22 @@ const StreamlinedTripManagement = () => {
           >
             <RefreshCw className="w-4 h-4" />
             <span>Refresh</span>
+          </button>
+          <button
+            onClick={() => { if (viewMode !== 'live') { setShowLiveScheduleModal(true); } else { setViewMode('all'); fetchData(); } }}
+            className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${viewMode === 'live' ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-green-50 text-green-700 hover:bg-green-100'}`}
+            title="Show trips currently running"
+          >
+            <Play className="w-4 h-4" />
+            <span>{viewMode === 'live' ? 'Live: On' : 'Live Trips'}</span>
+          </button>
+          <button
+            onClick={() => startTripsForDate(dateFilter || new Date().toISOString().slice(0,10))}
+            className="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors flex items-center space-x-2"
+            title="Start all scheduled trips for the selected date"
+          >
+            <Play className="w-4 h-4" />
+            <span>Start All (Date)</span>
           </button>
         </div>
       </div>
@@ -763,7 +1019,7 @@ const StreamlinedTripManagement = () => {
           </div>
         </div>
         
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer" onClick={() => { setStatusFilter('scheduled'); setViewMode('all'); }}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Scheduled</p>
@@ -775,7 +1031,7 @@ const StreamlinedTripManagement = () => {
           </div>
         </div>
         
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer" onClick={() => { setStatusFilter('running'); setViewMode('all'); }}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Running</p>
@@ -787,7 +1043,7 @@ const StreamlinedTripManagement = () => {
           </div>
         </div>
         
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer" onClick={() => { setStatusFilter('completed'); setViewMode('all'); }}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Completed</p>
@@ -861,6 +1117,64 @@ const StreamlinedTripManagement = () => {
             <div className="text-left">
               <h4 className="font-semibold text-orange-900">Export Trips</h4>
               <p className="text-sm text-orange-700">Export trip data for analysis</p>
+            </div>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <button
+            onClick={async () => {
+              try {
+                setLoading(true);
+                const today = new Date().toISOString().slice(0,10);
+                const res = await apiFetch('/api/auto-scheduler/schedule-all', {
+                  method: 'POST',
+                  body: JSON.stringify({ startDate: today, endDate: today, options: { enableOptimization: true } })
+                });
+                if (res?.ok) { 
+                  toast.success('Scheduled all buses for today'); 
+                  await startTripsForDate(today);
+                } else { 
+                  toast.error(res?.message || 'Scheduling failed'); 
+                }
+              } catch (e) { console.error(e); toast.error('Scheduling failed'); } finally { setLoading(false); }
+            }}
+            className="p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center space-x-3"
+          >
+            <div className="p-2 bg-green-100 rounded-lg">
+              <Play className="w-5 h-5 text-green-600" />
+            </div>
+            <div className="text-left">
+              <h4 className="font-semibold text-green-900">Schedule All Buses (Today)</h4>
+              <p className="text-sm text-green-700">Auto-assign crew & buses</p>
+            </div>
+          </button>
+
+          <button
+            onClick={async () => {
+              try {
+                setLoading(true);
+                const today = new Date().toISOString().slice(0,10);
+                const res = await apiFetch('/api/auto-scheduler/mass-schedule', {
+                  method: 'POST',
+                  body: JSON.stringify({ date: today, maxTripsPerRoute: 4, timeGap: 30, autoAssignCrew: true, autoAssignBuses: true, optimizeForDemand: true, region: 'KERALA' })
+                });
+                if (res?.ok || res?.data?.success) { 
+                  toast.success('Scheduled Kerala routes for today'); 
+                  await startTripsForDate(today);
+                } else { 
+                  toast.error(res?.message || 'Scheduling failed'); 
+                }
+              } catch (e) { console.error(e); toast.error('Scheduling failed'); } finally { setLoading(false); }
+            }}
+            className="p-4 bg-teal-50 rounded-lg hover:bg-teal-100 transition-colors flex items-center space-x-3"
+          >
+            <div className="p-2 bg-teal-100 rounded-lg">
+              <Sparkles className="w-5 h-5 text-teal-600" />
+            </div>
+            <div className="text-left">
+              <h4 className="font-semibold text-teal-900">Schedule Kerala Only (Today)</h4>
+              <p className="text-sm text-teal-700">All routes within Kerala</p>
             </div>
           </button>
         </div>
@@ -956,6 +1270,59 @@ const StreamlinedTripManagement = () => {
 
       {/* Modals */}
       <AutoSchedulerModal />
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold text-gray-900 flex items-center space-x-2">
+                {assignMode === 'now' ? <UserCheck className="w-5 h-5 text-purple-600" /> : <CalendarDays className="w-5 h-5 text-gray-700" />}
+                <span>{assignMode === 'now' ? 'Assign Now' : 'Assign for Specific Date'}</span>
+              </h3>
+              <button onClick={() => setShowAssignModal(false)} className="p-1 text-gray-500 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Route *</label>
+                <select value={assignForm.routeId} onChange={e => setAssignForm({ ...assignForm, routeId: e.target.value })} className="w-full border rounded-lg px-3 py-2">
+                  <option value="">Select route</option>
+                  {routes.map(r => <option key={r._id} value={r._id}>{r.routeNumber} - {r.routeName} ({r.startPlace || r.startingPoint?.location || r.startingPoint?.city} → {r.endPlace || r.endingPoint?.location || r.endingPoint?.city})</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Bus *</label>
+                <select value={assignForm.busId} onChange={e => setAssignForm({ ...assignForm, busId: e.target.value })} className="w-full border rounded-lg px-3 py-2">
+                  <option value="">Select bus</option>
+                  {buses.map(b => <option key={b._id} value={b._id}>{b.busNumber}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Driver *</label>
+                <select value={assignForm.driverId} onChange={e => setAssignForm({ ...assignForm, driverId: e.target.value })} className="w-full border rounded-lg px-3 py-2">
+                  <option value="">Select driver</option>
+                  {drivers.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Date *</label>
+                <input type="date" value={assignForm.scheduledDate} onChange={e => setAssignForm({ ...assignForm, scheduledDate: e.target.value })} className="w-full border rounded-lg px-3 py-2" />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Time *</label>
+                <div className="relative">
+                  <Timer className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input type="time" value={assignForm.scheduledTime} onChange={e => setAssignForm({ ...assignForm, scheduledTime: e.target.value })} className="w-full pl-9 border rounded-lg px-3 py-2" />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button onClick={() => setShowAssignModal(false)} className="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+              <button onClick={handleAssignSubmit} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">Assign</button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Single Add Trip Modal */}
       {showSingleAddModal && (
@@ -972,7 +1339,7 @@ const StreamlinedTripManagement = () => {
                 <label className="block text-sm text-gray-600 mb-1">Route *</label>
                 <select value={tripForm.routeId} onChange={e => setTripForm({ ...tripForm, routeId: e.target.value })} className="w-full border rounded-lg px-3 py-2">
                   <option value="">Select route</option>
-                  {routes.map(r => <option key={r._id} value={r._id}>{r.routeNumber} - {r.routeName}</option>)}
+                  {routes.map(r => <option key={r._id} value={r._id}>{r.routeNumber} - {r.routeName} ({r.startPlace || r.startingPoint?.location || r.startingPoint?.city} → {r.endPlace || r.endingPoint?.location || r.endingPoint?.city})</option>)}
                 </select>
               </div>
               <div>
@@ -1050,7 +1417,7 @@ const StreamlinedTripManagement = () => {
                 <label className="block text-sm text-gray-600 mb-1">Route *</label>
                 <select value={tripForm.routeId} onChange={e => setTripForm({ ...tripForm, routeId: e.target.value })} className="w-full border rounded-lg px-3 py-2">
                   <option value="">Select route</option>
-                  {routes.map(r => <option key={r._id} value={r._id}>{r.routeNumber} - {r.routeName}</option>)}
+                  {routes.map(r => <option key={r._id} value={r._id}>{r.routeNumber} - {r.routeName} ({r.startPlace || r.startingPoint?.location || r.startingPoint?.city} → {r.endPlace || r.endingPoint?.location || r.endingPoint?.city})</option>)}
                 </select>
               </div>
               <div>

@@ -59,6 +59,37 @@ const tripSchema = new mongoose.Schema({
       value: { type: Number },
       description: { type: String }
     }]
+  },
+
+  // Enhanced Stop-to-Stop Fare Map
+  stopFareMap: {
+    type: Map,
+    of: Map,
+    default: new Map()
+  },
+
+  // Auto-generated Seat Layout
+  seatLayout: {
+    totalSeats: { type: Number },
+    rows: { type: Number },
+    seatsPerRow: { type: Number },
+    layout: [{
+      seatNumber: { type: String, required: true },
+      row: { type: Number, required: true },
+      column: { type: Number, required: true },
+      seatType: { 
+        type: String, 
+        enum: ['regular', 'ladies', 'disabled', 'sleeper'], 
+        default: 'regular' 
+      },
+      isAvailable: { type: Boolean, default: true },
+      isBooked: { type: Boolean, default: false },
+      bookedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      bookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking' }
+    }],
+    ladiesSeats: { type: Number, default: 0 },
+    disabledSeats: { type: Number, default: 0 },
+    sleeperSeats: { type: Number, default: 0 }
   }
 }, { timestamps: true });
 
@@ -198,6 +229,182 @@ tripSchema.methods.canCancel = function() {
   
   const hoursUntilDeparture = (departureTime - new Date()) / (1000 * 60 * 60);
   return hoursUntilDeparture >= this.cancellationPolicy.hoursBeforeDeparture;
+};
+
+// Method to generate seat layout based on bus capacity
+tripSchema.methods.generateSeatLayout = function(busCapacity, busType = 'ac_seater') {
+  const layout = [];
+  let rows, seatsPerRow, ladiesSeats = 0, disabledSeats = 0, sleeperSeats = 0;
+  
+  // Determine layout based on bus type and capacity
+  switch (busType) {
+    case 'ac_sleeper':
+      rows = Math.ceil(busCapacity / 2); // Sleeper buses typically have 2 seats per row
+      seatsPerRow = 2;
+      sleeperSeats = busCapacity;
+      break;
+    case 'ac_seater':
+    case 'non_ac_seater':
+      rows = Math.ceil(busCapacity / 4); // Seater buses typically have 4 seats per row
+      seatsPerRow = 4;
+      ladiesSeats = Math.ceil(busCapacity * 0.15); // 15% ladies seats
+      disabledSeats = Math.ceil(busCapacity * 0.05); // 5% disabled seats
+      break;
+    case 'volvo':
+      rows = Math.ceil(busCapacity / 2);
+      seatsPerRow = 2;
+      sleeperSeats = busCapacity;
+      break;
+    case 'mini':
+      rows = Math.ceil(busCapacity / 3);
+      seatsPerRow = 3;
+      ladiesSeats = Math.ceil(busCapacity * 0.2);
+      disabledSeats = 1;
+      break;
+    default:
+      rows = Math.ceil(busCapacity / 4);
+      seatsPerRow = 4;
+      ladiesSeats = Math.ceil(busCapacity * 0.15);
+      disabledSeats = Math.ceil(busCapacity * 0.05);
+  }
+
+  let seatNumber = 1;
+  let ladiesCount = 0;
+  let disabledCount = 0;
+
+  for (let row = 1; row <= rows; row++) {
+    for (let col = 1; col <= seatsPerRow; col++) {
+      if (seatNumber > busCapacity) break;
+
+      let seatType = 'regular';
+      
+      // Assign special seat types
+      if (busType.includes('sleeper') || busType === 'volvo') {
+        seatType = 'sleeper';
+      } else {
+        if (ladiesCount < ladiesSeats && (row === 1 || row === 2)) {
+          seatType = 'ladies';
+          ladiesCount++;
+        } else if (disabledCount < disabledSeats && row === 1 && col === 1) {
+          seatType = 'disabled';
+          disabledCount++;
+        }
+      }
+
+      layout.push({
+        seatNumber: `S${String(seatNumber).padStart(2, '0')}`,
+        row: row,
+        column: col,
+        seatType: seatType,
+        isAvailable: true,
+        isBooked: false
+      });
+
+      seatNumber++;
+    }
+  }
+
+  // Update seat layout
+  this.seatLayout = {
+    totalSeats: busCapacity,
+    rows: rows,
+    seatsPerRow: seatsPerRow,
+    layout: layout,
+    ladiesSeats: ladiesSeats,
+    disabledSeats: disabledSeats,
+    sleeperSeats: sleeperSeats
+  };
+
+  return this.seatLayout;
+};
+
+// Method to get available seats
+tripSchema.methods.getAvailableSeats = function() {
+  if (!this.seatLayout || !this.seatLayout.layout) {
+    return [];
+  }
+  return this.seatLayout.layout.filter(seat => seat.isAvailable && !seat.isBooked);
+};
+
+// Method to book a specific seat
+tripSchema.methods.bookSeat = function(seatNumber, userId, bookingId) {
+  if (!this.seatLayout || !this.seatLayout.layout) {
+    throw new Error('Seat layout not generated');
+  }
+
+  const seat = this.seatLayout.layout.find(s => s.seatNumber === seatNumber);
+  if (!seat) {
+    throw new Error('Seat not found');
+  }
+
+  if (seat.isBooked || !seat.isAvailable) {
+    throw new Error('Seat already booked');
+  }
+
+  seat.isBooked = true;
+  seat.isAvailable = false;
+  seat.bookedBy = userId;
+  seat.bookingId = bookingId;
+
+  this.bookedSeats += 1;
+  this.availableSeats = this.capacity - this.bookedSeats;
+
+  return this.save();
+};
+
+// Method to cancel seat booking
+tripSchema.methods.cancelSeatBooking = function(seatNumber) {
+  if (!this.seatLayout || !this.seatLayout.layout) {
+    throw new Error('Seat layout not generated');
+  }
+
+  const seat = this.seatLayout.layout.find(s => s.seatNumber === seatNumber);
+  if (!seat) {
+    throw new Error('Seat not found');
+  }
+
+  if (!seat.isBooked) {
+    throw new Error('Seat not booked');
+  }
+
+  seat.isBooked = false;
+  seat.isAvailable = true;
+  seat.bookedBy = null;
+  seat.bookingId = null;
+
+  this.bookedSeats -= 1;
+  this.availableSeats = this.capacity - this.bookedSeats;
+
+  return this.save();
+};
+
+// Method to get fare between stops
+tripSchema.methods.getFareBetweenStops = function(fromStopName, toStopName) {
+  if (!this.stopFareMap || this.stopFareMap.size === 0) {
+    return null;
+  }
+
+  const fromStopMap = this.stopFareMap.get(fromStopName);
+  if (!fromStopMap) {
+    return null;
+  }
+
+  const fareData = fromStopMap.get(toStopName);
+  return fareData ? fareData.fare : null;
+};
+
+// Method to populate stop fare map from route
+tripSchema.methods.populateStopFareMap = async function() {
+  const Route = require('./Route');
+  const route = await Route.findById(this.routeId);
+  
+  if (!route) {
+    throw new Error('Route not found');
+  }
+
+  // Copy fare matrix from route to trip
+  this.stopFareMap = route.fareMatrix || new Map();
+  return this.save();
 };
 
 // Pre-save middleware to update available seats

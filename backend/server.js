@@ -36,8 +36,6 @@ app.use(passport.session());
 require('./config/passport');
 
 // Connect to MongoDB with enhanced error handling
-console.log('🔌 Attempting MongoDB connection...');
-console.log('📡 MongoDB URI:', process.env.MONGODB_URI ? 'Set' : 'Using default');
 
 const mongoOptions = {
   maxPoolSize: 10, // Maintain up to 10 socket connections
@@ -51,9 +49,20 @@ const mongoOptions = {
 async function startServer() {
   try {
     console.log('🔌 Attempting MongoDB connection...');
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/yatrik_erp', mongoOptions);
-    console.log('✅ Connected to MongoDB successfully');
-    console.log('📊 Database ready for operations');
+    
+    // Use Atlas MongoDB only
+    const connectionUri = process.env.MONGODB_URI;
+    
+    if (!connectionUri) {
+      throw new Error('MONGODB_URI environment variable is required. Please set it in your .env file.');
+    }
+    
+    console.log('📡 Using Atlas MongoDB');
+    console.log('🔗 Connection URI:', connectionUri.replace(/\/\/.*@/, '//***:***@')); // Hide credentials
+    
+    await mongoose.connect(connectionUri, mongoOptions);
+    console.log('✅ Connected to Atlas MongoDB successfully');
+      console.log('📊 Database ready for operations');
     
     // Start the server after database connection
     const PORT = process.env.PORT || 5000;
@@ -158,6 +167,7 @@ app.use('/api/email', require('./routes/emailStatus'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/auto-scheduler', require('./routes/autoScheduler'));
 app.use('/api/alerts', require('./routes/alerts'));
+app.use('/api/fastest-route', require('./routes/fastestRoute'));
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
@@ -180,7 +190,7 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// API-only mode - no frontend serving
+// Catch-all route for non-API requests (API-only mode)
 app.get('*', (req, res) => {
   res.status(404).json({
     error: 'API endpoint not found',

@@ -95,7 +95,9 @@ const RedBusPayment = () => {
         }
       };
 
-      const rzp = new window.Razorpay(options);
+      const { default: PaymentService } = await import('../utils/paymentService');
+      const RazorpayClass = await PaymentService.initializeRazorpay();
+      const rzp = new RazorpayClass(options);
       rzp.open();
     } catch (error) {
       console.error('Payment error:', error);

@@ -412,6 +412,7 @@ router.get('/trips/search', async (req, res) => {
 
     // If from/to parameters are provided, filter trips; otherwise show all
     let filteredTrips = trips;
+    let fallbackUsed = false;
     
     if (from && to) {
       console.log(`🔍 Filtering trips from "${from}" to "${to}"`);
@@ -432,6 +433,13 @@ router.get('/trips/search', async (req, res) => {
         return fromMatch && toMatch;
       });
       console.log(`✅ Filtered to ${filteredTrips.length} matching trips`);
+
+      // Fallback: show all trips for the date when there are no matches
+      if (filteredTrips.length === 0) {
+        filteredTrips = trips;
+        fallbackUsed = true;
+        console.log('ℹ️ No matching trips found. Falling back to showing all scheduled trips for the date.');
+      }
     } else {
       console.log(`📋 Showing all ${trips.length} scheduled trips (no from/to filter)`);
     }
@@ -465,7 +473,7 @@ router.get('/trips/search', async (req, res) => {
     }));
 
     console.log(`Search: ${from} → ${to} on ${date}`);
-    console.log(`Found ${trips.length} total trips, ${filteredTrips.length} matching trips`);
+    console.log(`Found ${trips.length} total trips, ${filteredTrips.length} to return (fallback=${fallbackUsed})`);
     console.log(`Found ${availableRoutes.length} matching routes without trips`);
 
     const transformedTrips = filteredTrips.map(trip => {
@@ -527,12 +535,12 @@ router.get('/trips/search', async (req, res) => {
         searchParams: { from, to, date: searchDate.toDateString() },
         totalFound: transformedTrips.length,
         routesFound: availableRoutes.length,
-        searchType: from && to ? 'filtered' : 'all_scheduled',
-        message: from && to 
-          ? (filteredTrips.length === 0 
-              ? `No trips found from "${from}" to "${to}" on ${searchDate.toDateString()}. Showing all ${trips.length} scheduled trips instead.`
-              : `Found ${filteredTrips.length} trip(s) from "${from}" to "${to}". Showing ${trips.length} total scheduled trips.`)
-          : `Showing all ${trips.length} scheduled trips for ${searchDate.toDateString()}.`
+        searchType: from && to ? (fallbackUsed ? 'all_on_no_match' : 'filtered') : 'all_scheduled',
+        message: (from && to)
+          ? (fallbackUsed 
+              ? `No trips matched "${from}" → "${to}". Showing all scheduled trips for ${searchDate.toDateString()}.`
+              : `Found ${transformedTrips.length} trip(s) from "${from}" to "${to}".`)
+          : `Showing all ${transformedTrips.length} scheduled trips for ${searchDate.toDateString()}.`
       }
     });
 

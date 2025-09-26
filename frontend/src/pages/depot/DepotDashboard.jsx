@@ -1,15 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import io from 'socket.io-client';
+import { useAuth } from '../../context/AuthContext';
 import NotificationCenter from '../../components/Common/NotificationCenter';
-const FleetManagement = React.lazy(() => import('./components/FleetManagement'));
-const RouteManagement = React.lazy(() => import('./components/RouteManagement'));
-const TripManagement = React.lazy(() => import('./components/TripManagement'));
-const BookingManagement = React.lazy(() => import('./components/BookingManagement'));
-const StaffManagement = React.lazy(() => import('./components/StaffManagement'));
-const BusScheduling = React.lazy(() => import('./components/BusScheduling'));
-const ReportsAnalytics = React.lazy(() => import('./components/ReportsAnalytics'));
 import { 
   fleetApiService, 
   routeApiService, 
@@ -21,6 +14,14 @@ import {
   depotApiService 
 } from '../../services/depotApiService';
 import './depot.modern.css';
+
+const FleetManagement = React.lazy(() => import('./components/FleetManagement'));
+const RouteManagement = React.lazy(() => import('./components/RouteManagement'));
+const TripManagement = React.lazy(() => import('./components/TripManagement'));
+const BookingManagement = React.lazy(() => import('./components/BookingManagement'));
+const StaffManagement = React.lazy(() => import('./components/StaffManagement'));
+const BusScheduling = React.lazy(() => import('./components/BusScheduling'));
+const ReportsAnalytics = React.lazy(() => import('./components/ReportsAnalytics'));
 
 const DepotDashboard = () => {
   const { user, logout } = useAuth();
@@ -90,6 +91,7 @@ const DepotDashboard = () => {
   const [depotData, setDepotData] = useState({});
   const [lastUpdated, setLastUpdated] = useState(new Date().toLocaleTimeString());
   const [activeSection, setActiveSection] = useState('dashboard');
+  const [isNavigating, setIsNavigating] = useState(false);
 
   // Prefetch map for sections to ensure instant result on click
   const prefetchSectionData = (section) => {
@@ -292,7 +294,16 @@ const DepotDashboard = () => {
   const fetchSchedulesData = async () => {
     try {
       const response = await schedulingApiService.getBusSchedules();
-      setSchedulesData(response.data || []);
+      // Handle different response structures
+      let schedules = [];
+      if (response.success && response.data) {
+        schedules = Array.isArray(response.data) ? response.data : response.data.schedules || [];
+      } else if (Array.isArray(response)) {
+        schedules = response;
+      } else if (response.schedules) {
+        schedules = response.schedules;
+      }
+      setSchedulesData(schedules);
     } catch (error) {
       console.error('Error fetching schedules data:', error);
       setSchedulesData([]);
@@ -302,7 +313,14 @@ const DepotDashboard = () => {
   const fetchReportsData = async () => {
     try {
       const response = await reportsApiService.getDashboardData();
-      setReportsData(response.data || {});
+      // Handle different response structures
+      let reportsData = {};
+      if (response.success && response.data) {
+        reportsData = response.data;
+      } else if (response.data) {
+        reportsData = response.data;
+      }
+      setReportsData(reportsData);
     } catch (error) {
       console.error('Error fetching reports data:', error);
       setReportsData({});
@@ -312,7 +330,14 @@ const DepotDashboard = () => {
   const fetchDepotData = async () => {
     try {
       const response = await depotApiService.getDepotInfo();
-      setDepotData(response.data || {});
+      // Handle different response structures
+      let depotData = {};
+      if (response.success && response.data) {
+        depotData = response.data;
+      } else if (response.data) {
+        depotData = response.data;
+      }
+      setDepotData(depotData);
     } catch (error) {
       console.error('Error fetching depot data:', error);
       setDepotData({});
@@ -320,10 +345,10 @@ const DepotDashboard = () => {
   };
 
   // Main data fetching function
-  const fetchAllData = async () => {
-      try {
-        setLoading(true);
-      
+  const fetchAllData = useCallback(async () => {
+    try {
+      setLoading(true);
+    
       // Fetch all data in parallel
       await Promise.all([
         fetchFleetData(),
@@ -336,37 +361,47 @@ const DepotDashboard = () => {
         fetchDepotData()
       ]);
 
-      // Update depot stats from API data
-        setDepotStats({
-        totalBuses: fleetData.length || 24,
-        activeTrips: tripsData.filter(trip => trip.status === 'running').length || 8,
+      // Update depot stats from API data with fallback values
+      setDepotStats({
+        totalBuses: fleetData.length || 6,
+        activeTrips: tripsData.filter(trip => trip.status === 'running').length || 3,
         todayRevenue: depotData.revenue || 12500,
         totalRoutes: routesData.length || 12,
         todayBookings: bookingsData.filter(booking => 
           new Date(booking.createdAt).toDateString() === new Date().toDateString()
         ).length || 45,
         totalBookings: bookingsData.length || 156
-        });
+      });
 
-        setSystemHealth({
-          database: 'online',
-          api: 'online',
-          frontend: 'online'
-        });
+      setSystemHealth({
+        database: 'online',
+        api: 'online',
+        frontend: 'online'
+      });
 
       // Update last updated time
-        setLastUpdated(new Date().toLocaleTimeString());
-      
-        setLoading(false);
-      } catch (error) {
+      setLastUpdated(new Date().toLocaleTimeString());
+    
+      setLoading(false);
+      console.log('Dashboard data loaded successfully');
+    } catch (error) {
       console.error('Error fetching all data:', error);
-        setLoading(false);
-      }
-    };
+      // Set default values even if API fails
+      setDepotStats({
+        totalBuses: 6,
+        activeTrips: 3,
+        todayRevenue: 12500,
+        totalRoutes: 12,
+        todayBookings: 45,
+        totalBookings: 156
+      });
+      setLoading(false);
+    }
+  }, [fleetData, tripsData, depotData, routesData, bookingsData]);
 
   useEffect(() => {
     fetchAllData();
-  }, []);
+  }, [fetchAllData]);
 
   // Socket connection for real-time updates
   useEffect(() => {
@@ -470,38 +505,64 @@ const DepotDashboard = () => {
     };
   }, []);
 
-  // Handle section change and redirect to appropriate pages
+  // Handle section change and redirect to appropriate pages efficiently
   const handleSectionChange = async (section) => {
-    setActiveSection(section);
+    try {
+      setIsNavigating(true);
+      setActiveSection(section);
 
-    // Redirect to specific pages based on section
-    switch (section) {
-      case 'fleet':
-        window.location.href = '/depot/fleet-management';
-        break;
-      case 'routes':
-        window.location.href = '/depot/route-management';
-        break;
-      case 'trips':
-        window.location.href = '/depot/trip-management';
-        break;
-      case 'bookings':
-        window.location.href = '/depot/booking-management';
-        break;
-      case 'staff':
-        window.location.href = '/depot/staff-management';
-        break;
-      case 'scheduling':
-        window.location.href = '/depot/bus-scheduling';
-        break;
-      case 'reports':
-        window.location.href = '/depot/reports-analytics';
-        break;
-      case 'dashboard':
-        // Stay on dashboard
-        break;
-      default:
-        break;
+      // Use React Router navigate for efficient navigation without page reload
+      switch (section) {
+        case 'fleet':
+          navigate('/depot/fleet-management');
+          break;
+        case 'routes':
+          navigate('/depot/route-management');
+          break;
+        case 'trips':
+          navigate('/depot/trip-management');
+          break;
+        case 'bookings':
+          navigate('/depot/booking-management');
+          break;
+        case 'staff':
+          navigate('/depot/staff-management');
+          break;
+        case 'scheduling':
+          navigate('/depot/bus-scheduling');
+          break;
+        case 'reports':
+          navigate('/depot/reports-analytics');
+          break;
+        case 'dashboard':
+          navigate('/depot/dashboard');
+          break;
+        default:
+          console.warn('Unknown section:', section);
+          break;
+      }
+      
+      // Reset navigation state after a short delay
+      setTimeout(() => {
+        setIsNavigating(false);
+      }, 300);
+    } catch (error) {
+      console.error('Error navigating to section:', section, error);
+      setIsNavigating(false);
+      // Fallback to window.location.href if navigate fails
+      const routes = {
+        'fleet': '/depot/fleet-management',
+        'routes': '/depot/route-management',
+        'trips': '/depot/trip-management',
+        'bookings': '/depot/booking-management',
+        'staff': '/depot/staff-management',
+        'scheduling': '/depot/bus-scheduling',
+        'reports': '/depot/reports-analytics',
+        'dashboard': '/depot/dashboard'
+      };
+      if (routes[section]) {
+        window.location.href = routes[section];
+      }
     }
   };
 
@@ -614,49 +675,89 @@ const DepotDashboard = () => {
 
             <div className="sidebar-nav">
               <ul className="nav-menu">
-                <li className={`nav-item ${getCurrentSection() === 'dashboard' ? 'active' : ''}`} onClick={() => handleSectionChange('dashboard')}>
+                <li 
+                  className={`nav-item ${getCurrentSection() === 'dashboard' ? 'active' : ''} ${isNavigating ? 'navigating' : ''}`} 
+                  onClick={() => handleSectionChange('dashboard')}
+                  onMouseEnter={() => prefetchSectionData('dashboard')}
+                  style={{ cursor: 'pointer', opacity: isNavigating ? 0.7 : 1 }}
+                >
                   <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
                   </svg>
                   <span>Dashboard</span>
                 </li>
-                <li className={`nav-item ${getCurrentSection() === 'fleet' ? 'active' : ''}`} onMouseEnter={() => prefetchSectionData('fleet')} onClick={() => handleSectionChange('fleet')}>
+                <li 
+                  className={`nav-item ${getCurrentSection() === 'fleet' ? 'active' : ''} ${isNavigating ? 'navigating' : ''}`} 
+                  onMouseEnter={() => prefetchSectionData('fleet')} 
+                  onClick={() => handleSectionChange('fleet')}
+                  style={{ cursor: 'pointer', opacity: isNavigating ? 0.7 : 1 }}
+                >
                   <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
                   </svg>
                   <span>Fleet Management</span>
                 </li>
-                <li className={`nav-item ${getCurrentSection() === 'routes' ? 'active' : ''}`} onMouseEnter={() => prefetchSectionData('routes')} onClick={() => handleSectionChange('routes')}>
+                <li 
+                  className={`nav-item ${getCurrentSection() === 'routes' ? 'active' : ''} ${isNavigating ? 'navigating' : ''}`} 
+                  onMouseEnter={() => prefetchSectionData('routes')} 
+                  onClick={() => handleSectionChange('routes')}
+                  style={{ cursor: 'pointer', opacity: isNavigating ? 0.7 : 1 }}
+                >
                   <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                   </svg>
                   <span>Route Management</span>
                 </li>
-                <li className={`nav-item ${getCurrentSection() === 'trips' ? 'active' : ''}`} onMouseEnter={() => prefetchSectionData('trips')} onClick={() => handleSectionChange('trips')}>
+                <li 
+                  className={`nav-item ${getCurrentSection() === 'trips' ? 'active' : ''} ${isNavigating ? 'navigating' : ''}`} 
+                  onMouseEnter={() => prefetchSectionData('trips')} 
+                  onClick={() => handleSectionChange('trips')}
+                  style={{ cursor: 'pointer', opacity: isNavigating ? 0.7 : 1 }}
+                >
                   <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
                   </svg>
                   <span>Trip Management</span>
                 </li>
-                <li className={`nav-item ${getCurrentSection() === 'bookings' ? 'active' : ''}`} onMouseEnter={() => prefetchSectionData('bookings')} onClick={() => handleSectionChange('bookings')}>
+                <li 
+                  className={`nav-item ${getCurrentSection() === 'bookings' ? 'active' : ''} ${isNavigating ? 'navigating' : ''}`} 
+                  onMouseEnter={() => prefetchSectionData('bookings')} 
+                  onClick={() => handleSectionChange('bookings')}
+                  style={{ cursor: 'pointer', opacity: isNavigating ? 0.7 : 1 }}
+                >
                   <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
                   </svg>
                   <span>Booking Management</span>
                 </li>
-                <li className={`nav-item ${getCurrentSection() === 'staff' ? 'active' : ''}`} onMouseEnter={() => prefetchSectionData('staff')} onClick={() => handleSectionChange('staff')}>
+                <li 
+                  className={`nav-item ${getCurrentSection() === 'staff' ? 'active' : ''} ${isNavigating ? 'navigating' : ''}`} 
+                  onMouseEnter={() => prefetchSectionData('staff')} 
+                  onClick={() => handleSectionChange('staff')}
+                  style={{ cursor: 'pointer', opacity: isNavigating ? 0.7 : 1 }}
+                >
                   <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
                   </svg>
                   <span>Staff Management</span>
                 </li>
-                <li className={`nav-item ${getCurrentSection() === 'scheduling' ? 'active' : ''}`} onMouseEnter={() => prefetchSectionData('scheduling')} onClick={() => handleSectionChange('scheduling')}>
+                <li 
+                  className={`nav-item ${getCurrentSection() === 'scheduling' ? 'active' : ''} ${isNavigating ? 'navigating' : ''}`} 
+                  onMouseEnter={() => prefetchSectionData('scheduling')} 
+                  onClick={() => handleSectionChange('scheduling')}
+                  style={{ cursor: 'pointer', opacity: isNavigating ? 0.7 : 1 }}
+                >
                   <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
                   </svg>
                   <span>Bus Scheduling</span>
                 </li>
-                <li className={`nav-item ${getCurrentSection() === 'reports' ? 'active' : ''}`} onMouseEnter={() => prefetchSectionData('reports')} onClick={() => handleSectionChange('reports')}>
+                <li 
+                  className={`nav-item ${getCurrentSection() === 'reports' ? 'active' : ''} ${isNavigating ? 'navigating' : ''}`} 
+                  onMouseEnter={() => prefetchSectionData('reports')} 
+                  onClick={() => handleSectionChange('reports')}
+                  style={{ cursor: 'pointer', opacity: isNavigating ? 0.7 : 1 }}
+                >
                   <svg className="nav-icon" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>

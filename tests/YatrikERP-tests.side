@@ -1,0 +1,178 @@
+{
+  "id": "a4e9c2a0-6d1f-4df1-9f6b-2c4e2a6f8c11",
+  "version": "2.0",
+  "name": "YatrikERP-tests",
+  "url": "http://localhost:5173",
+  "tests": [
+    {
+      "id": "9c0a3f2f-0e22-4c3f-9a9b-9c0e6a2b1a11",
+      "name": "PassengerFlow",
+      "commands": [
+        { "id": "p-01", "comment": "Open Login Page", "command": "open", "target": "http://localhost:5173/login", "value": "" },
+        { "id": "p-02", "comment": "Wait for login inputs", "command": "waitForElementVisible", "target": "css=#email", "value": "30000" },
+        { "id": "p-03", "comment": "Type email", "command": "type", "target": "css=#email", "value": "${testEmail}" },
+        { "id": "p-04", "comment": "Type password", "command": "type", "target": "css=#password", "value": "${testPassword}" },
+        { "id": "p-05", "comment": "Click Login", "command": "click", "target": "css=form.login-form-compact button[type=\"submit\"]", "value": "" },
+        { "id": "p-06", "comment": "Assert dashboard visible", "command": "waitForElementVisible", "target": "css=[data-testid=\"dashboard-home\"]", "value": "30000" },
+        { "id": "p-07", "comment": "Assert title", "command": "assertTitle", "target": "Yatrik ERP", "value": "" },
+        { "id": "p-08", "comment": "Go to Search", "command": "click", "target": "css=[data-testid=\"nav-search\"]", "value": "" },
+        { "id": "p-09", "comment": "Wait for search form", "command": "waitForElementVisible", "target": "css=[data-testid=\"trip-search-form\"]", "value": "30000" },
+        { "id": "p-10", "comment": "Type from city", "command": "type", "target": "css=[data-testid=\"from-city\"]", "value": "${fromCity}" },
+        { "id": "p-11", "comment": "Type to city", "command": "type", "target": "css=[data-testid=\"to-city\"]", "value": "${toCity}" },
+        { "id": "p-12", "comment": "Type date", "command": "type", "target": "css=[data-testid=\"travel-date\"]", "value": "${date}" },
+        { "id": "p-13", "comment": "Submit search", "command": "click", "target": "css=[data-testid=\"search-submit\"]", "value": "" },
+        { "id": "p-14", "comment": "Wait results", "command": "waitForElementVisible", "target": "css=[data-testid=\"trip-results\"]", "value": "30000" },
+        { "id": "p-15", "comment": "Assert results title", "command": "assertText", "target": "css=[data-testid=\"results-title\"]", "value": "Trips Found" },
+        { "id": "p-16", "comment": "Open first trip", "command": "click", "target": "css=[data-testid=\"trip-card-0\"]", "value": "" },
+        { "id": "p-17", "comment": "Wait seat map", "command": "waitForElementVisible", "target": "css=[data-testid=\"seat-map\"]", "value": "30000" },
+        { "id": "p-18", "comment": "Choose seat A1", "command": "click", "target": "css=[data-testid=\"seat-A1\"]", "value": "" },
+        { "id": "p-19", "comment": "Continue to payment", "command": "click", "target": "css=[data-testid=\"continue-to-payment\"]", "value": "" },
+        { "id": "p-20", "comment": "Wait payment screen", "command": "waitForElementVisible", "target": "css=[data-testid=\"payment-screen\"]", "value": "30000" },
+        { "id": "p-21", "comment": "Mock pay now", "command": "click", "target": "css=[data-testid=\"pay-now\"]", "value": "" },
+        { "id": "p-22", "comment": "Wait booking confirmed", "command": "waitForElementVisible", "target": "css=[data-testid=\"booking-status\"]", "value": "30000" },
+        { "id": "p-23", "comment": "Assert booking confirmed", "command": "assertText", "target": "css=[data-testid=\"booking-status\"]", "value": "Booking Confirmed" },
+        { "id": "p-24", "comment": "Open wallet", "command": "click", "target": "css=[data-testid=\"nav-wallet\"]", "value": "" },
+        { "id": "p-25", "comment": "Wait QR ticket", "command": "waitForElementVisible", "target": "css=[data-testid=\"qr-ticket\"]", "value": "30000" },
+        { "id": "p-26", "comment": "Assert QR visible", "command": "assertText", "target": "css=[data-testid=\"wallet-title\"]", "value": "My Tickets" }
+      ]
+    },
+    {
+      "id": "f2b6a1de-3c75-4e42-9f2b-ec5c5c0a0b22",
+      "name": "ConductorFlow",
+      "commands": [
+        { "id": "c-01", "comment": "Open Login", "command": "open", "target": "http://localhost:5173/login", "value": "" },
+        { "id": "c-02", "comment": "Wait for login", "command": "waitForElementVisible", "target": "css=#email", "value": "30000" },
+        { "id": "c-03", "comment": "Type email", "command": "type", "target": "css=#email", "value": "${testEmail}" },
+        { "id": "c-04", "comment": "Type password", "command": "type", "target": "css=#password", "value": "${testPassword}" },
+        { "id": "c-05", "comment": "Login", "command": "click", "target": "css=form.login-form-compact button[type=\"submit\"]", "value": "" },
+        { "id": "c-06", "comment": "Assert conductor dashboard", "command": "waitForElementVisible", "target": "css=[data-testid=\"conductor-dashboard\"]", "value": "30000" },
+        { "id": "c-07", "comment": "Start duty", "command": "click", "target": "css=[data-testid=\"start-duty\"]", "value": "" },
+        { "id": "c-08", "comment": "Assert duty started", "command": "waitForElementVisible", "target": "css=[data-testid=\"duty-status\"]", "value": "30000" },
+        { "id": "c-09", "comment": "Scan ticket", "command": "click", "target": "css=[data-testid=\"scan-ticket\"]", "value": "" },
+        { "id": "c-10", "comment": "Assert ticket scanned", "command": "waitForElementVisible", "target": "css=[data-testid=\"scan-success\"]", "value": "30000" },
+        { "id": "c-11", "comment": "Mark seat vacant", "command": "click", "target": "css=[data-testid=\"mark-seat-vacant\"]", "value": "" },
+        { "id": "c-12", "comment": "Assert seat vacant", "command": "waitForElementVisible", "target": "css=[data-testid=\"seat-status-vacant\"]", "value": "30000" },
+        { "id": "c-13", "comment": "End duty", "command": "click", "target": "css=[data-testid=\"end-duty\"]", "value": "" },
+        { "id": "c-14", "comment": "Assert duty ended", "command": "waitForElementVisible", "target": "css=[data-testid=\"duty-status-ended\"]", "value": "30000" }
+      ]
+    },
+    {
+      "id": "d3c77e4a-1e8e-4b1a-8a8a-4c7e3f1a0c33",
+      "name": "DriverFlow",
+      "commands": [
+        { "id": "d-01", "comment": "Open Login", "command": "open", "target": "http://localhost:5173/login", "value": "" },
+        { "id": "d-02", "comment": "Wait for login", "command": "waitForElementVisible", "target": "css=#email", "value": "30000" },
+        { "id": "d-03", "comment": "Type email", "command": "type", "target": "css=#email", "value": "${testEmail}" },
+        { "id": "d-04", "comment": "Type password", "command": "type", "target": "css=#password", "value": "${testPassword}" },
+        { "id": "d-05", "comment": "Login", "command": "click", "target": "css=form.login-form-compact button[type=\"submit\"]", "value": "" },
+        { "id": "d-06", "comment": "Assert driver dashboard", "command": "waitForElementVisible", "target": "css=[data-testid=\"driver-dashboard\"]", "value": "30000" },
+        { "id": "d-07", "comment": "Start trip", "command": "click", "target": "css=[data-testid=\"start-trip\"]", "value": "" },
+        { "id": "d-08", "comment": "Assert trip started", "command": "waitForElementVisible", "target": "css=[data-testid=\"trip-status-started\"]", "value": "30000" },
+        { "id": "d-09", "comment": "Trigger GPS mock update", "command": "click", "target": "css=[data-testid=\"gps-mock-update\"]", "value": "" },
+        { "id": "d-10", "comment": "Assert GPS updated", "command": "waitForElementVisible", "target": "css=[data-testid=\"gps-updated\"]", "value": "30000" },
+        { "id": "d-11", "comment": "Send delay notice", "command": "click", "target": "css=[data-testid=\"send-delay\"]", "value": "" },
+        { "id": "d-12", "comment": "Assert delay sent", "command": "waitForElementVisible", "target": "css=[data-testid=\"delay-sent\"]", "value": "30000" },
+        { "id": "d-13", "comment": "End trip", "command": "click", "target": "css=[data-testid=\"end-trip\"]", "value": "" },
+        { "id": "d-14", "comment": "Assert trip ended", "command": "waitForElementVisible", "target": "css=[data-testid=\"trip-status-ended\"]", "value": "30000" }
+      ]
+    },
+    {
+      "id": "e4d88f5b-2f99-4f55-b7d1-8f1d2e3a0d44",
+      "name": "DepotFlow",
+      "commands": [
+        { "id": "dp-01", "comment": "Open Login", "command": "open", "target": "http://localhost:5173/login", "value": "" },
+        { "id": "dp-02", "comment": "Wait for login", "command": "waitForElementVisible", "target": "css=#email", "value": "30000" },
+        { "id": "dp-03", "comment": "Type email", "command": "type", "target": "css=#email", "value": "${testEmail}" },
+        { "id": "dp-04", "comment": "Type password", "command": "type", "target": "css=#password", "value": "${testPassword}" },
+        { "id": "dp-05", "comment": "Login", "command": "click", "target": "css=form.login-form-compact button[type=\"submit\"]", "value": "" },
+        { "id": "dp-06", "comment": "Assert depot dashboard", "command": "waitForElementVisible", "target": "css=[data-testid=\"depot-dashboard\"]", "value": "30000" },
+        { "id": "dp-07", "comment": "Create route", "command": "click", "target": "css=[data-testid=\"create-route\"]", "value": "" },
+        { "id": "dp-08", "comment": "Wait route form", "command": "waitForElementVisible", "target": "css=[data-testid=\"route-form\"]", "value": "30000" },
+        { "id": "dp-09", "comment": "Type from city", "command": "type", "target": "css=[data-testid=\"route-from\"]", "value": "${fromCity}" },
+        { "id": "dp-10", "comment": "Type to city", "command": "type", "target": "css=[data-testid=\"route-to\"]", "value": "${toCity}" },
+        { "id": "dp-11", "comment": "Save route", "command": "click", "target": "css=[data-testid=\"save-route\"]", "value": "" },
+        { "id": "dp-12", "comment": "Assign bus", "command": "click", "target": "css=[data-testid=\"assign-bus\"]", "value": "" },
+        { "id": "dp-13", "comment": "Wait assignment form", "command": "waitForElementVisible", "target": "css=[data-testid=\"assignment-form\"]", "value": "30000" },
+        { "id": "dp-14", "comment": "Select bus", "command": "select", "target": "css=[data-testid=\"bus-select\"]", "value": "label=${busType}" },
+        { "id": "dp-15", "comment": "Assign crew", "command": "click", "target": "css=[data-testid=\"assign-crew\"]", "value": "" },
+        { "id": "dp-16", "comment": "Approve pass", "command": "click", "target": "css=[data-testid=\"approve-pass\"]", "value": "" },
+        { "id": "dp-17", "comment": "Assert pass approved", "command": "waitForElementVisible", "target": "css=[data-testid=\"pass-approved\"]", "value": "30000" },
+        { "id": "dp-18", "comment": "Open dashboard map", "command": "click", "target": "css=[data-testid=\"nav-map\"]", "value": "" },
+        { "id": "dp-19", "comment": "Assert map visible", "command": "waitForElementVisible", "target": "css=[data-testid=\"dashboard-map\"]", "value": "30000" }
+      ]
+    },
+    {
+      "id": "f5e99a6c-3aa1-4d77-8e0f-3f1d2e4a0e55",
+      "name": "AdminFlow",
+      "commands": [
+        { "id": "a-01", "comment": "Open Login", "command": "open", "target": "http://localhost:5173/login", "value": "" },
+        { "id": "a-02", "comment": "Wait for login", "command": "waitForElementVisible", "target": "css=#email", "value": "30000" },
+        { "id": "a-03", "comment": "Type email", "command": "type", "target": "css=#email", "value": "${testEmail}" },
+        { "id": "a-04", "comment": "Type password", "command": "type", "target": "css=#password", "value": "${testPassword}" },
+        { "id": "a-05", "comment": "Login", "command": "click", "target": "css=form.login-form-compact button[type=\"submit\"]", "value": "" },
+        { "id": "a-06", "comment": "Assert admin dashboard", "command": "waitForElementVisible", "target": "css=[data-testid=\"admin-dashboard\"]", "value": "30000" },
+        { "id": "a-07", "comment": "Open Bus Types", "command": "click", "target": "css=[data-testid=\"nav-bus-types\"]", "value": "" },
+        { "id": "a-08", "comment": "Add new bus type", "command": "click", "target": "css=[data-testid=\"add-bus-type\"]", "value": "" },
+        { "id": "a-09", "comment": "Wait bus type form", "command": "waitForElementVisible", "target": "css=[data-testid=\"bus-type-form\"]", "value": "30000" },
+        { "id": "a-10", "comment": "Type bus type name", "command": "type", "target": "css=[data-testid=\"bus-type-name\"]", "value": "${busType}" },
+        { "id": "a-11", "comment": "Type fare per km", "command": "type", "target": "css=[data-testid=\"fare-per-km\"]", "value": "${farePerKm}" },
+        { "id": "a-12", "comment": "Save bus type", "command": "click", "target": "css=[data-testid=\"save-bus-type\"]", "value": "" },
+        { "id": "a-13", "comment": "Assert bus type saved", "command": "waitForElementVisible", "target": "css=[data-testid=\"bus-type-saved\"]", "value": "30000" },
+        { "id": "a-14", "comment": "Open Fare Policies", "command": "click", "target": "css=[data-testid=\"nav-fare-policies\"]", "value": "" },
+        { "id": "a-15", "comment": "Assert auto calculation", "command": "assertText", "target": "css=[data-testid=\"fare-policy-status\"]", "value": "Auto-calculated" },
+        { "id": "a-16", "comment": "Open Feature Flags", "command": "click", "target": "css=[data-testid=\"nav-feature-flags\"]", "value": "" },
+        { "id": "a-17", "comment": "Toggle flag", "command": "click", "target": "css=[data-testid=\"feature-flag-0\"]", "value": "" },
+        { "id": "a-18", "comment": "Assert flag toggled", "command": "waitForElementVisible", "target": "css=[data-testid=\"feature-flag-toggled\"]", "value": "30000" },
+        { "id": "a-19", "comment": "Open Audit Logs", "command": "click", "target": "css=[data-testid=\"nav-audit-logs\"]", "value": "" },
+        { "id": "a-20", "comment": "Assert logs visible", "command": "waitForElementVisible", "target": "css=[data-testid=\"audit-log-table\"]", "value": "30000" }
+      ]
+    }
+  ],
+  "suites": [
+    {
+      "id": "s-1-passenger",
+      "name": "PassengerSuite",
+      "persistSession": false,
+      "parallel": false,
+      "timeout": 300000,
+      "tests": ["9c0a3f2f-0e22-4c3f-9a9b-9c0e6a2b1a11"]
+    },
+    {
+      "id": "s-2-conductor",
+      "name": "ConductorSuite",
+      "persistSession": false,
+      "parallel": false,
+      "timeout": 300000,
+      "tests": ["f2b6a1de-3c75-4e42-9f2b-ec5c5c0a0b22"]
+    },
+    {
+      "id": "s-3-driver",
+      "name": "DriverSuite",
+      "persistSession": false,
+      "parallel": false,
+      "timeout": 300000,
+      "tests": ["d3c77e4a-1e8e-4b1a-8a8a-4c7e3f1a0c33"]
+    },
+    {
+      "id": "s-4-depot",
+      "name": "DepotSuite",
+      "persistSession": false,
+      "parallel": false,
+      "timeout": 300000,
+      "tests": ["e4d88f5b-2f99-4f55-b7d1-8f1d2e3a0d44"]
+    },
+    {
+      "id": "s-5-admin",
+      "name": "AdminSuite",
+      "persistSession": false,
+      "parallel": false,
+      "timeout": 300000,
+      "tests": ["f5e99a6c-3aa1-4d77-8e0f-3f1d2e4a0e55"]
+    }
+  ],
+  "urls": [
+    "http://localhost:5173",
+    "http://localhost:5000"
+  ],
+  "plugins": []
+}

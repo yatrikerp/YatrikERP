@@ -445,18 +445,18 @@ const AdminMasterDashboard = () => {
             action={() => window.location.href = '/admin/users'}
           />
           <QuickActionCard
-            title="Manage Routes"
-            description="Add, edit, or remove bus routes and schedules"
+            title="Enhanced Routes"
+            description="Create routes with multiple stops and auto-calculate fare matrix"
             icon={Route}
             color="bg-green-500"
-            action={() => window.location.href = '/admin/routes-management'}
+            action={() => window.location.href = '/admin/streamlined-routes'}
           />
           <QuickActionCard
-            title="Schedule Trip"
-            description="Create new trips with specific buses and conductors"
+            title="Enhanced Trips"
+            description="Schedule trips with auto-generated seating and stop-to-stop fares"
             icon={Calendar}
             color="bg-purple-500"
-            action={() => window.location.href = '/admin/trips'}
+            action={() => window.location.href = '/admin/streamlined-trips'}
           />
           <QuickActionCard
             title="Bus Management"
