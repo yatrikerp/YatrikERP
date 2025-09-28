@@ -98,16 +98,20 @@ const Login = () => {
           depotId: user.depotId
         });
         
-        // Store user data and token
-        login(user, token);
+        // OPTIMIZED: Immediate UI response - don't await login
+        login(user, token).catch(err => 
+          console.error('Background login processing failed:', err)
+        );
         
-        // Show success message
-        setErrorMessage(`Welcome back, ${user.name}! Redirecting to dashboard...`);
-        setErrorType('success');
-        setShowErrorPopup(true);
-        
-        // Navigate to dashboard immediately for fastest performance
+        // OPTIMIZED: Navigate immediately for fastest performance
         navigate('/dashboard');
+        
+        // OPTIMIZED: Show success message in background
+        setTimeout(() => {
+          setErrorMessage(`Welcome back, ${user.name}! Redirecting to dashboard...`);
+          setErrorType('success');
+          setShowErrorPopup(true);
+        }, 100);
       } else {
         throw new Error('Invalid response from server');
       }
@@ -215,7 +219,7 @@ const Login = () => {
                     <Link to="/forgot-password" className="login-link">Forgot password?</Link>
                   </div>
 
-                  <button type="submit" disabled={isLoading} className="login-btn login-btn--primary">
+                  <button type="submit" disabled={isLoading} className="login-btn login-btn--primary transform transition-all duration-150 hover:scale-105 active:scale-95">
                     {isLoading ? (
                       <div className="flex items-center space-x-2">
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>

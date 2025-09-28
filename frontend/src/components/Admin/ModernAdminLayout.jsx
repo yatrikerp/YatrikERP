@@ -51,7 +51,7 @@ const ModernAdminLayout = ({ children }) => {
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'User Management', href: '/admin/users', icon: Users },
     { name: 'Booking Management', href: '/admin/bookings', icon: Ticket },
-    { name: 'Depot Management', href: '/admin/depots', icon: Building2 },
+    { name: 'Depot Management', href: '/admin/depot-management', icon: Building2 },
     { name: 'Driver Management', href: '/admin/drivers', icon: UserCheck },
     { name: 'Conductor Management', href: '/admin/conductors', icon: UserCog },
     { name: 'Fare Policy', href: '/admin/fares', icon: DollarSign },

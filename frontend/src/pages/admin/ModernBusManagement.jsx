@@ -9,7 +9,7 @@ import {
   Satellite, Wifi, Battery, Signal, Brain, Map, Navigation,
   BellRing, Smartphone, QrCode, Layers, Globe, Share2,
   ChevronRight, ArrowUpRight, ArrowDownRight, Loader2,
-  MoreHorizontal
+  MoreHorizontal, Type, Tags
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { apiFetch, clearApiCache } from '../../utils/api';
@@ -22,6 +22,7 @@ import BusAnalytics from '../../components/BusAnalytics';
 import BusTimeline from '../../components/BusTimeline';
 import QRScanner from '../../components/QRScanner';
 import AIInsights from '../../components/AIInsights';
+import EnhancedBusTypeManager from '../../components/Admin/EnhancedBusTypeManager.jsx';
 import { Chart as ChartJS, registerables } from 'chart.js';
 import { Line, Bar, Doughnut, Radar } from 'react-chartjs-2';
 
@@ -66,6 +67,8 @@ const ModernBusManagement = () => {
   const [busForMaintenance, setBusForMaintenance] = useState(null);
   const [maintenanceLogs, setMaintenanceLogs] = useState([]);
   const [showMaintenanceHistory, setShowMaintenanceHistory] = useState(false);
+  const [showEnhancedBusTypeManager, setShowEnhancedBusTypeManager] = useState(false);
+  const [activeBusTypes, setActiveBusTypes] = useState([]);
   
   // Real-time and location hooks
   const { location, error: locationError } = useGeolocation();
@@ -500,16 +503,78 @@ const ModernBusManagement = () => {
           </div>
         </div>
 
+        {/* Bus Types Section - Always Visible */}
+        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg shadow-sm p-4 border-2 border-indigo-200 mb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-indigo-900 flex items-center gap-2 mb-1">
+                <Type className="w-5 h-5 text-indigo-600" />
+                KSRTC Bus Types Management
+              </h3>
+              <p className="text-sm text-indigo-700">Manage all 17 official KSRTC bus types and scheduling rules</p>
+            </div>
+            <button
+              onClick={() => {
+                alert('Bus Types button clicked! Opening Enhanced Bus Type Manager...');
+                console.log('🚌 KSRTC Bus Types button clicked!');
+                setShowEnhancedBusTypeManager(true);
+              }}
+              className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg hover:from-indigo-600 hover:to-purple-600 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center gap-3 text-base font-medium transform hover:scale-105"
+            >
+              <Type className="w-5 h-5" />
+              Manage Bus Types
+              <div className="bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold">
+                NEW
+              </div>
+            </button>
+          </div>
+        </div>
+
         {/* Quick Actions */}
         <div className="bg-white rounded-lg shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <Settings className="w-4 h-4 text-gray-600" />
               Quick Actions
-          </h3>
+            </h3>
+            
+            {/* Standalone Bus Types Button - Always Visible */}
+            <button
+              onClick={() => {
+                console.log('🚌 Standalone Bus Types button clicked!');
+                setShowEnhancedBusTypeManager(true);
+              }}
+              className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg hover:from-indigo-600 hover:to-purple-600 transition-all duration-200 shadow-md hover:shadow-lg flex items-center gap-2 text-sm font-medium"
+            >
+              <Type className="w-4 h-4" />
+              Bus Types
+              <div className="bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                !
+              </div>
+            </button>
           </div>
           
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-4 gap-3">
+            {/* Bus Types Button - Most Important */}
+            <button
+              onClick={() => {
+                console.log('🚌 Bus Types button clicked!');
+                setShowEnhancedBusTypeManager(true);
+              }}
+              className="group p-4 bg-gradient-to-br from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 rounded-lg text-center transition-all duration-200 border-2 border-indigo-200 hover:border-indigo-300 shadow-sm hover:shadow-lg transform hover:scale-105 relative"
+            >
+              {/* New Badge */}
+              <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                NEW
+              </div>
+              
+              <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-lg w-fit mx-auto mb-3">
+                <Type className="w-5 h-5 text-white" />
+              </div>
+              <p className="text-sm font-bold text-indigo-900 mb-1">Bus Types</p>
+              <p className="text-xs text-indigo-700">Add & manage types</p>
+            </button>
+            
             <button
               onClick={() => setShowAddModal(true)}
               className="group p-3 bg-blue-50 hover:bg-blue-100 rounded-lg text-center transition-colors border border-blue-200"
@@ -1087,6 +1152,20 @@ const ModernBusManagement = () => {
 
   return (
     <div className="space-y-6">
+        {/* TEST BUS TYPES BUTTON - ALWAYS VISIBLE */}
+        <div className="bg-red-100 border-2 border-red-300 rounded-lg p-4 text-center">
+          <button
+            onClick={() => {
+              alert('TEST: Bus Types button clicked!');
+              console.log('TEST: Bus Types button clicked!');
+              setShowEnhancedBusTypeManager(true);
+            }}
+            className="px-8 py-4 bg-red-500 text-white rounded-lg hover:bg-red-600 text-lg font-bold"
+          >
+            🚌 TEST: BUS TYPES BUTTON - CLICK ME!
+          </button>
+        </div>
+
         {/* Header Section */}
         <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
           <div className="flex items-center justify-between mb-6">
@@ -1206,12 +1285,12 @@ const ModernBusManagement = () => {
               className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">All Types</option>
-              <option value="ac_sleeper">AC Sleeper</option>
-              <option value="ac_seater">AC Seater</option>
-              <option value="non_ac_sleeper">Non-AC Sleeper</option>
-              <option value="non_ac_seater">Non-AC Seater</option>
-              <option value="volvo">Volvo</option>
-              <option value="mini">Mini Bus</option>
+              <option value="ac_sleeper">AC Sleeper (35 seats)</option>
+              <option value="ac_seater">AC Seater (45 seats)</option>
+              <option value="non_ac_sleeper">Non-AC Sleeper (40 seats)</option>
+              <option value="non_ac_seater">Non-AC Seater (50 seats)</option>
+              <option value="volvo">Volvo Multi-Axle (30 seats)</option>
+              <option value="mini">Mini Bus (25 seats)</option>
             </select>
 
             <select
@@ -1534,6 +1613,22 @@ const ModernBusManagement = () => {
           onClose={() => setShowQRScanner(false)}
         />
       )}
+
+      {/* Bus Type Manager Modal */}
+      {/* Enhanced Bus Type Manager Modal */}
+      <EnhancedBusTypeManager 
+        isOpen={showEnhancedBusTypeManager}
+        onClose={() => setShowEnhancedBusTypeManager(false)}
+        onSave={(busTypes) => {
+          console.log('Enhanced bus types saved:', busTypes);
+          setShowEnhancedBusTypeManager(false);
+        }}
+        onScheduleUpdate={(activeTypes) => {
+          setActiveBusTypes(activeTypes);
+          console.log('Scheduling updated with active bus types:', activeTypes);
+          toast.success('Bus type scheduling rules updated successfully');
+        }}
+      />
     </div>
   );
 };
@@ -1774,6 +1869,12 @@ const AddBusModal = ({ onClose, onSave }) => {
     busNumber: '',
     registrationNumber: '',
     busType: 'ac_seater',
+    customBusType: {
+      name: '',
+      capacity: 0,
+      priceCategory: 'standard',
+      amenities: []
+    },
     capacity: {
       total: 0,
       seater: 0,
@@ -1842,12 +1943,27 @@ const AddBusModal = ({ onClose, onSave }) => {
   };
 
   const busTypes = [
-    { value: 'ac_sleeper', label: 'AC Sleeper' },
-    { value: 'ac_seater', label: 'AC Seater' },
-    { value: 'non_ac_sleeper', label: 'Non-AC Sleeper' },
-    { value: 'non_ac_seater', label: 'Non-AC Seater' },
-    { value: 'volvo', label: 'Volvo' },
-    { value: 'mini', label: 'Mini Bus' }
+    // Official KSRTC Bus Types
+    { value: 'ordinary', label: 'Ordinary', category: 'Budget', description: 'Basic service, stops at all points, Non-AC simple seats' },
+    { value: 'lspf', label: 'Limited Stop Fast Passenger (LSFP)', category: 'Economy', description: 'Fewer stops, Non-AC 2+3 seater, medium-distance travel' },
+    { value: 'fast_passenger', label: 'Fast Passenger', category: 'Standard', description: 'Limited stops, better speed, Non-AC comfortable seats' },
+    { value: 'venad', label: 'Venad', category: 'Budget', description: 'Ordinary long-distance service, south Kerala routes' },
+    { value: 'super_fast', label: 'Super Fast', category: 'Standard', description: 'Popular category, limited stops, better cushioning, long-distance' },
+    { value: 'super_deluxe', label: 'Super Deluxe', category: 'Premium', description: 'Fewer stops, 2+2 cushioned seats, Non-AC, long routes' },
+    { value: 'deluxe_express', label: 'Deluxe Express / FP Deluxe', category: 'Premium', description: 'Fast Passenger Deluxe, 2+2 pushback seats, intercity routes' },
+    { value: 'ananthapuri_fast', label: 'Ananthapuri (Fast / Superfast / Deluxe)', category: 'Standard', description: 'Special Trivandrum-based branded service' },
+    { value: 'rajadhani', label: 'Rajadhani', category: 'Luxury', description: 'AC long-distance service with premium comfort' },
+    { value: 'minnal', label: 'Minnal', category: 'Premium', description: 'Overnight services, AC/Non-AC semi-sleeper, night journeys' },
+    { value: 'garuda_king_long', label: 'Garuda King Long', category: 'Luxury', description: 'AC semi-sleeper, premium interstate service' },
+    { value: 'garuda_volvo', label: 'Garuda Volvo', category: 'Luxury', description: 'AC luxury Volvo, pushback, curtains, charging ports' },
+    { value: 'garuda_scania', label: 'Garuda Scania', category: 'Luxury', description: 'AC luxury Scania, premium interstate service' },
+    { value: 'garuda_maharaja', label: 'Garuda Maharaja', category: 'Super Luxury', description: 'Premium long-distance, AC pushback, large leg space' },
+    { value: 'low_floor_non_ac', label: 'Low Floor Non-AC', category: 'Standard', description: 'Modern city service, wide doors, GPS-enabled' },
+    { value: 'low_floor_ac', label: 'Low Floor AC (Volvo)', category: 'Premium', description: 'Volvo AC city service, Trivandrum/Kochi' },
+    { value: 'jnnurm_city', label: 'JNNURM / City Circular', category: 'Budget', description: 'Special city buses, funded under JNNURM scheme' },
+    
+    // Additional/Custom Types
+    { value: 'custom', label: 'Custom Bus Type', category: 'Custom', description: 'Define your own bus specifications' }
   ];
 
   const fuelTypes = [
@@ -1980,9 +2096,95 @@ const AddBusModal = ({ onClose, onSave }) => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {busTypes.map(type => (
-                  <option key={type.value} value={type.value}>{type.label}</option>
+                  <option key={type.value} value={type.value}>
+                    {type.label} - {type.category}
+                  </option>
                 ))}
               </select>
+              {formData.busType && formData.busType !== 'custom' && (
+                <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm text-blue-800">
+                    <span className="font-medium">{busTypes.find(t => t.value === formData.busType)?.label}</span>
+                    <br />
+                    <span className="text-blue-600">{busTypes.find(t => t.value === formData.busType)?.description}</span>
+                  </p>
+                </div>
+              )}
+              {formData.busType === 'custom' && (
+                <div className="mt-3 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
+                  <h4 className="font-medium text-purple-900 mb-3">Custom Bus Type Configuration</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Custom Name</label>
+                      <input
+                        type="text"
+                        value={formData.customBusType?.name || ''}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          customBusType: { ...formData.customBusType, name: e.target.value }
+                        })}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-purple-500"
+                        placeholder="e.g., Luxury Coach"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Total Capacity</label>
+                      <input
+                        type="number"
+                        value={formData.customBusType?.capacity || ''}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          customBusType: { ...formData.customBusType, capacity: parseInt(e.target.value) || 0 }
+                        })}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-purple-500"
+                        placeholder="50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Price Category</label>
+                      <select
+                        value={formData.customBusType?.priceCategory || 'standard'}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          customBusType: { ...formData.customBusType, priceCategory: e.target.value }
+                        })}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-purple-500"
+                      >
+                        <option value="budget">Budget</option>
+                        <option value="economy">Economy</option>
+                        <option value="standard">Standard</option>
+                        <option value="premium">Premium</option>
+                        <option value="luxury">Luxury</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Amenities</label>
+                      <div className="flex flex-wrap gap-1">
+                        {['AC', 'WiFi', 'Charging', 'Entertainment'].map(amenity => (
+                          <label key={amenity} className="flex items-center text-xs">
+                            <input
+                              type="checkbox"
+                              checked={formData.customBusType?.amenities?.includes(amenity) || false}
+                              onChange={(e) => {
+                                const amenities = formData.customBusType?.amenities || [];
+                                const newAmenities = e.target.checked
+                                  ? [...amenities, amenity]
+                                  : amenities.filter(a => a !== amenity);
+                                setFormData({
+                                  ...formData,
+                                  customBusType: { ...formData.customBusType, amenities: newAmenities }
+                                });
+                              }}
+                              className="mr-1"
+                            />
+                            {amenity}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
@@ -2351,6 +2553,12 @@ const EditBusModal = ({ bus, onClose, onSave }) => {
     busNumber: bus.busNumber || '',
     registrationNumber: bus.registrationNumber || '',
     busType: bus.busType || 'ac_seater',
+    customBusType: {
+      name: bus.customBusType?.name || '',
+      capacity: bus.customBusType?.capacity || 0,
+      priceCategory: bus.customBusType?.priceCategory || 'standard',
+      amenities: bus.customBusType?.amenities || []
+    },
     capacity: {
       total: bus.capacity?.total || 0,
       seater: bus.capacity?.seater || 0,
@@ -2419,12 +2627,27 @@ const EditBusModal = ({ bus, onClose, onSave }) => {
   };
 
   const busTypes = [
-    { value: 'ac_sleeper', label: 'AC Sleeper' },
-    { value: 'ac_seater', label: 'AC Seater' },
-    { value: 'non_ac_sleeper', label: 'Non-AC Sleeper' },
-    { value: 'non_ac_seater', label: 'Non-AC Seater' },
-    { value: 'volvo', label: 'Volvo' },
-    { value: 'mini', label: 'Mini Bus' }
+    // Official KSRTC Bus Types
+    { value: 'ordinary', label: 'Ordinary', category: 'Budget', description: 'Basic service, stops at all points, Non-AC simple seats' },
+    { value: 'lspf', label: 'Limited Stop Fast Passenger (LSFP)', category: 'Economy', description: 'Fewer stops, Non-AC 2+3 seater, medium-distance travel' },
+    { value: 'fast_passenger', label: 'Fast Passenger', category: 'Standard', description: 'Limited stops, better speed, Non-AC comfortable seats' },
+    { value: 'venad', label: 'Venad', category: 'Budget', description: 'Ordinary long-distance service, south Kerala routes' },
+    { value: 'super_fast', label: 'Super Fast', category: 'Standard', description: 'Popular category, limited stops, better cushioning, long-distance' },
+    { value: 'super_deluxe', label: 'Super Deluxe', category: 'Premium', description: 'Fewer stops, 2+2 cushioned seats, Non-AC, long routes' },
+    { value: 'deluxe_express', label: 'Deluxe Express / FP Deluxe', category: 'Premium', description: 'Fast Passenger Deluxe, 2+2 pushback seats, intercity routes' },
+    { value: 'ananthapuri_fast', label: 'Ananthapuri (Fast / Superfast / Deluxe)', category: 'Standard', description: 'Special Trivandrum-based branded service' },
+    { value: 'rajadhani', label: 'Rajadhani', category: 'Luxury', description: 'AC long-distance service with premium comfort' },
+    { value: 'minnal', label: 'Minnal', category: 'Premium', description: 'Overnight services, AC/Non-AC semi-sleeper, night journeys' },
+    { value: 'garuda_king_long', label: 'Garuda King Long', category: 'Luxury', description: 'AC semi-sleeper, premium interstate service' },
+    { value: 'garuda_volvo', label: 'Garuda Volvo', category: 'Luxury', description: 'AC luxury Volvo, pushback, curtains, charging ports' },
+    { value: 'garuda_scania', label: 'Garuda Scania', category: 'Luxury', description: 'AC luxury Scania, premium interstate service' },
+    { value: 'garuda_maharaja', label: 'Garuda Maharaja', category: 'Super Luxury', description: 'Premium long-distance, AC pushback, large leg space' },
+    { value: 'low_floor_non_ac', label: 'Low Floor Non-AC', category: 'Standard', description: 'Modern city service, wide doors, GPS-enabled' },
+    { value: 'low_floor_ac', label: 'Low Floor AC (Volvo)', category: 'Premium', description: 'Volvo AC city service, Trivandrum/Kochi' },
+    { value: 'jnnurm_city', label: 'JNNURM / City Circular', category: 'Budget', description: 'Special city buses, funded under JNNURM scheme' },
+    
+    // Additional/Custom Types
+    { value: 'custom', label: 'Custom Bus Type', category: 'Custom', description: 'Define your own bus specifications' }
   ];
 
   const fuelTypes = [
@@ -2566,9 +2789,20 @@ const EditBusModal = ({ bus, onClose, onSave }) => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {busTypes.map(type => (
-                  <option key={type.value} value={type.value}>{type.label}</option>
+                  <option key={type.value} value={type.value}>
+                    {type.label} - {type.category}
+                  </option>
                 ))}
               </select>
+              {formData.busType && formData.busType !== 'custom' && (
+                <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm text-blue-800">
+                    <span className="font-medium">{busTypes.find(t => t.value === formData.busType)?.label}</span>
+                    <br />
+                    <span className="text-blue-600">{busTypes.find(t => t.value === formData.busType)?.description}</span>
+                  </p>
+                </div>
+              )}
             </div>
 
             <div>

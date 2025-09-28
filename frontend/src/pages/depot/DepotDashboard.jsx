@@ -397,11 +397,11 @@ const DepotDashboard = () => {
       });
       setLoading(false);
     }
-  }, [fleetData, tripsData, depotData, routesData, bookingsData]);
+  }, []); // Remove dependencies to prevent infinite re-renders
 
   useEffect(() => {
     fetchAllData();
-  }, [fetchAllData]);
+  }, []); // Remove fetchAllData dependency to prevent infinite re-renders
 
   // Socket connection for real-time updates
   useEffect(() => {
@@ -545,7 +545,7 @@ const DepotDashboard = () => {
       // Reset navigation state after a short delay
       setTimeout(() => {
         setIsNavigating(false);
-      }, 300);
+      }, 150);
     } catch (error) {
       console.error('Error navigating to section:', section, error);
       setIsNavigating(false);

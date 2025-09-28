@@ -1,19 +1,24 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import RedBusSearchCard from '../SearchCard/RedBusSearchCard';
+import BusTrackingModal from '../Common/BusTrackingModal';
+import { Bus } from 'lucide-react';
 import './LandingPage.css';
 
 const LandingPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
 
   const handleBookNow = useCallback(() => {
-    if (!user) {
-      navigate('/login?next=/pax');
-      return;
-    }
-    navigate('/pax');
-  }, [navigate, user]);
+    // Navigate directly to search results page
+    navigate('/search-results');
+  }, [navigate]);
+
+  const handleTrackBus = useCallback(() => {
+    setIsTrackingModalOpen(true);
+  }, []);
 
   return (
     <div className="landing-page">
@@ -58,20 +63,15 @@ const LandingPage = () => {
           <div className="hero-buttons">
             <button className="btn btn-primary">Sign Up</button>
             <button className="btn btn-primary" onClick={handleBookNow}>Book Now</button>
+            <button className="btn btn-secondary" onClick={handleTrackBus}>
+              <Bus className="w-4 h-4 mr-2" />
+              Track Bus
+            </button>
           </div>
 
           {/* Search Section */}
           <div className="search-section">
-            <div className="search-container">
-              <div className="search-input-group">
-                <input 
-                  type="text" 
-                  placeholder="Enter destination..." 
-                  className="search-input"
-                />
-                <button className="search-btn">Search</button>
-              </div>
-            </div>
+            <RedBusSearchCard />
           </div>
         </div>
 
@@ -177,10 +177,16 @@ const LandingPage = () => {
         <h2 className="cta-title">Ready to Transform Your Transportation?</h2>
         <p className="cta-subtitle">Join thousands of companies already using Yatrik ERP</p>
         <div className="cta-buttons">
-          <button className="btn btn-primary">Get Started Free</button>
-          <button className="btn btn-secondary">Schedule Demo</button>
+          <button className="btn btn-primary" onClick={handleBookNow}>Get Started Free</button>
+          <button className="btn btn-secondary" onClick={handleBookNow}>Schedule Demo</button>
         </div>
       </div>
+
+      {/* Bus Tracking Modal */}
+      <BusTrackingModal 
+        isOpen={isTrackingModalOpen} 
+        onClose={() => setIsTrackingModalOpen(false)} 
+      />
     </div>
   );
 };

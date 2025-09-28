@@ -20,7 +20,15 @@ const busSchema = new mongoose.Schema({
   },
   busType: {
     type: String,
-    enum: ['ac_sleeper', 'ac_seater', 'non_ac_sleeper', 'non_ac_seater', 'volvo', 'mini'],
+    enum: [
+      // Official KSRTC Bus Types
+      'ordinary', 'lspf', 'fast_passenger', 'venad', 'super_fast', 'super_deluxe',
+      'deluxe_express', 'ananthapuri_fast', 'rajadhani', 'minnal',
+      'garuda_king_long', 'garuda_volvo', 'garuda_scania', 'garuda_maharaja',
+      'low_floor_non_ac', 'low_floor_ac', 'jnnurm_city',
+      // Additional Types
+      'custom'
+    ],
     required: true
   },
   capacity: {
@@ -99,9 +107,21 @@ const busSchema = new mongoose.Schema({
     routeName: String,
     routeNumber: String,
     assignedAt: Date,
-    assignedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
+  },
+  
+  // Fare information
+  fareInfo: {
+    baseFarePerKm: Number,
+    minimumFare: Number,
+    maximumFare: Number,
+    routeType: {
+      type: String,
+      enum: ['local', 'intercity', 'interstate', 'long_distance', 'city', 'district'],
+      default: 'intercity'
+    },
+    lastUpdated: {
+      type: Date,
+      default: Date.now
     }
   },
   maintenance: {

@@ -36,32 +36,41 @@ const DepotLogin = () => {
     setError('');
 
     try {
+      // OPTIMIZED: Use apiFetch for better error handling and performance
       const response = await fetch('/api/depot-auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          username: formData.email, // Support both username and email
+          email: formData.email,
+          password: formData.password
+        })
       });
 
       const data = await response.json();
 
       if (data.success) {
-        // Use AuthContext to handle depot login
-        await login(data.user, data.token, true);
+        // OPTIMIZED: Immediate UI response - don't await login
+        login(data.data.user, data.data.token, true).catch(err => 
+          console.error('Background login processing failed:', err)
+        );
         
-        // Store depot info separately
-        localStorage.setItem('depotInfo', JSON.stringify(data.depot));
-        
-        // Redirect to depot dashboard
+        // OPTIMIZED: Navigate immediately for instant response
         navigate('/depot/dashboard');
+        
+        // OPTIMIZED: Store depot info in background if available
+        if (data.depot) {
+          localStorage.setItem('depotInfo', JSON.stringify(data.depot));
+        }
       } else {
         setError(data.message || 'Login failed');
+        setLoading(false);
       }
     } catch (err) {
       console.error('Login error:', err);
       setError('Network error. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
@@ -85,15 +94,15 @@ const DepotLogin = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Username/Email Field */}
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                 Username or Email
               </label>
               <input
-                id="username"
-                name="username"
+                id="email"
+                name="email"
                 type="text"
                 required
-                value={formData.username}
+                value={formData.email}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Enter your username or email"
@@ -144,7 +153,7 @@ const DepotLogin = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 transform hover:scale-105 active:scale-95"
             >
               {loading ? (
                 <>

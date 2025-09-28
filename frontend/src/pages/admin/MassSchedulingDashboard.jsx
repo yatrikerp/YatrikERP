@@ -44,11 +44,7 @@ const MassSchedulingDashboard = () => {
     timeGap: 30,
     autoAssignCrew: true,
     autoAssignBuses: true,
-    optimizeForDemand: true,
-    generateReports: true,
-    useAIOptimization: true,
-    considerTraffic: true,
-    balanceWorkload: true
+    generateReports: true
   });
   
   // Real-time updates
@@ -342,33 +338,6 @@ const MassSchedulingDashboard = () => {
     }
   };
 
-  const optimizeSchedule = async () => {
-    try {
-      setLoading(true);
-      setCurrentOperation('Running AI optimization...');
-      
-      const response = await apiFetch('/api/auto-scheduler/optimize', {
-        method: 'POST',
-        body: JSON.stringify({
-          date: schedulerConfig.targetDate,
-          optimizationType: 'comprehensive',
-          includeTrafficData: schedulerConfig.considerTraffic,
-          balanceWorkload: schedulerConfig.balanceWorkload
-        })
-      });
-
-      if (response.success) {
-        toast.success('Schedule optimized successfully');
-        await fetchInitialData();
-      }
-    } catch (error) {
-      console.error('Error optimizing schedule:', error);
-      toast.error('Optimization failed');
-    } finally {
-      setLoading(false);
-      setCurrentOperation('');
-    }
-  };
 
   const clearSchedule = async () => {
     if (!window.confirm('Are you sure you want to clear all scheduled trips for this date?')) {
@@ -645,51 +614,11 @@ const MassSchedulingDashboard = () => {
           <label className="flex items-center space-x-3">
             <input
               type="checkbox"
-              checked={schedulerConfig.optimizeForDemand}
-              onChange={(e) => setSchedulerConfig(prev => ({ ...prev, optimizeForDemand: e.target.checked }))}
-              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-            />
-            <span className="text-sm text-gray-700">Optimize based on historical demand</span>
-          </label>
-          
-          <label className="flex items-center space-x-3">
-            <input
-              type="checkbox"
-              checked={schedulerConfig.useAIOptimization}
-              onChange={(e) => setSchedulerConfig(prev => ({ ...prev, useAIOptimization: e.target.checked }))}
-              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-            />
-            <span className="text-sm text-gray-700">Use AI-powered optimization</span>
-          </label>
-          
-          <label className="flex items-center space-x-3">
-            <input
-              type="checkbox"
-              checked={schedulerConfig.considerTraffic}
-              onChange={(e) => setSchedulerConfig(prev => ({ ...prev, considerTraffic: e.target.checked }))}
-              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-            />
-            <span className="text-sm text-gray-700">Consider traffic patterns</span>
-          </label>
-          
-          <label className="flex items-center space-x-3">
-            <input
-              type="checkbox"
-              checked={schedulerConfig.balanceWorkload}
-              onChange={(e) => setSchedulerConfig(prev => ({ ...prev, balanceWorkload: e.target.checked }))}
-              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-            />
-            <span className="text-sm text-gray-700">Balance crew workload</span>
-          </label>
-          
-          <label className="flex items-center space-x-3">
-            <input
-              type="checkbox"
               checked={schedulerConfig.generateReports}
               onChange={(e) => setSchedulerConfig(prev => ({ ...prev, generateReports: e.target.checked }))}
               className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
             />
-            <span className="text-sm text-gray-700">Generate detailed reports</span>
+            <span className="text-sm text-gray-700">Generate scheduling reports</span>
           </label>
         </div>
       </div>
@@ -744,19 +673,6 @@ const MassSchedulingDashboard = () => {
           </div>
         </button>
         
-        <button
-          onClick={optimizeSchedule}
-          disabled={loading || !schedulerConfig.targetDate}
-          className="p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors disabled:opacity-50 flex items-center space-x-3"
-        >
-          <div className="p-2 bg-purple-100 rounded-lg">
-            <Sparkles className="w-5 h-5 text-purple-600" />
-          </div>
-          <div className="text-left">
-            <h4 className="font-semibold text-purple-900">Optimize Schedule</h4>
-            <p className="text-sm text-purple-700">AI-powered optimization</p>
-          </div>
-        </button>
         
         <button
           onClick={generateReport}
@@ -837,10 +753,10 @@ const MassSchedulingDashboard = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center space-x-3">
-            <Sparkles className="w-8 h-8 text-purple-600" />
+            <Zap className="w-8 h-8 text-purple-600" />
             <span>Mass Scheduling Dashboard</span>
           </h1>
-          <p className="text-gray-600">AI-powered fleet scheduling for 6000+ buses</p>
+          <p className="text-gray-600">Automated fleet scheduling with automatic assignments</p>
         </div>
         <div className="flex items-center space-x-3">
           <button
@@ -1035,9 +951,9 @@ const MassSchedulingDashboard = () => {
           </div>
           <div className="text-center">
             <div className="p-3 bg-green-100 rounded-lg w-fit mx-auto mb-3">
-              <Cpu className="w-6 h-6 text-green-600" />
+              <Settings className="w-6 h-6 text-green-600" />
             </div>
-            <h4 className="font-semibold text-gray-900">AI Engine</h4>
+            <h4 className="font-semibold text-gray-900">Auto Scheduler</h4>
             <p className="text-sm text-green-600">Ready</p>
           </div>
           <div className="text-center">

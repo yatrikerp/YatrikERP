@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Bus, Plus, Upload, Download, Search, Filter, 
   Edit, Eye, CheckCircle, XCircle, AlertTriangle,
-  RefreshCw, X, Trash2
+  RefreshCw, X, Trash2, Type, Settings
 } from 'lucide-react';
+import EnhancedBusTypeManager from '../../components/Admin/EnhancedBusTypeManager.jsx';
+import FarePolicyManager from '../../components/Admin/FarePolicyManager.jsx';
 import { toast } from 'react-hot-toast';
 import { apiFetch } from '../../utils/api';
 
@@ -26,6 +28,12 @@ const StreamlinedBusManagement = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedBusId, setSelectedBusId] = useState(null);
   const [selectedBusView, setSelectedBusView] = useState(null);
+  
+  // Bus Types Management
+  const [showEnhancedBusTypeManager, setShowEnhancedBusTypeManager] = useState(false);
+  
+  // Fare Policy Management
+  const [showFarePolicyManager, setShowFarePolicyManager] = useState(false);
   
   // Bulk operations
   const [selectedBuses, setSelectedBuses] = useState([]);
@@ -68,6 +76,7 @@ const StreamlinedBusManagement = () => {
     count: 10,
     startNumber: 1,
     prefix: 'BUS',
+    targetDate: new Date().toISOString().slice(0, 10), // Default to today
     specifications: {
       manufacturer: 'Ashok Leyland',
       model: 'Viking',
@@ -329,6 +338,8 @@ const StreamlinedBusManagement = () => {
           await Promise.all(selectedBuses.map(busId => apiFetch(`/api/admin/buses/${busId}`, { method: 'PUT', body: JSON.stringify({ status: assignForm.status || 'active' }) }))); break;
         case 'assign_depot':
           await Promise.all(selectedBuses.map(busId => apiFetch(`/api/admin/buses/${busId}`, { method: 'PUT', body: JSON.stringify({ depotId: assignForm.depotId }) }))); break;
+        case 'schedule_trips':
+          await handleBulkScheduleTrips(); break;
         default:
           toast.error('Select a bulk operation');
       }
@@ -341,6 +352,41 @@ const StreamlinedBusManagement = () => {
       toast.error('Bulk operation failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBulkScheduleTrips = async () => {
+    if (!bulkForm.targetDate) {
+      toast.error('Please select a target date for scheduling');
+      return;
+    }
+
+    try {
+      const response = await apiFetch('/api/auto-scheduler/mass-schedule', {
+        method: 'POST',
+        body: JSON.stringify({
+          date: bulkForm.targetDate,
+          depotIds: bulkForm.depotId ? [bulkForm.depotId] : [],
+          maxTripsPerRoute: 5,
+          timeGap: 30,
+          autoAssignCrew: true,
+          autoAssignBuses: true,
+          generateReports: true,
+          busIds: selectedBuses // Schedule trips specifically for selected buses
+        })
+      });
+
+      if (response?.success || response?.ok) {
+        const tripsCreated = response.data?.tripsCreated || response.tripsCreated || 0;
+        const successRate = response.data?.successRate || response.successRate || '0%';
+        toast.success(`Bulk scheduling completed! ${tripsCreated} trips created for selected buses (${successRate} success rate)`);
+      } else {
+        const errorMessage = response?.message || response?.error || 'Bulk scheduling failed';
+        toast.error(errorMessage);
+      }
+    } catch (error) {
+      console.error('Error in bulk scheduling:', error);
+      toast.error('Bulk scheduling failed');
     }
   };
 
@@ -509,6 +555,15 @@ const StreamlinedBusManagement = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Start Number</label>
                   <input type="number" min="1" value={bulkForm.startNumber} onChange={(e) => setBulkForm(prev => ({ ...prev, startNumber: parseInt(e.target.value) }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Target Date for Scheduling</label>
+                  <input 
+                    type="date" 
+                    value={bulkForm.targetDate} 
+                    onChange={(e) => setBulkForm(prev => ({ ...prev, targetDate: e.target.value }))} 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                  />
+                </div>
               </div>
               <div className="bg-blue-50 rounded-lg p-4">
                 <h4 className="font-semibold text-blue-800 mb-2">Preview:</h4>
@@ -674,15 +729,52 @@ const StreamlinedBusManagement = () => {
                 <option value="assign_driver">Assign Crew</option>
                 <option value="change_status">Change Status</option>
                 <option value="assign_depot">Assign Depot</option>
+                <option value="schedule_trips">Schedule Trips</option>
               </select>
               <button onClick={handleBulkOperation} disabled={!bulkOperation} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">Execute</button>
             </div>
           )}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <button onClick={() => setShowSingleAddModal(true)} className="p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center space-x-3"><div className="p-2 bg-blue-100 rounded-lg"><Plus className="w-5 h-5 text-blue-600" /></div><div className="text-left"><h4 className="font-semibold text-blue-900">Add Single Bus</h4><p className="text-sm text-blue-700">Add one bus with detailed specifications</p></div></button>
           <button onClick={() => setShowBulkAddModal(true)} className="p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center space-x-3"><div className="p-2 bg-green-100 rounded-lg"><Upload className="w-5 h-5 text-green-600" /></div><div className="text-left"><h4 className="font-semibold text-green-900">Bulk Add Buses</h4><p className="text-sm text-green-700">Add multiple buses at once (up to 100)</p></div></button>
           <button onClick={handleExport} className="p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors flex items-center space-x-3"><div className="p-2 bg-purple-100 rounded-lg"><Download className="w-5 h-5 text-purple-600" /></div><div className="text-left"><h4 className="font-semibold text-purple-900">Export Data</h4><p className="text-sm text-purple-700">Export bus data for external use</p></div></button>
+          
+          {/* Bus Types Button - NEW */}
+          <button 
+            onClick={() => {
+              console.log('🚌 Bus Types button clicked!');
+              setShowEnhancedBusTypeManager(true);
+            }} 
+            className="p-4 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg hover:from-indigo-100 hover:to-purple-100 transition-all duration-200 border-2 border-indigo-200 hover:border-indigo-300 shadow-sm hover:shadow-lg flex items-center space-x-3 relative"
+          >
+            <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+              NEW
+            </div>
+            <div className="p-2 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-lg"><Type className="w-5 h-5 text-indigo-600" /></div>
+            <div className="text-left">
+              <h4 className="font-semibold text-indigo-900">Bus Types</h4>
+              <p className="text-sm text-indigo-700">Manage KSRTC bus types</p>
+            </div>
+          </button>
+          
+          {/* Fare Policy Button - NEW */}
+          <button 
+            onClick={() => {
+              console.log('💰 Fare Policy button clicked!');
+              setShowFarePolicyManager(true);
+            }} 
+            className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg hover:from-green-100 hover:to-emerald-100 transition-all duration-200 border-2 border-green-200 hover:border-green-300 shadow-sm hover:shadow-lg flex items-center space-x-3 relative"
+          >
+            <div className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+              NEW
+            </div>
+            <div className="p-2 bg-gradient-to-br from-green-100 to-emerald-100 rounded-lg"><Settings className="w-5 h-5 text-green-600" /></div>
+            <div className="text-left">
+              <h4 className="font-semibold text-green-900">Fare Policy</h4>
+              <p className="text-sm text-green-700">Set pricing rules & rates</p>
+            </div>
+          </button>
         </div>
       </div>
 
@@ -740,6 +832,32 @@ const StreamlinedBusManagement = () => {
       <EditModal />
       <DeleteConfirm />
       <ViewModal />
+      
+      {/* Enhanced Bus Type Manager Modal */}
+      <EnhancedBusTypeManager 
+        isOpen={showEnhancedBusTypeManager}
+        onClose={() => setShowEnhancedBusTypeManager(false)}
+        onSave={(busTypes) => {
+          console.log('Enhanced bus types saved:', busTypes);
+          setShowEnhancedBusTypeManager(false);
+          toast.success('Bus types updated successfully!');
+        }}
+        onScheduleUpdate={(activeTypes) => {
+          console.log('Scheduling updated with active bus types:', activeTypes);
+          toast.success('Bus type scheduling rules updated successfully');
+        }}
+      />
+      
+      {/* Fare Policy Manager Modal */}
+      <FarePolicyManager 
+        isOpen={showFarePolicyManager}
+        onClose={() => setShowFarePolicyManager(false)}
+        onSave={(farePolicies) => {
+          console.log('Fare policies saved:', farePolicies);
+          setShowFarePolicyManager(false);
+          toast.success('Fare policies updated successfully!');
+        }}
+      />
     </div>
   );
 };

@@ -445,11 +445,19 @@ router.get('/realtime-stats', async (req, res) => {
 
 /**
  * POST /api/auto-scheduler/mass-schedule
- * Mass scheduling endpoint
+ * Mass scheduling endpoint - Fast and efficient
  */
 router.post('/mass-schedule', async (req, res) => {
   try {
-    const { date, depotIds, maxTripsPerRoute = 5, timeGap = 30, autoAssignCrew = true, autoAssignBuses = true } = req.body;
+    const { 
+      date, 
+      depotIds = [], 
+      maxTripsPerRoute = 5, 
+      timeGap = 30, 
+      autoAssignCrew = true, 
+      autoAssignBuses = true,
+      generateReports = true
+    } = req.body;
     
     if (!date) {
       return res.status(400).json({
@@ -459,10 +467,15 @@ router.post('/mass-schedule', async (req, res) => {
     }
     
     const targetDate = new Date(date);
-    const nextDay = new Date(targetDate);
-    nextDay.setDate(nextDay.getDate() + 1);
+    if (isNaN(targetDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format'
+      });
+    }
     
     console.log(`🚀 Starting mass scheduling for ${targetDate.toDateString()}`);
+    console.log(`📋 Parameters: maxTripsPerRoute=${maxTripsPerRoute}, timeGap=${timeGap}, autoAssignCrew=${autoAssignCrew}`);
     
     // Get required models
     const Bus = require('../models/Bus');
@@ -471,41 +484,47 @@ router.post('/mass-schedule', async (req, res) => {
     const User = require('../models/User');
     const Depot = require('../models/Depot');
     
-    // Get available buses
+    // Build queries efficiently
     const busQuery = { status: 'active' };
+    const routeQuery = { status: 'active', isActive: true };
+    const userQuery = { status: 'active' };
+    
     if (depotIds && depotIds.length > 0) {
       busQuery.depotId = { $in: depotIds };
-    }
-    const buses = await Bus.find(busQuery).limit(100); // Limit for demo
-    
-    // Get available routes
-    const routeQuery = { status: 'active', isActive: true };
-    if (depotIds && depotIds.length > 0) {
       routeQuery['depot.depotId'] = { $in: depotIds };
+      userQuery.depotId = { $in: depotIds };
     }
-    const routes = await Route.find(routeQuery).limit(20); // Limit for demo
     
-    // Get available drivers and conductors
-    const drivers = await User.find({ 
-      role: 'driver', 
-      status: 'active',
-      ...(depotIds && depotIds.length > 0 ? { depotId: { $in: depotIds } } : {})
-    }).limit(50);
+    // Execute queries in parallel for better performance
+    const [buses, routes, drivers, conductors, depots] = await Promise.all([
+      Bus.find(busQuery).populate('depotId', 'depotName').lean(),
+      Route.find(routeQuery).populate('depot.depotId', 'depotName').lean(),
+      User.find({ ...userQuery, role: 'driver' }).select('_id name depotId').lean(),
+      User.find({ ...userQuery, role: 'conductor' }).select('_id name depotId').lean(),
+      Depot.find(depotIds && depotIds.length > 0 ? { _id: { $in: depotIds } } : {}).lean()
+    ]);
     
-    const conductors = await User.find({ 
-      role: 'conductor', 
-      status: 'active',
-      ...(depotIds && depotIds.length > 0 ? { depotId: { $in: depotIds } } : {})
-    }).limit(50);
+    console.log(`📊 Found ${buses.length} buses, ${routes.length} routes, ${drivers.length} drivers, ${conductors.length} conductors, ${depots.length} depots`);
     
-    console.log(`📊 Found ${buses.length} buses, ${routes.length} routes, ${drivers.length} drivers, ${conductors.length} conductors`);
-    const precheckWarnings = [];
-    if (buses.length === 0) precheckWarnings.push('No active buses found for selected depots.');
-    if (routes.length === 0) precheckWarnings.push('No active routes found for selected depots.');
-    if (drivers.length === 0 && autoAssignCrew) precheckWarnings.push('No active drivers found for selected depots.');
-    if (conductors.length === 0 && autoAssignCrew) precheckWarnings.push('No active conductors found for selected depots.');
+    // Early validation
+    const warnings = [];
+    if (buses.length === 0) warnings.push('No active buses found for selected depots.');
+    if (routes.length === 0) warnings.push('No active routes found for selected depots.');
+    if (drivers.length === 0 && autoAssignCrew) warnings.push('No active drivers found for selected depots.');
+    if (conductors.length === 0 && autoAssignCrew) warnings.push('No active conductors found for selected depots.');
     
-    // If nothing to schedule, return a successful noop with warnings
+    // Log sample data for debugging
+    if (routes.length > 0) {
+      console.log('📋 Sample route structure:', JSON.stringify(routes[0], null, 2));
+    }
+    if (buses.length > 0) {
+      console.log('🚌 Sample bus structure:', JSON.stringify(buses[0], null, 2));
+    }
+    if (depots.length > 0) {
+      console.log('🏢 Sample depot structure:', JSON.stringify(depots[0], null, 2));
+    }
+    
+    // If nothing to schedule, return early
     if (routes.length === 0 || buses.length === 0) {
       return res.json({
         success: true,
@@ -519,42 +538,106 @@ router.post('/mass-schedule', async (req, res) => {
           totalRoutes: routes.length,
           totalBuses: buses.length,
           date: targetDate.toISOString().split('T')[0],
-          warnings: precheckWarnings
+          warnings
         }
       });
     }
     
-    // Generate trips
-    const tripsToCreate = [];
-    const timeSlots = ['06:00', '07:30', '09:00', '10:30', '12:00', '13:30', '15:00', '16:30', '18:00', '19:30'];
+    // Generate time slots based on timeGap
+    const timeSlots = generateTimeSlots(timeGap);
     
-    let tripsCreated = 0;
+    // Group buses by depot NAME for efficient assignment (since IDs don't match)
+    const busesByDepotName = buses.reduce((acc, bus) => {
+      const depotName = bus.depotId?.depotName || 'unknown';
+      if (!acc[depotName]) acc[depotName] = [];
+      acc[depotName].push(bus);
+      return acc;
+    }, {});
+    
+    // Group crew by depot NAME
+    const driversByDepotName = {};
+    const conductorsByDepotName = {};
+    
+    // Get depot names for drivers and conductors
+    for (const driver of drivers) {
+      const depotId = driver.depotId?.toString();
+      if (depotId) {
+        // Find depot name by ID
+        const depot = depots.find(d => d._id.toString() === depotId);
+        if (depot) {
+          const depotName = depot.depotName || depot.name;
+          if (!driversByDepotName[depotName]) driversByDepotName[depotName] = [];
+          driversByDepotName[depotName].push(driver);
+        }
+      }
+    }
+    
+    for (const conductor of conductors) {
+      const depotId = conductor.depotId?.toString();
+      if (depotId) {
+        // Find depot name by ID
+        const depot = depots.find(d => d._id.toString() === depotId);
+        if (depot) {
+          const depotName = depot.depotName || depot.name;
+          if (!conductorsByDepotName[depotName]) conductorsByDepotName[depotName] = [];
+          conductorsByDepotName[depotName].push(conductor);
+        }
+      }
+    }
+    
+    console.log('📊 Depot groupings by NAME:');
+    console.log('   Bus depots:', Object.keys(busesByDepotName));
+    console.log('   Driver depots:', Object.keys(driversByDepotName));
+    console.log('   Conductor depots:', Object.keys(conductorsByDepotName));
+    
+    // Generate trips efficiently
+    const tripsToCreate = [];
     let busesAssigned = 0;
     let driversAssigned = 0;
     let conductorsAssigned = 0;
-    let warnings = [...precheckWarnings];
     
-    // Create trips for each route
-    for (const route of routes) {
-      if (tripsCreated >= maxTripsPerRoute * routes.length) break;
+    try {
+      for (const route of routes) {
+      // Handle different route depot structures
+      let routeDepotName = null;
+      let routeDepotId = null;
       
-      // Guard against routes without depot info
-      const routeDepotRaw = route?.depot?.depotId;
-      const routeDepotId = routeDepotRaw?.toString?.();
-      if (!routeDepotId) {
+      if (route.depot?.depotId?.depotName) {
+        routeDepotName = route.depot.depotId.depotName;
+        routeDepotId = route.depot.depotId._id || route.depot.depotId;
+      } else if (route.depot?.depotName) {
+        routeDepotName = route.depot.depotName;
+        routeDepotId = route.depot._id;
+      } else if (route.depotId) {
+        // Direct depotId reference
+        routeDepotId = route.depotId;
+        const depot = depots.find(d => d._id.toString() === routeDepotId.toString());
+        routeDepotName = depot?.depotName || depot?.name;
+      }
+      
+      if (!routeDepotName) {
         warnings.push(`Route ${route.routeNumber || route._id} missing depot info. Skipped.`);
+        console.log(`   Route depot structure:`, route.depot);
         continue;
       }
       
-      const routeBuses = buses.filter(bus => {
-        try {
-          return bus.depotId?.toString?.() === routeDepotId;
-        } catch (_) {
-          return false;
-        }
-      });
+      // Find buses, drivers, and conductors that match this route's depot name
+      const routeBuses = busesByDepotName[routeDepotName] || [];
+      const routeDrivers = driversByDepotName[routeDepotName] || [];
+      const routeConductors = conductorsByDepotName[routeDepotName] || [];
       
-      for (let i = 0; i < Math.min(maxTripsPerRoute, routeBuses.length); i++) {
+      console.log(`🛣️ Processing route ${route.routeNumber} (depot: ${routeDepotName}): ${routeBuses.length} buses, ${routeDrivers.length} drivers, ${routeConductors.length} conductors`);
+      
+      // Create trips for this route
+      const tripsForRoute = Math.min(maxTripsPerRoute, routeBuses.length);
+      
+      if (tripsForRoute === 0) {
+        warnings.push(`Route ${route.routeNumber} has no buses in depot ${routeDepotName}`);
+        console.log(`   Available depot names: ${Object.keys(busesByDepotName).join(', ')}`);
+        continue;
+      }
+      
+      for (let i = 0; i < tripsForRoute; i++) {
         const bus = routeBuses[i];
         const timeSlot = timeSlots[i % timeSlots.length];
         
@@ -563,20 +646,18 @@ router.post('/mass-schedule', async (req, res) => {
         let assignedConductor = null;
         
         if (autoAssignCrew) {
-          const routeDrivers = drivers.filter(d => d.depotId?.toString() === route.depot.depotId.toString());
-          const routeConductors = conductors.filter(c => c.depotId?.toString() === route.depot.depotId.toString());
-          
           if (routeDrivers.length > 0) {
-            assignedDriver = routeDrivers[Math.floor(Math.random() * routeDrivers.length)];
+            assignedDriver = routeDrivers[i % routeDrivers.length];
             driversAssigned++;
           }
           
           if (routeConductors.length > 0) {
-            assignedConductor = routeConductors[Math.floor(Math.random() * routeConductors.length)];
+            assignedConductor = routeConductors[i % routeConductors.length];
             conductorsAssigned++;
           }
         }
         
+        // Use the route depot ID we found earlier
         const trip = {
           routeId: route._id,
           busId: bus._id,
@@ -588,36 +669,44 @@ router.post('/mass-schedule', async (req, res) => {
           fare: route.baseFare || 100,
           capacity: bus.capacity?.total || 45,
           availableSeats: bus.capacity?.total || 45,
+          bookedSeats: 0,
           status: 'scheduled',
-          depotId: routeDepotRaw,
+          depotId: routeDepotId,
           bookingOpen: true,
           notes: `Auto-scheduled trip for ${route.routeName}`,
-          createdBy: req.user?._id || undefined
+          createdBy: req.user?._id || undefined,
+          createdAt: new Date(),
+          updatedAt: new Date()
         };
         
         tripsToCreate.push(trip);
-        tripsCreated++;
         busesAssigned++;
       }
     }
+    } catch (tripGenerationError) {
+      console.error('❌ Error generating trips:', tripGenerationError);
+      throw new Error(`Trip generation failed: ${tripGenerationError.message}`);
+    }
     
-    // Create trips in batches to avoid overwhelming the database
-    const batchSize = 10;
+    // Create trips in optimized batches
+    const batchSize = 20; // Increased batch size for better performance
     let createdTrips = 0;
     
     for (let i = 0; i < tripsToCreate.length; i += batchSize) {
       const batch = tripsToCreate.slice(i, i + batchSize);
       try {
-        await Trip.insertMany(batch);
+        await Trip.insertMany(batch, { ordered: false }); // unordered for better performance
         createdTrips += batch.length;
+        console.log(`✅ Created batch ${Math.floor(i / batchSize) + 1}: ${batch.length} trips`);
       } catch (error) {
-        console.error(`Error creating batch ${i / batchSize + 1}:`, error);
+        console.error(`❌ Error creating batch ${Math.floor(i / batchSize) + 1}:`, error.message);
+        // Continue with other batches even if one fails
       }
     }
     
     const successRate = tripsToCreate.length > 0 ? Math.round((createdTrips / tripsToCreate.length) * 100) : 0;
     
-    console.log(`✅ Mass scheduling completed: ${createdTrips} trips created`);
+    console.log(`✅ Mass scheduling completed: ${createdTrips} trips created (${successRate}% success rate)`);
     
     res.json({
       success: true,
@@ -631,19 +720,38 @@ router.post('/mass-schedule', async (req, res) => {
         totalRoutes: routes.length,
         totalBuses: buses.length,
         date: targetDate.toISOString().split('T')[0],
-        warnings
+        warnings: warnings.length > 0 ? warnings : undefined
       }
     });
     
   } catch (error) {
-    console.error('Mass schedule error:', error);
+    console.error('❌ Mass schedule error:', error);
+    console.error('❌ Error stack:', error.stack);
     res.status(500).json({
       success: false,
       message: 'Mass scheduling failed',
-      error: error.message
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
+
+// Helper function to generate time slots based on gap
+function generateTimeSlots(timeGapMinutes) {
+  const slots = [];
+  const startHour = 6; // Start at 6 AM
+  const endHour = 20; // End at 8 PM
+  
+  for (let hour = startHour; hour < endHour; hour++) {
+    for (let minutes = 0; minutes < 60; minutes += timeGapMinutes) {
+      if (hour === endHour - 1 && minutes >= 60 - timeGapMinutes) break;
+      const timeString = `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      slots.push(timeString);
+    }
+  }
+  
+  return slots;
+}
 
 // Helper function to calculate end time
 function calculateEndTime(startTime, durationMinutes) {

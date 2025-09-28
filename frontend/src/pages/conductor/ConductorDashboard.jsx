@@ -300,6 +300,7 @@ const ConductorDashboard = () => {
           </button>
           <button className="logout-btn-header" onClick={handleLogout} title="Logout">
             <LogOut size={16} />
+            <span className="logout-text">Logout</span>
           </button>
         </div>
       </div>

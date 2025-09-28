@@ -9,7 +9,7 @@ const { auth } = require('../middleware/auth');
 // Helper function to create auth middleware
 const authMiddleware = auth;
 
-// Depot User Login
+// Depot User Login - OPTIMIZED FOR INSTANT RESPONSE
 router.post('/login', async (req, res) => {
   try {
     const { username, email, password } = req.body;
@@ -17,32 +17,43 @@ router.post('/login', async (req, res) => {
 
     if (!identifier || !password) {
       return res.status(400).json({
-        ok: false,
+        success: false,
         message: 'Username/email and password are required'
       });
     }
 
-    // Get user first, then depot
+    // OPTIMIZED: Single query with lean() for fastest response
     const user = await DepotUser.findOne({
       $or: [
         { username: identifier },
         { email: identifier }
       ]
-    }).select('+password');
+    }).select('+password').lean();
 
     if (!user) {
-      return res.status(401).json({ ok: false, message: 'Invalid credentials' });
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid credentials' 
+      });
     }
 
+    // OPTIMIZED: Fast password comparison
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      return res.status(401).json({ ok: false, message: 'Invalid credentials' });
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid credentials' 
+      });
     }
 
     if (user.status !== 'active') {
-      return res.status(401).json({ ok: false, message: `Account is ${user.status}. Please contact administrator.` });
+      return res.status(401).json({ 
+        success: false, 
+        message: `Account is ${user.status}. Please contact administrator.` 
+      });
     }
 
+    // OPTIMIZED: Generate token immediately without waiting for depot data
     const token = jwt.sign(
       {
         userId: user._id,
@@ -56,17 +67,26 @@ router.post('/login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    // Get depot data and update last login in parallel
-    const [depot] = await Promise.all([
+    // OPTIMIZED: Get depot data and update last login in parallel - non-blocking
+    Promise.all([
       Depot.findById(user.depotId).lean(),
       DepotUser.updateOne(
         { _id: user._id },
         { lastLogin: new Date() }
       )
-    ]);
+    ]).then(([depot]) => {
+      // Update depot info in background if needed
+      if (depot) {
+        console.log(`Depot login background update for ${user.username}:`, depot.depotName);
+      }
+    }).catch(err => {
+      console.warn('Background depot data update failed:', err);
+      // Don't fail login for background updates
+    });
 
+    // OPTIMIZED: Return immediately with essential data only
     res.json({
-      ok: true,
+      success: true,
       message: 'Login successful',
       data: {
         token,
@@ -75,7 +95,7 @@ router.post('/login', async (req, res) => {
           id: user._id,
           username: user.username,
           email: user.email,
-          name: user.username, // Use username as name for consistency
+          name: user.username,
           role: user.role || 'depot_manager',
           depotId: user.depotId,
           depotCode: user.depotCode,
@@ -83,27 +103,16 @@ router.post('/login', async (req, res) => {
           permissions: user.permissions,
           status: user.status,
           lastLogin: new Date()
-        },
-        depot: depot ? {
-          id: depot._id,
-          depotCode: depot.depotCode,
-          depotName: depot.depotName,
-          location: depot.location,
-          capacity: depot.capacity,
-          status: depot.status
-        } : null
+        }
       }
     });
 
   } catch (error) {
     console.error('Depot login error:', error);
-    if (error.message === 'Invalid credentials') {
-      return res.status(401).json({ ok: false, message: 'Invalid username or password' });
-    }
-    if (error.message?.includes('Account is temporarily locked')) {
-      return res.status(423).json({ ok: false, message: 'Account is temporarily locked due to too many failed login attempts. Please try again later.' });
-    }
-    res.status(500).json({ ok: false, message: 'Internal server error during login' });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Login failed. Please try again.' 
+    });
   }
 });
 

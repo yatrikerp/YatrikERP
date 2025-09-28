@@ -1,7 +1,0 @@
---recursive
---reporter mochawesome
---timeout 90000
-tests/e2e/**/*.spec.js
-
-
-

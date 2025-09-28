@@ -1,0 +1,5 @@
+# Created at 2025-09-28T15:02:06.423
+Boot Manifest-JAR contains absolute paths in classpath 'D:\YATRIK ERP\target\test-classes'
+Hint: <argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true</argLine>
+'other' has different root
+

@@ -134,8 +134,8 @@ const emailTemplates = {
     `
   }),
 
-  loginNotification: (userName, loginTime, ipAddress) => ({
-    subject: 'YATRIK ERP - New Login Detected',
+  loginNotification: (userName, loginTime, ipAddress, userRole, latestTrips = [], newServices = []) => ({
+    subject: 'YATRIK ERP - Welcome Back! Latest Trips & Services',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 30px;">
@@ -143,44 +143,76 @@ const emailTemplates = {
           <p style="color: #666; margin: 5px 0;">Transport Management System</p>
         </div>
         
-        <div style="background: #fff3cd; padding: 20px; border-radius: 10px; border-left: 4px solid #ffc107; margin-bottom: 20px;">
-          <h3 style="color: #856404; margin-top: 0;">🔐 Security Notification</h3>
-          <p style="color: #856404; margin: 0;">New login detected on your account</p>
+        <div style="background: linear-gradient(135deg, #E91E63, #FF4081); padding: 30px; border-radius: 10px; color: white; text-align: center; margin-bottom: 20px;">
+          <h2 style="margin: 0; font-size: 28px;">👋 Welcome Back, ${userName}!</h2>
+          <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">You've successfully logged in to your account</p>
         </div>
         
         <div style="background: #f8f9fa; padding: 30px; border-radius: 10px; border-left: 4px solid #E91E63;">
-          <h3 style="color: #333; margin-top: 0;">Hello ${userName},</h3>
-          
-          <p style="color: #555; line-height: 1.6;">
-            We detected a new login to your YATRIK ERP account. Here are the details:
-          </p>
+          <h3 style="color: #333; margin-top: 0;">🔐 Login Information</h3>
           
           <div style="background: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #e0e0e0;">
             <p style="margin: 5px 0; color: #333;"><strong>Login Time:</strong> ${loginTime}</p>
             <p style="margin: 5px 0; color: #333;"><strong>IP Address:</strong> ${ipAddress}</p>
-            <p style="margin: 5px 0; color: #333;"><strong>Device:</strong> Web Browser</p>
+            <p style="margin: 5px 0; color: #333;"><strong>Account Type:</strong> ${userRole || 'Passenger'}</p>
           </div>
           
-          <p style="color: #555; line-height: 1.6;">
-            If this was you, no action is needed. If you don't recognize this login, please:
-          </p>
+          ${latestTrips.length > 0 ? `
+          <div style="background: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h4 style="color: #2e7d32; margin-top: 0;">🚌 Latest Available Trips</h4>
+            ${latestTrips.map(trip => `
+              <div style="background: white; padding: 15px; border-radius: 8px; margin: 10px 0; border-left: 3px solid #00A86B;">
+                <p style="margin: 5px 0; color: #333;"><strong>Route:</strong> ${trip.route || 'N/A'}</p>
+                <p style="margin: 5px 0; color: #333;"><strong>Departure:</strong> ${trip.departureTime || 'N/A'}</p>
+                <p style="margin: 5px 0; color: #333;"><strong>Fare:</strong> ₹${trip.fare || 'N/A'}</p>
+                <p style="margin: 5px 0; color: #333;"><strong>Available Seats:</strong> ${trip.availableSeats || 'N/A'}</p>
+              </div>
+            `).join('')}
+          </div>
+          ` : ''}
           
-          <ul style="color: #555; margin: 10px 0; padding-left: 20px;">
-            <li>Change your password immediately</li>
-            <li>Contact our support team</li>
-            <li>Check your account for any unauthorized activity</li>
-          </ul>
+          ${newServices.length > 0 ? `
+          <div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h4 style="color: #856404; margin-top: 0;">🆕 New Services & Features</h4>
+            ${newServices.map(service => `
+              <div style="background: white; padding: 15px; border-radius: 8px; margin: 10px 0; border-left: 3px solid #FFB300;">
+                <p style="margin: 5px 0; color: #333;"><strong>${service.name || 'New Service'}</strong></p>
+                <p style="margin: 5px 0; color: #666;">${service.description || 'Check out this new feature!'}</p>
+              </div>
+            `).join('')}
+          </div>
+          ` : ''}
+          
+          <div style="background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h4 style="color: #1976D2; margin-top: 0;">🎯 Quick Actions</h4>
+            <ul style="color: #555; margin: 0; padding-left: 20px;">
+              <li>Book your next trip</li>
+              <li>Check your booking history</li>
+              <li>Update your profile information</li>
+              <li>View available routes and schedules</li>
+            </ul>
+          </div>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/profile" 
-               style="background: #E91E63; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
-              Manage Account
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/search" 
+               style="background: #E91E63; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; margin: 5px;">
+              Search Trips
             </a>
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/bookings" 
+               style="background: #00A86B; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; margin: 5px;">
+              My Bookings
+            </a>
+          </div>
+          
+          <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+            <p style="color: #856404; margin: 0; font-size: 14px;">
+              <strong>Security Tip:</strong> If you don't recognize this login, please change your password immediately and contact our support team.
+            </p>
           </div>
         </div>
         
         <div style="text-align: center; margin-top: 30px; color: #999; font-size: 12px;">
-          <p>This is an automated security notification. Please do not reply to this message.</p>
+          <p>This is an automated notification. Please do not reply to this message.</p>
           <p>&copy; 2024 YATRIK ERP. All rights reserved.</p>
         </div>
       </div>
@@ -282,7 +314,14 @@ const sendEmail = async (to, template, data = {}) => {
           emailContent = emailTemplates[template](data.userName, data.userEmail);
           break;
         case 'loginNotification':
-          emailContent = emailTemplates[template](data.userName, data.loginTime, data.ipAddress);
+          emailContent = emailTemplates[template](
+            data.userName, 
+            data.loginTime, 
+            data.ipAddress, 
+            data.userRole,
+            data.latestTrips || [],
+            data.newServices || []
+          );
           break;
         case 'ticketConfirmation':
           emailContent = emailTemplates[template](data);

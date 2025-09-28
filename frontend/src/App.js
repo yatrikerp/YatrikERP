@@ -10,6 +10,7 @@ import AdminLayout from './components/Admin/AdminLayout';
 import LandingPage from './pages/LandingPage';
 import TripResults from './pages/TripResults';
 import TripSearch from './components/Common/TripSearch';
+import SearchResults from './pages/SearchResults';
 import Auth from './pages/Auth';
 import OAuthCallback from './pages/OAuthCallback';
 import ResetPassword from './pages/ResetPassword';
@@ -115,7 +116,7 @@ function App() {
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<LandingPage />} />
-            <Route path="/search-results" element={<TripResults />} />
+            <Route path="/search-results" element={<SearchResults />} />
             <Route path="/trip-search" element={<TripSearch />} />
           {/* Use unified Auth page for both login and signup */}
           <Route path="/login" element={<Auth initialMode="login" />} />
@@ -167,7 +168,7 @@ function App() {
 
           {/* RedBus-style routes */}
           <Route path="/redbus" element={<RedBusSearch />} />
-          <Route path="/search-results" element={<RedBusResults />} />
+          <Route path="/redbus-results" element={<RedBusResults />} />
           <Route path="/redbus/board-drop/:tripId" element={<RedBusBoardDrop />} />
           <Route path="/redbus/seats/:tripId" element={<RedBusSeatSelection />} />
           <Route path="/redbus/passenger-details/:tripId" element={<RedBusPassengerDetails />} />

@@ -17,8 +17,8 @@ const ROLE_EMAIL_PATTERNS = {
     description: 'Driver: {Dname}-{depot}@yatrik.com (e.g., suresh-mumbai@yatrik.com)'
   },
   DEPOT_MANAGER: {
-    pattern: /^[a-zA-Z]+-depot@yatrik\.com$/,
-    description: 'Depot Manager: {place}-depot@yatrik.com (e.g., mumbai-depot@yatrik.com)'
+    pattern: /^(depot-[a-zA-Z]+@yatrik\.com|[a-zA-Z]+-depot@yatrik\.com)$/,
+    description: 'Depot Manager: depot-{place}@yatrik.com or {place}-depot@yatrik.com (e.g., depot-plk@yatrik.com or mumbai-depot@yatrik.com)'
   },
   PASSENGER: {
     pattern: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
@@ -130,7 +130,7 @@ function getExamplesForRole(role) {
     ADMIN: ['admin@yatrik.com'],
     CONDUCTOR: ['rajesh-mumbai@yatrik.com', 'amit-delhi@yatrik.com'],
     DRIVER: ['suresh-mumbai@yatrik.com', 'ramesh-delhi@yatrik.com'],
-    DEPOT_MANAGER: ['mumbai-depot@yatrik.com', 'delhi-depot@yatrik.com'],
+    DEPOT_MANAGER: ['depot-plk@yatrik.com', 'mumbai-depot@yatrik.com', 'delhi-depot@yatrik.com'],
     PASSENGER: ['john.doe@gmail.com', 'jane.smith@yahoo.com', 'user@outlook.com', 'test@example.com']
   };
 

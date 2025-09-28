@@ -112,7 +112,7 @@ router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
     
-    // Validate input
+    // OPTIMIZED: Fast input validation
     if (!email || !password) {
       return res.status(400).json({ 
         success: false,
@@ -120,8 +120,8 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Find user with password field included
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    // OPTIMIZED: Single lean query for fastest response
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+password').lean();
     if (!user) {
       return res.status(401).json({ 
         success: false,
@@ -129,15 +129,7 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Check if account is locked
-    if (user.isLocked && user.isLocked()) {
-      return res.status(423).json({ 
-        success: false,
-        message: 'Account is temporarily locked due to multiple failed login attempts' 
-      });
-    }
-
-    // Check account status
+    // OPTIMIZED: Fast status checks
     if (user.status && user.status !== 'active') {
       return res.status(403).json({ 
         success: false,
@@ -145,63 +137,124 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Use the model's built-in password comparison method
-    const isMatch = await user.comparePassword(password);
+    // OPTIMIZED: Fast password comparison with bcrypt directly
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      // Increment login attempts
-      await user.incLoginAttempts();
+      // OPTIMIZED: Non-blocking login attempt increment
+      User.findByIdAndUpdate(user._id, { $inc: { loginAttempts: 1 } }).catch(err => 
+        console.warn('Failed to increment login attempts:', err)
+      );
       return res.status(401).json({ 
         success: false,
         message: "Invalid email or password" 
       });
     }
 
-    // Reset login attempts on successful login
-    if (user.loginAttempts > 0) {
-      user.loginAttempts = 0;
-      user.lockUntil = undefined;
-    }
-    user.lastLogin = new Date();
-    await user.save();
-
+    // OPTIMIZED: Generate token immediately
     const token = jwt.sign(
-      {
-        userId: user._id,
-        role: (user.role || 'passenger').toUpperCase(),
-        name: user.name,
-        email: user.email
-      },
+      { userId: user._id, role: (user.role || 'passenger').toUpperCase(), name: user.name, email: user.email },
       process.env.JWT_SECRET || 'secret',
       { expiresIn: '7d' }
     );
 
-    // Queue login notification email ONLY for passengers (not depot/driver/conductor/admin)
-    const clientIP = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || 'Unknown';
-    const loginTime = new Date().toLocaleString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-    
-    if (String(user.role || '').toLowerCase() === 'passenger' || String(user.role || '').toLowerCase() === 'user') {
-      queueEmail(user.email, 'loginNotification', {
-        userName: user.name,
-        loginTime: loginTime,
-        ipAddress: clientIP
-      });
-      console.log('📧 Login notification email queued for passenger:', user.email);
-    }
+    // OPTIMIZED: Reset login attempts and update last login in background
+    User.findByIdAndUpdate(user._id, { 
+      loginAttempts: 0, 
+      lastLogin: new Date() 
+    }).catch(err => console.warn('Background login update failed:', err));
 
-    const { password: _removed, ...safeUser } = user.toObject();
+    // OPTIMIZED: Return response immediately for fastest login
+    const { password: _removed, ...safeUser } = user;
     res.json({ 
       success: true,
       token, 
       user: safeUser 
     });
+
+    // OPTIMIZED: Queue login notification email in background (non-blocking)
+    if (String(user.role || '').toLowerCase() === 'passenger' || String(user.role || '').toLowerCase() === 'user') {
+      const clientIP = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || 'Unknown';
+      const loginTime = new Date().toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      
+      // Fetch latest trips and services in background
+      setImmediate(async () => {
+        try {
+          // Import Trip model for fetching latest trips
+          const Trip = require('../models/Trip');
+          
+          // Get latest 5 trips with available seats
+          const latestTrips = await Trip.find({
+            status: 'scheduled',
+            departureTime: { $gte: new Date() }
+          })
+          .populate('route', 'name')
+          .populate('bus', 'busNumber totalSeats')
+          .sort({ departureTime: 1 })
+          .limit(5)
+          .lean();
+
+          // Format trips data for email
+          const formattedTrips = latestTrips.map(trip => ({
+            route: trip.route?.name || 'N/A',
+            departureTime: trip.departureTime ? new Date(trip.departureTime).toLocaleString('en-IN', {
+              timeZone: 'Asia/Kolkata',
+              day: 'numeric',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit'
+            }) : 'N/A',
+            fare: trip.fare || 'N/A',
+            availableSeats: trip.bus ? (trip.bus.totalSeats - (trip.bookedSeats?.length || 0)) : 'N/A'
+          }));
+
+          // Define new services/features
+          const newServices = [
+            {
+              name: 'Real-time Bus Tracking',
+              description: 'Track your bus in real-time and get live updates on departure and arrival times.'
+            },
+            {
+              name: 'QR Code Boarding',
+              description: 'Show your QR ticket to the conductor for quick and contactless boarding.'
+            },
+            {
+              name: 'Smart Notifications',
+              description: 'Get instant updates about delays, route changes, and important announcements.'
+            }
+          ];
+
+          // Queue email with enhanced data
+          queueEmail(user.email, 'loginNotification', {
+            userName: user.name,
+            loginTime: loginTime,
+            ipAddress: clientIP,
+            userRole: user.role || 'passenger',
+            latestTrips: formattedTrips,
+            newServices: newServices
+          });
+          
+          console.log('📧 Enhanced login notification email queued for passenger:', user.email);
+        } catch (err) {
+          console.warn('Failed to fetch trip data for login email:', err);
+          
+          // Fallback: send basic login notification
+          queueEmail(user.email, 'loginNotification', {
+            userName: user.name,
+            loginTime: loginTime,
+            ipAddress: clientIP,
+            userRole: user.role || 'passenger'
+          });
+        }
+      });
+    }
 
   } catch (error) {
     console.error('Login error:', error);

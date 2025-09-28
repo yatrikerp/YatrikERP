@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   DollarSign, 
   Plus, 
@@ -7,82 +7,49 @@ import {
   Save, 
   X, 
   Search, 
-  Filter, 
-  Download, 
-  Upload,
   RefreshCw,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  MapPin,
-  Bus,
-  Users,
-  Calendar,
-  TrendingUp,
-  TrendingDown,
-  Percent,
-  Calculator,
-  Settings,
-  Eye,
-  EyeOff,
-  Copy,
-  Archive,
-  Zap,
-  Target,
-  BarChart3,
-  PieChart,
-  Activity
+  Settings
 } from 'lucide-react';
 
 const AdminFarePolicy = () => {
   const [farePolicies, setFarePolicies] = useState([]);
-  const [routes, setRoutes] = useState([]);
-  const [depots, setDepots] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterDepot, setFilterDepot] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingPolicy, setEditingPolicy] = useState(null);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
-  const [selectedPolicies, setSelectedPolicies] = useState([]);
 
   // Form states
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    routeId: '',
-    depotId: '',
-    baseFare: '',
-    distanceFare: '',
-    timeFare: '',
-    peakHourMultiplier: 1.2,
-    weekendMultiplier: 1.1,
-    holidayMultiplier: 1.3,
-    studentDiscount: 0.1,
-    seniorDiscount: 0.15,
-    groupDiscount: 0.05,
-    advanceBookingDiscount: 0.05,
-    cancellationFee: 0.1,
-    refundPolicy: 'partial',
-    validityStart: '',
-    validityEnd: '',
-    isActive: true,
-    conditions: []
+    busType: '',
+    routeType: '',
+    baseFarePerKm: 0,
+    minimumFare: 0,
+    maximumFare: 0,
+    distanceBrackets: [
+      { fromKm: 0, toKm: 50, ratePerKm: 0, description: '' }
+    ],
+    timeBasedPricing: {
+      morning: 1.0,
+      afternoon: 1.0,
+      evening: 1.0,
+      night: 1.0
+    },
+    peakHourMultiplier: 1.0,
+    isActive: true
   });
 
   useEffect(() => {
     fetchFarePolicies();
-    fetchRoutes();
-    fetchDepots();
-  }, []);
+  }, [fetchFarePolicies]);
 
-  const fetchFarePolicies = async () => {
+  const fetchFarePolicies = useCallback(async () => {
     try {
       setLoading(true);
       console.log('💰 Fetching fare policies...');
       
-      const response = await fetch('/api/admin/fare-policies', {
+      const response = await fetch('/api/fare-policy', {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       
@@ -91,10 +58,11 @@ const AdminFarePolicy = () => {
       if (response.ok) {
         const data = await response.json();
         console.log('📊 Fare policies data:', data);
-        setFarePolicies(data.policies || []);
+        setFarePolicies(data.data || []);
       } else {
         console.error('❌ Fare policies failed:', response.status);
-        // Set mock data for demonstration
+        // Initialize default policies if none exist
+        await initializeDefaultPolicies();
         setFarePolicies([
           {
             _id: '1',
@@ -157,48 +125,25 @@ const AdminFarePolicy = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchRoutes = async () => {
+
+  const initializeDefaultPolicies = async () => {
     try {
-      const response = await fetch('/api/routes', {
+      console.log('🚀 Initializing default fare policies...');
+      const response = await fetch('/api/fare-policy/initialize-defaults', {
+        method: 'POST',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       
       if (response.ok) {
-        const data = await response.json();
-        setRoutes(data.data || []);
-      } else {
-        // Mock routes
-        setRoutes([
-          { _id: 'route1', routeNumber: 'R001', startingPoint: { city: 'City Center' }, endingPoint: { city: 'Airport' } },
-          { _id: 'route2', routeNumber: 'R002', startingPoint: { city: 'City A' }, endingPoint: { city: 'City B' } }
-        ]);
+        console.log('✅ Default fare policies initialized');
+        return true;
       }
     } catch (error) {
-      console.error('Error fetching routes:', error);
+      console.error('❌ Error initializing default policies:', error);
     }
-  };
-
-  const fetchDepots = async () => {
-    try {
-      const response = await fetch('/api/admin/depots', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setDepots(data.depots || []);
-      } else {
-        // Mock depots
-        setDepots([
-          { _id: 'depot1', depotName: 'Central Depot', depotCode: 'CD' },
-          { _id: 'depot2', depotName: 'North Depot', depotCode: 'ND' }
-        ]);
-      }
-    } catch (error) {
-      console.error('Error fetching depots:', error);
-    }
+    return false;
   };
 
   const handleCreatePolicy = async () => {
@@ -206,7 +151,7 @@ const AdminFarePolicy = () => {
       setLoading(true);
       console.log('💰 Creating fare policy:', formData);
       
-      const response = await fetch('/api/admin/fare-policies', {
+      const response = await fetch('/api/fare-policy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -239,7 +184,7 @@ const AdminFarePolicy = () => {
       setLoading(true);
       console.log('💰 Updating fare policy:', editingPolicy._id, formData);
       
-      const response = await fetch(`/api/admin/fare-policies/${editingPolicy._id}`, {
+      const response = await fetch(`/api/fare-policy/${editingPolicy._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -274,7 +219,7 @@ const AdminFarePolicy = () => {
       setLoading(true);
       console.log('💰 Deleting fare policy:', policyId);
       
-      const response = await fetch(`/api/admin/fare-policies/${policyId}`, {
+      const response = await fetch(`/api/fare-policy/${policyId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
@@ -297,74 +242,105 @@ const AdminFarePolicy = () => {
 
   const resetForm = () => {
     setFormData({
-      name: '',
-      description: '',
-      routeId: '',
-      depotId: '',
-      baseFare: '',
-      distanceFare: '',
-      timeFare: '',
-      peakHourMultiplier: 1.2,
-      weekendMultiplier: 1.1,
-      holidayMultiplier: 1.3,
-      studentDiscount: 0.1,
-      seniorDiscount: 0.15,
-      groupDiscount: 0.05,
-      advanceBookingDiscount: 0.05,
-      cancellationFee: 0.1,
-      refundPolicy: 'partial',
-      validityStart: '',
-      validityEnd: '',
-      isActive: true,
-      conditions: []
+      busType: '',
+      routeType: '',
+      baseFarePerKm: 0,
+      minimumFare: 0,
+      maximumFare: 0,
+      distanceBrackets: [
+        { fromKm: 0, toKm: 50, ratePerKm: 0, description: '' }
+      ],
+      timeBasedPricing: {
+        morning: 1.0,
+        afternoon: 1.0,
+        evening: 1.0,
+        night: 1.0
+      },
+      peakHourMultiplier: 1.0,
+      isActive: true
     });
   };
 
   const openEditModal = (policy) => {
     setEditingPolicy(policy);
     setFormData({
-      name: policy.name,
-      description: policy.description,
-      routeId: policy.routeId,
-      depotId: policy.depotId,
-      baseFare: policy.baseFare,
-      distanceFare: policy.distanceFare,
-      timeFare: policy.timeFare,
-      peakHourMultiplier: policy.peakHourMultiplier,
-      weekendMultiplier: policy.weekendMultiplier,
-      holidayMultiplier: policy.holidayMultiplier,
-      studentDiscount: policy.studentDiscount,
-      seniorDiscount: policy.seniorDiscount,
-      groupDiscount: policy.groupDiscount,
-      advanceBookingDiscount: policy.advanceBookingDiscount,
-      cancellationFee: policy.cancellationFee,
-      refundPolicy: policy.refundPolicy,
-      validityStart: policy.validityStart,
-      validityEnd: policy.validityEnd,
-      isActive: policy.isActive,
-      conditions: policy.conditions || []
+      busType: policy.busType || '',
+      routeType: policy.routeType || '',
+      baseFarePerKm: policy.baseFarePerKm || 0,
+      minimumFare: policy.minimumFare || 0,
+      maximumFare: policy.maximumFare || 0,
+      distanceBrackets: policy.distanceBrackets || [{ fromKm: 0, toKm: 50, ratePerKm: 0, description: '' }],
+      timeBasedPricing: policy.timeBasedPricing || {
+        morning: 1.0,
+        afternoon: 1.0,
+        evening: 1.0,
+        night: 1.0
+      },
+      peakHourMultiplier: policy.peakHourMultiplier || 1.0,
+      isActive: policy.isActive !== undefined ? policy.isActive : true
     });
   };
 
   const filteredPolicies = farePolicies.filter(policy => {
-    const matchesSearch = policy.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         policy.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDepot = filterDepot === 'all' || policy.depotId === filterDepot;
+    const matchesSearch = (policy.busType && policy.busType.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                         (policy.routeType && policy.routeType.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = filterStatus === 'all' || 
                          (filterStatus === 'active' && policy.isActive) ||
                          (filterStatus === 'inactive' && !policy.isActive);
     
-    return matchesSearch && matchesDepot && matchesStatus;
+    return matchesSearch && matchesStatus;
   });
 
-  const calculateTotalFare = (policy, distance = 10, isPeakHour = false, isWeekend = false, isHoliday = false) => {
-    let total = parseFloat(policy.baseFare) + (parseFloat(policy.distanceFare) * distance);
+  const calculateTotalFare = (policy, distance = 10, isPeakHour = false) => {
+    let total = (policy.baseFarePerKm || 0) * distance;
     
-    if (isPeakHour) total *= policy.peakHourMultiplier;
-    if (isWeekend) total *= policy.weekendMultiplier;
-    if (isHoliday) total *= policy.holidayMultiplier;
+    // Apply minimum fare
+    total = Math.max(total, policy.minimumFare || 0);
+    
+    // Apply peak hour multiplier
+    if (isPeakHour) total *= (policy.peakHourMultiplier || 1.0);
+    
+    // Apply maximum fare cap if set
+    if (policy.maximumFare && policy.maximumFare > 0) {
+      total = Math.min(total, policy.maximumFare);
+    }
     
     return Math.round(total);
+  };
+
+  const getBusTypeLabel = (busType) => {
+    const labels = {
+      'ordinary': 'Ordinary',
+      'lspf': 'Limited Stop Fast Passenger',
+      'fast_passenger': 'Fast Passenger',
+      'venad': 'Venad',
+      'super_fast': 'Super Fast',
+      'super_deluxe': 'Super Deluxe',
+      'deluxe_express': 'Deluxe Express',
+      'ananthapuri_fast': 'Ananthapuri Fast',
+      'rajadhani': 'Rajadhani',
+      'minnal': 'Minnal',
+      'garuda_king_long': 'Garuda King Long',
+      'garuda_volvo': 'Garuda Volvo',
+      'garuda_scania': 'Garuda Scania',
+      'garuda_maharaja': 'Garuda Maharaja',
+      'low_floor_non_ac': 'Low Floor Non-AC',
+      'low_floor_ac': 'Low Floor AC',
+      'jnnurm_city': 'JNNURM City Circular'
+    };
+    return labels[busType] || busType;
+  };
+
+  const getRouteTypeLabel = (routeType) => {
+    const labels = {
+      'local': 'Local',
+      'city': 'City',
+      'intercity': 'Intercity',
+      'district': 'District',
+      'long_distance': 'Long Distance',
+      'interstate': 'Interstate'
+    };
+    return labels[routeType] || routeType;
   };
 
   return (
@@ -388,7 +364,7 @@ const AdminFarePolicy = () => {
                 onClick={async () => {
                   try {
                     console.log('🧪 Testing Fare Policy API...');
-                    const response = await fetch('/api/admin/fare-policies', {
+                    const response = await fetch('/api/fare-policy', {
                       headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
                     });
                     console.log('📡 Fare Policy API response:', response.status);
@@ -410,6 +386,30 @@ const AdminFarePolicy = () => {
                 <span>Test API</span>
               </button>
               <button
+                onClick={async () => {
+                  if (window.confirm('This will create default fare policies for all KSRTC bus types. Continue?')) {
+                    try {
+                      setLoading(true);
+                      const success = await initializeDefaultPolicies();
+                      if (success) {
+                        alert('Default fare policies initialized successfully!');
+                        fetchFarePolicies();
+                      } else {
+                        alert('Failed to initialize default policies');
+                      }
+                    } catch (error) {
+                      alert('Error initializing default policies: ' + error.message);
+                    } finally {
+                      setLoading(false);
+                    }
+                  }
+                }}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+              >
+                <Settings className="w-5 h-5" />
+                <span>Initialize Defaults</span>
+              </button>
+              <button
                 onClick={() => setShowCreateModal(true)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
               >
@@ -424,7 +424,7 @@ const AdminFarePolicy = () => {
       <div className="px-6 py-6 space-y-6">
         {/* Filters and Search */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
@@ -435,19 +435,6 @@ const AdminFarePolicy = () => {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            
-            <select
-              value={filterDepot}
-              onChange={(e) => setFilterDepot(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">All Depots</option>
-              {depots.map(depot => (
-                <option key={depot._id} value={depot._id}>
-                  {depot.depotName}
-                </option>
-              ))}
-            </select>
             
             <select
               value={filterStatus}
@@ -475,14 +462,14 @@ const AdminFarePolicy = () => {
             <div key={policy._id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900">{policy.name}</h3>
-                  <p className="text-sm text-gray-600 mt-1">{policy.description}</p>
+                  <h3 className="text-lg font-semibold text-gray-900">{getBusTypeLabel(policy.busType)}</h3>
+                  <p className="text-sm text-gray-600 mt-1">{getRouteTypeLabel(policy.routeType)} Route</p>
                   <div className="flex items-center space-x-2 mt-2">
                     <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                      {policy.routeName || 'Route'}
+                      {policy.busType}
                     </span>
                     <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                      {policy.depotName || 'Depot'}
+                      {policy.routeType}
                     </span>
                     <span className={`text-xs px-2 py-1 rounded ${
                       policy.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
@@ -511,51 +498,42 @@ const AdminFarePolicy = () => {
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-xs text-gray-500">Base Fare</p>
-                    <p className="text-lg font-semibold text-gray-900">₹{policy.baseFare}</p>
+                    <p className="text-xs text-gray-500">Base Rate</p>
+                    <p className="text-lg font-semibold text-gray-900">₹{policy.baseFarePerKm}/km</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Distance Rate</p>
-                    <p className="text-lg font-semibold text-gray-900">₹{policy.distanceFare}/km</p>
+                    <p className="text-xs text-gray-500">Minimum Fare</p>
+                    <p className="text-lg font-semibold text-gray-900">₹{policy.minimumFare}</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-gray-500">Peak Hour</p>
-                    <p className="text-sm font-medium text-orange-600">+{Math.round((policy.peakHourMultiplier - 1) * 100)}%</p>
+                {policy.maximumFare && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-gray-500">Maximum Fare</p>
+                      <p className="text-lg font-semibold text-gray-900">₹{policy.maximumFare}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Peak Multiplier</p>
+                      <p className="text-sm font-medium text-orange-600">{policy.peakHourMultiplier}x</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Weekend</p>
-                    <p className="text-sm font-medium text-blue-600">+{Math.round((policy.weekendMultiplier - 1) * 100)}%</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-gray-500">Student Discount</p>
-                    <p className="text-sm font-medium text-green-600">-{Math.round(policy.studentDiscount * 100)}%</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Senior Discount</p>
-                    <p className="text-sm font-medium text-green-600">-{Math.round(policy.seniorDiscount * 100)}%</p>
-                  </div>
-                </div>
+                )}
 
                 {/* Sample Fare Calculation */}
                 <div className="bg-gray-50 p-3 rounded-lg">
                   <p className="text-xs text-gray-500 mb-2">Sample Fare (10km, Peak Hour)</p>
                   <p className="text-lg font-bold text-gray-900">
-                    ₹{calculateTotalFare(policy, 10, true, false, false)}
+                    ₹{calculateTotalFare(policy, 10, true)}
                   </p>
                 </div>
               </div>
 
-              {/* Validity Period */}
+              {/* Policy Info */}
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <div className="flex items-center justify-between text-xs text-gray-500">
-                  <span>Valid From: {new Date(policy.validityStart).toLocaleDateString()}</span>
-                  <span>To: {new Date(policy.validityEnd).toLocaleDateString()}</span>
+                  <span>Distance Brackets: {policy.distanceBrackets?.length || 0}</span>
+                  <span>Created: {new Date(policy.createdAt || Date.now()).toLocaleDateString()}</span>
                 </div>
               </div>
             </div>
@@ -603,41 +581,48 @@ const AdminFarePolicy = () => {
               {/* Basic Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Policy Name</label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter policy name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Route</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Bus Type</label>
                   <select
-                    value={formData.routeId}
-                    onChange={(e) => setFormData({...formData, routeId: e.target.value})}
+                    value={formData.busType}
+                    onChange={(e) => setFormData({...formData, busType: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="">Select Route</option>
-                    {routes.map(route => (
-                      <option key={route._id} value={route._id}>
-                        {route.routeNumber} - {route.startingPoint?.city} to {route.endingPoint?.city}
-                      </option>
-                    ))}
+                    <option value="">Select Bus Type</option>
+                    <option value="ordinary">Ordinary</option>
+                    <option value="lspf">Limited Stop Fast Passenger</option>
+                    <option value="fast_passenger">Fast Passenger</option>
+                    <option value="venad">Venad</option>
+                    <option value="super_fast">Super Fast</option>
+                    <option value="super_deluxe">Super Deluxe</option>
+                    <option value="deluxe_express">Deluxe Express</option>
+                    <option value="ananthapuri_fast">Ananthapuri Fast</option>
+                    <option value="rajadhani">Rajadhani</option>
+                    <option value="minnal">Minnal</option>
+                    <option value="garuda_king_long">Garuda King Long</option>
+                    <option value="garuda_volvo">Garuda Volvo</option>
+                    <option value="garuda_scania">Garuda Scania</option>
+                    <option value="garuda_maharaja">Garuda Maharaja</option>
+                    <option value="low_floor_non_ac">Low Floor Non-AC</option>
+                    <option value="low_floor_ac">Low Floor AC</option>
+                    <option value="jnnurm_city">JNNURM City Circular</option>
                   </select>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  rows={3}
-                  placeholder="Enter policy description"
-                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Route Type</label>
+                  <select
+                    value={formData.routeType}
+                    onChange={(e) => setFormData({...formData, routeType: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select Route Type</option>
+                    <option value="local">Local</option>
+                    <option value="city">City</option>
+                    <option value="intercity">Intercity</option>
+                    <option value="district">District</option>
+                    <option value="long_distance">Long Distance</option>
+                    <option value="interstate">Interstate</option>
+                  </select>
+                </div>
               </div>
 
               {/* Fare Structure */}
@@ -645,31 +630,32 @@ const AdminFarePolicy = () => {
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Fare Structure</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Base Fare (₹)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Base Fare/Km (₹)</label>
                     <input
                       type="number"
-                      value={formData.baseFare}
-                      onChange={(e) => setFormData({...formData, baseFare: e.target.value})}
+                      step="0.1"
+                      value={formData.baseFarePerKm}
+                      onChange={(e) => setFormData({...formData, baseFarePerKm: parseFloat(e.target.value) || 0})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                       placeholder="0"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Distance Rate (₹/km)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Fare (₹)</label>
                     <input
                       type="number"
-                      value={formData.distanceFare}
-                      onChange={(e) => setFormData({...formData, distanceFare: e.target.value})}
+                      value={formData.minimumFare}
+                      onChange={(e) => setFormData({...formData, minimumFare: parseInt(e.target.value) || 0})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                       placeholder="0"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Time Rate (₹/min)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Maximum Fare (₹) - Optional</label>
                     <input
                       type="number"
-                      value={formData.timeFare}
-                      onChange={(e) => setFormData({...formData, timeFare: e.target.value})}
+                      value={formData.maximumFare}
+                      onChange={(e) => setFormData({...formData, maximumFare: parseInt(e.target.value) || 0})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                       placeholder="0"
                     />
@@ -677,112 +663,76 @@ const AdminFarePolicy = () => {
                 </div>
               </div>
 
-              {/* Multipliers */}
+              {/* Time-based Pricing */}
               <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Fare Multipliers</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Time-based Pricing</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Peak Hour Multiplier</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Morning (6AM-12PM)</label>
                     <input
                       type="number"
                       step="0.1"
-                      value={formData.peakHourMultiplier}
-                      onChange={(e) => setFormData({...formData, peakHourMultiplier: parseFloat(e.target.value)})}
+                      value={formData.timeBasedPricing.morning}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        timeBasedPricing: { ...formData.timeBasedPricing, morning: parseFloat(e.target.value) || 1.0 }
+                      })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Weekend Multiplier</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Afternoon (12PM-6PM)</label>
                     <input
                       type="number"
                       step="0.1"
-                      value={formData.weekendMultiplier}
-                      onChange={(e) => setFormData({...formData, weekendMultiplier: parseFloat(e.target.value)})}
+                      value={formData.timeBasedPricing.afternoon}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        timeBasedPricing: { ...formData.timeBasedPricing, afternoon: parseFloat(e.target.value) || 1.0 }
+                      })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Holiday Multiplier</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Evening (6PM-10PM)</label>
                     <input
                       type="number"
                       step="0.1"
-                      value={formData.holidayMultiplier}
-                      onChange={(e) => setFormData({...formData, holidayMultiplier: parseFloat(e.target.value)})}
+                      value={formData.timeBasedPricing.evening}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        timeBasedPricing: { ...formData.timeBasedPricing, evening: parseFloat(e.target.value) || 1.0 }
+                      })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Night (10PM-6AM)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={formData.timeBasedPricing.night}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        timeBasedPricing: { ...formData.timeBasedPricing, night: parseFloat(e.target.value) || 1.0 }
+                      })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
-              </div>
-
-              {/* Discounts */}
-              <div className="bg-green-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Discounts</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Student Discount (%)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={formData.studentDiscount * 100}
-                      onChange={(e) => setFormData({...formData, studentDiscount: parseFloat(e.target.value) / 100})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Senior Discount (%)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={formData.seniorDiscount * 100}
-                      onChange={(e) => setFormData({...formData, seniorDiscount: parseFloat(e.target.value) / 100})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Group Discount (%)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={formData.groupDiscount * 100}
-                      onChange={(e) => setFormData({...formData, groupDiscount: parseFloat(e.target.value) / 100})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Advance Booking Discount (%)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={formData.advanceBookingDiscount * 100}
-                      onChange={(e) => setFormData({...formData, advanceBookingDiscount: parseFloat(e.target.value) / 100})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Validity and Status */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Valid From</label>
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Peak Hour Multiplier</label>
                   <input
-                    type="date"
-                    value={formData.validityStart}
-                    onChange={(e) => setFormData({...formData, validityStart: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Valid Until</label>
-                  <input
-                    type="date"
-                    value={formData.validityEnd}
-                    onChange={(e) => setFormData({...formData, validityEnd: e.target.value})}
+                    type="number"
+                    step="0.1"
+                    value={formData.peakHourMultiplier}
+                    onChange={(e) => setFormData({...formData, peakHourMultiplier: parseFloat(e.target.value) || 1.0})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
 
+              {/* Status */}
               <div className="flex items-center space-x-4">
                 <label className="flex items-center">
                   <input

@@ -101,53 +101,57 @@ export const AuthProvider = ({ children }) => {
         isDepotUser
       });
       
-      // Update state immediately for instant UI response
+      // OPTIMIZED: Update state immediately for instant UI response
       setUser(normalizedUser);
       
+      // OPTIMIZED: Store data in background for fastest response
       if (isDepotUser) {
         // Store depot-specific data
-        await Promise.all([
+        Promise.all([
           localStorage.setItem('depotToken', token),
           localStorage.setItem('depotUser', JSON.stringify(normalizedUser))
-        ]);
+        ]).catch(err => console.warn('Failed to store depot data:', err));
       } else {
         // Store regular user data
-        await Promise.all([
+        Promise.all([
           localStorage.setItem('token', token),
           localStorage.setItem('user', JSON.stringify(normalizedUser))
-        ]);
+        ]).catch(err => console.warn('Failed to store user data:', err));
       }
 
-      // Auto-start location tracking for drivers
+      // OPTIMIZED: Auto-start location tracking for drivers in background
       if (normalizedUser.role === 'driver') {
-        try {
-          console.log('Starting automatic location tracking for driver...');
-          
-          // Get initial location
-          const initialLocation = await locationService.getCurrentLocation();
-          console.log('Initial driver location detected:', initialLocation);
-          
-          // Start continuous tracking
-          locationService.startTracking((location, error) => {
-            if (error) {
-              console.error('Location tracking error:', error);
-              return;
-            }
+        // Start location tracking in background - don't block login
+        setTimeout(async () => {
+          try {
+            console.log('Starting automatic location tracking for driver...');
             
-            console.log('Driver location updated:', location);
+            // Get initial location
+            const initialLocation = await locationService.getCurrentLocation();
+            console.log('Initial driver location detected:', initialLocation);
             
-            // Send location to backend if driver has an active duty
-            const currentDutyId = localStorage.getItem('currentDutyId');
-            if (currentDutyId && currentDutyId !== 'demo') {
-              locationService.sendLocationToBackend(currentDutyId)
-                .catch(err => console.error('Failed to send location to backend:', err));
-            }
-          });
-          
-        } catch (locationError) {
-          console.warn('Failed to initialize location tracking:', locationError);
-          // Continue login process even if location fails
-        }
+            // Start continuous tracking
+            locationService.startTracking((location, error) => {
+              if (error) {
+                console.error('Location tracking error:', error);
+                return;
+              }
+              
+              console.log('Driver location updated:', location);
+              
+              // Send location to backend if driver has an active duty
+              const currentDutyId = localStorage.getItem('currentDutyId');
+              if (currentDutyId && currentDutyId !== 'demo') {
+                locationService.sendLocationToBackend(currentDutyId)
+                  .catch(err => console.error('Failed to send location to backend:', err));
+              }
+            });
+            
+          } catch (locationError) {
+            console.warn('Failed to initialize location tracking:', locationError);
+            // Continue login process even if location fails
+          }
+        }, 100); // Small delay to not block login
       }
       
       console.log('AuthContext.login completed, user state updated:', normalizedUser);

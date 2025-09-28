@@ -67,6 +67,7 @@ const StreamlinedRouteManagement = () => {
     count: 10,
     startNumber: 1,
     prefix: 'R',
+    targetDate: new Date().toISOString().slice(0, 10), // Default to today
     distanceRange: { min: 50, max: 200 },
     farePerKm: 2.5,
     features: ['AC']
@@ -338,6 +339,9 @@ const StreamlinedRouteManagement = () => {
           ));
           toast.success(`Updated fares for ${selectedRoutes.length} routes`);
           break;
+          
+        case 'schedule_trips':
+          await handleBulkScheduleTrips(); break;
       }
       
       setSelectedRoutes([]);
@@ -348,6 +352,41 @@ const StreamlinedRouteManagement = () => {
       toast.error('Bulk operation failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBulkScheduleTrips = async () => {
+    if (!bulkForm.targetDate) {
+      toast.error('Please select a target date for scheduling');
+      return;
+    }
+
+    try {
+      const response = await apiFetch('/api/auto-scheduler/mass-schedule', {
+        method: 'POST',
+        body: JSON.stringify({
+          date: bulkForm.targetDate,
+          depotIds: bulkForm.depotId ? [bulkForm.depotId] : [],
+          maxTripsPerRoute: 5,
+          timeGap: 30,
+          autoAssignCrew: true,
+          autoAssignBuses: true,
+          generateReports: true,
+          routeIds: selectedRoutes // Schedule trips specifically for selected routes
+        })
+      });
+
+      if (response?.success || response?.ok) {
+        const tripsCreated = response.data?.tripsCreated || response.tripsCreated || 0;
+        const successRate = response.data?.successRate || response.successRate || '0%';
+        toast.success(`Bulk scheduling completed! ${tripsCreated} trips created for selected routes (${successRate} success rate)`);
+      } else {
+        const errorMessage = response?.message || response?.error || 'Bulk scheduling failed';
+        toast.error(errorMessage);
+      }
+    } catch (error) {
+      console.error('Error in bulk scheduling:', error);
+      toast.error('Bulk scheduling failed');
     }
   };
 
@@ -829,6 +868,17 @@ const StreamlinedRouteManagement = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Target Date for Scheduling
+                  </label>
+                  <input 
+                    type="date" 
+                    value={bulkForm.targetDate} 
+                    onChange={(e) => setBulkForm(prev => ({ ...prev, targetDate: e.target.value }))} 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                  />
+                </div>
               </div>
               
               <div className="bg-blue-50 rounded-lg p-4">
@@ -973,6 +1023,7 @@ const StreamlinedRouteManagement = () => {
                 <option value="activate">Activate Routes</option>
                 <option value="deactivate">Deactivate Routes</option>
                 <option value="update_fare">Update Fares</option>
+                <option value="schedule_trips">Schedule Trips</option>
               </select>
               <button
                 onClick={handleBulkOperation}

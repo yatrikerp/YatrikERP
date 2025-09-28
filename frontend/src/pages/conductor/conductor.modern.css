@@ -326,26 +326,37 @@
 }
 
 .logout-btn-header {
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  background: #f8fafc;
-  border: 1px solid #ECEFF1;
+  padding: 0.5rem 1rem;
+  background: #FF3B30;
+  border: 1px solid #FF3B30;
   border-radius: 8px;
-  color: #1a1a1a;
+  color: white;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 0.5rem;
+  box-shadow: 0 2px 4px rgba(255, 59, 48, 0.3);
+  font-size: 0.875rem;
+  font-weight: 600;
+  min-width: auto;
+  height: 40px;
 }
 
 .logout-btn-header:hover {
-  background: #fee2e2;
-  border-color: #fecaca;
-  color: #dc2626;
+  background: #E53935;
+  border-color: #E53935;
+  color: white;
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
+  box-shadow: 0 4px 12px rgba(229, 57, 53, 0.4);
+}
+
+.logout-text {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
 }
 
 /* Trip Context Bar */
@@ -1668,8 +1679,7 @@
   gap: 0.5rem;
 }
 
-.mobile-view .sound-btn,
-.mobile-view .logout-btn-header {
+.mobile-view .sound-btn {
   width: 48px;
   height: 48px;
   background: #f3f4f6;
@@ -1678,11 +1688,32 @@
   border-radius: 12px;
 }
 
-.mobile-view .sound-btn:hover,
-.mobile-view .logout-btn-header:hover {
+.mobile-view .logout-btn-header {
+  padding: 0.75rem 1rem;
+  background: #FF3B30;
+  border: 1px solid #FF3B30;
+  color: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(255, 59, 48, 0.3);
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  min-width: auto;
+  height: 48px;
+}
+
+.mobile-view .sound-btn:hover {
   background: #e5e7eb;
   border-color: #9ca3af;
   transform: translateY(-1px);
+}
+
+.mobile-view .logout-btn-header:hover {
+  background: #E53935;
+  border-color: #E53935;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(229, 57, 53, 0.4);
 }
 
 .mobile-view .sound-btn.active {

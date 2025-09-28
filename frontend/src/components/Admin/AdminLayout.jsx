@@ -85,9 +85,9 @@ const AdminLayout = ({ children }) => {
     },
     {
       name: 'Depot Management',
-      href: '/admin/depots',
+      href: '/admin/depot-management',
       icon: Building2,
-      current: location.pathname === '/admin/depots'
+      current: location.pathname === '/admin/depot-management'
     },
     {
       name: 'Driver Management',
@@ -340,7 +340,7 @@ const AdminLayout = ({ children }) => {
               </button>
 
               {/* User menu */}
-              <div className="relative">
+              <div className="relative flex items-center space-x-2">
                 <button 
                   className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-all duration-200 ease-in-out btn-transition"
                   disabled={isLoggingOut}
@@ -353,6 +353,22 @@ const AdminLayout = ({ children }) => {
                   <span className="hidden md:block text-sm font-medium text-gray-900">
                     {user?.name || 'ERP Admin'}
                   </span>
+                </button>
+                
+                {/* Logout Button */}
+                <button
+                  onClick={handleLogout}
+                  data-testid="logout-btn"
+                  className="flex items-center space-x-2 px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 hover:shadow-lg rounded-lg transition-all duration-200 ease-in-out btn-transition border border-red-600"
+                  title="Logout"
+                  disabled={isLoggingOut}
+                >
+                  {isLoggingOut ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <LogOut className="w-4 h-4" />
+                  )}
+                  <span className="font-medium">Logout</span>
                 </button>
               </div>
             </div>

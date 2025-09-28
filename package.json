@@ -13,6 +13,8 @@
     "start": "cd backend && npm start",
     "start:production": "cd backend && npm start",
     "test:e2e": "mocha \"tests/e2e/**/*.spec.js\" --timeout 90000 --reporter mochawesome",
+    "test:login": "mocha tests/roleLoginTests.js --timeout 90000 --reporter mochawesome",
+    "test": "mocha tests/*.js --timeout 90000 --reporter mochawesome",
     "deploy:docker": "docker-compose up -d --build",
     "deploy:docker:stop": "docker-compose down",
     "deploy:docker:logs": "docker-compose logs -f",
@@ -30,15 +32,20 @@
     "free:deploy": "bash setup-free-hosting.sh deploy",
     "quick:deploy": "node AUTO_SETUP_FREE_HOSTING.js && echo 'Follow DEPLOYMENT_INSTRUCTIONS.md for next steps'"
   },
-  "keywords": ["bus", "erp", "transport", "management"],
+  "keywords": [
+    "bus",
+    "erp",
+    "transport",
+    "management"
+  ],
   "author": "YATRIK ERP Team",
   "license": "MIT",
   "devDependencies": {
-    "concurrently": "^8.2.2",
     "chromedriver": "^131.0.0",
+    "concurrently": "^8.2.2",
     "dotenv": "^16.4.5",
-    "mocha": "^10.7.3",
-    "mochawesome": "^7.1.3",
+    "mocha": "^10.8.2",
+    "mochawesome": "^7.1.4",
     "selenium-webdriver": "^4.24.0"
   }
 }

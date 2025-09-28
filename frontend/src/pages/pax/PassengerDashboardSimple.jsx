@@ -6,6 +6,11 @@ import { Search, Ticket, Bus, Wallet, Calendar, Clock, Plus } from 'lucide-react
 const PassengerDashboardSimple = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
   const [upcomingTrips, setUpcomingTrips] = useState([]);
   const [recentBookings, setRecentBookings] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -46,7 +51,9 @@ const PassengerDashboardSimple = () => {
             <h1 className="text-2xl font-semibold text-gray-900">Passenger Dashboard</h1>
             <p className="text-gray-600 mt-1">Welcome back{user?.name ? `, ${user.name}` : ''}. What would you like to do?</p>
           </div>
-          <button onClick={logout} className="px-3 py-2 text-sm rounded-md border border-gray-300 bg-white hover:bg-gray-100">Logout</button>
+          <button onClick={handleLogout} className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-all duration-200 shadow-sm hover:shadow-md flex items-center space-x-2">
+            <span>Logout</span>
+          </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
