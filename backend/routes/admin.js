@@ -56,6 +56,61 @@ const setCachedDashboardData = (data) => {
   dashboardCache.timestamp = Date.now();
 };
 
+// GET /api/admin/dashboard/summary - Get comprehensive dashboard summary
+router.get('/dashboard/summary', async (req, res) => {
+  try {
+    const TripAssignmentService = require('../services/tripAssignmentService');
+    
+    // Get real-time data from database
+    const [fleetSummary, crewSummary, complianceAlerts, busTypeDistribution, depotDistribution] = await Promise.all([
+      TripAssignmentService.getFleetSummary(),
+      TripAssignmentService.getCrewSummary(),
+      TripAssignmentService.getComplianceAlerts(),
+      Bus.aggregate([
+        { $group: { _id: '$busType', count: { $sum: 1 } } },
+        { $sort: { count: -1 } }
+      ]),
+      Bus.aggregate([
+        { $lookup: { from: 'depots', localField: 'depotId', foreignField: '_id', as: 'depot' } },
+        { $unwind: '$depot' },
+        { $group: { _id: '$depot.depotName', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 10 }
+      ])
+    ]);
+
+    // Get recent trips for activity summary
+    const recentTrips = await Trip.find()
+      .populate('routeId', 'routeName routeNumber')
+      .populate('busId', 'busNumber busType')
+      .populate('driverId', 'name')
+      .populate('conductorId', 'name')
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    res.json({
+      success: true,
+      data: {
+        fleet: fleetSummary,
+        crew: crewSummary,
+        alerts: complianceAlerts,
+        busTypeDistribution: busTypeDistribution,
+        depotDistribution: depotDistribution,
+        recentTrips: recentTrips,
+        timestamp: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting dashboard summary:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error getting dashboard summary',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/admin/dashboard
 router.get('/dashboard', async (req, res) => {
   const startTime = Date.now();
@@ -1932,6 +1987,47 @@ router.get('/trips', async (req, res) => {
       success: false,
       error: 'Failed to fetch trips',
       message: error.message
+    });
+  }
+});
+
+// POST /api/admin/trips/assign - Create trip with automatic assignment
+router.post('/trips/assign', async (req, res) => {
+  try {
+    const TripAssignmentService = require('../services/tripAssignmentService');
+    
+    const result = await TripAssignmentService.createTripWithAssignment(req.body);
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Trip created successfully with automatic assignment',
+        data: result.trip,
+        assignments: result.assignments
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: result.error,
+        requiresManualAssignment: result.requiresManualAssignment,
+        availableOptions: {
+          buses: result.availableBuses || [],
+          drivers: result.availableDrivers || [],
+          conductors: result.availableConductors || []
+        },
+        partialAssignments: {
+          bus: result.assignedBus || null,
+          driver: result.assignedDriver || null,
+          conductor: result.assignedConductor || null
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error in trip assignment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error creating trip with assignment',
+      error: error.message
     });
   }
 });
@@ -5337,79 +5433,17 @@ router.get('/fare-policies', async (req, res) => {
       ];
     }
     
-    // For now, return mock data since we don't have a FarePolicy model yet
-    const policies = [
-      {
-        _id: '1',
-        name: 'City Center to Airport',
-        description: 'Standard fare policy for city to airport route',
-        routeId: 'route1',
-        routeName: 'City Center - Airport',
-        depotId: 'depot1',
-        depotName: 'Central Depot',
-        baseFare: 150,
-        distanceFare: 5,
-        timeFare: 2,
-        peakHourMultiplier: 1.2,
-        weekendMultiplier: 1.1,
-        holidayMultiplier: 1.3,
-        studentDiscount: 0.1,
-        seniorDiscount: 0.15,
-        groupDiscount: 0.05,
-        advanceBookingDiscount: 0.05,
-        cancellationFee: 0.1,
-        refundPolicy: 'partial',
-        validityStart: '2024-01-01',
-        validityEnd: '2024-12-31',
-        isActive: true,
-        conditions: ['Valid ID required for discounts', 'Advance booking 24 hours'],
-        createdAt: new Date(),
-        updatedAt: new Date()
-      },
-      {
-        _id: '2',
-        name: 'Intercity Express',
-        description: 'Premium fare policy for intercity routes',
-        routeId: 'route2',
-        routeName: 'City A - City B',
-        depotId: 'depot2',
-        depotName: 'North Depot',
-        baseFare: 300,
-        distanceFare: 8,
-        timeFare: 3,
-        peakHourMultiplier: 1.3,
-        weekendMultiplier: 1.2,
-        holidayMultiplier: 1.5,
-        studentDiscount: 0.15,
-        seniorDiscount: 0.2,
-        groupDiscount: 0.1,
-        advanceBookingDiscount: 0.08,
-        cancellationFee: 0.15,
-        refundPolicy: 'full',
-        validityStart: '2024-01-01',
-        validityEnd: '2024-12-31',
-        isActive: true,
-        conditions: ['Minimum 2 passengers for group discount', 'Refund within 2 hours'],
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-    ];
+    // Fetch fare policies from database
+    const FarePolicy = require('../models/FarePolicy');
+    
+    const policies = await FarePolicy.find(query)
+      .populate('routeId', 'routeName')
+      .populate('depotId', 'depotName')
+      .sort({ createdAt: -1 });
     
     res.json({
       success: true,
-      policies: policies.filter(policy => {
-        if (depotId && depotId !== 'all' && policy.depotId !== depotId) return false;
-        if (status && status !== 'all') {
-          if (status === 'active' && !policy.isActive) return false;
-          if (status === 'inactive' && policy.isActive) return false;
-        }
-        if (search) {
-          const searchLower = search.toLowerCase();
-          if (!policy.name.toLowerCase().includes(searchLower) && 
-              !policy.description.toLowerCase().includes(searchLower)) return false;
-        }
-        return true;
-      }),
+      data: policies,
       total: policies.length
     });
     
@@ -7278,6 +7312,110 @@ router.get('/trip-assignments', auth, requireRole(['admin', 'depot_manager']), a
     res.status(500).json({
       success: false,
       message: 'Internal server error'
+    });
+  }
+});
+
+// =================================================================
+// Depot Management Endpoints
+// =================================================================
+
+// GET /api/admin/depots - Get all depots with filtering
+router.get('/depots', async (req, res) => {
+  try {
+    const { category, status, search } = req.query;
+    
+    // Build filter object
+    const filter = { isActive: true };
+    
+    if (category && category !== 'all') {
+      filter.category = category;
+    }
+    
+    if (status && status !== 'all') {
+      filter.status = status;
+    }
+    
+    if (search) {
+      filter.$or = [
+        { depotCode: { $regex: search, $options: 'i' } },
+        { depotName: { $regex: search, $options: 'i' } },
+        { abbreviation: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const depots = await Depot.find(filter)
+      .populate('createdBy', 'name email')
+      .sort({ depotCode: 1 })
+      .lean();
+
+    res.json(depots);
+  } catch (error) {
+    console.error('Error fetching depots:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch depots',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/admin/depots - Create new depot
+router.post('/depots', async (req, res) => {
+  try {
+    const depotData = {
+      ...req.body,
+      createdBy: req.user._id
+    };
+
+    const depot = new Depot(depotData);
+    await depot.save();
+
+    const populatedDepot = await Depot.findById(depot._id)
+      .populate('createdBy', 'name email');
+
+    res.status(201).json({
+      success: true,
+      message: 'Depot created successfully',
+      data: populatedDepot
+    });
+  } catch (error) {
+    console.error('Error creating depot:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create depot',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/admin/depots/:id - Update depot
+router.put('/depots/:id', async (req, res) => {
+  try {
+    const depot = await Depot.findByIdAndUpdate(
+      req.params.id,
+      { ...req.body, updatedBy: req.user._id },
+      { new: true, runValidators: true }
+    ).populate('updatedBy', 'name email');
+
+    if (!depot) {
+      return res.status(404).json({
+        success: false,
+        message: 'Depot not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Depot updated successfully',
+      data: depot
+    });
+  } catch (error) {
+    console.error('Error updating depot:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update depot',
+      error: error.message
     });
   }
 });

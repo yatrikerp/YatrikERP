@@ -76,8 +76,8 @@ const busSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'maintenance', 'retired', 'suspended'],
-    default: 'active'
+    enum: ['active', 'idle', 'assigned', 'maintenance', 'retired', 'suspended'],
+    default: 'idle'
   },
   currentLocation: {
     latitude: Number,
@@ -89,11 +89,11 @@ const busSchema = new mongoose.Schema({
   },
   assignedDriver: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    ref: 'Driver'
   },
   assignedConductor: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    ref: 'Conductor'
   },
   currentTrip: {
     type: mongoose.Schema.Types.ObjectId,
@@ -195,6 +195,107 @@ busSchema.pre('save', function(next) {
   }
   next();
 });
+
+// Instance methods for compliance checking
+busSchema.methods.isCompliant = function() {
+  const now = new Date();
+  const thirtyDaysFromNow = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
+  
+  // Check if insurance is expired or expiring soon
+  if (this.documents.insurance.expiryDate && this.documents.insurance.expiryDate <= thirtyDaysFromNow) {
+    return { compliant: false, reason: 'Insurance expired or expiring soon', expiryDate: this.documents.insurance.expiryDate };
+  }
+  
+  // Check if fitness certificate is expired or expiring soon
+  if (this.documents.fitness.expiryDate && this.documents.fitness.expiryDate <= thirtyDaysFromNow) {
+    return { compliant: false, reason: 'Fitness certificate expired or expiring soon', expiryDate: this.documents.fitness.expiryDate };
+  }
+  
+  // Check if bus is in maintenance
+  if (this.status === 'maintenance') {
+    return { compliant: false, reason: 'Bus is under maintenance' };
+  }
+  
+  // Check if bus is retired
+  if (this.status === 'retired') {
+    return { compliant: false, reason: 'Bus is retired' };
+  }
+  
+  return { compliant: true };
+};
+
+// Method to check if bus is available for assignment
+busSchema.methods.isAvailableForAssignment = function() {
+  const compliance = this.isCompliant();
+  if (!compliance.compliant) {
+    return false;
+  }
+  
+  // Bus must be idle to be available for assignment
+  return this.status === 'idle';
+};
+
+// Method to get compliance alerts
+busSchema.methods.getComplianceAlerts = function() {
+  const alerts = [];
+  const now = new Date();
+  const thirtyDaysFromNow = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
+  
+  if (this.documents.insurance.expiryDate && this.documents.insurance.expiryDate <= thirtyDaysFromNow) {
+    alerts.push({
+      type: 'insurance',
+      message: `Insurance expires on ${this.documents.insurance.expiryDate.toDateString()}`,
+      severity: this.documents.insurance.expiryDate <= now ? 'critical' : 'warning',
+      expiryDate: this.documents.insurance.expiryDate
+    });
+  }
+  
+  if (this.documents.fitness.expiryDate && this.documents.fitness.expiryDate <= thirtyDaysFromNow) {
+    alerts.push({
+      type: 'fitness',
+      message: `Fitness certificate expires on ${this.documents.fitness.expiryDate.toDateString()}`,
+      severity: this.documents.fitness.expiryDate <= now ? 'critical' : 'warning',
+      expiryDate: this.documents.fitness.expiryDate
+    });
+  }
+  
+  if (this.maintenance.nextService && this.maintenance.nextService <= thirtyDaysFromNow) {
+    alerts.push({
+      type: 'maintenance',
+      message: `Maintenance due on ${this.maintenance.nextService.toDateString()}`,
+      severity: this.maintenance.nextService <= now ? 'critical' : 'warning',
+      dueDate: this.maintenance.nextService
+    });
+  }
+  
+  return alerts;
+};
+
+// Static method to find available buses for assignment
+busSchema.statics.findAvailableBuses = function(depotId, busType) {
+  const query = {
+    depotId: depotId,
+    status: 'idle'
+  };
+  
+  if (busType) {
+    query.busType = busType;
+  }
+  
+  return this.find(query).populate('depotId', 'depotName depotCode');
+};
+
+// Static method to get fleet summary
+busSchema.statics.getFleetSummary = function() {
+  return this.aggregate([
+    {
+      $group: {
+        _id: '$status',
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+};
 
 module.exports = mongoose.model('Bus', busSchema);
 

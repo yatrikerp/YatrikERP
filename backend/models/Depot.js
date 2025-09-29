@@ -14,6 +14,30 @@ const depotSchema = new mongoose.Schema({
     trim: true
   },
   
+  // Additional depot information
+  abbreviation: {
+    type: String,
+    trim: true,
+    uppercase: true
+  },
+  stdCode: {
+    type: String,
+    trim: true
+  },
+  officePhone: {
+    type: String,
+    trim: true
+  },
+  stationMasterPhone: {
+    type: String,
+    trim: true
+  },
+  category: {
+    type: String,
+    enum: ['main', 'sub', 'operating'],
+    default: 'main'
+  },
+  
   // Location Information
   location: {
     address: {

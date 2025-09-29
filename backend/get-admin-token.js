@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 
 async function getAdminToken() {
   try {
-    await mongoose.connect('mongodb://localhost:27017/yatrik_erp');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/yatrik_erp');
     console.log('Connected to MongoDB');
 
     const adminUser = await User.findOne({ role: 'admin' });

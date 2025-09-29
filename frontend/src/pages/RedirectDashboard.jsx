@@ -28,24 +28,38 @@ export default function RedirectDashboard() {
 
       // Check for depot email pattern first
       const depotEmailPattern = /^[a-z0-9]+-depot@yatrik\.com$/; // tvm-depot@yatrik.com
+      const isDepotEmail = depotEmailPattern.test(email);
       
       let destination = '/pax'; // Default fallback
+      
+      console.log('RedirectDashboard - Analyzing user:', {
+        role,
+        email,
+        isDepotEmail,
+        userDepotId: user.depotId,
+        userDepotCode: user.depotCode,
+        userDepotName: user.depotName,
+        isDepotUser: user.isDepotUser
+      });
       
       if (role === 'admin' || role === 'administrator') {
         destination = '/admin';
         console.log('Redirecting admin user to:', destination);
-      } else if (role === 'depot_manager' || role === 'depot-manager' || role === 'depotmanager') {
+      } else if (role === 'depot_manager' || role === 'depot-manager' || role === 'depotmanager' || 
+                 isDepotEmail || user.isDepotUser || user.depotId) {
         destination = '/depot';
-        console.log('Redirecting depot manager to:', destination);
+        console.log('Redirecting depot user to:', destination, {
+          reason: role === 'depot_manager' ? 'role' : 
+                 isDepotEmail ? 'email_pattern' : 
+                 user.isDepotUser ? 'isDepotUser_flag' : 
+                 user.depotId ? 'depotId_present' : 'unknown'
+        });
       } else if (role === 'conductor') {
         destination = '/conductor';
         console.log('Redirecting conductor to:', destination);
       } else if (role === 'driver') {
         destination = '/driver';
         console.log('Redirecting driver to:', destination);
-      } else if (depotEmailPattern.test(email)) {
-        destination = '/depot';
-        console.log('Redirecting depot user by email pattern to:', destination);
       } else {
         destination = '/pax';
         console.log('Redirecting passenger to:', destination);

@@ -13,6 +13,66 @@ router.get('/test', (req, res) => {
   });
 });
 
+// Calculate fare based on distance and bus type
+router.post('/calculate', auth, async (req, res) => {
+  try {
+    const { distance, busType, routeType = 'intercity' } = req.body;
+    
+    if (!distance || !busType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Distance and bus type are required'
+      });
+    }
+
+    // Find the appropriate fare policy
+    const policy = await FarePolicy.findOne({
+      busType: busType,
+      isActive: true
+    });
+
+    if (!policy) {
+      return res.status(404).json({
+        success: false,
+        message: 'No fare policy found for the specified bus type'
+      });
+    }
+
+    // Calculate fare
+    const baseFare = distance * policy.ratePerKm;
+    const totalFare = Math.max(baseFare, policy.minimumFare);
+
+    res.json({
+      success: true,
+      data: {
+        baseFare: Math.round(baseFare * 100) / 100,
+        totalFare: Math.round(totalFare * 100) / 100,
+        minimumFare: policy.minimumFare,
+        ratePerKm: policy.ratePerKm,
+        appliedPolicy: policy.name,
+        policy: {
+          id: policy._id,
+          name: policy.name,
+          busType: policy.busType,
+          ratePerKm: policy.ratePerKm,
+          minimumFare: policy.minimumFare,
+          peakHourMultiplier: policy.peakHourMultiplier,
+          weekendMultiplier: policy.weekendMultiplier,
+          holidayMultiplier: policy.holidayMultiplier
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error calculating fare:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error calculating fare',
+      error: error.message
+    });
+  }
+});
+
 // Get all fare policies
 router.get('/', auth, async (req, res) => {
   try {

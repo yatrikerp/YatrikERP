@@ -14,6 +14,7 @@ router.get('/', async (req, res) => {
       city, 
       state, 
       status, 
+      category,
       hasCapacity, 
       page = 1, 
       limit = 20,
@@ -34,6 +35,10 @@ router.get('/', async (req, res) => {
     
     if (status) {
       filter.status = status;
+    }
+    
+    if (category && ['main', 'sub', 'operating'].includes(category)) {
+      filter.category = category;
     }
     
     if (hasCapacity === 'true') {
@@ -390,6 +395,11 @@ router.get('/stats/overview', authRole(['admin', 'manager']), async (req, res) =
     const inactiveDepots = await Depot.countDocuments({ isActive: true, status: 'inactive' });
     const maintenanceDepots = await Depot.countDocuments({ isActive: true, status: 'maintenance' });
 
+    // Get depot counts by category
+    const mainDepots = await Depot.countDocuments({ isActive: true, category: 'main' });
+    const subDepots = await Depot.countDocuments({ isActive: true, category: 'sub' });
+    const operatingCenters = await Depot.countDocuments({ isActive: true, category: 'operating' });
+
     // Get total capacity across all depots
     const capacityStats = await Depot.aggregate([
       { $match: { isActive: true } },
@@ -426,6 +436,9 @@ router.get('/stats/overview', authRole(['admin', 'manager']), async (req, res) =
         activeDepots,
         inactiveDepots,
         maintenanceDepots,
+        mainDepots,
+        subDepots,
+        operatingCenters,
         capacityStats: capacityStats[0] || { totalBuses: 0, availableBuses: 0, maintenanceBuses: 0 },
         depotsByCity,
         lowCapacityDepots

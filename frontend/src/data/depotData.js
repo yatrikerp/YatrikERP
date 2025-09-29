@@ -106,14 +106,18 @@ export const depotData = {
 
 // Helper functions for depot management
 export const generateDepotEmail = (depotCode, depotType = 'main') => {
-  const prefix = depotType === 'main' ? 'depot' : depotType === 'sub' ? 'subdepot' : 'opcenter';
+  const prefix = depotType === 'main' ? 'depot' : depotType === 'sub' ? 'depot' : 'opcenter';
   return `${depotCode.toLowerCase()}-${prefix}@yatrik.com`;
 };
 
 export const generateDepotPassword = (depotCode) => {
-  // Generate a secure password based on depot code
-  const basePassword = `${depotCode}@Yatrik2024`;
-  return basePassword;
+  // Generate the working password format that matches backend
+  return `${depotCode}@2024`;
+};
+
+export const generateDepotUsername = (depotCode) => {
+  // Generate the working username format that matches backend
+  return `${depotCode.toLowerCase()}-manager`;
 };
 
 export const getDepotTypeLabel = (type) => {

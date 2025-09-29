@@ -1,0 +1,24 @@
+// Run this in MongoDB Compass or MongoDB shell:
+
+// Update Main Depots
+db.depots.updateMany(
+  { depotCode: { $in: ['ALP','ALY','ATL','CHR','CGR','CTL','EKM','KNR','KGD','KYM','KLM','KTR','KTM','KKD','MVP','NDD','NTA','PLA','PLK','PPD','PTA','PBR','SBY','TVL','TSR','TVM','CTY','VZM'] } },
+  { $set: { category: 'main' } }
+)
+
+// Update Sub Depots
+db.depots.updateMany(
+  { depotCode: { $in: ['ADR','ANK','CDM','CLD','CHT','CTR','ETP','GVR','HPD','KPT','KHD','KPM','KNP','KTD','KTP','KMR','KDR','KMG','KMY','MLA','MLP','MND','MVK','NBR','NPR','PSL','PPM','PNR','PMN','PRK','PVM','PNK','PNI','PVR','PLR','TLY','TSY','TDP','TPM','VKM','VND','VRD','VJD','VKB','VTR'] } },
+  { $set: { category: 'sub' } }
+)
+
+// Update Operating Centres
+db.depots.updateMany(
+  { depotCode: { $in: ['ARD','ARK','EDT','EMY','IJK','KNI','KKM','KLP','MPY','MKD','MLT','MNR','PLD','PDM','PDK','RNY','TDY','VKA','VDK'] } },
+  { $set: { category: 'operating' } }
+)
+
+// Verify results
+db.depots.aggregate([
+  { $group: { _id: "$category", count: { $sum: 1 } } }
+])

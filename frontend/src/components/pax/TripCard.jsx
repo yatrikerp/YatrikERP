@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bus, Clock, MapPinned, Ticket as TicketIcon, Navigation } from 'lucide-react';
+import { Bus, Clock, MapPin, Ticket as TicketIcon, Navigation } from 'lucide-react';
 
 const statusChip = (status) => {
   const map = {
@@ -21,7 +21,7 @@ const TripCard = ({ route, busNo, seat, departure, arrival, status='ontime', onV
         {statusChip(status)}
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm text-gray-600">
-        <div className="flex items-center gap-2"><MapPinned className="w-4 h-4" /> Bus No: <span className="font-medium text-gray-800">{busNo}</span></div>
+        <div className="flex items-center gap-2"><MapPin className="w-4 h-4" /> Bus No: <span className="font-medium text-gray-800">{busNo}</span></div>
         <div className="flex items-center gap-2"><TicketIcon className="w-4 h-4" /> Seat: <span className="font-medium text-gray-800">{seat}</span></div>
         <div className="flex items-center gap-2"><Clock className="w-4 h-4" /> Depart: <span className="font-medium text-gray-800">{departure}</span></div>
         <div className="flex items-center gap-2"><Clock className="w-4 h-4" /> Arrive: <span className="font-medium text-gray-800">{arrival}</span></div>

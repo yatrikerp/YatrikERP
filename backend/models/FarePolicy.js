@@ -1,193 +1,177 @@
 const mongoose = require('mongoose');
 
-const FarePolicySchema = new mongoose.Schema({
+const farePolicySchema = new mongoose.Schema({
+  // Basic Policy Information
+  name: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  description: {
+    type: String,
+    trim: true
+  },
+  
+  // Bus Type Information
   busType: {
     type: String,
-    enum: [
-      // Official KSRTC Bus Types
-      'ordinary', 'lspf', 'fast_passenger', 'venad', 'super_fast', 'super_deluxe',
-      'deluxe_express', 'ananthapuri_fast', 'rajadhani', 'minnal',
-      'garuda_king_long', 'garuda_volvo', 'garuda_scania', 'garuda_maharaja',
-      'low_floor_non_ac', 'low_floor_ac', 'jnnurm_city',
-      // Additional Types
-      'custom'
-    ],
-    required: true
-  },
-  
-  routeType: {
-    type: String,
-    enum: ['local', 'intercity', 'interstate', 'long_distance', 'city', 'district'],
-    required: true
-  },
-  
-  // Base fare rates per kilometer
-  baseFarePerKm: {
-    type: Number,
     required: true,
-    min: 0
+    enum: [
+      'City / Ordinary',
+      'City Fast',
+      'Fast Passenger / LSFP',
+      'Super Fast Passenger',
+      'Super Express',
+      'Super Deluxe',
+      'Luxury / Hi-tech & AC',
+      'Garuda Sanchari / Biaxle Premium',
+      'Garuda Maharaja / Garuda King / Multi-axle Premium',
+      'A/C Low Floor',
+      'Non A/C Low Floor'
+    ]
   },
   
-  // Minimum fare regardless of distance
+  // Fare Structure
   minimumFare: {
     type: Number,
     required: true,
     min: 0
   },
-  
-  // Maximum fare cap (optional)
-  maximumFare: {
+  ratePerKm: {
     type: Number,
+    required: true,
     min: 0
   },
   
-  // Distance brackets for different rates
-  distanceBrackets: [{
-    fromKm: { type: Number, required: true },
-    toKm: { type: Number, required: true },
-    ratePerKm: { type: Number, required: true },
-    description: String
-  }],
+  // Route and Depot Information
+  routeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Route',
+    required: false
+  },
+  routeName: {
+    type: String,
+    trim: true
+  },
+  depotId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Depot',
+    required: false
+  },
+  depotName: {
+    type: String,
+    trim: true
+  },
   
-  // Peak hour multipliers
+  // Advanced Pricing Options
   peakHourMultiplier: {
     type: Number,
     default: 1.0,
-    min: 1.0
+    min: 1.0,
+    max: 2.0
+  },
+  weekendMultiplier: {
+    type: Number,
+    default: 1.0,
+    min: 1.0,
+    max: 2.0
+  },
+  holidayMultiplier: {
+    type: Number,
+    default: 1.0,
+    min: 1.0,
+    max: 2.0
   },
   
-  // Seasonal adjustments
-  seasonalAdjustments: [{
-    season: { type: String, enum: ['normal', 'festival', 'holiday', 'monsoon'] },
-    multiplier: { type: Number, default: 1.0, min: 0.1 },
-    startDate: Date,
-    endDate: Date
-  }],
-  
-  // Time-based pricing
-  timeBasedPricing: {
-    morning: { type: Number, default: 1.0 }, // 6AM-12PM
-    afternoon: { type: Number, default: 1.0 }, // 12PM-6PM
-    evening: { type: Number, default: 1.0 }, // 6PM-10PM
-    night: { type: Number, default: 1.0 } // 10PM-6AM
+  // Discount Options
+  studentDiscount: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 1.0
+  },
+  seniorDiscount: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 1.0
+  },
+  groupDiscount: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 1.0
+  },
+  advanceBookingDiscount: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 1.0
   },
   
-  // Additional charges
-  additionalCharges: [{
-    name: String,
-    amount: Number,
-    type: { type: String, enum: ['fixed', 'percentage'], default: 'fixed' },
-    condition: String // e.g., "distance > 100km"
-  }],
+  // Cancellation and Refund
+  cancellationFee: {
+    type: Number,
+    default: 0.1,
+    min: 0,
+    max: 1.0
+  },
+  refundPolicy: {
+    type: String,
+    enum: ['none', 'partial', 'full'],
+    default: 'partial'
+  },
   
-  // Discounts
-  discounts: [{
-    name: String,
-    type: { type: String, enum: ['percentage', 'fixed'], default: 'percentage' },
-    value: Number,
-    condition: String, // e.g., "advance_booking", "student", "senior_citizen"
-    validFrom: Date,
-    validTo: Date
-  }],
+  // Validity Period
+  validityStart: {
+    type: Date,
+    default: Date.now
+  },
+  validityEnd: {
+    type: Date,
+    default: () => new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // 1 year from now
+  },
   
-  // Status
+  // Status and Metadata
   isActive: {
     type: Boolean,
     default: true
   },
+  conditions: [{
+    type: String,
+    trim: true
+  }],
   
-  // Metadata
+  // Audit Fields
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    ref: 'User',
+    required: false
   },
-  
-  lastModifiedBy: {
+  updatedBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  },
-  
-  effectiveFrom: {
-    type: Date,
-    default: Date.now
-  },
-  
-  effectiveTo: Date,
-  
-  notes: String
+    ref: 'User',
+    required: false
+  }
 }, {
   timestamps: true
 });
 
-// Index for efficient queries
-FarePolicySchema.index({ busType: 1, routeType: 1, isActive: 1 });
-FarePolicySchema.index({ effectiveFrom: 1, effectiveTo: 1 });
+// Indexes for better performance
+farePolicySchema.index({ busType: 1, isActive: 1 });
+farePolicySchema.index({ routeId: 1, isActive: 1 });
+farePolicySchema.index({ depotId: 1, isActive: 1 });
 
-// Virtual for calculating fare based on distance
-FarePolicySchema.methods.calculateFare = function(distance, timeOfDay = 'afternoon', season = 'normal') {
-  let fare = 0;
-  
-  // Find applicable distance bracket
-  let applicableBracket = null;
-  for (const bracket of this.distanceBrackets) {
-    if (distance >= bracket.fromKm && distance <= bracket.toKm) {
-      applicableBracket = bracket;
-      break;
-    }
-  }
-  
-  // Calculate base fare
-  if (applicableBracket) {
-    fare = distance * applicableBracket.ratePerKm;
-  } else {
-    fare = distance * this.baseFarePerKm;
-  }
-  
-  // Apply minimum fare
-  fare = Math.max(fare, this.minimumFare);
-  
-  // Apply time-based multiplier
-  const timeMultiplier = this.timeBasedPricing[timeOfDay] || 1.0;
-  fare *= timeMultiplier;
-  
-  // Apply seasonal adjustment
-  const seasonalAdjustment = this.seasonalAdjustments.find(s => s.season === season);
-  if (seasonalAdjustment) {
-    fare *= seasonalAdjustment.multiplier;
-  }
-  
-  // Apply peak hour multiplier if applicable
-  fare *= this.peakHourMultiplier;
-  
-  // Apply maximum fare cap if set
-  if (this.maximumFare) {
-    fare = Math.min(fare, this.maximumFare);
-  }
-  
-  // Apply additional charges
-  for (const charge of this.additionalCharges) {
-    if (this.evaluateCondition(charge.condition, { distance })) {
-      if (charge.type === 'fixed') {
-        fare += charge.amount;
-      } else {
-        fare += (fare * charge.amount / 100);
-      }
-    }
-  }
-  
-  return Math.round(fare);
-};
+// Virtual for calculated sample fare
+farePolicySchema.virtual('sampleFare').get(function() {
+  const sampleDistance = 10; // 10km sample
+  const calculatedFare = sampleDistance * this.ratePerKm;
+  const peakHourFare = calculatedFare * this.peakHourMultiplier;
+  return Math.max(this.minimumFare, peakHourFare);
+});
 
-// Helper method to evaluate conditions
-FarePolicySchema.methods.evaluateCondition = function(condition, context) {
-  if (!condition) return true;
-  
-  try {
-    // Simple condition evaluation (can be enhanced)
-    return eval(condition.replace(/distance/g, context.distance));
-  } catch (e) {
-    return false;
-  }
-};
+// Ensure virtual fields are serialized
+farePolicySchema.set('toJSON', { virtuals: true });
+farePolicySchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('FarePolicy', FarePolicySchema);
+module.exports = mongoose.model('FarePolicy', farePolicySchema);

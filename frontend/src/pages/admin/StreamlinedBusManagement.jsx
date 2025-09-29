@@ -8,7 +8,7 @@ import {
 import EnhancedBusTypeManager from '../../components/Admin/EnhancedBusTypeManager.jsx';
 import FarePolicyManager from '../../components/Admin/FarePolicyManager.jsx';
 import { toast } from 'react-hot-toast';
-import { apiFetch } from '../../utils/api';
+import { apiFetch, clearApiCache } from '../../utils/api';
 
 const StreamlinedBusManagement = () => {
   const [buses, setBuses] = useState([]);
@@ -102,14 +102,19 @@ const StreamlinedBusManagement = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
+      // Clear API cache to ensure fresh data
+      clearApiCache();
+      
       // Fetch core datasets in parallel with multiple fallbacks where needed
       const [busesRes, depotsRes, driversRes, altDriversRes, analyticsRes] = await Promise.all([
-        apiFetch('/api/admin/buses'),
+        apiFetch(`/api/admin/buses?limit=500&page=1&_t=${Date.now()}`), // Added limit=500 and cache busting
         apiFetch('/api/admin/depots?showAll=true'),
         apiFetch('/api/admin/all-drivers', { suppressError: true }),
         apiFetch('/api/admin/drivers', { suppressError: true }),
         apiFetch('/api/admin/buses/analytics', { suppressError: true })
       ]);
+
+      console.log('🚌 Buses API Response:', busesRes); // Debug log
 
       // Normalize lists
       const depotsListRaw = depotsRes.data?.data?.depots || depotsRes.data?.depots || depotsRes.depots || [];
@@ -126,6 +131,8 @@ const StreamlinedBusManagement = () => {
       const driversList = (driversListRaw || []).map(d => ({ _id: d._id || d.id, name: d.name || d.fullName || d.employeeName || 'Driver' }));
 
       const busesRaw = busesRes.data?.data?.buses || busesRes.data?.buses || busesRes.buses || [];
+      console.log('🚌 Raw buses fetched:', busesRaw.length); // Debug log
+      
       const normalizedBuses = (busesRaw || []).map(b => {
         const depotRef = b.depotId;
         const depotId = depotRef && typeof depotRef === 'object' ? depotRef._id : depotRef || null;
@@ -139,7 +146,23 @@ const StreamlinedBusManagement = () => {
         };
       });
 
-      setDepots(depotsList);
+      console.log('🚌 Normalized buses:', normalizedBuses.length); // Debug log
+      
+      // Log depot distribution
+      const depotCounts = {};
+      normalizedBuses.forEach(bus => {
+        const depotName = bus.depotName || 'Unknown';
+        depotCounts[depotName] = (depotCounts[depotName] || 0) + 1;
+      });
+      console.log('🚌 Depot distribution:', depotCounts);
+
+      // Filter depots to only show those that have buses
+      const depotsWithBuses = depotsList.filter(depot => 
+        normalizedBuses.some(bus => bus.depotId === depot._id)
+      );
+      console.log('🚌 Depots with buses:', depotsWithBuses.length);
+
+      setDepots(depotsWithBuses); // Use filtered depots instead of all depots
       setDrivers(driversList);
       setBuses(normalizedBuses);
 
@@ -705,6 +728,17 @@ const StreamlinedBusManagement = () => {
           <p className="text-gray-600">Efficient bus fleet management with bulk operations</p>
         </div>
         <div className="flex items-center space-x-3">
+          <button 
+            onClick={() => {
+              clearApiCache();
+              fetchData();
+            }} 
+            className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center space-x-2"
+            disabled={loading}
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <span>Force Refresh</span>
+          </button>
           <button onClick={fetchData} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center space-x-2"><RefreshCw className="w-4 h-4" /><span>Refresh</span></button>
         </div>
       </div>
@@ -804,17 +838,53 @@ const StreamlinedBusManagement = () => {
               {depots.map(depot => (<option key={depot._id} value={depot._id}>{depot.depotName || depot.name}</option>))}
             </select>
           </div>
-          <div className="flex items-end">
-            <button onClick={() => { setSearchTerm(''); setStatusFilter('all'); setDepotFilter('all'); }} className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center space-x-2">
+          <div className="flex items-end space-x-2">
+            <button onClick={() => { setSearchTerm(''); setStatusFilter('all'); setDepotFilter('all'); }} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center space-x-2">
               <Filter className="w-4 h-4" />
               <span>Clear Filters</span>
+            </button>
+            <button 
+              onClick={() => { 
+                setSearchTerm(''); 
+                setStatusFilter('all'); 
+                setDepotFilter('all'); 
+                clearApiCache();
+                fetchData();
+              }} 
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"
+              disabled={loading}
+            >
+              <Bus className="w-4 h-4" />
+              <span>Show All Buses</span>
             </button>
           </div>
         </div>
       </div>
 
+      {/* Depot Distribution Summary */}
+      {filteredBuses.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Depot Distribution Summary</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {(() => {
+              const depotCounts = {};
+              filteredBuses.forEach(bus => {
+                const depotName = bus.depotName || 'Unknown';
+                depotCounts[depotName] = (depotCounts[depotName] || 0) + 1;
+              });
+              return Object.entries(depotCounts).map(([depot, count]) => (
+                <div key={depot} className="bg-gray-50 rounded-lg p-3 text-center">
+                  <p className="text-sm font-medium text-gray-600">{depot}</p>
+                  <p className="text-lg font-bold text-gray-900">{count}</p>
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      )}
+
       {/* Bus Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredBuses.map(bus => (<BusCard key={bus._id} bus={bus} />))}
       </div>
 
@@ -822,7 +892,20 @@ const StreamlinedBusManagement = () => {
         <div className="text-center py-12">
           <Bus className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No buses found</h3>
-          <p className="text-gray-600">Try adjusting your search or add some buses.</p>
+          <p className="text-gray-600 mb-4">Try adjusting your search or add some buses.</p>
+          {depotFilter !== 'all' && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-md mx-auto">
+              <p className="text-yellow-800 text-sm">
+                <strong>Tip:</strong> The selected depot "{depots.find(d => d._id === depotFilter)?.depotName || 'Unknown'}" might not have any buses assigned to it.
+              </p>
+              <button 
+                onClick={() => { setDepotFilter('all'); clearApiCache(); fetchData(); }} 
+                className="mt-2 px-3 py-1 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700"
+              >
+                Show All Depots
+              </button>
+            </div>
+          )}
         </div>
       )}
 

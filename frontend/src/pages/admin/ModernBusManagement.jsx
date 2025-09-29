@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Bus, Plus, Search, Filter, MapPin, Wrench, Fuel, Users, 
@@ -9,7 +9,7 @@ import {
   Satellite, Wifi, Battery, Signal, Brain, Map, Navigation,
   BellRing, Smartphone, QrCode, Layers, Globe, Share2,
   ChevronRight, ArrowUpRight, ArrowDownRight, Loader2,
-  MoreHorizontal, Type, Tags
+  MoreHorizontal, Type, Tags, UserPlus, UserX, AlertCircle
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { apiFetch, clearApiCache } from '../../utils/api';
@@ -779,6 +779,8 @@ const ModernBusManagement = () => {
               onScheduleMaintenance={() => handleMaintenanceSchedule(bus)}
               onCompleteMaintenance={() => completeMaintenanceHandler(bus)}
               onViewMaintenance={() => fetchMaintenanceHistory(bus._id)}
+              onAssignStaff={() => handleStaffAssignment(bus._id)}
+              onUnassignStaff={() => handleStaffUnassignment(bus._id)}
             />
           </motion.div>
         ))}
@@ -971,6 +973,53 @@ const ModernBusManagement = () => {
       fetchAllData(); // Refresh all data
     } catch (error) {
       toast.error('Failed to unassign bus from route');
+    }
+  };
+
+  // Staff Assignment Handlers
+  const handleStaffAssignment = async (busId) => {
+    try {
+      // Find the bus to get its depot
+      const bus = buses.find(b => b._id === busId);
+      if (!bus || !bus.depotId) {
+        toast.error('Bus depot not found');
+        return;
+      }
+
+      const depotId = bus.depotId._id || bus.depotId;
+      const response = await apiFetch(`/api/staff/auto-assign/${depotId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ busIds: [busId], forceReassign: false })
+      });
+
+      if (response.success) {
+        toast.success('Staff assigned successfully');
+        clearApiCache();
+        fetchAllData();
+      } else {
+        toast.error('Failed to assign staff');
+      }
+    } catch (error) {
+      toast.error('Failed to assign staff');
+    }
+  };
+
+  const handleStaffUnassignment = async (busId) => {
+    try {
+      const response = await apiFetch(`/api/staff/unassign/${busId}`, {
+        method: 'POST'
+      });
+
+      if (response.success) {
+        toast.success('Staff unassigned successfully');
+        clearApiCache();
+        fetchAllData();
+      } else {
+        toast.error('Failed to unassign staff');
+      }
+    } catch (error) {
+      toast.error('Failed to unassign staff');
     }
   };
 
@@ -1672,7 +1721,7 @@ const MetricCard = ({ title, value, icon, trend, color }) => {
 };
 
 // Bus Card Component
-const BusCard = ({ bus, liveData, onEdit, onDelete, onView, onSelect, isSelected, onAssignRoute, onRemoveRoute, onScheduleMaintenance, onCompleteMaintenance, onViewMaintenance }) => {
+const BusCard = ({ bus, liveData, onEdit, onDelete, onView, onSelect, isSelected, onAssignRoute, onRemoveRoute, onScheduleMaintenance, onCompleteMaintenance, onViewMaintenance, onAssignStaff, onUnassignStaff }) => {
   const statusColors = {
     active: 'bg-green-100 text-green-800',
     maintenance: 'bg-yellow-100 text-yellow-800',
@@ -1745,6 +1794,9 @@ const BusCard = ({ bus, liveData, onEdit, onDelete, onView, onSelect, isSelected
                 <p className="text-sm font-medium text-gray-900">
                   {bus?.assignedDriver?.name || 'Not Assigned'}
                 </p>
+                {bus?.assignedDriver && (
+                  <p className="text-xs text-gray-400">{bus.assignedDriver.employeeCode}</p>
+                )}
               </div>
             </div>
             <div className="flex items-center text-sm">
@@ -1756,9 +1808,29 @@ const BusCard = ({ bus, liveData, onEdit, onDelete, onView, onSelect, isSelected
                 <p className="text-sm font-medium text-gray-900">
                   {bus?.assignedConductor?.name || 'Not Assigned'}
                 </p>
+                {bus?.assignedConductor && (
+                  <p className="text-xs text-gray-400">{bus.assignedConductor.employeeCode}</p>
+                )}
               </div>
             </div>
           </div>
+
+          {/* Staff Assignment Status */}
+          {(!bus?.assignedDriver || !bus?.assignedConductor) && (
+            <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-center">
+                <AlertCircle className="w-4 h-4 text-yellow-600 mr-2" />
+                <p className="text-xs text-yellow-800">
+                  {!bus?.assignedDriver && !bus?.assignedConductor 
+                    ? 'No staff assigned' 
+                    : !bus?.assignedDriver 
+                      ? 'Driver not assigned' 
+                      : 'Conductor not assigned'
+                  }
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="space-y-2 mt-4 pt-4 border-t">
@@ -1801,6 +1873,27 @@ const BusCard = ({ bus, liveData, onEdit, onDelete, onView, onSelect, isSelected
               >
                 <Route className="w-3 h-3" />
                 Assign Route
+              </button>
+            )}
+          </div>
+
+          {/* Staff Assignment Buttons */}
+          <div className="flex items-center gap-2">
+            {(!bus?.assignedDriver || !bus?.assignedConductor) ? (
+              <button
+                onClick={() => onAssignStaff && onAssignStaff(bus._id)}
+                className="flex-1 px-3 py-1 bg-blue-50 text-blue-600 rounded text-sm hover:bg-blue-100 flex items-center justify-center gap-1"
+              >
+                <UserPlus className="w-3 h-3" />
+                Assign Staff
+              </button>
+            ) : (
+              <button
+                onClick={() => onUnassignStaff && onUnassignStaff(bus._id)}
+                className="flex-1 px-3 py-1 bg-red-50 text-red-600 rounded text-sm hover:bg-red-100 flex items-center justify-center gap-1"
+              >
+                <UserX className="w-3 h-3" />
+                Unassign Staff
               </button>
             )}
           </div>

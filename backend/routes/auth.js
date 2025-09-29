@@ -120,8 +120,41 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // OPTIMIZED: Single lean query for fastest response
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password').lean();
+    const normalizedEmail = email.toLowerCase();
+    
+    // Check for depot email pattern: {depotname}-depot@yatrik.com
+    const depotEmailPattern = /^[a-z0-9]+-depot@yatrik\.com$/;
+    const isDepotEmail = depotEmailPattern.test(normalizedEmail);
+    
+    let user = null;
+    
+    if (isDepotEmail) {
+      // Try to find depot user first
+      const depotUser = await DepotUser.findOne({ email: normalizedEmail }).select('+password').lean();
+      if (depotUser) {
+        // Convert depot user to user format for consistency
+        user = {
+          _id: depotUser._id,
+          name: depotUser.username,
+          email: depotUser.email,
+          password: depotUser.password,
+          role: depotUser.role || 'depot_manager',
+          status: depotUser.status,
+          depotId: depotUser.depotId,
+          depotCode: depotUser.depotCode,
+          depotName: depotUser.depotName,
+          permissions: depotUser.permissions,
+          lastLogin: depotUser.lastLogin,
+          isDepotUser: true
+        };
+      }
+    }
+    
+    // If not found as depot user or not depot email, try regular user
+    if (!user) {
+      user = await User.findOne({ email: normalizedEmail }).select('+password').lean();
+    }
+    
     if (!user) {
       return res.status(401).json({ 
         success: false,
@@ -150,25 +183,57 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // OPTIMIZED: Generate token immediately
+    // OPTIMIZED: Generate token immediately with depot-specific data
+    const tokenPayload = {
+      userId: user._id, 
+      role: (user.role || 'passenger').toUpperCase(), 
+      name: user.name, 
+      email: user.email
+    };
+    
+    // Add depot-specific information if it's a depot user
+    if (user.isDepotUser) {
+      tokenPayload.depotId = user.depotId;
+      tokenPayload.depotCode = user.depotCode;
+      tokenPayload.depotName = user.depotName;
+      tokenPayload.permissions = user.permissions;
+      tokenPayload.isDepotUser = true;
+    }
+    
     const token = jwt.sign(
-      { userId: user._id, role: (user.role || 'passenger').toUpperCase(), name: user.name, email: user.email },
+      tokenPayload,
       process.env.JWT_SECRET || 'secret',
       { expiresIn: '7d' }
     );
 
     // OPTIMIZED: Reset login attempts and update last login in background
-    User.findByIdAndUpdate(user._id, { 
-      loginAttempts: 0, 
-      lastLogin: new Date() 
-    }).catch(err => console.warn('Background login update failed:', err));
+    if (user.isDepotUser) {
+      // Update depot user
+      DepotUser.findByIdAndUpdate(user._id, { 
+        loginAttempts: 0, 
+        lastLogin: new Date() 
+      }).catch(err => console.warn('Background depot user login update failed:', err));
+    } else {
+      // Update regular user
+      User.findByIdAndUpdate(user._id, { 
+        loginAttempts: 0, 
+        lastLogin: new Date() 
+      }).catch(err => console.warn('Background login update failed:', err));
+    }
 
     // OPTIMIZED: Return response immediately for fastest login
     const { password: _removed, ...safeUser } = user;
+    
+    // Ensure depot-specific data is included in response
+    const responseUser = {
+      ...safeUser,
+      role: user.role || 'passenger'
+    };
+    
     res.json({ 
       success: true,
       token, 
-      user: safeUser 
+      user: responseUser 
     });
 
     // OPTIMIZED: Queue login notification email in background (non-blocking)
@@ -388,7 +453,29 @@ router.get('/me', async (req, res) => {
     }
 
     const payload = jwt.verify(token, process.env.JWT_SECRET || 'secret');
-    const user = await User.findById(payload.userId).select('-password');
+    
+    // Check if it's a depot user based on token payload
+    let user = null;
+    if (payload.isDepotUser) {
+      user = await DepotUser.findById(payload.userId).select('-password');
+      if (user) {
+        // Convert depot user to standard format
+        user = {
+          _id: user._id,
+          name: user.username,
+          email: user.email,
+          role: user.role || 'depot_manager',
+          depotId: user.depotId,
+          depotCode: user.depotCode,
+          depotName: user.depotName,
+          permissions: user.permissions,
+          status: user.status,
+          isDepotUser: true
+        };
+      }
+    } else {
+      user = await User.findById(payload.userId).select('-password');
+    }
     
     if (!user) {
       return res.status(401).json({ 
@@ -405,8 +492,12 @@ router.get('/me', async (req, res) => {
           name: user.name, 
           email: user.email,
           role: user.role, 
-          depotId: user.depotId || null, 
-          status: user.status
+          depotId: user.depotId || null,
+          depotCode: user.depotCode || null,
+          depotName: user.depotName || null,
+          permissions: user.permissions || null,
+          status: user.status,
+          isDepotUser: user.isDepotUser || false
         } 
       }
     });

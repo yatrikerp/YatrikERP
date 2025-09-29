@@ -24,7 +24,7 @@ const AdminFarePolicy = () => {
   const [formData, setFormData] = useState({
     busType: '',
     routeType: '',
-    baseFarePerKm: 0,
+    ratePerKm: 0,
     minimumFare: 0,
     maximumFare: 0,
     distanceBrackets: [
@@ -40,16 +40,12 @@ const AdminFarePolicy = () => {
     isActive: true
   });
 
-  useEffect(() => {
-    fetchFarePolicies();
-  }, [fetchFarePolicies]);
-
   const fetchFarePolicies = useCallback(async () => {
     try {
       setLoading(true);
       console.log('💰 Fetching fare policies...');
       
-      const response = await fetch('/api/fare-policy', {
+      const response = await fetch('/api/admin/fare-policies', {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       
@@ -127,6 +123,9 @@ const AdminFarePolicy = () => {
     }
   }, []);
 
+  useEffect(() => {
+    fetchFarePolicies();
+  }, [fetchFarePolicies]);
 
   const initializeDefaultPolicies = async () => {
     try {
@@ -151,7 +150,7 @@ const AdminFarePolicy = () => {
       setLoading(true);
       console.log('💰 Creating fare policy:', formData);
       
-      const response = await fetch('/api/fare-policy', {
+      const response = await fetch('/api/admin/fare-policies', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -184,7 +183,7 @@ const AdminFarePolicy = () => {
       setLoading(true);
       console.log('💰 Updating fare policy:', editingPolicy._id, formData);
       
-      const response = await fetch(`/api/fare-policy/${editingPolicy._id}`, {
+      const response = await fetch(`/api/admin/fare-policies/${editingPolicy._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -219,7 +218,7 @@ const AdminFarePolicy = () => {
       setLoading(true);
       console.log('💰 Deleting fare policy:', policyId);
       
-      const response = await fetch(`/api/fare-policy/${policyId}`, {
+      const response = await fetch(`/api/admin/fare-policies/${policyId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
@@ -244,7 +243,7 @@ const AdminFarePolicy = () => {
     setFormData({
       busType: '',
       routeType: '',
-      baseFarePerKm: 0,
+      ratePerKm: 0,
       minimumFare: 0,
       maximumFare: 0,
       distanceBrackets: [
@@ -292,7 +291,7 @@ const AdminFarePolicy = () => {
   });
 
   const calculateTotalFare = (policy, distance = 10, isPeakHour = false) => {
-    let total = (policy.baseFarePerKm || 0) * distance;
+    let total = (policy.ratePerKm || 0) * distance;
     
     // Apply minimum fare
     total = Math.max(total, policy.minimumFare || 0);
@@ -364,7 +363,7 @@ const AdminFarePolicy = () => {
                 onClick={async () => {
                   try {
                     console.log('🧪 Testing Fare Policy API...');
-                    const response = await fetch('/api/fare-policy', {
+                    const response = await fetch('/api/admin/fare-policies', {
                       headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
                     });
                     console.log('📡 Fare Policy API response:', response.status);
@@ -499,7 +498,7 @@ const AdminFarePolicy = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-gray-500">Base Rate</p>
-                    <p className="text-lg font-semibold text-gray-900">₹{policy.baseFarePerKm}/km</p>
+                    <p className="text-lg font-semibold text-gray-900">₹{policy.ratePerKm}/km</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500">Minimum Fare</p>

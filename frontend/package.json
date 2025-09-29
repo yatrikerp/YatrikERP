@@ -18,7 +18,7 @@
     "framer-motion": "^10.18.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.2",
-    "lucide-react": "^0.294.0",
+    "lucide-react": "^0.544.0",
     "mapbox-gl": "^3.14.0",
     "qr-scanner": "^1.4.2",
     "qrcode": "^1.5.4",

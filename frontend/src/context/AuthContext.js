@@ -77,6 +77,23 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Invalid user data');
       }
       
+      // Check for depot email pattern to auto-detect depot users
+      const email = (userData.email || '').toLowerCase();
+      const depotEmailPattern = /^[a-z0-9]+-depot@yatrik\.com$/;
+      const isDepotEmail = depotEmailPattern.test(email);
+      
+      // Auto-detect depot user if email matches pattern or isDepotUser flag is set
+      const detectedDepotUser = isDepotEmail || userData.isDepotUser || userData.depotId;
+      
+      console.log('AuthContext - Depot detection:', {
+        email,
+        isDepotEmail,
+        userDataIsDepotUser: userData.isDepotUser,
+        userDataDepotId: userData.depotId,
+        detectedDepotUser,
+        originalIsDepotUser: isDepotUser
+      });
+      
       // Normalize role to handle various formats
       let normalizedRole = userData.role;
       if (typeof normalizedRole === 'string') {
@@ -89,7 +106,8 @@ export const AuthProvider = ({ children }) => {
       
       const normalizedUser = {
         ...userData,
-        role: normalizedRole
+        role: normalizedRole,
+        isDepotUser: detectedDepotUser || isDepotUser
       };
       
       console.log('AuthContext - Normalized user data:', {
@@ -105,11 +123,17 @@ export const AuthProvider = ({ children }) => {
       setUser(normalizedUser);
       
       // OPTIMIZED: Store data in background for fastest response
-      if (isDepotUser) {
+      if (normalizedUser.isDepotUser) {
         // Store depot-specific data
         Promise.all([
           localStorage.setItem('depotToken', token),
-          localStorage.setItem('depotUser', JSON.stringify(normalizedUser))
+          localStorage.setItem('depotUser', JSON.stringify(normalizedUser)),
+          localStorage.setItem('depotInfo', JSON.stringify({
+            depotId: normalizedUser.depotId,
+            depotCode: normalizedUser.depotCode,
+            depotName: normalizedUser.depotName,
+            permissions: normalizedUser.permissions
+          }))
         ]).catch(err => console.warn('Failed to store depot data:', err));
       } else {
         // Store regular user data
