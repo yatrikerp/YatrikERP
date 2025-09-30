@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import QueryProvider from './providers/QueryProvider';
@@ -8,9 +8,7 @@ import RequireAuth from './guards/RequireAuth';
 import AppShell from './components/Layout/AppShell';
 import AdminLayout from './components/Admin/AdminLayout';
 import LandingPage from './pages/LandingPage';
-import TripResults from './pages/TripResults';
-import TripSearch from './components/Common/TripSearch';
-import SearchResults from './pages/SearchResults';
+// Removed legacy TripResults, TripSearch, and SearchResults imports
 import Auth from './pages/Auth';
 import OAuthCallback from './pages/OAuthCallback';
 import ResetPassword from './pages/ResetPassword';
@@ -102,6 +100,17 @@ import AvailableTrips from './pages/passenger/AvailableTrips';
 
 import './index.css';
 
+// Redirect any accidental SPA navigations to /api/* to the backend server logically
+const ApiRedirect = () => {
+  const location = useLocation();
+  useEffect(() => {
+    const backendBase = ((typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_BACKEND_URL) || process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+    const target = `${backendBase}${location.pathname}${location.search}${location.hash}`;
+    try { window.location.replace(target); } catch { window.location.href = target; }
+  }, [location]);
+  return null;
+};
+
 function App() {
   // Initialize cache manager on app startup
   useEffect(() => {
@@ -115,9 +124,10 @@ function App() {
       <Router>
           <Routes>
             {/* Public Routes */}
+            {/* Logical guard: if the SPA ever lands on /api/*, forward to backend */}
+            <Route path="/api/*" element={<ApiRedirect />} />
             <Route path="/" element={<LandingPage />} />
-            <Route path="/search-results" element={<SearchResults />} />
-            <Route path="/trip-search" element={<TripSearch />} />
+            {/* Legacy search routes removed in favor of unified RedBus flow */}
           {/* Use unified Auth page for both login and signup */}
           <Route path="/login" element={<Auth initialMode="login" />} />
           <Route path="/signup" element={<Auth initialMode="signup" />} />

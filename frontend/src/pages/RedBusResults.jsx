@@ -22,6 +22,7 @@ const RedBusResults = () => {
   const navigate = useNavigate();
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [filters, setFilters] = useState({
     priceRange: [0, 2000],
     busType: 'all',
@@ -44,28 +45,32 @@ const RedBusResults = () => {
   const fetchTrips = async () => {
     try {
       setLoading(true);
+      setError('');
       const params = new URLSearchParams({
         from,
         to,
         date
       });
       
-      const response = await apiFetch(`/api/trips/search?${params.toString()}`);
+      const response = await apiFetch(`/api/trips/search?${params.toString()}`, { suppressError: true });
       
-      if (response.ok) {
+      if (response && response.ok) {
         setTrips(response.data.data?.trips || response.data.trips || []);
       } else {
-        console.error('Failed to fetch trips:', response.message);
+        console.error('Failed to fetch trips:', response && response.message);
+        setError((response && response.message) || 'Failed to fetch trips');
       }
     } catch (error) {
       console.error('Error fetching trips:', error);
+      setError('Network error while fetching trips');
     } finally {
       setLoading(false);
     }
   };
 
   const getAmenityIcon = (amenity) => {
-    switch (amenity.toLowerCase()) {
+    const name = String(amenity || '').toLowerCase();
+    switch (name) {
       case 'wifi': return <Wifi className="w-4 h-4" />;
       case 'ac': return <Droplets className="w-4 h-4" />;
       case 'charging': return <Zap className="w-4 h-4" />;
@@ -75,7 +80,8 @@ const RedBusResults = () => {
   };
 
   const getBusTypeColor = (busType) => {
-    switch (busType.toLowerCase()) {
+    const type = String(busType || '').toLowerCase();
+    switch (type) {
       case 'ac_sleeper': return 'bg-blue-100 text-blue-800';
       case 'ac_seater': return 'bg-green-100 text-green-800';
       case 'non_ac_sleeper': return 'bg-orange-100 text-orange-800';
@@ -105,12 +111,14 @@ const RedBusResults = () => {
   };
 
   const handleBookNow = (trip) => {
-    navigate(`/redbus/board-drop/${trip._id}`, {
-      state: { 
-        trip, 
-        searchData: { from, to, date, passengers, bookingForWomen } 
-      }
-    });
+    const token = typeof window !== 'undefined' ? (localStorage.getItem('depotToken') || localStorage.getItem('token')) : null;
+    const nextUrl = `/redbus/board-drop/${trip._id}`;
+    const searchData = new URLSearchParams({ from, to, date, passengers, bookingForWomen: String(bookingForWomen) }).toString();
+    if (!token) {
+      navigate(`/login?next=${encodeURIComponent(`${nextUrl}?${searchData}`)}`);
+      return;
+    }
+    navigate(`${nextUrl}?${searchData}`, { state: { trip } });
   };
 
   const filteredTrips = trips.filter(trip => {
@@ -142,10 +150,39 @@ const RedBusResults = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Searching for buses...</p>
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-6xl mx-auto px-4 py-6">
+          {/* Skeleton header */}
+          <div className="h-6 w-64 bg-gray-200 rounded animate-pulse mb-4" />
+          {/* Skeleton cards */}
+          <div className="space-y-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-3">
+                        <div className="w-12 h-12 bg-gray-200 rounded-lg animate-pulse" />
+                        <div>
+                          <div className="h-4 w-40 bg-gray-200 rounded animate-pulse mb-2" />
+                          <div className="h-3 w-28 bg-gray-200 rounded animate-pulse" />
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-6">
+                        <div className="h-3 w-32 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-3 w-24 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="h-6 w-16 bg-gray-200 rounded animate-pulse mb-2 ml-auto" />
+                      <div className="h-10 w-28 bg-gray-200 rounded animate-pulse ml-auto" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -159,7 +196,7 @@ const RedBusResults = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button
-                onClick={() => navigate('/redbus')}
+                onClick={() => navigate('/')}
                 className="flex items-center space-x-2 text-gray-600 hover:text-gray-900"
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -252,12 +289,16 @@ const RedBusResults = () => {
             </div>
 
             {sortedTrips.length === 0 ? (
-              <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-                <Bus className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No buses found</h3>
-                <p className="text-gray-600 mb-4">
-                  We couldn't find any buses for your selected route and date.
-                </p>
+              <div className="bg-white rounded-lg shadow-sm p-10 text-center">
+                <div className="flex items-center justify-center mb-6">
+                  <div className="relative">
+                    <Bus className="w-16 h-16 text-pink-500 animate-bounce" />
+                    <div className="absolute -inset-2 rounded-full bg-pink-100 animate-ping" />
+                  </div>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">No buses found</h3>
+                {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
+                <p className="text-gray-600 mb-6">Try a different date or route. We update trips continuously.</p>
                 <button
                   onClick={() => navigate('/redbus')}
                   className="bg-pink-600 text-white px-6 py-2 rounded-lg hover:bg-pink-700"

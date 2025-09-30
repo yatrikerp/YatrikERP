@@ -349,71 +349,48 @@ const GoogleMapsRouteTracker = ({
 
   if (!isApiConfigured) {
     return (
-      <div className={`${className} relative`}>
-        {/* OpenStreetMap - Works without API key */}
-        <iframe
-          src={`https://www.openstreetmap.org/export/embed.html?bbox=${(trip?.coordinates?.lng || 76.2711)-0.1},${(trip?.coordinates?.lat || 10.8505)-0.1},${(trip?.coordinates?.lng || 76.2711)+0.1},${(trip?.coordinates?.lat || 10.8505)+0.1}&layer=mapnik&marker=${trip?.coordinates?.lat || 10.8505},${trip?.coordinates?.lng || 76.2711}`}
-          className="w-full h-full border-0 rounded-lg"
-          allowFullScreen
-          loading="lazy"
-          title="Bus Tracking Map"
-        />
-        
-        {/* Map Overlay with Bus Info */}
-        {trip && (
-          <div className="absolute top-4 left-4 bg-white bg-opacity-95 rounded-lg p-4 shadow-lg max-w-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="font-semibold text-gray-900">Live Bus Tracking</span>
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Navigation className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-medium">{trip.busId?.busNumber}</span>
+      <div className={`${className} relative bg-gray-200 flex items-center justify-center rounded-lg`}>
+        <div className="text-center">
+          <MapPin className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-500 mb-2">Google Maps API key required</p>
+          <p className="text-sm text-gray-400">Please configure your Google Maps API key</p>
+          {trip && (
+            <div className="mt-4 p-4 bg-white rounded-lg shadow-lg max-w-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="font-semibold text-gray-900">Bus Information</span>
               </div>
               
-              <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-green-600" />
-                <span className="text-sm text-gray-700">{trip.currentLocation}</span>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <Navigation className="w-4 h-4 text-blue-600" />
+                  <span className="font-medium">{trip.busId?.busNumber || 'Bus #123'}</span>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-green-600" />
+                  <span>{trip.currentLocation || 'Current Location'}</span>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 text-orange-600" />
+                  <span>{trip.currentSpeed || 'Unknown Speed'}</span>
+                </div>
               </div>
               
-              <div className="flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 text-orange-600" />
-                <span className="text-sm text-gray-700">{trip.currentSpeed}</span>
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <p className="text-xs text-gray-500 mb-2">
+                  Coordinates: {trip.coordinates?.lat?.toFixed(4)}, {trip.coordinates?.lng?.toFixed(4)}
+                </p>
+                <button
+                  onClick={openInGoogleMaps}
+                  className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-2"
+                >
+                  Open in Google Maps <ExternalLink className="w-4 h-4" />
+                </button>
               </div>
             </div>
-            
-            <div className="mt-3 pt-3 border-t border-gray-200">
-              <p className="text-xs text-gray-500 mb-2">
-                Coordinates: {trip.coordinates?.lat?.toFixed(4)}, {trip.coordinates?.lng?.toFixed(4)}
-              </p>
-              <button
-                onClick={openInGoogleMaps}
-                className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-2"
-              >
-                Open in Google Maps <ExternalLink className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
-        
-        {/* Map Controls */}
-        <div className="absolute top-4 right-4 bg-white bg-opacity-90 rounded-lg p-2 shadow-lg">
-          <button
-            onClick={openInGoogleMaps}
-            className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-          >
-            <ExternalLink className="w-4 h-4" />
-            Full Map
-          </button>
-        </div>
-        
-        {/* Map Attribution */}
-        <div className="absolute bottom-2 right-2 bg-white bg-opacity-80 rounded px-2 py-1 text-xs text-gray-500">
-          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600">
-            © OpenStreetMap
-          </a>
+          )}
         </div>
       </div>
     );

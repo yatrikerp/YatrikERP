@@ -3276,7 +3276,7 @@ const LiveTracking = ({ buses, tracking, selectedBus, onBusSelect, routes }) => 
 
       {/* Map Container */}
       <div className="flex-1 relative bg-gray-100 rounded-lg overflow-hidden">
-        {/* Placeholder Map - In a real implementation, you would use Mapbox, Google Maps, or Leaflet */}
+        {/* Google Maps Integration - Ready for implementation */}
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center">
             <Map className="w-16 h-16 text-gray-400 mx-auto mb-4" />

@@ -1,254 +1,372 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { apiFetch } from '../../utils/api';
-import { useAuth } from '../../context/AuthContext';
-import { 
-  Bus, 
-  Clock, 
-  MapPin, 
-  Users, 
-  Star,
-  ArrowRight,
-  Wifi,
-  Zap,
-  Coffee,
-  Accessibility,
-  Music,
-  Shield,
-  Heart
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import {
+  MapPin, Clock, Bus, Users, Star,
+  Filter, ArrowRight, Wifi,
+  Snowflake, Tv, RefreshCw, AlertCircle
 } from 'lucide-react';
+import { apiFetch } from '../../utils/api';
 
 const PassengerResults = () => {
+  const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [params] = useSearchParams();
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [filters, setFilters] = useState({
+    busType: 'all',
+    departureTime: 'all',
+    maxPrice: 1000,
+    amenities: []
+  });
+
+  // Get search parameters from URL
+  const searchParams = new URLSearchParams(location.search);
+  const searchCriteria = {
+    from: searchParams.get('from'),
+    to: searchParams.get('to'),
+    date: searchParams.get('date'),
+    passengers: searchParams.get('passengers')
+  };
 
   useEffect(() => {
-    async function loadTrips() {
-      try {
-        setLoading(true);
-        const raw = Object.fromEntries(params.entries());
-        const mapped = new URLSearchParams({
-          from: raw.from || raw.fromCity || '',
-          to: raw.to || raw.toCity || '',
-          date: raw.date || ''
-        });
-        
-        const res = await apiFetch(`/api/trips/search?${mapped.toString()}`);
-        if (res.ok) {
-          setTrips(res.data.data?.trips || res.data.trips || []);
-        } else {
-          setError('Failed to fetch trips');
-        }
-      } catch (err) {
-        console.error('Error fetching trips:', err);
-        setError('Error fetching trips');
-      } finally {
-        setLoading(false);
-      }
+    if (searchCriteria.from && searchCriteria.to && searchCriteria.date) {
+      fetchAvailableTrips();
     }
-    
-    loadTrips();
-  }, [params]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchCriteria.from, searchCriteria.to, searchCriteria.date]);
 
-  const handleBookNow = (trip) => {
-    if (!user) {
-      navigate(`/login?next=/passenger/boarddrop/${trip._id}`);
-      return;
+  const fetchAvailableTrips = async () => {
+    try {
+      setLoading(true);
+
+      // Align with existing backend GET endpoint
+      const params = new URLSearchParams({
+        from: searchCriteria.from || '',
+        to: searchCriteria.to || '',
+        date: searchCriteria.date || ''
+      });
+
+      const response = await apiFetch(`/api/passenger/trips/search?${params.toString()}`);
+
+      if (response && response.ok) {
+        const list = response.data?.data?.trips || response.data?.trips || [];
+        setTrips(Array.isArray(list) ? list : []);
+      } else {
+        console.error('Failed to fetch trips:', response?.message);
+        setTrips([]);
+      }
+    } catch (error) {
+      console.error('Error fetching trips:', error);
+      setTrips([]);
+    } finally {
+      setLoading(false);
     }
-    
-    // Navigate to boarding/dropping point selection
-    navigate(`/passenger/boarddrop/${trip._id}`, {
-      state: { trip }
+  };
+
+  const getFilteredTrips = () => {
+    return trips.filter(trip => {
+      // Bus type filter
+      if (filters.busType !== 'all' && trip.bus?.busType !== filters.busType) {
+        return false;
+      }
+
+      // Price filter
+      if (trip.fare > filters.maxPrice) {
+        return false;
+      }
+
+      // Departure time filter
+      if (filters.departureTime !== 'all') {
+        const hour = parseInt(trip.startTime?.split(':')[0] || '0');
+        switch (filters.departureTime) {
+          case 'early': if (hour >= 12) return false; break;
+          case 'afternoon': if (hour < 12 || hour >= 18) return false; break;
+          case 'evening': if (hour < 18) return false; break;
+          default: break;
+        }
+      }
+
+      return true;
     });
   };
 
-  const getAmenityIcon = (amenity) => {
-    switch (amenity.toLowerCase()) {
-      case 'wifi': return <Wifi className="w-4 h-4" />;
-      case 'charging': return <Zap className="w-4 h-4" />;
-      case 'refreshments': return <Coffee className="w-4 h-4" />;
-      case 'wheelchair': return <Accessibility className="w-4 h-4" />;
-      case 'entertainment': return <Music className="w-4 h-4" />;
-      case 'safety': return <Shield className="w-4 h-4" />;
-      default: return <Star className="w-4 h-4" />;
+  const getBusTypeIcon = (busType) => {
+    switch (busType) {
+      case 'ac': return <Snowflake className="w-4 h-4" />;
+      case 'deluxe': return <Star className="w-4 h-4" />;
+      case 'sleeper': return <Users className="w-4 h-4" />;
+      default: return <Bus className="w-4 h-4" />;
     }
   };
 
+  const getBusTypeName = (busType) => {
+    switch (busType) {
+      case 'ac': return 'AC';
+      case 'deluxe': return 'Deluxe';
+      case 'sleeper': return 'Sleeper';
+      default: return 'Standard';
+    }
+  };
+
+  const formatTime = (timeString) => {
+    if (!timeString) return 'N/A';
+    const [hours, minutes] = timeString.split(':');
+    return `${hours}:${minutes}`;
+  };
+
   const formatDuration = (startTime, endTime) => {
-    const start = new Date(`2000-01-01T${startTime}`);
-    const end = new Date(`2000-01-01T${endTime}`);
-    const diffMs = end - start;
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    return `${diffHours}h ${diffMinutes}m`;
+    if (!startTime || !endTime) return 'N/A';
+
+    const start = new Date(`2000-01-01T${startTime}:00`);
+    const end = new Date(`2000-01-01T${endTime}:00`);
+
+    const diffMinutes = (end - start) / (1000 * 60);
+    const hours = Math.floor(diffMinutes / 60);
+    const minutes = diffMinutes % 60;
+
+    return `${hours}h ${minutes}m`;
+  };
+
+  const handleBookTrip = (trip) => {
+    // Navigate to booking page with trip details
+    navigate(`/passenger/booking/${trip._id}`, {
+      state: { trip, searchCriteria }
+    });
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pink-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 text-lg">Searching for trips...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Searching for available trips...</p>
         </div>
       </div>
     );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-red-600 text-lg mb-4">{error}</div>
-          <button 
-            onClick={() => navigate('/passenger/search')}
-            className="bg-pink-600 text-white px-6 py-2 rounded-lg hover:bg-pink-700"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const filteredTrips = getFilteredTrips();
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-6">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <button 
-              onClick={() => navigate('/passenger/search')}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Available Trips</h1>
+              <p className="text-gray-600">
+                {searchCriteria.from} → {searchCriteria.to} on {new Date(searchCriteria.date).toLocaleDateString()}
+              </p>
+            </div>
+            <button
+              onClick={fetchAvailableTrips}
+              className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors flex items-center gap-2"
             >
-              <ArrowRight className="w-4 h-4 rotate-180" />
-              Back to Search
-            </button>
-            <button 
-              onClick={() => navigate('/passenger/available-trips')}
-              className="flex items-center gap-2 bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 transition-colors text-sm font-medium"
-            >
-              <Bus className="w-4 h-4" />
-              View All Scheduled Trips
+              <RefreshCw className="w-4 h-4" />
+              Refresh
             </button>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">Available Trips</h1>
-          <p className="text-gray-600 mt-2">
-            {params.get('from')} → {params.get('to')} • {new Date(params.get('date')).toDateString()}
-          </p>
         </div>
 
-        {/* Results */}
-        {trips.length > 0 ? (
-          <div className="space-y-6">
-            {trips.map(trip => (
-              <div key={trip._id} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-                <div className="p-6">
-                  <div className="flex items-start justify-between">
-                    {/* Left Side - Trip Details */}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-4 mb-4">
-                        <div className="w-12 h-12 bg-gradient-to-r from-pink-100 to-pink-200 rounded-lg flex items-center justify-center">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Filters Sidebar */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <Filter className="w-5 h-5 mr-2" />
+                Filters
+              </h3>
+
+              <div className="space-y-4">
+                {/* Bus Type Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Bus Type</label>
+                  <select
+                    value={filters.busType}
+                    onChange={(e) => setFilters(prev => ({ ...prev, busType: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="standard">Standard</option>
+                    <option value="deluxe">Deluxe</option>
+                    <option value="ac">AC</option>
+                    <option value="sleeper">Sleeper</option>
+                  </select>
+                </div>
+
+                {/* Departure Time Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Departure Time</label>
+                  <select
+                    value={filters.departureTime}
+                    onChange={(e) => setFilters(prev => ({ ...prev, departureTime: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                  >
+                    <option value="all">Any Time</option>
+                    <option value="early">Early Morning (6 AM - 12 PM)</option>
+                    <option value="afternoon">Afternoon (12 PM - 6 PM)</option>
+                    <option value="evening">Evening (6 PM - 10 PM)</option>
+                  </select>
+                </div>
+
+                {/* Price Range */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Max Price: ₹{filters.maxPrice}
+                  </label>
+                  <input
+                    type="range"
+                    min="100"
+                    max="2000"
+                    step="50"
+                    value={filters.maxPrice}
+                    onChange={(e) => setFilters(prev => ({ ...prev, maxPrice: parseInt(e.target.value) }))}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Results */}
+          <div className="lg:col-span-3">
+            {filteredTrips.length === 0 ? (
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-8 text-center">
+                <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No trips found</h3>
+                <p className="text-gray-600 mb-4">
+                  No buses are available for your selected route and date.
+                </p>
+                <button
+                  onClick={() => navigate('/passenger/search')}
+                  className="px-6 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors"
+                >
+                  Modify Search
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredTrips.map((trip, index) => (
+                  <motion.div
+                    key={trip._id || trip.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2 bg-pink-100 rounded-lg">
                           <Bus className="w-6 h-6 text-pink-600" />
                         </div>
                         <div>
-                          <h3 className="text-xl font-semibold text-gray-900">{trip.routeName}</h3>
-                          <p className="text-gray-600">
-                            {typeof trip.fromCity === 'object' ? trip.fromCity?.city || trip.fromCity?.location || 'Unknown' : trip.fromCity} → 
-                            {typeof trip.toCity === 'object' ? trip.toCity?.city || trip.toCity?.location || 'Unknown' : trip.toCity}
+                          <h3 className="font-semibold text-gray-900">
+                            {trip.route?.routeNumber || trip.routeNumber || 'N/A'}
+                          </h3>
+                          <p className="text-sm text-gray-600">
+                            {trip.route?.routeName || trip.routeName || 'Unknown Route'}
                           </p>
                         </div>
                       </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Clock className="w-4 h-4" />
-                          <span>{trip.startTime} - {trip.endTime}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <MapPin className="w-4 h-4" />
-                          <span>{formatDuration(trip.startTime, trip.endTime)}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Users className="w-4 h-4" />
-                          <span>{trip.availableSeats} seats available</span>
-                        </div>
-                      </div>
-
-                      {/* Amenities */}
-                      {trip.amenities && trip.amenities.length > 0 && (
-                        <div className="flex items-center gap-4 mb-4">
-                          <span className="text-sm text-gray-600">Amenities:</span>
-                          <div className="flex gap-2">
-                            {trip.amenities.map((amenity, index) => (
-                              <div key={index} className="flex items-center gap-1 text-xs text-gray-500">
-                                {getAmenityIcon(amenity)}
-                                <span>{amenity}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Bus Details */}
-                      <div className="text-sm text-gray-500">
-                        <p>Bus Type: {trip.busType || 'AC Sleeper'}</p>
-                        <p>Operator: {trip.operator || 'Kerala State Transport'}</p>
-                      </div>
-                    </div>
-
-                    {/* Right Side - Price and Book Button */}
-                    <div className="flex flex-col items-end gap-4">
                       <div className="text-right">
-                        <div className="text-3xl font-bold text-pink-600">₹{trip.fare}</div>
-                        <div className="text-sm text-gray-500">per seat</div>
+                        <div className="text-2xl font-bold text-pink-600">₹{trip.fare}</div>
+                        <div className="text-sm text-gray-600">per person</div>
                       </div>
-                      
-                      <button 
-                        onClick={() => handleBookNow(trip)}
-                        className="bg-gradient-to-r from-pink-600 to-pink-700 hover:from-pink-700 hover:to-pink-800 text-white px-8 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg"
-                      >
-                        <Heart className="w-5 h-5" />
-                        Book Now
-                      </button>
                     </div>
-                  </div>
-                </div>
 
-                {/* Additional Info */}
-                <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
-                  <div className="flex items-center justify-between text-sm text-gray-600">
-                    <div className="flex items-center gap-4">
-                      <span>Distance: {trip.distanceKm || 'N/A'} km</span>
-                      <span>Capacity: {trip.capacity || 'N/A'}</span>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                      <div className="flex items-center text-sm text-gray-600">
+                        <Clock className="w-4 h-4 mr-2" />
+                        <span>{formatTime(trip.startTime || trip.departureTime)} - {formatTime(trip.endTime || trip.arrivalTime)}</span>
+                      </div>
+
+                      <div className="flex items-center text-sm text-gray-600">
+                        <MapPin className="w-4 h-4 mr-2" />
+                        <span>{formatDuration(trip.startTime || trip.departureTime, trip.endTime || trip.arrivalTime)}</span>
+                      </div>
+
+                      <div className="flex items-center text-sm text-gray-600">
+                        <Users className="w-4 h-4 mr-2" />
+                        <span>{trip.bookedSeats || 0}/{trip.capacity || trip.totalSeats || 0} seats</span>
+                      </div>
+
+                      <div className="flex items-center text-sm text-gray-600">
+                        {getBusTypeIcon(trip.bus?.busType || trip.busType)}
+                        <span className="ml-2">{getBusTypeName(trip.bus?.busType || trip.busType)}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                      <span>{trip.rating || '4.5'} ({trip.totalRatings || '128'} reviews)</span>
+
+                    {/* Bus Amenities */}
+                    {trip.bus?.amenities && trip.bus.amenities.length > 0 && (
+                      <div className="flex items-center space-x-4 mb-4">
+                        {trip.bus.amenities.includes('wifi') && (
+                          <div className="flex items-center text-sm text-gray-600">
+                            <Wifi className="w-4 h-4 mr-1" />
+                            <span>WiFi</span>
+                          </div>
+                        )}
+                        {trip.bus.amenities.includes('ac') && (
+                          <div className="flex items-center text-sm text-gray-600">
+                            <Snowflake className="w-4 h-4 mr-1" />
+                            <span>AC</span>
+                          </div>
+                        )}
+                        {trip.bus.amenities.includes('tv') && (
+                          <div className="flex items-center text-sm text-gray-600">
+                            <Tv className="w-4 h-4 mr-1" />
+                            <span>TV</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Route Stops Preview */}
+                    {trip.route?.stops && trip.route.stops.length > 0 && (
+                      <div className="mb-4">
+                        <p className="text-sm text-gray-600 mb-2">Route stops:</p>
+                        <div className="flex items-center space-x-2 text-xs text-gray-500">
+                          <span>{trip.route.startingPoint?.city}</span>
+                          <ArrowRight className="w-3 h-3" />
+                          <span className="truncate max-w-xs">
+                            {trip.route.stops.slice(0, 2).map(stop => stop.stopName).join(' → ')}
+                            {trip.route.stops.length > 2 && ' ...'}
+                          </span>
+                          <ArrowRight className="w-3 h-3" />
+                          <span>{trip.route.endingPoint?.city}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="text-sm text-gray-600">
+                          <span className="font-medium">Bus:</span> {trip.bus?.busNumber || 'N/A'}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          <span className="font-medium">Available:</span> {trip.availableSeats || 0} seats
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <button className="px-4 py-2 text-pink-600 border border-pink-600 rounded-lg hover:bg-pink-50 transition-colors">
+                          View Details
+                        </button>
+                        <button
+                          onClick={() => handleBookTrip(trip)}
+                          className="px-6 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors"
+                        >
+                          Book Now
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  </motion.div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        ) : (
-          <div className="text-center py-12">
-            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Bus className="w-12 h-12 text-gray-400" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No trips found</h3>
-            <p className="text-gray-600 mb-6">We couldn't find any trips for your search criteria.</p>
-            <button 
-              onClick={() => navigate('/passenger/search')}
-              className="bg-pink-600 text-white px-6 py-3 rounded-lg hover:bg-pink-700 transition-colors"
-            >
-              Search Again
-            </button>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

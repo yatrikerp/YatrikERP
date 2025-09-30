@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Bus, Clock, MapPin, Phone, Star } from 'lucide-react';
@@ -20,6 +20,7 @@ import BusTrackingModal from '../components/Common/BusTrackingModal';
 import './landing.css';
 import heroBus from '../assets/hero-bus.png';
 import { useAuth } from '../context/AuthContext';
+import { apiFetch } from '../utils/api';
 
 const LandingPage = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -61,13 +62,31 @@ const LandingPage = () => {
     }
   };
 
-  const popularRoutes = [
-    { from: 'Kochi', to: 'Thiruvananthapuram', frequency: 'Every 2 hours', fare: '₹350' },
-    { from: 'Kozhikode', to: 'Kochi', frequency: 'Every 3 hours', fare: '₹280' },
-    { from: 'Bangalore', to: 'Mysore', frequency: 'Every 45 mins', fare: '₹180' },
-    { from: 'Chennai', to: 'Pondicherry', frequency: 'Every 2 hours', fare: '₹120' },
-    { from: 'Hyderabad', to: 'Warangal', frequency: 'Every 1 hour', fare: '₹100' },
-  ];
+  const [popularRoutes, setPopularRoutes] = useState([]);
+
+  // Fetch live popular routes and refresh periodically
+  useEffect(() => {
+    let isMounted = true;
+    const fetchPopular = async () => {
+      const res = await apiFetch('/api/routes/popular', { method: 'GET', suppressError: true });
+      if (!isMounted) return;
+      if (res && res.ok) {
+        // API returns { success: true, data: [...] }
+        if (res.data && Array.isArray(res.data.data)) {
+          setPopularRoutes(res.data.data);
+          return;
+        }
+        // Fallback if endpoint returns an array directly
+        if (Array.isArray(res.data)) {
+          setPopularRoutes(res.data);
+        }
+      }
+    };
+
+    fetchPopular();
+    const intervalId = setInterval(fetchPopular, 60000); // refresh every 60s
+    return () => { isMounted = false; clearInterval(intervalId); };
+  }, []);
 
   const serviceAlerts = [
     { type: 'info', message: 'New Kerala routes added: Kochi to Thiruvananthapuram, Kozhikode to Kochi' },

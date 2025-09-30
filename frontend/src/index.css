@@ -4,8 +4,7 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700;800&display=swap');
 
-/* Leaflet CSS - Using CDN */
-@import url('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+/* Google Maps integration - No additional CSS needed */
 
 body {
   margin: 0;

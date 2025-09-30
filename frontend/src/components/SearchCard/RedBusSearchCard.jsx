@@ -208,14 +208,8 @@ const RedBusSearchCard = ({ onSearchResults, showResults = false }) => {
         }
       }
 
-      // Navigate to appropriate results page based on authentication
-      if (token) {
-        // User is logged in, go to passenger results
-        navigate(`/passenger/results?${queryParams.toString()}`);
-      } else {
-        // User is not logged in, go to public results page
-        navigate(`/search-results?${queryParams.toString()}`);
-      }
+      // For consistent experience with Popular Routes, send to RedBus-style results
+      navigate(`/redbus-results?${queryParams.toString()}`);
       
     } catch (error) {
       console.error('Search error:', error);

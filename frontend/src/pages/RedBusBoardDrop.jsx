@@ -5,11 +5,17 @@ import { apiFetch } from '../utils/api';
 
 const RedBusBoardDrop = () => {
   const { tripId } = useParams();
-  const { state } = useLocation();
+  const { state, search } = useLocation();
   const navigate = useNavigate();
   
+  const params = new URLSearchParams(search || '');
   const trip = state?.trip || {};
-  const searchData = state?.searchData || {};
+  const searchData = state?.searchData || {
+    from: params.get('from') || '',
+    to: params.get('to') || '',
+    date: params.get('date') || '',
+    passengers: params.get('passengers') || '1'
+  };
   
   const [boardingPoint, setBoardingPoint] = useState(null);
   const [dropPoint, setDropPoint] = useState(null);

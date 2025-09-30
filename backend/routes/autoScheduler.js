@@ -1056,5 +1056,94 @@ router.delete('/clear', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/auto-scheduler/continuous
+ * Start continuous auto-scheduling that runs every few minutes
+ */
+router.post('/continuous', async (req, res) => {
+  try {
+    console.log('🚀 Starting continuous auto-scheduling...');
+
+    const results = await AutoScheduler.runContinuousScheduling();
+
+    res.json({
+      success: true,
+      message: 'Continuous auto-scheduling completed successfully',
+      data: results,
+      summary: {
+        scheduledBuses: results.scheduledBuses,
+        totalBuses: results.totalBuses,
+        totalTrips: results.totalTrips,
+        successRate: `${((results.scheduledBuses / results.totalBuses) * 100).toFixed(1)}%`
+      }
+    });
+
+  } catch (error) {
+    console.error('Continuous scheduling error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Continuous scheduling failed',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/auto-scheduler/mass-schedule-kerala
+ * Mass schedule Kerala routes for a specific date
+ */
+router.post('/mass-schedule-kerala', async (req, res) => {
+  try {
+    const {
+      date,
+      maxTripsPerRoute = 4,
+      timeGap = 30,
+      autoAssignCrew = true,
+      autoAssignBuses = true,
+      generateReports = true
+    } = req.body;
+
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        message: 'Date is required'
+      });
+    }
+
+    const targetDate = new Date(date);
+    if (isNaN(targetDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format'
+      });
+    }
+
+    console.log(`🚌 Starting mass scheduling for Kerala on ${targetDate.toDateString()}`);
+
+    const results = await AutoScheduler.massSchedule({
+      date: targetDate,
+      maxTripsPerRoute,
+      timeGap,
+      autoAssignCrew,
+      autoAssignBuses,
+      region: 'KERALA'
+    });
+
+    res.json({
+      success: true,
+      message: 'Kerala mass scheduling completed successfully',
+      data: results
+    });
+
+  } catch (error) {
+    console.error('Kerala mass scheduling error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Kerala mass scheduling failed',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
 

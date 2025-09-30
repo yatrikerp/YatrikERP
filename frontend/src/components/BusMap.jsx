@@ -1,300 +1,245 @@
 import React, { useEffect, useRef, useState } from 'react';
-import * as mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
 import { Bus, Navigation, MapPin, Route } from 'lucide-react';
-
-// Set your Mapbox access token here
-mapboxgl.accessToken = process.env.REACT_APP_MAPBOX_TOKEN || 'YOUR_MAPBOX_TOKEN';
+import { toast } from 'react-hot-toast';
 
 const BusMap = ({ buses = [], tracking = {}, selectedBus, onBusSelect, fullscreen = false }) => {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const markersRef = useRef({});
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapLoadError, setMapLoadError] = useState(false);
+
+  // Load Google Maps API
+  const loadGoogleMapsAPI = () => {
+    if (window.google && window.google.maps) {
+      initializeMap();
+      return;
+    }
+
+    const viteKey = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GOOGLE_MAPS_API_KEY) || '';
+    const craKey = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_GOOGLE_MAPS_API_KEY) || '';
+    const apiKey = viteKey || craKey;
+
+    if (!apiKey) {
+      toast.error('Google Maps API key is required');
+      setMapLoadError(true);
+      return;
+    }
+
+    const existing = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
+    if (existing) {
+      existing.addEventListener('load', () => initializeMap(), { once: true });
+      existing.addEventListener('error', () => {
+        toast.error('Failed to load Google Maps');
+        setMapLoadError(true);
+      }, { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      initializeMap();
+    };
+    script.onerror = () => {
+      toast.error('Failed to load Google Maps. Please check your API key and network connection.');
+      setMapLoadError(true);
+    };
+    document.head.appendChild(script);
+  };
+
+  // Initialize Google Maps
+  const initializeMap = () => {
+    if (!mapContainer.current || map.current) return;
+
+    map.current = new window.google.maps.Map(mapContainer.current, {
+      center: { lat: 20.5937, lng: 78.9629 }, // India center
+      zoom: 5,
+      mapTypeId: window.google.maps.MapTypeId.ROADMAP,
+      styles: [
+        {
+          featureType: 'poi',
+          elementType: 'labels',
+          stylers: [{ visibility: 'off' }]
+        }
+      ]
+    });
+
+    map.current.addListener('tilesloaded', () => {
+      setMapLoaded(true);
+    });
+  };
 
   useEffect(() => {
-    if (map.current || !mapContainer.current) return;
-
-    // Initialize map
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/streets-v12',
-      center: [78.9629, 20.5937], // India center
-      zoom: 5
-    });
-
-    map.current.on('load', () => {
-      setMapLoaded(true);
-      
-      // Add navigation controls
-      map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
-      
-      // Add fullscreen control
-      if (fullscreen) {
-        map.current.addControl(new mapboxgl.FullscreenControl(), 'top-right');
-      }
-
-      // Add geolocate control
-      map.current.addControl(
-        new mapboxgl.GeolocateControl({
-          positionOptions: {
-            enableHighAccuracy: true
-          },
-          trackUserLocation: true,
-          showUserHeading: true
-        }),
-        'top-right'
-      );
-
-      // Add route layer
-      map.current.addSource('routes', {
-        type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: []
-        }
-      });
-
-      map.current.addLayer({
-        id: 'routes',
-        type: 'line',
-        source: 'routes',
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
-        paint: {
-          'line-color': '#1976d2',
-          'line-width': 4,
-          'line-opacity': 0.7
-        }
-      });
-    });
-
+    loadGoogleMapsAPI();
+    
     return () => {
-      map.current?.remove();
-      map.current = null;
+      // Clean up markers
+      Object.values(markersRef.current).forEach(marker => {
+        if (marker.setMap) marker.setMap(null);
+      });
+      markersRef.current = {};
     };
-  }, [fullscreen]);
+  }, []);
 
   // Update bus markers
   useEffect(() => {
-    if (!mapLoaded || !map.current) return;
+    if (!map.current || !mapLoaded) return;
 
+    // Clear existing markers
+    Object.values(markersRef.current).forEach(marker => {
+      if (marker.setMap) marker.setMap(null);
+    });
+    markersRef.current = {};
+
+    // Add new markers
     buses.forEach(bus => {
-      const busTracking = tracking[bus._id];
-      const coordinates = busTracking?.location || bus.lastKnownLocation;
+      const position = tracking[bus._id] || { lat: 10.8505, lng: 76.2711 }; // Default to Kerala
+      
+      const marker = new window.google.maps.Marker({
+        position: { lat: position.lat, lng: position.lng },
+        map: map.current,
+        title: `Bus ${bus.busNumber}`,
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: selectedBus === bus._id ? '#ff4444' : '#1976d2',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 2
+        },
+        animation: window.google.maps.Animation.DROP
+      });
 
-      if (!coordinates?.lat || !coordinates?.lng) return;
+      // Create info window
+      const infoWindow = new window.google.maps.InfoWindow({
+        content: `
+          <div class="p-2">
+            <h3 class="font-semibold text-lg">Bus ${bus.busNumber}</h3>
+            <p class="text-sm text-gray-600">Route: ${bus.route || 'N/A'}</p>
+            <p class="text-sm text-gray-600">Status: ${bus.status || 'Active'}</p>
+            <p class="text-sm text-gray-600">Last Update: ${new Date().toLocaleTimeString()}</p>
+          </div>
+        `
+      });
 
-      const markerId = `bus-${bus._id}`;
-
-      // Create or update marker
-      if (!markersRef.current[markerId]) {
-        // Create custom marker element
-        const el = document.createElement('div');
-        el.className = 'bus-marker';
-        el.innerHTML = createBusMarkerHTML(bus, busTracking);
-
-        const marker = new mapboxgl.Marker(el)
-          .setLngLat([coordinates.lng, coordinates.lat])
-          .setPopup(createBusPopup(bus, busTracking))
-          .addTo(map.current);
-
-        // Add click handler
-        el.addEventListener('click', () => {
-          if (onBusSelect) {
-            onBusSelect(bus);
-          }
-        });
-
-        markersRef.current[markerId] = { marker, element: el, bus };
-      } else {
-        // Update existing marker
-        const { marker, element } = markersRef.current[markerId];
-        marker.setLngLat([coordinates.lng, coordinates.lat]);
-        element.innerHTML = createBusMarkerHTML(bus, busTracking);
-        
-        // Update popup content
-        const popup = marker.getPopup();
-        if (popup) {
-          popup.setHTML(createBusPopupHTML(bus, busTracking));
+      // Add click listener
+      marker.addListener('click', () => {
+        infoWindow.open(map.current, marker);
+        if (onBusSelect) {
+          onBusSelect(bus);
         }
-      }
+      });
 
-      // Update marker appearance based on status
-      const { element } = markersRef.current[markerId];
-      element.className = `bus-marker ${bus.status} ${selectedBus?._id === bus._id ? 'selected' : ''}`;
+      markersRef.current[bus._id] = { marker, infoWindow };
     });
 
-    // Remove markers for buses that no longer exist
-    Object.keys(markersRef.current).forEach(markerId => {
-      const busId = markerId.replace('bus-', '');
-      if (!buses.find(b => b._id === busId)) {
-        markersRef.current[markerId].marker.remove();
-        delete markersRef.current[markerId];
-      }
-    });
+    // Fit map to show all buses
+    if (buses.length > 0) {
+      const bounds = new window.google.maps.LatLngBounds();
+      buses.forEach(bus => {
+        const position = tracking[bus._id] || { lat: 10.8505, lng: 76.2711 };
+        bounds.extend({ lat: position.lat, lng: position.lng });
+      });
+      map.current.fitBounds(bounds);
+    }
   }, [buses, tracking, selectedBus, mapLoaded, onBusSelect]);
 
-  // Center on selected bus
+  // Update marker position for real-time tracking
   useEffect(() => {
-    if (!selectedBus || !map.current) return;
+    Object.entries(tracking).forEach(([busId, position]) => {
+      const markerData = markersRef.current[busId];
+      if (markerData && markerData.marker) {
+        markerData.marker.setPosition({ lat: position.lat, lng: position.lng });
+        
+        // Add animation for movement
+        markerData.marker.setAnimation(window.google.maps.Animation.BOUNCE);
+        setTimeout(() => {
+          markerData.marker.setAnimation(null);
+        }, 1000);
+      }
+    });
+  }, [tracking]);
 
-    const busTracking = tracking[selectedBus._id];
-    const coordinates = busTracking?.location || selectedBus.lastKnownLocation;
-
-    if (coordinates?.lat && coordinates?.lng) {
-      map.current.flyTo({
-        center: [coordinates.lng, coordinates.lat],
-        zoom: 15,
-        duration: 1000
-      });
-    }
-  }, [selectedBus, tracking]);
-
-  const createBusMarkerHTML = (bus, tracking) => {
-    const speed = tracking?.speed || 0;
-    const isMoving = speed > 5;
-    const rotation = tracking?.heading || 0;
-
-    return `
-      <div class="bus-marker-icon ${isMoving ? 'moving' : ''}" style="transform: rotate(${rotation}deg)">
-        <svg width="40" height="40" viewBox="0 0 40 40">
-          <circle cx="20" cy="20" r="18" fill="${getBusColor(bus.status)}" opacity="0.8"/>
-          <text x="20" y="25" text-anchor="middle" fill="white" font-size="12" font-weight="bold">
-            ${bus.busNumber.slice(0, 4)}
-          </text>
-        </svg>
-        ${isMoving ? '<div class="speed-indicator">' + speed + ' km/h</div>' : ''}
-      </div>
-    `;
-  };
-
-  const createBusPopup = (bus, tracking) => {
-    return new mapboxgl.Popup({ offset: 25 })
-      .setHTML(createBusPopupHTML(bus, tracking));
-  };
-
-  const createBusPopupHTML = (bus, tracking) => {
-    return `
-      <div class="bus-popup">
-        <h3 class="font-bold text-lg mb-2">${bus.busNumber}</h3>
-        <div class="space-y-1 text-sm">
-          <p><strong>Registration:</strong> ${bus.registrationNumber}</p>
-          <p><strong>Status:</strong> <span class="status-badge ${bus.status}">${bus.status}</span></p>
-          <p><strong>Driver:</strong> ${bus.driver?.name || 'Not assigned'}</p>
-          <p><strong>Route:</strong> ${bus.currentRoute?.name || 'Not on route'}</p>
-          ${tracking ? `
-            <p><strong>Speed:</strong> ${tracking.speed || 0} km/h</p>
-            <p><strong>Last Update:</strong> ${new Date(tracking.timestamp).toLocaleTimeString()}</p>
-          ` : ''}
-          <p><strong>Fuel Level:</strong> ${bus.fuelLevel || 0}%</p>
-          <p><strong>Occupancy:</strong> ${bus.occupancy || 0}/${bus.capacity}</p>
+  if (mapLoadError) {
+    return (
+      <div className="w-full h-full bg-gray-200 flex items-center justify-center rounded-lg">
+        <div className="text-center">
+          <Bus className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-500 mb-2">Google Maps failed to load</p>
+          <p className="text-sm text-gray-400">Please check your API key configuration</p>
         </div>
       </div>
-    `;
-  };
-
-  const getBusColor = (status) => {
-    switch (status) {
-      case 'active': return '#10b981';
-      case 'maintenance': return '#f59e0b';
-      case 'inactive': return '#ef4444';
-      default: return '#6b7280';
-    }
-  };
+    );
+  }
 
   return (
-    <>
-      <style>
-        {`
-          .bus-marker {
-            cursor: pointer;
-            transition: all 0.3s ease;
-          }
-          
-          .bus-marker:hover {
-            transform: scale(1.1);
-          }
-          
-          .bus-marker.selected {
-            transform: scale(1.2);
-            z-index: 10;
-          }
-          
-          .bus-marker-icon {
-            position: relative;
-            transition: transform 0.3s ease;
-          }
-          
-          .bus-marker-icon.moving {
-            animation: pulse 2s infinite;
-          }
-          
-          @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.7; }
-            100% { opacity: 1; }
-          }
-          
-          .speed-indicator {
-            position: absolute;
-            top: -20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 10px;
-            white-space: nowrap;
-          }
-          
-          .bus-popup {
-            padding: 10px;
-            min-width: 200px;
-          }
-          
-          .status-badge {
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 500;
-          }
-          
-          .status-badge.active {
-            background: #d1fae5;
-            color: #065f46;
-          }
-          
-          .status-badge.maintenance {
-            background: #fef3c7;
-            color: #92400e;
-          }
-          
-          .status-badge.inactive {
-            background: #fee2e2;
-            color: #991b1b;
-          }
-        `}
-      </style>
-      <div 
-        ref={mapContainer} 
-        className={`w-full ${fullscreen ? 'h-full' : 'h-96'} rounded-lg`}
+    <div className={`relative ${fullscreen ? 'fixed inset-0 z-50' : 'w-full h-full'}`}>
+      <div
+        ref={mapContainer}
+        className="w-full h-full"
+        style={{ minHeight: fullscreen ? '100vh' : '400px' }}
       />
       
-      {!mapLoaded && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
+      {/* Map Controls Overlay */}
+      <div className="absolute top-4 right-4 flex flex-col space-y-2">
+        <button
+          onClick={() => {
+            if (map.current) {
+              map.current.setCenter({ lat: 20.5937, lng: 78.9629 });
+              map.current.setZoom(5);
+            }
+          }}
+          className="bg-white p-2 rounded-lg shadow-lg hover:bg-gray-50 transition-colors"
+          title="Reset View"
+        >
+          <Navigation className="w-5 h-5 text-gray-600" />
+        </button>
+        
+        {buses.length > 0 && (
+          <button
+            onClick={() => {
+              if (map.current && buses.length > 0) {
+                const bounds = new window.google.maps.LatLngBounds();
+                buses.forEach(bus => {
+                  const position = tracking[bus._id] || { lat: 10.8505, lng: 76.2711 };
+                  bounds.extend({ lat: position.lat, lng: position.lng });
+                });
+                map.current.fitBounds(bounds);
+              }
+            }}
+            className="bg-white p-2 rounded-lg shadow-lg hover:bg-gray-50 transition-colors"
+            title="Fit All Buses"
+          >
+            <Route className="w-5 h-5 text-gray-600" />
+          </button>
+        )}
+      </div>
+
+      {/* Bus Count Overlay */}
+      <div className="absolute bottom-4 left-4 bg-white p-3 rounded-lg shadow-lg">
+        <div className="flex items-center space-x-2">
+          <Bus className="w-5 h-5 text-blue-600" />
+          <span className="font-semibold">{buses.length} Buses</span>
+        </div>
+        <div className="text-sm text-gray-600 mt-1">
+          {Object.keys(tracking).length} Active
+        </div>
+      </div>
+
+      {/* Loading Overlay */}
+      {!mapLoaded && !mapLoadError && (
+        <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
           <div className="text-center">
-            <MapPin className="w-8 h-8 text-gray-400 mx-auto mb-2 animate-bounce" />
-            <p className="text-gray-600">Loading map...</p>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            <p className="text-gray-600">Loading Google Maps...</p>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
 
 export default BusMap;
-

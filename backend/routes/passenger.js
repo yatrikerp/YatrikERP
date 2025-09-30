@@ -8,6 +8,60 @@ const Route = require('../models/Route');
 const Bus = require('../models/Bus');
 const Depot = require('../models/Depot');
 
+// Public endpoint: search trips for landing page and redbus results
+// Placed BEFORE auth middleware to allow unauthenticated access
+router.get('/trips/search', async (req, res) => {
+  try {
+    const { from, to, date } = req.query;
+
+    const searchDate = date ? new Date(date) : new Date();
+    searchDate.setHours(0, 0, 0, 0);
+    const nextDay = new Date(searchDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    const trips = await Trip.find({
+      serviceDate: { $gte: searchDate, $lt: nextDay },
+      status: { $in: ['scheduled', 'running'] }
+    })
+    .populate('routeId', 'routeName routeNumber startingPoint endingPoint totalDistance baseFare')
+    .populate('busId', 'busNumber busType capacity')
+    .sort({ startTime: 1 })
+    .lean();
+
+    // Optional city filter when from/to provided
+    const filterByCity = (trip) => {
+      if (!from && !to) return true;
+      const fromCity = typeof trip.routeId?.startingPoint === 'object' ? (trip.routeId.startingPoint.city || trip.routeId.startingPoint.location) : trip.routeId?.startingPoint;
+      const toCity = typeof trip.routeId?.endingPoint === 'object' ? (trip.routeId.endingPoint.city || trip.routeId.endingPoint.location) : trip.routeId?.endingPoint;
+      const matchFrom = from ? new RegExp(from, 'i').test(fromCity || '') : true;
+      const matchTo = to ? new RegExp(to, 'i').test(toCity || '') : true;
+      return matchFrom && matchTo;
+    };
+
+    const filtered = trips.filter(filterByCity);
+
+    const items = filtered.map(t => ({
+      _id: t._id,
+      routeName: t.routeId?.routeName || 'Route',
+      routeNumber: t.routeId?.routeNumber || '',
+      startTime: t.startTime,
+      endTime: t.endTime,
+      serviceDate: t.serviceDate,
+      status: t.status,
+      fare: t.fare || t.routeId?.baseFare || 100,
+      capacity: t.capacity,
+      availableSeats: t.availableSeats,
+      bookedSeats: t.bookedSeats,
+      busType: t.busId?.busType || 'ac_seater'
+    }));
+
+    return res.json({ ok: true, data: { trips: items } });
+  } catch (error) {
+    console.error('Public trips search error:', error);
+    return res.status(500).json({ ok: false, message: 'Failed to fetch trips' });
+  }
+});
+
 // Apply authentication to all routes
 router.use(auth);
 

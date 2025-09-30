@@ -1991,6 +1991,44 @@ router.get('/trips', async (req, res) => {
   }
 });
 
+// BULK: Set many trips to 'scheduled' for a date or query
+router.post('/trips/bulk-schedule', async (req, res) => {
+  try {
+    const { date, dateFrom, dateTo, route, depot, ids } = req.body || {};
+
+    const query = {};
+    if (Array.isArray(ids) && ids.length > 0) {
+      query._id = { $in: ids };
+    }
+    if (date) {
+      const d = new Date(date);
+      const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+      const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+      query.serviceDate = { $gte: start, $lte: end };
+    } else if (dateFrom || dateTo) {
+      query.serviceDate = {};
+      if (dateFrom) query.serviceDate.$gte = new Date(dateFrom);
+      if (dateTo) query.serviceDate.$lte = new Date(dateTo);
+    }
+    if (route && route !== 'all') query.routeId = route;
+    if (depot && depot !== 'all') query.depotId = depot;
+
+    // Only update trips that are not cancelled/completed
+    query.status = { $nin: ['cancelled', 'completed'] };
+
+    const result = await Trip.updateMany(query, { $set: { status: 'scheduled' } });
+
+    res.json({
+      success: true,
+      message: 'Trips set to scheduled',
+      data: { matched: result.matchedCount ?? result.n, modified: result.modifiedCount ?? result.nModified }
+    });
+  } catch (error) {
+    console.error('Bulk schedule error:', error);
+    res.status(500).json({ success: false, message: 'Failed to schedule trips', error: error.message });
+  }
+});
+
 // POST /api/admin/trips/assign - Create trip with automatic assignment
 router.post('/trips/assign', async (req, res) => {
   try {
@@ -6105,7 +6143,7 @@ router.get('/buses/analytics', async (req, res) => {
     
     // Calculate analytics
     const totalBuses = buses.length;
-    const activeBuses = buses.filter(b => b.status === 'active').length;
+    const activeBuses = buses.filter(b => b.status === 'active' || b.status === 'assigned').length;
     const maintenanceBuses = buses.filter(b => b.status === 'maintenance').length;
     
     // Calculate utilization (simplified)
@@ -7417,6 +7455,79 @@ router.put('/depots/:id', async (req, res) => {
       message: 'Failed to update depot',
       error: error.message
     });
+  }
+});
+
+// =================================================================
+// Fallback finalize assignments: assign bus/driver/conductor for all scheduled trips on a date
+router.post('/trips/finalize', async (req, res) => {
+  try {
+    const { date } = req.body || {};
+    const serviceDate = date ? new Date(date) : new Date();
+    serviceDate.setHours(0, 0, 0, 0);
+    const nextDate = new Date(serviceDate);
+    nextDate.setDate(nextDate.getDate() + 1);
+
+    const [depots, drivers, conductors, buses] = await Promise.all([
+      Depot.find({ status: 'active', isActive: true }).lean(),
+      User.find({ role: 'driver', status: 'active' }).lean(),
+      User.find({ role: 'conductor', status: 'active' }).lean(),
+      Bus.find({ status: { $in: ['active', 'idle', 'assigned'] } }).populate('depotId').lean()
+    ]);
+
+    const driversByDepot = drivers.reduce((acc, d) => {
+      const k = d.depotId ? d.depotId.toString() : 'unknown';
+      if (!acc[k]) acc[k] = [];
+      acc[k].push(d);
+      return acc;
+    }, {});
+    const conductorsByDepot = conductors.reduce((acc, c) => {
+      const k = c.depotId ? c.depotId.toString() : 'unknown';
+      if (!acc[k]) acc[k] = [];
+      acc[k].push(c);
+      return acc;
+    }, {});
+
+    const trips = await Trip.find({
+      serviceDate: { $gte: serviceDate, $lt: nextDate },
+      status: { $in: ['scheduled'] }
+    }).lean();
+
+    let updated = 0;
+    const ops = [];
+    for (const depot of depots) {
+      const depotId = depot._id.toString();
+      const depotTrips = trips.filter(t => t.depotId?.toString() === depotId);
+      const depotBuses = buses.filter(b => b.depotId && b.depotId._id && b.depotId._id.toString() === depotId);
+      const usedBusIds = new Set();
+      const usedDrivers = new Set();
+      const usedConductors = new Set();
+
+      for (const t of depotTrips) {
+        const bus = depotBuses.find(b => !usedBusIds.has(b._id.toString()));
+        const driver = (driversByDepot[depotId] || drivers).find(d => !usedDrivers.has(d._id.toString()));
+        const conductor = (conductorsByDepot[depotId] || conductors).find(c => !usedConductors.has(c._id.toString()));
+        if (!bus || !driver || !conductor) continue;
+
+        usedBusIds.add(bus._id.toString());
+        usedDrivers.add(driver._id.toString());
+        usedConductors.add(conductor._id.toString());
+
+        ops.push(Trip.findByIdAndUpdate(t._id, { busId: bus._id, driverId: driver._id, conductorId: conductor._id }, { new: false }));
+        ops.push(Bus.findByIdAndUpdate(bus._id, {
+          status: 'assigned',
+          currentTrip: t._id,
+          currentRoute: { routeId: t.routeId, assignedAt: new Date() }
+        }, { new: false }));
+        updated++;
+      }
+    }
+
+    if (ops.length) await Promise.allSettled(ops);
+    return res.json({ success: true, message: 'Finalize complete', data: { tripsUpdated: updated } });
+  } catch (err) {
+    console.error('Admin finalize error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to finalize', error: err.message });
   }
 });
 

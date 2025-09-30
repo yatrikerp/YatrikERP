@@ -23,13 +23,12 @@ const QuickSearch = ({ className = '', compact = false }) => {
   const suggestionTimeoutRef = useRef(null);
   const navigate = useNavigate();
 
-  // Set default date to tomorrow
+  // Set default date to today
   useEffect(() => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const today = new Date();
     setFormData(prev => ({
       ...prev,
-      journeyDate: tomorrow.toISOString().split('T')[0]
+      journeyDate: today.toISOString().split('T')[0]
     }));
   }, []);
 
@@ -128,6 +127,8 @@ const QuickSearch = ({ className = '', compact = false }) => {
       case 'Escape':
         setShowSuggestions(prev => ({ ...prev, [field]: false }));
         setSelectedIndex(prev => ({ ...prev, [field]: -1 }));
+        break;
+      default:
         break;
     }
   };
@@ -319,7 +320,7 @@ const QuickSearch = ({ className = '', compact = false }) => {
         </div>
 
         {/* Date Field */}
-        <div className="search-field">
+        <div className="search-field date-field">
           <label className="search-label">Date</label>
           <div className="input-container">
             <Calendar className="input-icon" />
@@ -361,7 +362,7 @@ const QuickSearch = ({ className = '', compact = false }) => {
         .search-form {
           display: grid;
           gap: 16px;
-          grid-template-columns: 1fr 1fr auto auto;
+          grid-template-columns: 1fr 1fr minmax(220px, auto) auto;
           align-items: end;
           background: white;
           padding: 20px;
@@ -371,10 +372,18 @@ const QuickSearch = ({ className = '', compact = false }) => {
         }
 
         .search-form.compact {
-          grid-template-columns: 1fr 1fr auto auto;
+          grid-template-columns: 1fr 1fr minmax(220px, auto) auto;
           padding: 16px;
           gap: 12px;
         }
+        .date-field .input-container .search-input {
+          width: 100%;
+          min-width: 220px;
+        }
+
+        /* quick date pills removed */
+
+        /* women toggle removed */
 
         .search-field {
           position: relative;

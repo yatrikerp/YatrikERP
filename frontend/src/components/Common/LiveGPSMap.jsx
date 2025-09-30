@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Navigation, Radio, Settings, Play, Pause, Maximize2, Minimize2, Layers, Filter } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import './LiveGPSMap.css';
 
 // Kerala cities and transport hubs with coordinates
@@ -29,360 +30,412 @@ const KERALA_ROUTES = [
     driver: 'Rajesh Kumar',
     conductor: 'Amit Patel',
     currentLocation: { lat: 9.9312, lng: 76.2673 },
-    progress: 0,
-    speed: 45,
-    eta: '3h 45m',
-    stops: ['Kochi Central', 'Alappuzha', 'Kollam', 'Thiruvananthapuram Central']
+    speed: '65 km/h',
+    eta: '2h 30m'
   },
   {
     id: 'KL002',
-    name: 'Kozhikode - Kochi Coastal Route',
+    name: 'Kozhikode - Kochi Express',
     from: 'Kozhikode',
     to: 'Kochi',
     distance: '180 km',
     duration: '3h 30m',
     status: 'active',
     busNumber: 'KL-BUS-002',
-    driver: 'Suresh Singh',
-    conductor: 'Vikram Mehta',
+    driver: 'Suresh Nair',
+    conductor: 'Priya Menon',
     currentLocation: { lat: 11.2588, lng: 75.7804 },
-    progress: 25,
-    speed: 52,
-    eta: '2h 45m',
-    stops: ['Kozhikode Central', 'Thrissur', 'Ernakulam', 'Kochi Central']
+    speed: '70 km/h',
+    eta: '2h 45m'
   },
   {
     id: 'KL003',
-    name: 'Thiruvananthapuram - Kozhikode Mountain Express',
-    from: 'Thiruvananthapuram',
-    to: 'Kozhikode',
-    distance: '380 km',
-    duration: '7h 00m',
-    status: 'active',
+    name: 'Thrissur - Alappuzha Local',
+    from: 'Thrissur',
+    to: 'Alappuzha',
+    distance: '120 km',
+    duration: '2h 15m',
+    status: 'delayed',
     busNumber: 'KL-BUS-003',
-    driver: 'Krishna Reddy',
-    conductor: 'Srinivas Rao',
-    currentLocation: { lat: 8.5241, lng: 76.9366 },
-    progress: 15,
-    speed: 48,
-    eta: '6h 30m',
-    stops: ['Thiruvananthapuram Central', 'Kottayam', 'Thrissur', 'Palakkad', 'Kozhikode Central']
+    driver: 'Vijay Kumar',
+    conductor: 'Sunita Devi',
+    currentLocation: { lat: 10.5276, lng: 76.2144 },
+    speed: '45 km/h',
+    eta: '3h 00m'
   }
 ];
 
-const LiveGPSMap = ({ isFullScreen, onToggleFullScreen }) => {
-  console.log('LiveGPSMap component rendered'); // Debug log
-  
-  const [activeRoutes, setActiveRoutes] = useState(KERALA_ROUTES);
+const LiveGPSMap = ({ isFullscreen = false, onToggleFullscreen }) => {
+  const [isTracking, setIsTracking] = useState(true);
   const [selectedRoute, setSelectedRoute] = useState(null);
-  const [isLive, setIsLive] = useState(true);
-  const [mapView, setMapView] = useState('satellite'); // satellite, terrain, street
-  const [showSettings, setShowSettings] = useState(false);
+  const [mapType, setMapType] = useState('roadmap');
+  const [showFilters, setShowFilters] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
-  const [refreshInterval, setRefreshInterval] = useState(5000);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapLoadError, setMapLoadError] = useState(false);
+  
   const mapRef = useRef(null);
-  const intervalRef = useRef(null);
+  const map = useRef(null);
+  const markersRef = useRef({});
+  const polylinesRef = useRef({});
 
-  // Simulate real-time GPS updates
+  // Load Google Maps API
+  const loadGoogleMapsAPI = () => {
+    if (window.google && window.google.maps) {
+      initializeMap();
+      return;
+    }
+
+    const viteKey = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GOOGLE_MAPS_API_KEY) || '';
+    const craKey = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_GOOGLE_MAPS_API_KEY) || '';
+    const apiKey = viteKey || craKey;
+
+    if (!apiKey) {
+      toast.error('Google Maps API key is required');
+      setMapLoadError(true);
+      return;
+    }
+
+    const existing = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
+    if (existing) {
+      existing.addEventListener('load', () => initializeMap(), { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      initializeMap();
+    };
+    script.onerror = () => {
+      toast.error('Failed to load Google Maps');
+      setMapLoadError(true);
+    };
+    document.head.appendChild(script);
+  };
+
+  // Initialize Google Maps
+  const initializeMap = () => {
+    if (!mapRef.current || map.current) return;
+
+    map.current = new window.google.maps.Map(mapRef.current, {
+      center: { lat: 10.8505, lng: 76.2711 }, // Kerala center
+      zoom: 8,
+      mapTypeId: window.google.maps.MapTypeId.ROADMAP,
+      styles: [
+        {
+          featureType: 'poi',
+          elementType: 'labels',
+          stylers: [{ visibility: 'off' }]
+        }
+      ]
+    });
+
+    map.current.addListener('tilesloaded', () => {
+      setMapLoaded(true);
+      loadRoutes();
+    });
+  };
+
+  // Load and display routes
+  const loadRoutes = () => {
+    if (!map.current) return;
+
+    // Clear existing markers and polylines
+    Object.values(markersRef.current).forEach(marker => {
+      if (marker.setMap) marker.setMap(null);
+    });
+    Object.values(polylinesRef.current).forEach(polyline => {
+      if (polyline.setMap) polyline.setMap(null);
+    });
+    markersRef.current = {};
+    polylinesRef.current = {};
+
+    // Add city markers
+    Object.entries(KERALA_CITIES).forEach(([cityName, coordinates]) => {
+      const marker = new window.google.maps.Marker({
+        position: coordinates,
+        map: map.current,
+        title: cityName,
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          scale: 6,
+          fillColor: '#1976d2',
+          fillOpacity: 0.8,
+          strokeColor: '#ffffff',
+          strokeWeight: 2
+        }
+      });
+
+      const infoWindow = new window.google.maps.InfoWindow({
+        content: `
+          <div class="p-2">
+            <h3 class="font-semibold">${cityName}</h3>
+            <p class="text-sm text-gray-600">${coordinates.state}</p>
+          </div>
+        `
+      });
+
+      marker.addListener('click', () => {
+        infoWindow.open(map.current, marker);
+      });
+
+      markersRef.current[`city_${cityName}`] = { marker, infoWindow };
+    });
+
+    // Add route markers and polylines
+    KERALA_ROUTES.forEach(route => {
+      if (filterStatus !== 'all' && route.status !== filterStatus) return;
+
+      // Bus marker
+      const busMarker = new window.google.maps.Marker({
+        position: route.currentLocation,
+        map: map.current,
+        title: route.busNumber,
+        icon: {
+          path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+          scale: 8,
+          fillColor: route.status === 'active' ? '#4caf50' : route.status === 'delayed' ? '#ff9800' : '#f44336',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 2,
+          rotation: 45 // Rotate arrow to show direction
+        },
+        animation: window.google.maps.Animation.DROP
+      });
+
+      const routeInfoWindow = new window.google.maps.InfoWindow({
+        content: `
+          <div class="p-3">
+            <h3 class="font-semibold text-lg">${route.busNumber}</h3>
+            <p class="text-sm text-gray-600">Route: ${route.name}</p>
+            <p class="text-sm text-gray-600">Driver: ${route.driver}</p>
+            <p class="text-sm text-gray-600">Speed: ${route.speed}</p>
+            <p class="text-sm text-gray-600">ETA: ${route.eta}</p>
+            <p class="text-sm">
+              <span class="px-2 py-1 rounded text-xs ${route.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                ${route.status.toUpperCase()}
+              </span>
+            </p>
+          </div>
+        `
+      });
+
+      busMarker.addListener('click', () => {
+        routeInfoWindow.open(map.current, busMarker);
+        setSelectedRoute(route);
+      });
+
+      markersRef.current[route.id] = { marker: busMarker, infoWindow: routeInfoWindow };
+
+      // Route polyline
+      const fromCity = KERALA_CITIES[route.from];
+      const toCity = KERALA_CITIES[route.to];
+      
+      if (fromCity && toCity) {
+        const polyline = new window.google.maps.Polyline({
+          path: [fromCity, route.currentLocation, toCity],
+          geodesic: true,
+          strokeColor: route.status === 'active' ? '#4caf50' : route.status === 'delayed' ? '#ff9800' : '#f44336',
+          strokeOpacity: 0.6,
+          strokeWeight: 4,
+          map: map.current
+        });
+
+        polylinesRef.current[route.id] = polyline;
+      }
+    });
+
+    // Fit map to show all routes
+    const bounds = new window.google.maps.LatLngBounds();
+    KERALA_ROUTES.forEach(route => {
+      bounds.extend(route.currentLocation);
+    });
+    Object.values(KERALA_CITIES).forEach(coordinates => {
+      bounds.extend(coordinates);
+    });
+    map.current.fitBounds(bounds);
+  };
+
   useEffect(() => {
-    if (isLive) {
-      intervalRef.current = setInterval(() => {
-        setActiveRoutes(prevRoutes => 
-          prevRoutes.map(route => {
-            if (route.status === 'active') {
-              // Simulate movement along route
-              const progress = Math.min(route.progress + Math.random() * 2, 100);
-              const newLat = route.currentLocation.lat + (Math.random() - 0.5) * 0.01;
-              const newLng = route.currentLocation.lng + (Math.random() - 0.5) * 0.01;
-              
-              return {
-                ...route,
-                progress,
-                currentLocation: { lat: newLat, lng: newLng },
-                speed: Math.max(35, Math.min(65, route.speed + (Math.random() - 0.5) * 10)),
-                eta: calculateETA(progress, route.duration)
-              };
-            }
-            return route;
-          })
-        );
-      }, refreshInterval);
+    loadGoogleMapsAPI();
+    
+    return () => {
+      Object.values(markersRef.current).forEach(({ marker }) => {
+        if (marker.setMap) marker.setMap(null);
+      });
+      Object.values(polylinesRef.current).forEach(polyline => {
+        if (polyline.setMap) polyline.setMap(null);
+      });
+      markersRef.current = {};
+      polylinesRef.current = {};
+      if (map.current) {
+        map.current = null;
+      }
+    };
+  }, []);
 
-      return () => clearInterval(intervalRef.current);
+  useEffect(() => {
+    if (mapLoaded) {
+      loadRoutes();
     }
-  }, [isLive, refreshInterval]);
+  }, [filterStatus, mapLoaded]);
 
-  const calculateETA = (progress, duration) => {
-    const remaining = (100 - progress) / 100;
-    const totalMinutes = parseFloat(duration.replace('h', '')) * 60;
-    const remainingMinutes = Math.round(remaining * totalMinutes);
-    const hours = Math.floor(remainingMinutes / 60);
-    const minutes = remainingMinutes % 60;
-    return `${hours}h ${minutes}m`;
-  };
-
-  const toggleLiveUpdates = () => {
-    setIsLive(!isLive);
-  };
-
-  const handleRouteSelect = (route) => {
-    setSelectedRoute(selectedRoute?.id === route.id ? null : route);
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'active': return '#00A86B';
-      case 'delayed': return '#FFB300';
-      case 'maintenance': return '#F44336';
-      default: return '#9E9E9E';
+  const handleMapTypeChange = (type) => {
+    setMapType(type);
+    if (map.current) {
+      const mapTypeId = type === 'satellite' ? 
+        window.google.maps.MapTypeId.SATELLITE : 
+        window.google.maps.MapTypeId.ROADMAP;
+      map.current.setMapTypeId(mapTypeId);
     }
   };
 
-  const getProgressColor = (progress) => {
-    if (progress < 30) return '#F44336';
-    if (progress < 70) return '#FFB300';
-    return '#00A86B';
-  };
+  const filteredRoutes = KERALA_ROUTES.filter(route => 
+    filterStatus === 'all' || route.status === filterStatus
+  );
+
+  if (mapLoadError) {
+    return (
+      <div className={`${isFullscreen ? 'fixed inset-0 z-50 bg-white' : 'w-full h-full'} flex items-center justify-center`}>
+        <div className="text-center">
+          <MapPin className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-500 mb-2">Google Maps failed to load</p>
+          <p className="text-sm text-gray-400">Please check your API key configuration</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`live-gps-container ${isFullScreen ? 'fullscreen' : ''}`}>
-      {/* Header Controls */}
-      <div className="gps-header">
-        <div className="gps-title">
-          <Navigation className="gps-title-icon" />
-          <h2>Live Route Monitoring</h2>
-          <span className={`live-indicator ${isLive ? 'active' : ''}`}>
-            <Radio className="live-icon" />
-            {isLive ? 'LIVE' : 'PAUSED'}
-          </span>
+    <div className={`${isFullscreen ? 'fixed inset-0 z-50 bg-white' : 'w-full h-full'} flex flex-col`}>
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white">
+        <div className="flex items-center space-x-3">
+          <div className="p-2 bg-blue-100 rounded-lg">
+            <Radio className="w-6 h-6 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-lg text-gray-900">Live GPS Tracking</h2>
+            <p className="text-sm text-gray-600">Kerala Bus Network</p>
+          </div>
         </div>
         
-        <div className="gps-controls">
-          <button 
-            className={`control-btn ${isLive ? 'active' : ''}`}
-            onClick={toggleLiveUpdates}
-            title={isLive ? 'Pause Updates' : 'Resume Updates'}
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Filters"
           >
-            {isLive ? <Pause className="control-icon" /> : <Play className="control-icon" />}
+            <Filter className="w-5 h-5" />
           </button>
-          
-          <button 
-            className="control-btn"
-            onClick={() => setMapView(mapView === 'satellite' ? 'terrain' : mapView === 'terrain' ? 'street' : 'satellite')}
-            title="Change Map View"
+          <button
+            onClick={() => handleMapTypeChange(mapType === 'roadmap' ? 'satellite' : 'roadmap')}
+            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Map Type"
           >
-            <Layers className="control-icon" />
+            <Layers className="w-5 h-5" />
           </button>
-          
-          <button 
-            className="control-btn"
-            onClick={() => setShowSettings(!showSettings)}
-            title="Settings"
+          <button
+            onClick={() => setIsTracking(!isTracking)}
+            className={`p-2 rounded-lg transition-colors ${
+              isTracking 
+                ? 'bg-red-100 text-red-600 hover:bg-red-200' 
+                : 'bg-green-100 text-green-600 hover:bg-green-200'
+            }`}
+            title={isTracking ? 'Stop Tracking' : 'Start Tracking'}
           >
-            <Settings className="control-icon" />
+            {isTracking ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
           </button>
-          
-          <button 
-            className="control-btn"
-            onClick={onToggleFullScreen}
-            title={isFullScreen ? 'Exit Fullscreen' : 'Fullscreen'}
+          <button
+            onClick={() => onToggleFullscreen && onToggleFullscreen()}
+            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
           >
-            {isFullScreen ? <Minimize2 className="control-icon" /> : <Maximize2 className="control-icon" />}
+            {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
           </button>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="gps-main">
-        {/* Map Area */}
-        <div className="gps-map-area">
-          <div className="map-container" ref={mapRef}>
-            <div className="map-overlay">
-              <div className="map-type-indicator">
-                {mapView.charAt(0).toUpperCase() + mapView.slice(1)} View
-              </div>
-              
-              {/* India Map Outline */}
-              <div className="india-outline">
-                <svg viewBox="0 0 1000 1000" className="india-svg">
-                  <path 
-                    d="M 200 300 Q 250 250 300 300 Q 350 350 400 300 Q 450 250 500 300 Q 550 350 600 300 Q 650 250 700 300 Q 750 350 800 300 L 800 400 Q 750 450 700 400 Q 650 350 600 400 Q 550 450 500 400 Q 450 350 400 400 Q 350 450 300 400 Q 250 350 200 400 Z" 
-                    fill="rgba(233, 30, 99, 0.1)" 
-                    stroke="rgba(233, 30, 99, 0.3)" 
-                    strokeWidth="2"
-                  />
-                </svg>
-              </div>
-
-              {/* Route Markers */}
-              {activeRoutes.map((route) => (
-                <div 
-                  key={route.id}
-                  className={`route-marker ${selectedRoute?.id === route.id ? 'selected' : ''}`}
-                  style={{
-                    left: `${50 + (route.currentLocation.lng - 70) * 100}%`,
-                    top: `${50 - (route.currentLocation.lat - 20) * 100}%`
-                  }}
-                  onClick={() => handleRouteSelect(route)}
-                >
-                  <div className="marker-pulse"></div>
-                  <div className="marker-icon">
-                    <MapPin className="marker-pin" />
-                  </div>
-                  <div className="marker-info">
-                    <div className="marker-bus">{route.busNumber}</div>
-                    <div className="marker-speed">{route.speed} km/h</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Route Information Panel */}
-        <div className="gps-sidebar">
-          <div className="sidebar-header">
-            <h3>Active Routes</h3>
-            <div className="route-filter">
-              <select 
-                value={filterStatus} 
+      {/* Filters Panel */}
+      {showFilters && (
+        <div className="p-4 bg-gray-50 border-b border-gray-200">
+          <div className="flex items-center space-x-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700">Status Filter:</label>
+              <select
+                value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="filter-select"
+                className="ml-2 px-3 py-1 border border-gray-300 rounded-md text-sm"
               >
                 <option value="all">All Routes</option>
                 <option value="active">Active</option>
                 <option value="delayed">Delayed</option>
-                <option value="maintenance">Maintenance</option>
+                <option value="cancelled">Cancelled</option>
               </select>
-            </div>
-          </div>
-
-          <div className="routes-list">
-            {activeRoutes
-              .filter(route => filterStatus === 'all' || route.status === filterStatus)
-              .map((route) => (
-                <div 
-                  key={route.id}
-                  className={`route-card ${selectedRoute?.id === route.id ? 'selected' : ''}`}
-                  onClick={() => handleRouteSelect(route)}
-                >
-                  <div className="route-header">
-                    <div className="route-name">{route.name}</div>
-                    <div 
-                      className="route-status"
-                      style={{ backgroundColor: getStatusColor(route.status) }}
-                    >
-                      {route.status}
-                    </div>
-                  </div>
-                  
-                  <div className="route-details">
-                    <div className="route-info">
-                      <span className="route-from">{route.from}</span>
-                      <span className="route-arrow">→</span>
-                      <span className="route-to">{route.to}</span>
-                    </div>
-                    
-                    <div className="route-stats">
-                      <div className="stat-item">
-                        <span className="stat-label">Distance:</span>
-                        <span className="stat-value">{route.distance}</span>
-                      </div>
-                      <div className="stat-item">
-                        <span className="stat-label">Speed:</span>
-                        <span className="stat-value">{route.speed} km/h</span>
-                      </div>
-                      <div className="stat-item">
-                        <span className="stat-label">ETA:</span>
-                        <span className="stat-value">{route.eta}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="route-progress">
-                      <div className="progress-bar">
-                        <div 
-                          className="progress-fill"
-                          style={{ 
-                            width: `${route.progress}%`,
-                            backgroundColor: getProgressColor(route.progress)
-                          }}
-                        ></div>
-                      </div>
-                      <span className="progress-text">{Math.round(route.progress)}% Complete</span>
-                    </div>
-                    
-                    <div className="route-crew">
-                      <div className="crew-info">
-                        <span className="crew-label">Driver:</span>
-                        <span className="crew-name">{route.driver}</span>
-                      </div>
-                      <div className="crew-info">
-                        <span className="crew-name">
-                          <span className="crew-label">Conductor:</span>
-                          {route.conductor}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Settings Panel */}
-      {showSettings && (
-        <div className="gps-settings">
-          <div className="settings-header">
-            <h3>GPS Settings</h3>
-            <button 
-              className="close-btn"
-              onClick={() => setShowSettings(false)}
-            >
-              ×
-            </button>
-          </div>
-          
-          <div className="settings-content">
-            <div className="setting-group">
-              <label>Refresh Interval</label>
-              <select 
-                value={refreshInterval} 
-                onChange={(e) => setRefreshInterval(Number(e.target.value))}
-                className="setting-select"
-              >
-                <option value={2000}>2 seconds</option>
-                <option value={5000}>5 seconds</option>
-                <option value={10000}>10 seconds</option>
-                <option value={30000}>30 seconds</option>
-              </select>
-            </div>
-            
-            <div className="setting-group">
-              <label>Map View</label>
-              <select 
-                value={mapView} 
-                onChange={(e) => setMapView(e.target.value)}
-                className="setting-select"
-              >
-                <option value="satellite">Satellite</option>
-                <option value="terrain">Terrain</option>
-                <option value="street">Street</option>
-              </select>
-            </div>
-            
-            <div className="setting-group">
-              <label>Show Route Details</label>
-              <input type="checkbox" defaultChecked className="setting-checkbox" />
-            </div>
-            
-            <div className="setting-group">
-              <label>Enable Alerts</label>
-              <input type="checkbox" defaultChecked className="setting-checkbox" />
             </div>
           </div>
         </div>
       )}
+
+      {/* Map Container */}
+      <div className="flex-1 relative">
+        <div
+          ref={mapRef}
+          className="w-full h-full"
+        />
+        
+        {/* Map Controls */}
+        <div className="absolute top-4 right-4 flex flex-col space-y-2">
+          <button
+            onClick={() => {
+              if (map.current) {
+                map.current.setCenter({ lat: 10.8505, lng: 76.2711 });
+                map.current.setZoom(8);
+              }
+            }}
+            className="bg-white p-2 rounded-lg shadow-lg hover:bg-gray-50 transition-colors"
+            title="Reset View"
+          >
+            <Navigation className="w-5 h-5 text-gray-600" />
+          </button>
+        </div>
+
+        {/* Loading Overlay */}
+        {!mapLoaded && !mapLoadError && (
+          <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+              <p className="text-gray-600">Loading map...</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Status Bar */}
+      <div className="p-4 bg-gray-50 border-t border-gray-200">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+              <span className="text-sm text-gray-600">Active: {filteredRoutes.filter(r => r.status === 'active').length}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+              <span className="text-sm text-gray-600">Delayed: {filteredRoutes.filter(r => r.status === 'delayed').length}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+              <span className="text-sm text-gray-600">Cancelled: {filteredRoutes.filter(r => r.status === 'cancelled').length}</span>
+            </div>
+          </div>
+          <div className="text-sm text-gray-600">
+            Last Updated: {new Date().toLocaleTimeString()}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

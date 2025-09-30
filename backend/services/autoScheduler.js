@@ -32,20 +32,20 @@ class AutoScheduler {
   async scheduleAllBuses(startDate, endDate, options = {}) {
     const startTime = Date.now();
     console.log(`🚌 Starting auto-scheduling for ${startDate} to ${endDate}`);
-    
+
     try {
       // Step 1: Get all active buses grouped by depot
       const busesByDepot = await this.getBusesByDepot();
       console.log(`📊 Found ${Object.keys(busesByDepot).length} depots with buses`);
-      
+
       // Step 2: Get all active routes with schedules
       const routesWithSchedules = await this.getRoutesWithSchedules();
       console.log(`🛣️ Found ${routesWithSchedules.length} active routes`);
-      
+
       // Step 3: Get available drivers and conductors
       const availableCrew = await this.getAvailableCrew(startDate, endDate);
       console.log(`👥 Found ${availableCrew.drivers.length} drivers, ${availableCrew.conductors.length} conductors`);
-      
+
       // Step 4: Process each depot
       const results = {
         totalBuses: 0,
@@ -55,21 +55,21 @@ class AutoScheduler {
         depots: {}
       };
 
-      for (const [depotId, buses] of Object.entries(busesByDepot)) {
-        console.log(`🏢 Processing depot ${depotId} with ${buses.length} buses`);
-        
+      for (const [depotId, depotData] of Object.entries(busesByDepot)) {
+        console.log(`🏢 Processing depot ${depotId} with ${depotData.buses.length} buses`);
+
         const depotResult = await this.scheduleDepotBuses(
-          depotId, 
-          buses, 
-          routesWithSchedules, 
-          availableCrew, 
-          startDate, 
+          depotId,
+          depotData,
+          routesWithSchedules,
+          availableCrew,
+          startDate,
           endDate,
           options
         );
-        
+
         results.depots[depotId] = depotResult;
-        results.totalBuses += buses.length;
+        results.totalBuses += depotData.buses.length;
         results.scheduledBuses += depotResult.scheduledBuses;
         results.failedBuses += depotResult.failedBuses;
         results.totalTrips += depotResult.totalTrips;
@@ -78,11 +78,101 @@ class AutoScheduler {
       const duration = Date.now() - startTime;
       console.log(`✅ Auto-scheduling completed in ${duration}ms`);
       console.log(`📈 Results: ${results.scheduledBuses}/${results.totalBuses} buses scheduled, ${results.totalTrips} trips created`);
-      
+
       return results;
-      
+
     } catch (error) {
       console.error('❌ Auto-scheduling failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Continuous scheduling function - runs every few minutes to schedule new trips
+   */
+  async runContinuousScheduling() {
+    console.log('🚀 Starting continuous auto-scheduling...');
+
+    try {
+      // Get current date and next 7 days
+      const today = new Date();
+      const nextWeek = new Date(today);
+      nextWeek.setDate(nextWeek.getDate() + 7);
+
+      // Run scheduling for the next week
+      const results = await this.scheduleAllBuses(today, nextWeek);
+
+      // Send summary notification
+      await this.sendContinuousSchedulingNotification(results);
+
+      return results;
+
+    } catch (error) {
+      console.error('❌ Continuous scheduling failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mass schedule function for Kerala routes specifically
+   */
+  async massSchedule(options = {}) {
+    const {
+      date,
+      maxTripsPerRoute = 4,
+      timeGap = 30, // minutes
+      autoAssignCrew = true,
+      autoAssignBuses = true,
+      region = 'KERALA'
+    } = options;
+
+    console.log(`🚌 Starting mass scheduling for ${region} on ${date}`);
+
+    try {
+      // Get Kerala routes
+      const keralaRoutes = await this.getKeralaRoutes();
+      console.log(`🛣️ Found ${keralaRoutes.length} Kerala routes`);
+
+      // Get available buses and crew for Kerala depots
+      const keralaDepotIds = keralaRoutes.map(route => route.depot.depotId.toString());
+      const availableCrew = await this.getAvailableCrewForRegion(date, region);
+      const availableBuses = await this.getAvailableBusesForRegion(keralaDepotIds);
+
+      let totalTrips = 0;
+
+      // Process each route
+      for (const route of keralaRoutes) {
+        const routeTrips = await this.scheduleRouteMultipleTimes(
+          route,
+          availableBuses,
+          availableCrew,
+          date,
+          maxTripsPerRoute,
+          timeGap,
+          autoAssignCrew,
+          autoAssignBuses
+        );
+
+        totalTrips += routeTrips.length;
+
+        // Send notifications for each scheduled route
+        if (routeTrips.length > 0) {
+          await this.sendRouteScheduledNotification(route, routeTrips.length, date);
+        }
+      }
+
+      console.log(`✅ Mass scheduling completed: ${totalTrips} trips created for Kerala`);
+
+      return {
+        success: true,
+        totalTrips,
+        region,
+        date,
+        routesProcessed: keralaRoutes.length
+      };
+
+    } catch (error) {
+      console.error('❌ Mass scheduling failed:', error);
       throw error;
     }
   }
@@ -92,7 +182,7 @@ class AutoScheduler {
    */
   async getBusesByDepot() {
     const buses = await Bus.find({ 
-      status: 'active',
+      status: { $in: ['active', 'idle'] }, // Include both active and idle buses
       depotId: { $exists: true }
     }).populate('depotId', 'depotName depotCode').lean();
     
@@ -113,10 +203,10 @@ class AutoScheduler {
    * Get all active routes with their schedules
    */
   async getRoutesWithSchedules() {
+    // Modified to work with existing route structure
     return await Route.find({
       status: 'active',
-      isActive: true,
-      'schedules.isActive': true
+      isActive: true
     }).populate('depot.depotId', 'depotName depotCode').lean();
   }
 
@@ -170,21 +260,20 @@ class AutoScheduler {
    * Schedule buses for a specific depot
    */
   async scheduleDepotBuses(depotId, depotData, routesWithSchedules, availableCrew, startDate, endDate, options) {
-    const depotRoutes = routesWithSchedules.filter(route => 
-      route.depot.depotId.toString() === depotId
-    );
+    // Since routes don't have depot associations, assign routes based on depot location
+    // For now, assign a subset of routes to each depot
+    const depotRoutes = routesWithSchedules.slice(0, Math.min(5, routesWithSchedules.length));
     
     if (depotRoutes.length === 0) {
-      console.log(`⚠️ No routes found for depot ${depotId}`);
+      console.log(`⚠️ No routes available for depot ${depotId}`);
       return { scheduledBuses: 0, failedBuses: depotData.buses.length, totalTrips: 0 };
     }
+    
+    console.log(`✅ Assigned ${depotRoutes.length} routes to depot ${depotData.depot.depotName}`);
 
-    const depotDrivers = availableCrew.drivers.filter(driver => 
-      driver.depotId?.toString() === depotId
-    );
-    const depotConductors = availableCrew.conductors.filter(conductor => 
-      conductor.depotId?.toString() === depotId
-    );
+    // Since crew don't have depot associations, use all available crew
+    const depotDrivers = availableCrew.drivers;
+    const depotConductors = availableCrew.conductors;
 
     let scheduledBuses = 0;
     let failedBuses = 0;
@@ -206,7 +295,8 @@ class AutoScheduler {
           totalTrips += result.value.tripsCreated;
         } else {
           failedBuses++;
-          console.error(`❌ Failed to schedule bus ${batch[index].busNumber}:`, result.reason);
+          const reason = result.reason || result.value?.reason || 'Unknown error';
+          console.error(`❌ Failed to schedule bus ${batch[index].busNumber}:`, reason);
         }
       });
     }
@@ -262,7 +352,7 @@ class AutoScheduler {
       
     } catch (error) {
       console.error(`Error scheduling bus ${bus.busNumber}:`, error);
-      return { success: false, reason: error.message };
+      return { success: false, reason: error.message || error.toString() };
     }
   }
 
@@ -271,17 +361,9 @@ class AutoScheduler {
    */
   findSuitableRoutes(bus, routes) {
     return routes.filter(route => {
-      // Check if route has active schedules
-      if (!route.schedules || route.schedules.length === 0) return false;
-      
-      // Check bus capacity vs route requirements
+      // Simplified filtering - just check basic capacity
       const routeCapacity = this.getRouteCapacityRequirement(route);
-      if (bus.capacity.total < routeCapacity) return false;
-      
-      // Check bus type compatibility
-      if (!this.isBusTypeCompatible(bus.busType, route.features)) return false;
-      
-      return true;
+      return bus.capacity.total >= routeCapacity;
     });
   }
 
@@ -344,7 +426,7 @@ class AutoScheduler {
         availableSeats: bus.capacity.total,
         bookedSeats: 0,
         status: 'scheduled',
-        depotId: route.depot.depotId,
+        depotId: bus.depotId, // Use bus depot instead of route depot
         createdBy: new mongoose.Types.ObjectId(), // System user
         bookingOpen: true,
         cancellationPolicy: {
@@ -414,6 +496,23 @@ class AutoScheduler {
   }
 
   findAvailableSchedule(route, date) {
+    // Modified to create default schedule for routes without schedules
+    if (!route.schedules || route.schedules.length === 0) {
+      // Create a default schedule for the route
+      return {
+        scheduleId: `default_${route._id}`,
+        departureTime: '06:00',
+        arrivalTime: this.calculateArrivalTime('06:00', route.estimatedDuration || 300),
+        frequency: 'daily',
+        isActive: true,
+        fare: {
+          baseFare: route.farePerKm ? route.farePerKm * (route.totalDistance || 100) : 100,
+          perKmRate: route.farePerKm || 2.0
+        },
+        createdBy: 'system'
+      };
+    }
+    
     const dayOfWeek = this.getDayName(date);
     
     return route.schedules.find(schedule => {
@@ -435,6 +534,17 @@ class AutoScheduler {
 
   findAvailableCrewMember(crew, usedCrew, date) {
     return crew.find(member => !usedCrew.has(member._id.toString()));
+  }
+
+  /**
+   * Calculate arrival time based on departure time and duration
+   */
+  calculateArrivalTime(departureTime, durationMinutes) {
+    const [hours, minutes] = departureTime.split(':').map(Number);
+    const totalMinutes = hours * 60 + minutes + durationMinutes;
+    const arrivalHours = Math.floor(totalMinutes / 60) % 24;
+    const arrivalMinutes = totalMinutes % 60;
+    return `${arrivalHours.toString().padStart(2, '0')}:${arrivalMinutes.toString().padStart(2, '0')}`;
   }
 
   calculateFare(route, schedule) {
@@ -485,6 +595,132 @@ class AutoScheduler {
       });
     } catch (error) {
       console.error('Failed to send scheduling notification:', error);
+    }
+  }
+
+  /**
+   * Get Kerala routes specifically
+   */
+  async getKeralaRoutes() {
+    return await Route.find({
+      status: 'active',
+      isActive: true,
+      'depot.depotId': { $exists: true }
+    }).populate('depot.depotId', 'depotName depotCode').lean();
+  }
+
+  /**
+   * Get available crew for a specific region
+   */
+  async getAvailableCrewForRegion(date, region) {
+    const crew = await this.getAvailableCrew(date, new Date(date.getTime() + 24 * 60 * 60 * 1000));
+
+    // Filter crew by region (for Kerala, we can use all crew for now)
+    return crew;
+  }
+
+  /**
+   * Get available buses for specific depots
+   */
+  async getAvailableBusesForRegion(depotIds) {
+    return await Bus.find({
+      status: 'active',
+      depotId: { $in: depotIds },
+      'currentRoute.assignedAt': { $exists: false }
+    }).lean();
+  }
+
+  /**
+   * Schedule a route multiple times in a day
+   */
+  async scheduleRouteMultipleTimes(route, availableBuses, availableCrew, date, maxTrips, timeGap, autoAssignCrew, autoAssignBuses) {
+    const trips = [];
+
+    for (let i = 0; i < maxTrips; i++) {
+      const schedule = this.findAvailableSchedule(route, date);
+      if (!schedule) break;
+
+      // Find available bus, driver, and conductor
+      const bus = this.findAvailableBus(availableBuses, route);
+      const driver = autoAssignCrew ? this.findAvailableCrewMember(availableCrew.drivers, new Set(), date) : null;
+      const conductor = autoAssignCrew ? this.findAvailableCrewMember(availableCrew.conductors, new Set(), date) : null;
+
+      if (autoAssignBuses && !bus) continue;
+      if (autoAssignCrew && (!driver || !conductor)) continue;
+
+      // Create trip
+      const trip = await this.createTrip(bus, route, schedule, driver, conductor, date);
+      if (trip) {
+        trips.push(trip);
+
+        // Update schedule time for next trip
+        schedule.departureTime = this.addMinutesToTime(schedule.departureTime, timeGap);
+        schedule.arrivalTime = this.addMinutesToTime(schedule.arrivalTime, timeGap);
+      }
+    }
+
+    return trips;
+  }
+
+  /**
+   * Find available bus for a route
+   */
+  findAvailableBus(availableBuses, route) {
+    return availableBuses.find(bus => {
+      // Check capacity and type compatibility
+      return bus.capacity.total >= this.getRouteCapacityRequirement(route) &&
+             this.isBusTypeCompatible(bus.busType, route.features);
+    });
+  }
+
+  /**
+   * Add minutes to time string
+   */
+  addMinutesToTime(timeString, minutes) {
+    const [hours, mins] = timeString.split(':').map(Number);
+    const totalMinutes = hours * 60 + mins + minutes;
+    const newHours = Math.floor(totalMinutes / 60) % 24;
+    const newMins = totalMinutes % 60;
+    return `${newHours.toString().padStart(2, '0')}:${newMins.toString().padStart(2, '0')}`;
+  }
+
+  /**
+   * Send continuous scheduling notification
+   */
+  async sendContinuousSchedulingNotification(results) {
+    try {
+      await NotificationService.createSystemNotification({
+        title: 'Continuous Auto-Scheduling Completed',
+        message: `Auto-scheduling completed: ${results.scheduledBuses}/${results.totalBuses} buses scheduled, ${results.totalTrips} trips created across ${Object.keys(results.depots).length} depots`,
+        type: 'scheduling',
+        priority: 'high',
+        relatedEntity: {
+          type: 'system',
+          id: 'continuous-scheduling'
+        }
+      });
+    } catch (error) {
+      console.error('Failed to send continuous scheduling notification:', error);
+    }
+  }
+
+  /**
+   * Send route scheduled notification
+   */
+  async sendRouteScheduledNotification(route, tripsCount, date) {
+    try {
+      await NotificationService.createSystemNotification({
+        title: 'Route Scheduled',
+        message: `Route ${route.routeName} (${route.routeNumber}) has been scheduled for ${tripsCount} trips on ${date.toDateString()}`,
+        type: 'scheduling',
+        priority: 'medium',
+        relatedEntity: {
+          type: 'route',
+          id: route._id
+        }
+      });
+    } catch (error) {
+      console.error('Failed to send route scheduled notification:', error);
     }
   }
 }

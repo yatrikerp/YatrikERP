@@ -89,6 +89,7 @@ const DepotDashboard = () => {
   const [schedulesData, setSchedulesData] = useState([]);
   const [reportsData, setReportsData] = useState({});
   const [depotData, setDepotData] = useState({});
+  const [dashboardData, setDashboardData] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date().toLocaleTimeString());
   const [activeSection, setActiveSection] = useState('dashboard');
   const [isNavigating, setIsNavigating] = useState(false);
@@ -314,16 +315,20 @@ const DepotDashboard = () => {
     try {
       const response = await reportsApiService.getDashboardData();
       // Handle different response structures
-      let reportsData = {};
-      if (response.success && response.data) {
-        reportsData = response.data;
-      } else if (response.data) {
-        reportsData = response.data;
+      let payload = null;
+      if (response?.success && response?.data) {
+        payload = response.data;
+      } else if (response?.data) {
+        payload = response.data;
+      } else if (response) {
+        payload = response;
       }
-      setReportsData(reportsData);
+      setReportsData(payload || {});
+      setDashboardData(payload || null);
     } catch (error) {
       console.error('Error fetching reports data:', error);
       setReportsData({});
+      setDashboardData(null);
     }
   };
 
@@ -348,29 +353,45 @@ const DepotDashboard = () => {
   const fetchAllData = useCallback(async () => {
     try {
       setLoading(true);
-    
-      // Fetch all data in parallel
+      
+      // Fetch core dashboard + depot info first for KPIs
+      const [dashboardRes, depotInfoRes] = await Promise.all([
+        reportsApiService.getDashboardData(),
+        depotApiService.getDepotInfo()
+      ]);
+
+      const dashboardPayload = (dashboardRes?.data ?? dashboardRes) || {};
+      const depotInfoPayload = (depotInfoRes?.data ?? depotInfoRes) || {};
+      setDashboardData(dashboardPayload);
+      setDepotData(depotInfoPayload);
+      // Reflect depot header info immediately
+      if (depotInfoPayload && (depotInfoPayload.name || depotInfoPayload.depotName)) {
+        setDepotInfo({
+          name: depotInfoPayload.name || depotInfoPayload.depotName || 'Yatrik Depot',
+          location: depotInfoPayload.location?.city || depotInfoPayload.location || 'Kerala, India',
+          manager: depotInfoPayload.manager?.name || depotInfoPayload.manager || 'Depot Manager'
+        });
+      }
+
+      // Fire-and-forget loading of section data
       await Promise.all([
         fetchFleetData(),
         fetchRoutesData(),
         fetchTripsData(),
         fetchBookingsData(),
         fetchStaffData(),
-        fetchSchedulesData(),
-        fetchReportsData(),
-        fetchDepotData()
+        fetchSchedulesData()
       ]);
 
-      // Update depot stats from API data with fallback values
+      // Prefer backend KPIs when available
+      const stats = dashboardPayload?.stats || {};
       setDepotStats({
-        totalBuses: fleetData.length || 6,
-        activeTrips: tripsData.filter(trip => trip.status === 'running').length || 3,
-        todayRevenue: depotData.revenue || 12500,
-        totalRoutes: routesData.length || 12,
-        todayBookings: bookingsData.filter(booking => 
-          new Date(booking.createdAt).toDateString() === new Date().toDateString()
-        ).length || 45,
-        totalBookings: bookingsData.length || 156
+        totalBuses: Number(stats.totalBuses) || fleetData.length || 0,
+        activeTrips: Number(stats.activeTrips) || (tripsData.filter(trip => trip.status === 'running').length) || 0,
+        todayRevenue: Number(stats.todayRevenue) || 0,
+        totalRoutes: Number(stats.totalRoutes) || routesData.length || 0,
+        todayBookings: Number(stats.todayBookings) || 0,
+        totalBookings: Number(stats.totalBookings) || bookingsData.length || 0
       });
 
       setSystemHealth({
@@ -836,7 +857,92 @@ const DepotDashboard = () => {
                   </div>
                 </div>
 
-                {/* System Health */}
+                {/* KPI Cards (moved up for primary focus) */}
+                <div className="kpi-section">
+                  <div className="kpi-grid">
+                    <div className="kpi-card">
+                      <div className="kpi-content">
+                        <div className="kpi-header">
+                          <h3>{depotStats.totalBuses}</h3>
+                          <div className="kpi-trend">
+                            <svg className="trend-icon up" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                            </svg>
+                            <span>24 active, 0 new today</span>
+                          </div>
+                        </div>
+                        <p className="kpi-label">Total Buses</p>
+                      </div>
+                      <div className="kpi-icon blue">
+                        <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    <div className="kpi-card">
+                      <div className="kpi-content">
+                        <div className="kpi-header">
+                          <h3>{depotStats.activeTrips}</h3>
+                          <div className="kpi-trend">
+                            <svg className="trend-icon up" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                            </svg>
+                            <span>8 today, 0 completed</span>
+                          </div>
+                        </div>
+                        <p className="kpi-label">Running Trips</p>
+                      </div>
+                      <div className="kpi-icon green">
+                        <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    <div className="kpi-card">
+                      <div className="kpi-content">
+                        <div className="kpi-header">
+                          <h3>{formatCurrency(depotStats.todayRevenue)}</h3>
+                          <div className="kpi-trend">
+                            <svg className="trend-icon up" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                            </svg>
+                            <span>₹12,500 this week</span>
+                          </div>
+                        </div>
+                        <p className="kpi-label">Today's Revenue</p>
+                      </div>
+                      <div className="kpi-icon yellow">
+                        <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    <div className="kpi-card">
+                      <div className="kpi-content">
+                        <div className="kpi-header">
+                          <h3>{depotStats.todayBookings}</h3>
+                          <div className="kpi-trend">
+                            <svg className="trend-icon up" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                            </svg>
+                            <span>45 bookings today</span>
+                          </div>
+                        </div>
+                        <p className="kpi-label">Pending Bookings</p>
+                      </div>
+                      <div className="kpi-icon red">
+                        <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* System Health (moved below KPI section) */}
                 <div className="system-health">
                   <div className="section-header">
                     <div className="section-left">
@@ -879,8 +985,8 @@ const DepotDashboard = () => {
                   </div>
                 </div>
 
-                {/* KPI Cards */}
-                <div className="kpi-section">
+                {/* KPI Cards - remove duplicate (was above) */}
+                <div className="kpi-section" style={{ display: 'none' }}>
                   <div className="kpi-grid">
                     <div className="kpi-card">
                       <div className="kpi-content">
@@ -968,59 +1074,30 @@ const DepotDashboard = () => {
                 <div className="charts-row">
                   <div className="chart-card">
                     <h4>Recent Activities</h4>
-                    <div className="activities-list">
-                      <div className="activity-item">
+                  <div className="activities-list">
+                    {(dashboardData?.recentTrips || []).slice(0, 6).map((t) => (
+                      <div key={t._id} className="activity-item">
                         <div className="activity-icon bus">
                           <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
                           </svg>
-                    </div>
-                        <div className="activity-content">
-                          <div className="activity-title">Bus KL-01-AB-1234 departed</div>
-                          <div className="activity-time">2 minutes ago</div>
                         </div>
-                        <div className="activity-status success">On Time</div>
+                        <div className="activity-content">
+                          <div className="activity-title">{t.tripNumber || 'Trip'} • {t.routeId?.routeName || t.route?.name || 'Route'}</div>
+                          <div className="activity-time">{new Date(t.createdAt).toLocaleString()}</div>
+                        </div>
+                        <div className={`activity-status ${t.status === 'running' ? 'success' : 'info'}`}>{t.status}</div>
                       </div>
-                      
+                    ))}
+                    {(!dashboardData?.recentTrips || dashboardData.recentTrips.length === 0) && (
                       <div className="activity-item">
-                        <div className="activity-icon booking">
-                          <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-                          </svg>
-                        </div>
                         <div className="activity-content">
-                          <div className="activity-title">New booking received</div>
-                          <div className="activity-time">5 minutes ago</div>
+                          <div className="activity-title">No recent activities</div>
+                          <div className="activity-time">—</div>
                         </div>
-                        <div className="activity-status info">₹450</div>
                       </div>
-                      
-                      <div className="activity-item">
-                        <div className="activity-icon maintenance">
-                          <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                        <div className="activity-content">
-                          <div className="activity-title">Maintenance completed</div>
-                          <div className="activity-time">15 minutes ago</div>
-                        </div>
-                        <div className="activity-status success">Complete</div>
-                      </div>
-                      
-                      <div className="activity-item">
-                        <div className="activity-icon route">
-                          <svg className="icon" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                        <div className="activity-content">
-                          <div className="activity-title">Route updated</div>
-                          <div className="activity-time">1 hour ago</div>
-                        </div>
-                        <div className="activity-status info">Route 101</div>
-                    </div>
-                    </div>
+                    )}
+                  </div>
                   </div>
 
                   <div className="chart-card">

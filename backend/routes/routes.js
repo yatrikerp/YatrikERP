@@ -79,6 +79,95 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Public: Get popular routes based on live scheduling activity
+// GET /api/routes/popular?limit=5
+router.get('/popular', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '5', 10), 5);
+
+    // Only include today's scheduled or running trips, grouped by route
+    const Trip = require('../models/Trip');
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const end = new Date(); end.setHours(23, 59, 59, 999);
+
+    const popularByTrips = await Trip.aggregate([
+      { $match: {
+          serviceDate: { $gte: start, $lte: end },
+          status: { $in: ['scheduled', 'running'] }
+        }
+      },
+      // Compute next departure time per trip as a sortable Date for today
+      { $addFields: {
+          departureDateTime: {
+            $dateFromParts: {
+              'year': { $year: '$serviceDate' },
+              'month': { $month: '$serviceDate' },
+              'day': { $dayOfMonth: '$serviceDate' },
+              'hour': { $toInt: { $arrayElemAt: [ { $split: ['$startTime', ':'] }, 0 ] } },
+              'minute': { $toInt: { $arrayElemAt: [ { $split: ['$startTime', ':'] }, 1 ] } }
+            }
+          }
+        }
+      },
+      { $group: {
+          _id: '$routeId',
+          tripCount: { $sum: 1 },
+          minFare: { $min: '$fare' },
+          nextDeparture: { $min: '$departureDateTime' }
+        }
+      },
+      { $sort: { tripCount: -1, nextDeparture: 1 } },
+      { $limit: limit },
+      { $lookup: { from: 'routes', localField: '_id', foreignField: '_id', as: 'route' } },
+      { $unwind: '$route' },
+      { $project: {
+          routeId: '$_id',
+          tripCount: 1,
+          minFare: 1,
+          nextDeparture: 1,
+          routeName: '$route.routeName',
+          routeNumber: '$route.routeNumber',
+          startingPoint: '$route.startingPoint',
+          endingPoint: '$route.endingPoint'
+        }
+      }
+    ]);
+
+    const mapTripFrequency = (tripCount, scheduleCount) => {
+      if (tripCount >= 24) return 'Every 1 hour';
+      if (tripCount >= 12) return 'Every 2 hours';
+      if (tripCount >= 6) return 'Every 4 hours';
+      if (tripCount >= 2) return 'Multiple times today';
+      // fallback to schedule hint
+      if (scheduleCount >= 24) return 'Every 1 hour';
+      if (scheduleCount >= 12) return 'Every 2 hours';
+      if (scheduleCount >= 6) return 'Every 4 hours';
+      if (scheduleCount >= 2) return 'Every 12 hours';
+      return 'Daily';
+    };
+
+    const data = popularByTrips.map(r => {
+      const fromCity = r.startingPoint?.city || r.startingPoint?.location || r.startingPoint || '';
+      const toCity = r.endingPoint?.city || r.endingPoint?.location || r.endingPoint || '';
+      const tripsLabel = r.tripCount >= 1 ? `${r.tripCount} trips today` : 'Scheduled today';
+      const fareLabel = typeof r.minFare === 'number' ? `₹${r.minFare}` : '—';
+      return {
+        from: fromCity,
+        to: toCity,
+        frequency: tripsLabel,
+        fare: fareLabel,
+        routeId: r.routeId,
+        routeName: r.routeName || r.routeNumber || ''
+      };
+    });
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Error fetching popular routes:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch popular routes', error: error.message });
+  }
+});
+
 // Get cities from routes (public)
 router.get('/cities', async (req, res) => {
   try {

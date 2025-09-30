@@ -1,7 +1,20 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bus, Clock, MapPin, ArrowRight } from 'lucide-react';
 
 const PopularRoutes = ({ routes }) => {
+  const navigate = useNavigate();
+
+  const handleBook = (route) => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const date = `${yyyy}-${mm}-${dd}`;
+    const params = new URLSearchParams({ from: route.from || '', to: route.to || '', date });
+    navigate(`/redbus-results?${params.toString()}`);
+  };
+
   return (
     <div className="popular-routes">
       <h3 className="popular-routes__title">Popular Routes</h3>
@@ -25,7 +38,7 @@ const PopularRoutes = ({ routes }) => {
                 </div>
               </div>
             </div>
-            <button className="route-card__cta">
+            <button className="route-card__cta" onClick={() => handleBook(route)}>
               Book
             </button>
           </div>

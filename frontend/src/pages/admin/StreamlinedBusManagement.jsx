@@ -171,16 +171,16 @@ const StreamlinedBusManagement = () => {
       if (aData && (aData.totalBuses || aData.activeBuses !== undefined)) {
         setAnalytics({
           totalBuses: aData.totalBuses,
-          activeBuses: aData.activeBuses,
+          activeBuses: (aData.activeBuses ?? 0) + normalizedBuses.filter(b => b.status === 'assigned').length,
           maintenanceBuses: aData.maintenanceBuses,
-          unassigned: normalizedBuses.filter(b => !b.assignedDriver).length
+          unassigned: normalizedBuses.filter(b => !b.currentTrip && !b.assignedDriver).length
         });
       } else {
         setAnalytics({
           totalBuses: normalizedBuses.length,
-          activeBuses: normalizedBuses.filter(b => b.status === 'active').length,
+          activeBuses: normalizedBuses.filter(b => b.status === 'active' || b.status === 'assigned').length,
           maintenanceBuses: normalizedBuses.filter(b => b.status === 'maintenance').length,
-          unassigned: normalizedBuses.filter(b => !b.assignedDriver).length
+          unassigned: normalizedBuses.filter(b => !b.currentTrip && !b.assignedDriver).length
         });
       }
     } catch (error) {
@@ -499,7 +499,7 @@ const StreamlinedBusManagement = () => {
           </div>
         </div>
         <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-          bus.status === 'active' ? 'bg-green-100 text-green-800' :
+          (bus.status === 'active' || bus.status === 'assigned') ? 'bg-green-100 text-green-800' :
           bus.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' :
           bus.status === 'retired' ? 'bg-red-100 text-red-800' :
           'bg-gray-100 text-gray-800'
@@ -714,7 +714,7 @@ const StreamlinedBusManagement = () => {
   const filteredBuses = buses.filter(bus => {
     const matchesSearch = (bus.busNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (bus.registrationNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || bus.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' || bus.status === statusFilter || (statusFilter === 'active' && bus.status === 'assigned');
     const matchesDepot = depotFilter === 'all' || bus.depotId === depotFilter;
     return matchesSearch && matchesStatus && matchesDepot;
   });
@@ -827,6 +827,7 @@ const StreamlinedBusManagement = () => {
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
               <option value="all">All Status</option>
               <option value="active">Active</option>
+              <option value="assigned">Assigned</option>
               <option value="maintenance">Maintenance</option>
               <option value="retired">Retired</option>
             </select>

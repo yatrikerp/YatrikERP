@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, ExternalLink } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 const SimpleMap = ({ 
   center = { lat: 10.8505, lng: 76.2711 }, // Default to Kerala, India
@@ -8,75 +9,140 @@ const SimpleMap = ({
   className = "w-full h-96"
 }) => {
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapLoadError, setMapLoadError] = useState(false);
+  const mapRef = useRef(null);
+  const map = useRef(null);
 
-  const generateOpenStreetMapUrl = () => {
-    const { lat, lng } = center;
-    const bbox = `${lng-0.1},${lat-0.1},${lng+0.1},${lat+0.1}`;
-    
-    let url = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
-    
-    // Add additional markers if provided
-    if (markers.length > 0) {
-      const markerParams = markers.map(marker => `${marker.position[0]},${marker.position[1]}`).join('&marker=');
-      if (markerParams) {
-        url += `&marker=${markerParams}`;
-      }
+  // Load Google Maps API
+  const loadGoogleMapsAPI = () => {
+    if (window.google && window.google.maps) {
+      initializeMap();
+      return;
     }
-    
-    return url;
+
+    const viteKey = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GOOGLE_MAPS_API_KEY) || '';
+    const craKey = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_GOOGLE_MAPS_API_KEY) || '';
+    const apiKey = viteKey || craKey;
+
+    if (!apiKey) {
+      toast.error('Google Maps API key is required');
+      setMapLoadError(true);
+      return;
+    }
+
+    const existing = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
+    if (existing) {
+      existing.addEventListener('load', () => initializeMap(), { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      initializeMap();
+    };
+    script.onerror = () => {
+      toast.error('Failed to load Google Maps');
+      setMapLoadError(true);
+    };
+    document.head.appendChild(script);
   };
+
+  // Initialize Google Maps
+  const initializeMap = () => {
+    if (!mapRef.current || map.current) return;
+
+    map.current = new window.google.maps.Map(mapRef.current, {
+      center: center,
+      zoom: zoom,
+      mapTypeId: window.google.maps.MapTypeId.ROADMAP,
+      styles: [
+        {
+          featureType: 'poi',
+          elementType: 'labels',
+          stylers: [{ visibility: 'off' }]
+        }
+      ]
+    });
+
+    // Add markers
+    markers.forEach((marker, index) => {
+      new window.google.maps.Marker({
+        position: marker.position || marker,
+        map: map.current,
+        title: marker.title || `Marker ${index + 1}`,
+        icon: marker.icon || {
+          url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
+        }
+      });
+    });
+
+    map.current.addListener('tilesloaded', () => {
+      setMapLoaded(true);
+    });
+  };
+
+  useEffect(() => {
+    loadGoogleMapsAPI();
+    
+    return () => {
+      if (map.current) {
+        map.current = null;
+      }
+    };
+  }, []);
 
   const openInExternalMap = () => {
     const { lat, lng } = center;
-    const url = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}&zoom=${zoom}`;
-    window.open(url, '_blank');
+    const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+    window.open(googleMapsUrl, '_blank');
   };
 
+  if (mapLoadError) {
+    return (
+      <div className={`${className} bg-gray-200 flex items-center justify-center rounded-lg`}>
+        <div className="text-center">
+          <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+          <p className="text-gray-500 text-sm">Google Maps failed to load</p>
+          <button
+            onClick={openInExternalMap}
+            className="mt-2 text-blue-600 hover:text-blue-800 text-sm flex items-center space-x-1"
+          >
+            <ExternalLink className="w-4 h-4" />
+            <span>Open in Google Maps</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`relative ${className} rounded-lg overflow-hidden border-2 border-gray-200`}>
-      {/* OpenStreetMap iframe */}
-      <iframe
-        src={generateOpenStreetMapUrl()}
-        className="w-full h-full"
-        style={{ border: 0 }}
-        allowFullScreen
-        title="Map View"
-        onLoad={() => setMapLoaded(true)}
+    <div className={`${className} relative`}>
+      <div
+        ref={mapRef}
+        className="w-full h-full rounded-lg"
       />
       
+      {/* External Map Link */}
+      <button
+        onClick={openInExternalMap}
+        className="absolute top-2 right-2 bg-white p-2 rounded-lg shadow-lg hover:bg-gray-50 transition-colors"
+        title="Open in Google Maps"
+      >
+        <ExternalLink className="w-4 h-4 text-gray-600" />
+      </button>
+
       {/* Loading Overlay */}
-      {!mapLoaded && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+      {!mapLoaded && !mapLoadError && (
+        <div className="absolute inset-0 bg-gray-100 flex items-center justify-center rounded-lg">
           <div className="text-center">
-            <MapPin className="w-8 h-8 text-gray-400 mx-auto mb-2 animate-bounce" />
-            <p className="text-gray-600">Loading map...</p>
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            <p className="text-gray-600 text-sm">Loading map...</p>
           </div>
         </div>
       )}
-
-      {/* Map Controls */}
-      <div className="absolute top-4 right-4 bg-white bg-opacity-90 rounded-lg p-2">
-        <button
-          onClick={openInExternalMap}
-          className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-          title="Open in new tab"
-        >
-          <ExternalLink className="w-4 h-4" />
-          Open Map
-        </button>
-      </div>
-
-      {/* Map Attribution */}
-      <div className="absolute bottom-2 right-2 bg-white bg-opacity-80 rounded px-2 py-1 text-xs text-gray-600">
-        <a 
-          href="https://www.openstreetmap.org/copyright" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="hover:text-blue-600 transition-colors"
-        >
-          © OpenStreetMap
-        </a>
-      </div>
     </div>
   );
 };

@@ -13,6 +13,26 @@ router.get('/test', (req, res) => {
   });
 });
 
+// Public endpoint to get all fare policies (no auth required for testing)
+router.get('/public', async (req, res) => {
+  try {
+    const policies = await FarePolicy.find({ isActive: true })
+      .select('name busType minimumFare ratePerKm isActive')
+      .sort({ busType: 1 });
+
+    res.json({
+      success: true,
+      data: policies
+    });
+  } catch (error) {
+    console.error('Error fetching public fare policies:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Calculate fare based on distance and bus type
 router.post('/calculate', auth, async (req, res) => {
   try {
@@ -85,7 +105,7 @@ router.get('/', auth, async (req, res) => {
 
     const policies = await FarePolicy.find(filter)
       .populate('createdBy', 'name email')
-      .populate('lastModifiedBy', 'name email')
+      .populate('updatedBy', 'name email')
       .sort({ busType: 1, routeType: 1 });
 
     res.json({
@@ -105,7 +125,7 @@ router.get('/:id', auth, async (req, res) => {
   try {
     const policy = await FarePolicy.findById(req.params.id)
       .populate('createdBy', 'name email')
-      .populate('lastModifiedBy', 'name email');
+      .populate('updatedBy', 'name email');
 
     if (!policy) {
       return res.status(404).json({
@@ -132,7 +152,7 @@ router.post('/', auth, async (req, res) => {
     const policyData = {
       ...req.body,
       createdBy: req.user.id,
-      lastModifiedBy: req.user.id
+      updatedBy: req.user.id
     };
 
     const policy = new FarePolicy(policyData);
@@ -155,7 +175,7 @@ router.put('/:id', auth, async (req, res) => {
   try {
     const policyData = {
       ...req.body,
-      lastModifiedBy: req.user.id
+      updatedBy: req.user.id
     };
 
     const policy = await FarePolicy.findByIdAndUpdate(

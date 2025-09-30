@@ -22,6 +22,11 @@ const PassengerDashboard = () => {
   useEffect(() => {
     fetchDashboardData();
     fetchPopularRoutes();
+    // Live refresh every 60 seconds
+    const interval = setInterval(() => {
+      fetchPopularRoutes();
+    }, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchDashboardData = async () => {
@@ -64,24 +69,23 @@ const PassengerDashboard = () => {
 
   const fetchPopularRoutes = async () => {
     try {
-      // Set Kerala popular routes directly
-      const keralaPopularRoutes = [
-        { from: 'Kochi', to: 'Kollam', label: 'Kochi → Kollam', route: 'RT001' },
-        { from: 'Kochi', to: 'Thiruvananthapuram', label: 'Kochi → TVM', route: 'KTV-001' },
-        { from: 'Kochi', to: 'Kottayam', label: 'Kochi → Kottayam', route: 'KKT-001' },
-        { from: 'Kochi', to: 'Palakkad', label: 'Kochi → Palakkad', route: 'KPL-001' },
-        { from: 'Thiruvananthapuram', to: 'Kochi', label: 'TVM → Kochi', route: 'TVK-001' },
-        { from: 'Kollam', to: 'Kochi', label: 'Kollam → Kochi', route: 'RT001' }
-      ];
-      setPopularRoutes(keralaPopularRoutes);
+      const resp = await fetch(`/api/routes/popular?limit=6`);
+      if (!resp.ok) throw new Error('Failed to fetch popular routes');
+      const json = await resp.json();
+      if (json?.success && Array.isArray(json.data)) {
+        const mapped = json.data.map((r) => ({
+          from: r.from,
+          to: r.to,
+          label: `${r.from} → ${r.to}`,
+          route: r.routeName || r.routeNumber || ''
+        }));
+        setPopularRoutes(mapped);
+      } else {
+        setPopularRoutes([]);
+      }
     } catch (error) {
-      console.error('Error setting popular routes:', error);
-      // Fallback to Kerala routes
-      setPopularRoutes([
-        { from: 'Kochi', to: 'Kollam', label: 'Kochi → Kollam', route: 'RT001' },
-        { from: 'Kochi', to: 'Thiruvananthapuram', label: 'Kochi → TVM', route: 'KTV-001' },
-        { from: 'Kochi', to: 'Kottayam', label: 'Kochi → Kottayam', route: 'KKT-001' }
-      ]);
+      console.error('Error fetching popular routes:', error);
+      setPopularRoutes([]);
     }
   };
 

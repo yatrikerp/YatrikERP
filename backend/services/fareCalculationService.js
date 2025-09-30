@@ -149,150 +149,199 @@ class FareCalculationService {
    */
   static async createDefaultFarePolicies() {
     const defaultPolicies = [
-      // Ordinary Service
+      // City / Ordinary Service
       {
-        busType: 'ordinary',
-        routeType: 'local',
-        baseFarePerKm: 1.5,
+        name: 'City / Ordinary - Local',
+        description: 'Standard city bus service for local routes',
+        busType: 'City / Ordinary',
         minimumFare: 8,
-        maximumFare: 50,
-        distanceBrackets: [
-          { fromKm: 0, toKm: 10, ratePerKm: 1.5, description: 'Local short distance' },
-          { fromKm: 11, toKm: 25, ratePerKm: 1.3, description: 'Local medium distance' },
-          { fromKm: 26, toKm: 50, ratePerKm: 1.2, description: 'Local long distance' }
-        ],
-        timeBasedPricing: { morning: 1.0, afternoon: 1.0, evening: 1.0, night: 1.2 }
+        ratePerKm: 1.5,
+        peakHourMultiplier: 1.0,
+        weekendMultiplier: 1.0,
+        holidayMultiplier: 1.0,
+        studentDiscount: 0,
+        seniorDiscount: 0,
+        groupDiscount: 0,
+        advanceBookingDiscount: 0,
+        cancellationFee: 0.1,
+        refundPolicy: 'partial',
+        isActive: true
       },
       {
-        busType: 'ordinary',
-        routeType: 'intercity',
-        baseFarePerKm: 1.8,
+        name: 'City / Ordinary - Intercity',
+        description: 'Standard city bus service for intercity routes',
+        busType: 'City / Ordinary',
         minimumFare: 12,
-        maximumFare: 80,
-        distanceBrackets: [
-          { fromKm: 0, toKm: 20, ratePerKm: 1.8, description: 'Short intercity' },
-          { fromKm: 21, toKm: 50, ratePerKm: 1.6, description: 'Medium intercity' },
-          { fromKm: 51, toKm: 100, ratePerKm: 1.4, description: 'Long intercity' }
-        ]
+        ratePerKm: 1.8,
+        peakHourMultiplier: 1.0,
+        weekendMultiplier: 1.0,
+        holidayMultiplier: 1.0,
+        studentDiscount: 0,
+        seniorDiscount: 0,
+        groupDiscount: 0,
+        advanceBookingDiscount: 0,
+        cancellationFee: 0.1,
+        refundPolicy: 'partial',
+        isActive: true
       },
 
-      // LSFP (Limited Stop Fast Passenger)
+      // Fast Passenger / LSFP
       {
-        busType: 'lspf',
-        routeType: 'intercity',
-        baseFarePerKm: 2.2,
+        name: 'Fast Passenger / LSFP - Intercity',
+        description: 'Limited Stop Fast Passenger service for intercity routes',
+        busType: 'Fast Passenger / LSFP',
         minimumFare: 15,
-        maximumFare: 100,
-        distanceBrackets: [
-          { fromKm: 0, toKm: 25, ratePerKm: 2.2, description: 'Short intercity' },
-          { fromKm: 26, toKm: 60, ratePerKm: 2.0, description: 'Medium intercity' },
-          { fromKm: 61, toKm: 120, ratePerKm: 1.8, description: 'Long intercity' }
-        ]
+        ratePerKm: 2.2,
+        peakHourMultiplier: 1.0,
+        weekendMultiplier: 1.0,
+        holidayMultiplier: 1.0,
+        studentDiscount: 0,
+        seniorDiscount: 0,
+        groupDiscount: 0,
+        advanceBookingDiscount: 0,
+        cancellationFee: 0.1,
+        refundPolicy: 'partial',
+        isActive: true
       },
 
-      // Super Fast
+      // Super Fast Passenger
       {
-        busType: 'super_fast',
-        routeType: 'intercity',
-        baseFarePerKm: 2.5,
+        name: 'Super Fast Passenger - Intercity',
+        description: 'Super Fast Passenger service for intercity routes',
+        busType: 'Super Fast Passenger',
         minimumFare: 18,
-        maximumFare: 120,
-        distanceBrackets: [
-          { fromKm: 0, toKm: 30, ratePerKm: 2.5, description: 'Short intercity' },
-          { fromKm: 31, toKm: 70, ratePerKm: 2.3, description: 'Medium intercity' },
-          { fromKm: 71, toKm: 150, ratePerKm: 2.0, description: 'Long intercity' }
-        ]
+        ratePerKm: 2.5,
+        peakHourMultiplier: 1.0,
+        weekendMultiplier: 1.0,
+        holidayMultiplier: 1.0,
+        studentDiscount: 0,
+        seniorDiscount: 0,
+        groupDiscount: 0,
+        advanceBookingDiscount: 0,
+        cancellationFee: 0.1,
+        refundPolicy: 'partial',
+        isActive: true
       },
 
       // Super Deluxe
       {
-        busType: 'super_deluxe',
-        routeType: 'intercity',
-        baseFarePerKm: 3.0,
+        name: 'Super Deluxe - Intercity',
+        description: 'Super Deluxe service for intercity routes',
+        busType: 'Super Deluxe',
         minimumFare: 22,
-        maximumFare: 150,
-        distanceBrackets: [
-          { fromKm: 0, toKm: 35, ratePerKm: 3.0, description: 'Short intercity' },
-          { fromKm: 36, toKm: 80, ratePerKm: 2.8, description: 'Medium intercity' },
-          { fromKm: 81, toKm: 180, ratePerKm: 2.5, description: 'Long intercity' }
-        ]
+        ratePerKm: 3.0,
+        peakHourMultiplier: 1.0,
+        weekendMultiplier: 1.0,
+        holidayMultiplier: 1.0,
+        studentDiscount: 0,
+        seniorDiscount: 0,
+        groupDiscount: 0,
+        advanceBookingDiscount: 0,
+        cancellationFee: 0.1,
+        refundPolicy: 'partial',
+        isActive: true
       },
 
-      // Garuda Services (Luxury)
+      // Luxury / Hi-tech & AC
       {
-        busType: 'garuda_volvo',
-        routeType: 'interstate',
-        baseFarePerKm: 4.5,
+        name: 'Luxury / Hi-tech & AC - Interstate',
+        description: 'Luxury AC service for interstate routes',
+        busType: 'Luxury / Hi-tech & AC',
         minimumFare: 35,
-        maximumFare: 300,
-        distanceBrackets: [
-          { fromKm: 0, toKm: 50, ratePerKm: 4.5, description: 'Short interstate' },
-          { fromKm: 51, toKm: 120, ratePerKm: 4.0, description: 'Medium interstate' },
-          { fromKm: 121, toKm: 250, ratePerKm: 3.5, description: 'Long interstate' }
-        ],
-        peakHourMultiplier: 1.1
+        ratePerKm: 4.5,
+        peakHourMultiplier: 1.1,
+        weekendMultiplier: 1.0,
+        holidayMultiplier: 1.0,
+        studentDiscount: 0,
+        seniorDiscount: 0,
+        groupDiscount: 0,
+        advanceBookingDiscount: 0,
+        cancellationFee: 0.1,
+        refundPolicy: 'partial',
+        isActive: true
       },
+
+      // Garuda Sanchari / Biaxle Premium
       {
-        busType: 'garuda_scania',
-        routeType: 'interstate',
-        baseFarePerKm: 5.0,
+        name: 'Garuda Sanchari / Biaxle Premium - Interstate',
+        description: 'Premium Garuda service for interstate routes',
+        busType: 'Garuda Sanchari / Biaxle Premium',
         minimumFare: 40,
-        maximumFare: 350,
-        distanceBrackets: [
-          { fromKm: 0, toKm: 50, ratePerKm: 5.0, description: 'Short interstate' },
-          { fromKm: 51, toKm: 120, ratePerKm: 4.5, description: 'Medium interstate' },
-          { fromKm: 121, toKm: 250, ratePerKm: 4.0, description: 'Long interstate' }
-        ],
-        peakHourMultiplier: 1.1
+        ratePerKm: 5.0,
+        peakHourMultiplier: 1.1,
+        weekendMultiplier: 1.0,
+        holidayMultiplier: 1.0,
+        studentDiscount: 0,
+        seniorDiscount: 0,
+        groupDiscount: 0,
+        advanceBookingDiscount: 0,
+        cancellationFee: 0.1,
+        refundPolicy: 'partial',
+        isActive: true
       },
+
+      // Garuda Maharaja / Garuda King / Multi-axle Premium
       {
-        busType: 'garuda_maharaja',
-        routeType: 'interstate',
-        baseFarePerKm: 6.0,
+        name: 'Garuda Maharaja / Garuda King / Multi-axle Premium - Interstate',
+        description: 'Premium Maharaja service for interstate routes',
+        busType: 'Garuda Maharaja / Garuda King / Multi-axle Premium',
         minimumFare: 50,
-        maximumFare: 400,
-        distanceBrackets: [
-          { fromKm: 0, toKm: 60, ratePerKm: 6.0, description: 'Short interstate' },
-          { fromKm: 61, toKm: 150, ratePerKm: 5.5, description: 'Medium interstate' },
-          { fromKm: 151, toKm: 300, ratePerKm: 5.0, description: 'Long interstate' }
-        ],
-        peakHourMultiplier: 1.15
+        ratePerKm: 6.0,
+        peakHourMultiplier: 1.15,
+        weekendMultiplier: 1.0,
+        holidayMultiplier: 1.0,
+        studentDiscount: 0,
+        seniorDiscount: 0,
+        groupDiscount: 0,
+        advanceBookingDiscount: 0,
+        cancellationFee: 0.1,
+        refundPolicy: 'partial',
+        isActive: true
       },
 
-      // City Services
+      // A/C Low Floor
       {
-        busType: 'low_floor_ac',
-        routeType: 'city',
-        baseFarePerKm: 2.8,
+        name: 'A/C Low Floor - City',
+        description: 'Air-conditioned low floor service for city routes',
+        busType: 'A/C Low Floor',
         minimumFare: 15,
-        maximumFare: 60,
-        distanceBrackets: [
-          { fromKm: 0, toKm: 15, ratePerKm: 2.8, description: 'City short distance' },
-          { fromKm: 16, toKm: 30, ratePerKm: 2.5, description: 'City medium distance' },
-          { fromKm: 31, toKm: 50, ratePerKm: 2.2, description: 'City long distance' }
-        ]
+        ratePerKm: 2.8,
+        peakHourMultiplier: 1.0,
+        weekendMultiplier: 1.0,
+        holidayMultiplier: 1.0,
+        studentDiscount: 0,
+        seniorDiscount: 0,
+        groupDiscount: 0,
+        advanceBookingDiscount: 0,
+        cancellationFee: 0.1,
+        refundPolicy: 'partial',
+        isActive: true
       },
 
-      // Minnal (Night Service)
+      // Non A/C Low Floor
       {
-        busType: 'minnal',
-        routeType: 'long_distance',
-        baseFarePerKm: 3.5,
-        minimumFare: 25,
-        maximumFare: 200,
-        distanceBrackets: [
-          { fromKm: 0, toKm: 40, ratePerKm: 3.5, description: 'Short night service' },
-          { fromKm: 41, toKm: 100, ratePerKm: 3.2, description: 'Medium night service' },
-          { fromKm: 101, toKm: 200, ratePerKm: 2.8, description: 'Long night service' }
-        ],
-        timeBasedPricing: { morning: 0.9, afternoon: 1.0, evening: 1.1, night: 1.2 }
+        name: 'Non A/C Low Floor - City',
+        description: 'Non-air-conditioned low floor service for city routes',
+        busType: 'Non A/C Low Floor',
+        minimumFare: 12,
+        ratePerKm: 2.2,
+        peakHourMultiplier: 1.0,
+        weekendMultiplier: 1.0,
+        holidayMultiplier: 1.0,
+        studentDiscount: 0,
+        seniorDiscount: 0,
+        groupDiscount: 0,
+        advanceBookingDiscount: 0,
+        cancellationFee: 0.1,
+        refundPolicy: 'partial',
+        isActive: true
       }
     ];
 
     try {
       for (const policy of defaultPolicies) {
         await FarePolicy.findOneAndUpdate(
-          { busType: policy.busType, routeType: policy.routeType },
+          { busType: policy.busType, name: policy.name },
           policy,
           { upsert: true, new: true }
         );

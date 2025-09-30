@@ -73,7 +73,7 @@ const KERALA_LOCATIONS = {
 };
 
 // Email configuration
-const emailTransporter = nodemailer.createTransporter({
+const emailTransporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
@@ -471,6 +471,8 @@ if (require.main === module) {
 
 module.exports = {
   createKeralaStaffWithAssignment,
+  createStaffForDepot,
+  autoAssignStaffToBuses,
   generateKeralaName,
   generateKeralaPhone,
   generateKeralaEmail,

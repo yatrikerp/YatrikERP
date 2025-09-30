@@ -260,4 +260,181 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// GET /api/trips/depot/:depotId - Get trips for specific depot
+router.get('/depot/:depotId', async (req, res) => {
+  try {
+    const { depotId } = req.params;
+    const { date, status } = req.query;
+    
+    console.log(`🏢 Fetching trips for depot: ${depotId}`);
+    
+    let query = { depotId };
+    
+    // Add date filter if provided
+    if (date) {
+      const targetDate = new Date(date);
+      const startOfDay = new Date(targetDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(targetDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      query.serviceDate = { 
+        $gte: startOfDay, 
+        $lte: endOfDay 
+      };
+    }
+    
+    // Add status filter if provided
+    if (status) {
+      query.status = status;
+    }
+    
+    const trips = await Trip.find(query)
+      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+      .populate('busId', 'busNumber registrationNumber busType capacity')
+      .populate('driverId', 'name email phone')
+      .populate('conductorId', 'name email phone')
+      .populate('depotId', 'depotName depotCode location')
+      .sort({ startTime: 1 })
+      .lean();
+    
+    console.log(`✅ Found ${trips.length} trips for depot ${depotId}`);
+    
+    res.json({
+      success: true,
+      data: {
+        trips,
+        count: trips.length,
+        depotId
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching depot trips:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch depot trips',
+      details: error.message
+    });
+  }
+});
+
+// GET /api/trips/driver/:driverId - Get trips for specific driver
+router.get('/driver/:driverId', async (req, res) => {
+  try {
+    const { driverId } = req.params;
+    const { date, status } = req.query;
+    
+    console.log(`👨‍💼 Fetching trips for driver: ${driverId}`);
+    
+    let query = { driverId };
+    
+    // Add date filter if provided
+    if (date) {
+      const targetDate = new Date(date);
+      const startOfDay = new Date(targetDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(targetDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      query.serviceDate = { 
+        $gte: startOfDay, 
+        $lte: endOfDay 
+      };
+    }
+    
+    // Add status filter if provided
+    if (status) {
+      query.status = status;
+    }
+    
+    const trips = await Trip.find(query)
+      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+      .populate('busId', 'busNumber registrationNumber busType capacity')
+      .populate('driverId', 'name email phone')
+      .populate('conductorId', 'name email phone')
+      .populate('depotId', 'depotName depotCode location')
+      .sort({ startTime: 1 })
+      .lean();
+    
+    console.log(`✅ Found ${trips.length} trips for driver ${driverId}`);
+    
+    res.json({
+      success: true,
+      data: {
+        trips,
+        count: trips.length,
+        driverId
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching driver trips:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch driver trips',
+      details: error.message
+    });
+  }
+});
+
+// GET /api/trips/conductor/:conductorId - Get trips for specific conductor
+router.get('/conductor/:conductorId', async (req, res) => {
+  try {
+    const { conductorId } = req.params;
+    const { date, status } = req.query;
+    
+    console.log(`👨‍💼 Fetching trips for conductor: ${conductorId}`);
+    
+    let query = { conductorId };
+    
+    // Add date filter if provided
+    if (date) {
+      const targetDate = new Date(date);
+      const startOfDay = new Date(targetDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(targetDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      query.serviceDate = { 
+        $gte: startOfDay, 
+        $lte: endOfDay 
+      };
+    }
+    
+    // Add status filter if provided
+    if (status) {
+      query.status = status;
+    }
+    
+    const trips = await Trip.find(query)
+      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+      .populate('busId', 'busNumber registrationNumber busType capacity')
+      .populate('driverId', 'name email phone')
+      .populate('conductorId', 'name email phone')
+      .populate('depotId', 'depotName depotCode location')
+      .sort({ startTime: 1 })
+      .lean();
+    
+    console.log(`✅ Found ${trips.length} trips for conductor ${conductorId}`);
+    
+    res.json({
+      success: true,
+      data: {
+        trips,
+        count: trips.length,
+        conductorId
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching conductor trips:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch conductor trips',
+      details: error.message
+    });
+  }
+});
+
 module.exports = router;

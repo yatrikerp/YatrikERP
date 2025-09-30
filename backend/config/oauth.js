@@ -6,7 +6,8 @@ const config = {
     callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:5000/api/auth/google/callback',
     scope: ['profile', 'email']
   },
-  frontendURL: process.env.FRONTEND_URL || 'http://localhost:3000',
+  // Default to Vite dev server port in this project
+  frontendURL: process.env.FRONTEND_URL || 'http://localhost:5173',
   jwtSecret: process.env.JWT_SECRET || 'yatrikerp',
   jwtExpire: process.env.JWT_EXPIRE || '7d'
 };

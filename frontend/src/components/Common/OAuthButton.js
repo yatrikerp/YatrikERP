@@ -16,6 +16,18 @@ const OAuthButton = ({ href, provider = 'google', icon, children, ariaLabel, onC
   );
   const resolvedIcon = provider === 'google' ? googleIcon : icon;
   
+  const resolveUrl = (rawHref) => {
+    if (!rawHref) return '';
+    // If the href starts with /api, force absolute URL to backend
+    if (rawHref.startsWith('/api')) {
+      const backendBase = ((typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_BACKEND_URL) || process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+      return `${backendBase}${rawHref}`;
+    }
+    return rawHref;
+  };
+
+  const finalHref = resolveUrl(href);
+
   const handleClick = async (e) => {
     if (disabled || isLoading) return;
     
@@ -27,11 +39,12 @@ const OAuthButton = ({ href, provider = 'google', icon, children, ariaLabel, onC
       } finally {
         setIsLoading(false);
       }
-    } else if (href) {
-      // For OAuth links, add a small delay to show loading state
+    } else if (finalHref) {
+      // Force full-page navigation to backend, bypass SPA routing
+      try { e && e.preventDefault && e.preventDefault(); } catch {}
       setTimeout(() => {
-        window.location.href = href;
-      }, 100);
+        window.location.assign(finalHref);
+      }, 50);
     }
   };
   
@@ -55,7 +68,7 @@ const OAuthButton = ({ href, provider = 'google', icon, children, ariaLabel, onC
 
   return (
     <a
-      href={href}
+      href={finalHref}
       aria-label={ariaLabel}
       className={`${baseClasses} ${className}`}
       onClick={handleClick}

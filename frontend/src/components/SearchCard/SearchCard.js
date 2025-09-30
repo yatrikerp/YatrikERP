@@ -201,14 +201,8 @@ const SearchCard = ({ onSearchResults, showResults = false }) => {
         }
       }
 
-      // Navigate to appropriate results page based on authentication
-      if (token) {
-        // User is logged in, go to passenger results
-        navigate(`/passenger/results?${queryParams.toString()}`);
-      } else {
-        // User is not logged in, go to public results page
-        navigate(`/search-results?${queryParams.toString()}`);
-      }
+      // Unified navigation to RedBus-style results page
+      navigate(`/redbus-results?${queryParams.toString()}`);
       
     } catch (error) {
       console.error('Search error:', error);

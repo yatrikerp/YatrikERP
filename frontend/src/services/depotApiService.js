@@ -533,6 +533,11 @@ const scheduleCache = {
 };
 
 export const schedulingApiService = {
+  // Backwards-compatible alias expected by BusScheduling.jsx
+  getSchedules: async (params = {}) => {
+    return schedulingApiService.getBusSchedules(params);
+  },
+
   // Get bus schedules
   getBusSchedules: async (params = {}) => {
     try {

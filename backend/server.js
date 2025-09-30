@@ -68,7 +68,17 @@ async function startServer() {
     await mongoose.connect(connectionUri, mongoOptions);
     console.log('✅ Connected to Atlas MongoDB successfully');
       console.log('📊 Database ready for operations');
-    
+
+    // Start continuous auto-scheduler after database connection
+    // DISABLED: Continuous scheduler creates trips automatically
+    // try {
+    //   const ContinuousScheduler = require('./services/continuousScheduler');
+    //   ContinuousScheduler.start();
+    //   console.log('🚀 Continuous auto-scheduler started');
+    // } catch (error) {
+    //   console.error('❌ Failed to start continuous scheduler:', error.message);
+    // }
+
     // Start the server after database connection
     const PORT = process.env.PORT || 5000;
     
@@ -174,9 +184,12 @@ app.use('/api/status', require('./routes/status'));
 app.use('/api/email', require('./routes/emailStatus'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/auto-scheduler', require('./routes/autoScheduler'));
+app.use('/api/trip-generator', require('./routes/tripGenerator'));
 app.use('/api/alerts', require('./routes/alerts'));
 app.use('/api/fastest-route', require('./routes/fastestRoute'));
 app.use('/api/fare-policy', require('./routes/farePolicy'));
+app.use('/api/admin/routes', require('./routes/conductorPricing'));
+app.use('/api/conductor', require('./routes/conductorPricing'));
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {

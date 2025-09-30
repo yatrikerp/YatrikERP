@@ -6,7 +6,7 @@ const Driver = require('../models/Driver');
 const Conductor = require('../models/Conductor');
 const Bus = require('../models/Bus');
 const Depot = require('../models/Depot');
-const { createKeralaStaffWithAssignment, generateKeralaName, generateKeralaPhone, generateKeralaEmail, sendCredentialsEmail } = require('../scripts/create-kerala-staff-with-assignment');
+const { createKeralaStaffWithAssignment, createStaffForDepot, autoAssignStaffToBuses, generateKeralaName, generateKeralaPhone, generateKeralaEmail, sendCredentialsEmail } = require('../scripts/create-kerala-staff-with-assignment');
 
 // GET /api/staff/depot/:depotId - Get all staff for a depot
 router.get('/depot/:depotId', auth, requireRole(['admin', 'depot_manager']), async (req, res) => {

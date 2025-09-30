@@ -11,6 +11,7 @@ import {
   CheckCircle,
   XCircle
 } from 'lucide-react';
+import LiveTrackingMap from './LiveTrackingMap';
 
 const LiveTrackingPanel = () => {
   const [activeTrips, setActiveTrips] = useState([]);
@@ -237,38 +238,19 @@ const LiveTrackingPanel = () => {
             <p className="text-gray-600 mt-1">Real-time location of {selectedTrip.busNumber}</p>
           </div>
           <div className="p-6">
-            {/* Mock Map - Replace with actual map component */}
-            <div className="bg-gray-100 rounded-xl h-96 flex items-center justify-center relative overflow-hidden">
-              <div className="text-center">
-                <Navigation className="w-16 h-16 text-blue-600 mx-auto mb-4" />
-                <p className="text-lg font-medium text-gray-700 mb-2">Live Map View</p>
-                <p className="text-sm text-gray-500 mb-4">
-                  Bus {selectedTrip.busNumber} is currently at {selectedTrip.currentLocation}
-                </p>
-                
-                {/* Mock Route Visualization */}
-                <div className="flex items-center justify-center gap-2 mb-4">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  <div className="w-16 h-1 bg-gray-300"></div>
-                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                  <div className="w-16 h-1 bg-gray-300"></div>
-                  <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
-                </div>
-                
-                <div className="text-xs text-gray-500">
-                  <p>Start → {selectedTrip.currentLocation} → Destination</p>
-                  <p className="mt-1">Progress: {selectedTrip.progress}%</p>
-                </div>
-              </div>
-              
-              {/* Live Status Indicator */}
-              <div className="absolute top-4 right-4">
-                <div className="flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  LIVE
-                </div>
-              </div>
-            </div>
+            <LiveTrackingMap
+              trackingData={{
+                busNumber: selectedTrip.busNumber || selectedTrip.bus?.registrationNumber || 'Bus',
+                route: selectedTrip.route || `${selectedTrip?.origin || ''} → ${selectedTrip?.destination || ''}`.trim(),
+                currentLocation: selectedTrip.currentLocation || selectedTrip?.lastKnownLocation?.name || '—',
+                destination: selectedTrip.destination || selectedTrip?.to || '—',
+                estimatedArrival: selectedTrip.eta || selectedTrip.estimatedArrival || '—',
+                currentSpeed: selectedTrip.speed || selectedTrip.currentSpeed || '—',
+                status: selectedTrip.status || 'on-route',
+                lastUpdate: selectedTrip.lastUpdate || 'Just now',
+                coordinates: selectedTrip.coordinates || selectedTrip.currentCoordinates || selectedTrip?.lastKnownLocation || selectedTrip?.gps?.coords || undefined
+              }}
+            />
             
             {/* Live Updates */}
             <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">

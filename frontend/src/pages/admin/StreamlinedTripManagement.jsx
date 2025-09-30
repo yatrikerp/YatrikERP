@@ -22,13 +22,14 @@ const StreamlinedTripManagement = () => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState(() => new Date().toISOString().slice(0,10));
+  const [dateFilter, setDateFilter] = useState('');
   // const location = useLocation(); // unused
 
   // Pagination
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(24);
   const [total, setTotal] = useState(0);
+  const [statsCounts, setStatsCounts] = useState({ total: 0, scheduled: 0, running: 0, completed: 0 });
   const [routeFilter, setRouteFilter] = useState('all');
   const [viewMode, setViewMode] = useState('all'); // all | live
   // Assign modal state
@@ -46,10 +47,10 @@ const StreamlinedTripManagement = () => {
   // Enhanced Route Management States
   const [showRouteBuilder, setShowRouteBuilder] = useState(false);
   const [routeBuilderForm, setRouteBuilderForm] = useState({
-    routeNumber: 'R001',
-    routeName: 'Idukki to Thiruvananthapuram',
-    startLocation: 'Idukki, Kerala',
-    endLocation: 'Thiruvananthapuram, Kerala',
+    routeNumber: '',
+    routeName: '',
+    startLocation: '',
+    endLocation: '',
     startCoords: null,
     endCoords: null,
     depotId: '',
@@ -156,29 +157,51 @@ const StreamlinedTripManagement = () => {
 
   const reverseGeocode = useCallback(async (lat, lng) => {
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
-      );
-      const data = await response.json();
-      
-      if (data && data.display_name) {
-        return {
-          name: data.name || data.display_name.split(',')[0],
-          city: data.address?.city || data.address?.town || data.address?.village || data.address?.hamlet,
-          display_name: data.display_name
-        };
+      // Use Google Maps Geocoding API
+      if (window.google && window.google.maps) {
+        const geocoder = new window.google.maps.Geocoder();
+        const latlng = new window.google.maps.LatLng(lat, lng);
+        
+        return new Promise((resolve) => {
+          geocoder.geocode({ location: latlng }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+              const result = results[0];
+              const addressComponents = result.address_components || [];
+              
+              // Extract city from address components
+              let city = 'Unknown';
+              for (const component of addressComponents) {
+                if (component.types.includes('locality') || 
+                    component.types.includes('administrative_area_level_2') ||
+                    component.types.includes('administrative_area_level_3')) {
+                  city = component.long_name;
+                  break;
+                }
+              }
+              
+              resolve({
+                name: result.formatted_address.split(',')[0] || result.formatted_address,
+                city: city,
+                display_name: result.formatted_address
+              });
+            } else {
+              resolve(null);
+            }
+          });
+        });
+      } else {
+        // Fallback if Google Maps not loaded
+        return null;
       }
-      return null;
     } catch (error) {
       console.error('Reverse geocoding error:', error);
       return null;
     }
   }, []);
 
-  useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, limit, searchTerm, statusFilter, dateFilter]);
+  // moved effects below after definitions to avoid temporal dead zone
+
+  // Auto-refresh counts periodically (initialized after fetchCounts is defined at bottom)
 
   // Auto-select first depot when depots are loaded
   useEffect(() => {
@@ -234,12 +257,7 @@ const StreamlinedTripManagement = () => {
         addRangeFor(dateFilter);
       }
       if (viewMode === 'live' && !dateFilter) {
-        const today = new Date();
-        const yyyy = today.getFullYear();
-        const mm = String(today.getMonth() + 1).padStart(2, '0');
-        const dd = String(today.getDate()).padStart(2, '0');
-        const todayStr = `${yyyy}-${mm}-${dd}`;
-        addRangeFor(todayStr);
+        // Show all running trips across dates (no date restriction)
         params.set('status', 'running');
       }
 
@@ -268,6 +286,7 @@ const StreamlinedTripManagement = () => {
       }));
       setTrips(normalizedTrips);
       const pagination = payload.pagination || payload.meta || {};
+      // Show total from API response, or filtered count if no pagination info
       setTotal(pagination.total || normalizedTrips.length);
 
       // Fetch lookups in parallel
@@ -338,6 +357,61 @@ const StreamlinedTripManagement = () => {
       setLoading(false);
     }
   }, [page, limit, searchTerm, statusFilter, dateFilter, viewMode]);
+
+  // Fetch live counts from backend using pagination totals per status
+  const fetchCounts = useCallback(async () => {
+    try {
+      const baseParams = new URLSearchParams();
+      // respect date filter when present
+      if (dateFilter) {
+        const d = new Date(dateFilter);
+        const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).toISOString();
+        const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).toISOString();
+        baseParams.set('dateFrom', start);
+        baseParams.set('dateTo', end);
+      }
+
+      const mk = async (status) => {
+        const p = new URLSearchParams(baseParams);
+        p.set('page', '1');
+        p.set('limit', '1');
+        if (status) p.set('status', status);
+        const res = await apiFetch('/api/admin/trips?' + p.toString(), { suppressError: true });
+        const data = res?.data || {};
+        const total = data?.data?.pagination?.total || data?.pagination?.total || 0;
+        return total;
+      };
+
+      const [totalAll, totalScheduled, totalRunning, totalCompleted] = await Promise.all([
+        mk(null),
+        mk('scheduled'),
+        mk('running'),
+        mk('completed')
+      ]);
+
+      setStatsCounts({ total: totalAll, scheduled: totalScheduled, running: totalRunning, completed: totalCompleted });
+      setTotal(totalAll);
+    } catch (e) {
+      // ignore errors to avoid noisy UI; counts will be updated next cycle
+    }
+  }, [dateFilter]);
+
+  // Auto-refresh counts periodically after fetchCounts is defined
+  useEffect(() => {
+    const id = setInterval(() => {
+      fetchCounts();
+    }, 30000);
+    return () => clearInterval(id);
+  }, [fetchCounts]);
+
+  // Initialize after functions are defined
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    fetchCounts();
+  }, [fetchCounts]);
 
   const handleSingleTripAdd = async () => {
     try {
@@ -443,6 +517,59 @@ const StreamlinedTripManagement = () => {
     }
   };
 
+  const handleGenerate100Trips = async () => {
+    try {
+      if (!window.confirm('This will clear ALL existing trips and create new trips using available resources. Are you sure?')) {
+        return;
+      }
+      
+      setLoading(true);
+      toast.loading('Generating trips...', { id: 'generate-trips' });
+      
+      const response = await apiFetch('/api/trip-generator/generate-100-trips', {
+        method: 'POST'
+      });
+      
+      if (response?.success) {
+        toast.success(`Successfully generated ${response.data.tripsCreated} trips!`, { id: 'generate-trips' });
+        // Refresh the data
+        await fetchData();
+      } else {
+        toast.error(response?.error || 'Failed to generate trips', { id: 'generate-trips' });
+      }
+    } catch (error) {
+      console.error('Error generating trips:', error);
+      toast.error('Failed to generate trips', { id: 'generate-trips' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleScheduleToYearEnd = async () => {
+    try {
+      setLoading(true);
+      const now = new Date();
+      const startDate = (dateFilter && /^\d{4}-\d{2}-\d{2}$/.test(dateFilter)) ? dateFilter : new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().slice(0,10);
+      const endDate = new Date(now.getFullYear(), 11, 31).toISOString().slice(0,10);
+      toast.loading(`Scheduling all routes from ${startDate} to ${endDate}...`, { id: 'year-end' });
+      const res = await apiFetch('/api/auto-scheduler/schedule-all', {
+        method: 'POST',
+        body: JSON.stringify({ startDate, endDate, options: { autoAssignCrew: true, autoAssignBuses: true } })
+      });
+      if (res?.ok || res?.success) {
+        toast.success('Scheduled through year end successfully', { id: 'year-end' });
+        fetchCounts();
+      } else {
+        toast.error(res?.message || 'Year-end scheduling failed', { id: 'year-end' });
+      }
+    } catch (e) {
+      console.error('Year-end scheduling error', e);
+      toast.error('Year-end scheduling failed', { id: 'year-end' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleExportTrips = async () => {
     try {
       const rows = filteredTrips.map(t => {
@@ -478,6 +605,43 @@ const StreamlinedTripManagement = () => {
     } catch (e) {
       console.error(e);
       toast.error('Export failed');
+    }
+  };
+
+  const handleGenerate4PerDepot = async () => {
+    try {
+      const today = new Date().toISOString().slice(0,10);
+      setLoading(true);
+      toast.loading('Creating 4 trips per depot...', { id: 'gen-4pd' });
+      const res = await apiFetch('/api/trip-generator/generate-4-per-depot', {
+        method: 'POST',
+        body: JSON.stringify({ date: dateFilter || today })
+      });
+      if (res?.success || res?.ok) {
+        const created = res?.data?.trips || [];
+        if (Array.isArray(created) && created.length) {
+          // Optimistic UI: prepend created trips instantly
+          setTrips(prev => {
+            const normalized = created.map(t => ({
+              ...t,
+              serviceDate: t.serviceDate ? String(t.serviceDate).split('T')[0] : '',
+              fare: Number(t.fare) || 0,
+              capacity: Number(t.capacity) || 0
+            }));
+            return [...normalized, ...prev];
+          });
+        }
+        toast.success(res?.message || 'Trips created', { id: 'gen-4pd' });
+        // Background refresh to hydrate with populated fields
+        fetchData();
+      } else {
+        toast.error(res?.message || res?.error || 'Failed to create trips', { id: 'gen-4pd' });
+      }
+    } catch (e) {
+      console.error('Generate 4 per depot failed', e);
+      toast.error('Failed to create trips', { id: 'gen-4pd' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -544,16 +708,40 @@ const StreamlinedTripManagement = () => {
   // Enhanced Route Generation Functions
   const geocodeLocation = async (locationName) => {
     try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(locationName)}&limit=1&countrycodes=in`);
-      const data = await response.json();
-      if (data && data.length > 0) {
-        return {
-          lat: parseFloat(data[0].lat),
-          lng: parseFloat(data[0].lon),
-          display_name: data[0].display_name
-        };
+      // Use Google Maps Geocoding API
+      if (window.google && window.google.maps) {
+        const geocoder = new window.google.maps.Geocoder();
+        
+        return new Promise((resolve) => {
+          geocoder.geocode({ address: locationName, region: 'IN' }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+              const result = results[0];
+              const location = result.geometry.location;
+              resolve({
+                lat: location.lat(),
+                lng: location.lng(),
+                display_name: result.formatted_address
+              });
+            } else {
+              resolve(null);
+            }
+          });
+        });
+      } else {
+        // Fallback to OpenStreetMap Nominatim when Google Maps is unavailable
+        try {
+          const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(locationName)}&addressdetails=1&limit=1`);
+          const data = await resp.json();
+          if (Array.isArray(data) && data.length > 0) {
+            return {
+              lat: parseFloat(data[0].lat),
+              lng: parseFloat(data[0].lon),
+              display_name: data[0].display_name
+            };
+          }
+        } catch {}
+        return null;
       }
-      return null;
     } catch (error) {
       console.error('Geocoding error:', error);
       return null;
@@ -784,10 +972,10 @@ const StreamlinedTripManagement = () => {
 
   const resetRouteBuilderForm = () => {
     setRouteBuilderForm({
-      routeNumber: 'R001',
-      routeName: 'Idukki to Thiruvananthapuram',
-      startLocation: 'Idukki, Kerala',
-      endLocation: 'Thiruvananthapuram, Kerala',
+      routeNumber: '',
+      routeName: '',
+      startLocation: '',
+      endLocation: '',
       startCoords: null,
       endCoords: null,
       depotId: '',
@@ -1159,7 +1347,7 @@ const StreamlinedTripManagement = () => {
                     <span>Smart Route Builder</span>
                   </h3>
                   <p className="text-sm text-gray-600 mt-1">
-                    AI-powered route generation with automatic stop extraction and fare calculation
+                    Automated route generation with automatic stop extraction and fare calculation
                   </p>
                 </div>
                 <button
@@ -1189,9 +1377,15 @@ const StreamlinedTripManagement = () => {
                       type="text"
                       value={routeBuilderForm.startLocation || ''}
                       onChange={handleStartLocationChange}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && routeBuilderForm.startLocation && routeBuilderForm.endLocation) {
+                          e.preventDefault();
+                          handleRouteGeneration();
+                        }
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-blue-50"
-                      placeholder="e.g., Idukki, Kerala"
-                      title="Pre-filled with sample data - you can edit if needed"
+                      placeholder="Enter start location"
+                      title="Enter the starting location for your route"
                     />
                   </div>
                   
@@ -1203,9 +1397,15 @@ const StreamlinedTripManagement = () => {
                       type="text"
                       value={routeBuilderForm.endLocation || ''}
                       onChange={handleEndLocationChange}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && routeBuilderForm.startLocation && routeBuilderForm.endLocation) {
+                          e.preventDefault();
+                          handleRouteGeneration();
+                        }
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-blue-50"
-                      placeholder="e.g., Thiruvananthapuram, Kerala"
-                      title="Pre-filled with sample data - you can edit if needed"
+                      placeholder="Enter end location"
+                      title="Enter the destination location for your route"
                     />
                   </div>
                   
@@ -1218,8 +1418,8 @@ const StreamlinedTripManagement = () => {
                       value={routeBuilderForm.routeNumber || ''}
                       onChange={handleRouteNumberChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-blue-50"
-                      placeholder="R001"
-                      title="Pre-filled with sample data - you can edit if needed"
+                      placeholder="Enter route number"
+                      title="Enter a unique route number"
                     />
                   </div>
                   
@@ -1230,8 +1430,9 @@ const StreamlinedTripManagement = () => {
                     <select
                       value={routeBuilderForm.depotId || ''}
                       onChange={handleDepotChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-blue-50"
-                      title="Auto-selected from available depots - you can change if needed"
+                      disabled={!depots || depots.length === 0}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-blue-50 disabled:opacity-60"
+                      title="Select the depot for this route"
                     >
                       <option value="">Select Depot</option>
                       {depots.map(depot => (
@@ -1248,7 +1449,7 @@ const StreamlinedTripManagement = () => {
                       value={routeBuilderForm.busType || 'standard'}
                       onChange={handleBusTypeChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-blue-50"
-                      title="Pre-selected as Standard - you can change if needed"
+                      title="Select the bus type for this route"
                     >
                       <option value="standard">Standard</option>
                       <option value="deluxe">Deluxe</option>
@@ -1269,7 +1470,7 @@ const StreamlinedTripManagement = () => {
                       onChange={handleFareChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-blue-50"
                       placeholder="2.5"
-                      title="Pre-filled with ₹2.5 per km - you can adjust if needed"
+                      title="Enter fare per kilometer"
                     />
                   </div>
                 </div>
@@ -1289,8 +1490,8 @@ const StreamlinedTripManagement = () => {
                   </button>
                   
                   <div className="text-sm text-gray-600">
-                    <p>✨ <strong>Ready to use!</strong> All fields are pre-filled with sample data.</p>
-                    <p>Just click "Generate Route" above to create your first route!</p>
+                    <p>✨ <strong>Ready to create routes!</strong> Fill in the details above.</p>
+                    <p>Click "Generate Route" to create your route with automatic stop extraction.</p>
                   </div>
                 </div>
               </div>
@@ -1405,7 +1606,7 @@ const StreamlinedTripManagement = () => {
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-semibold text-gray-900 flex items-center space-x-2">
                   <Sparkles className="w-6 h-6 text-purple-600" />
-                  <span>AI-Powered Auto Scheduler</span>
+                  <span>Auto Scheduler</span>
                 </h3>
                 <button
                   onClick={() => setShowAutoSchedulerModal(false)}
@@ -1418,7 +1619,7 @@ const StreamlinedTripManagement = () => {
             
             <div className="p-6 space-y-6">
               <div className="bg-purple-50 rounded-lg p-4">
-                <h4 className="font-semibold text-purple-800 mb-2">🚀 Intelligent Scheduling</h4>
+                <h4 className="font-semibold text-purple-800 mb-2">🚀 Automated Scheduling</h4>
                 <p className="text-purple-700 text-sm">
                   This will automatically schedule trips for all buses, assign optimal routes, 
                   and allocate drivers/conductors based on demand patterns and efficiency algorithms.
@@ -1600,9 +1801,17 @@ const StreamlinedTripManagement = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Streamlined Trip Management</h1>
-          <p className="text-gray-600">Intelligent trip scheduling with AI-powered automation</p>
+          <p className="text-gray-600">Efficient trip scheduling and management</p>
         </div>
         <div className="flex items-center space-x-3">
+          {/* Quick date picker for scheduling/filtering */}
+          <input
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            title="Select date to filter and schedule"
+          />
           <button
             onClick={fetchData}
             className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center space-x-2"
@@ -1635,7 +1844,7 @@ const StreamlinedTripManagement = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Total Trips</p>
-              <p className="text-2xl font-bold text-gray-900">{total}</p>
+              <p className="text-2xl font-bold text-gray-900">{statsCounts.total || total}</p>
             </div>
             <div className="p-3 bg-blue-100 rounded-lg">
               <Calendar className="w-6 h-6 text-blue-600" />
@@ -1647,7 +1856,7 @@ const StreamlinedTripManagement = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Scheduled</p>
-              <p className="text-2xl font-bold text-blue-600">{trips.filter(t => t.status === 'scheduled').length}</p>
+              <p className="text-2xl font-bold text-blue-600">{statsCounts.scheduled}</p>
             </div>
             <div className="p-3 bg-blue-100 rounded-lg">
               <Clock className="w-6 h-6 text-blue-600" />
@@ -1659,7 +1868,7 @@ const StreamlinedTripManagement = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Running</p>
-              <p className="text-2xl font-bold text-green-600">{trips.filter(t => t.status === 'running').length}</p>
+              <p className="text-2xl font-bold text-green-600">{statsCounts.running}</p>
             </div>
             <div className="p-3 bg-green-100 rounded-lg">
               <Play className="w-6 h-6 text-green-600" />
@@ -1671,7 +1880,7 @@ const StreamlinedTripManagement = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Completed</p>
-              <p className="text-2xl font-bold text-gray-600">{trips.filter(t => t.status === 'completed').length}</p>
+              <p className="text-2xl font-bold text-gray-600">{statsCounts.completed}</p>
             </div>
             <div className="p-3 bg-gray-100 rounded-lg">
               <CheckCircle className="w-6 h-6 text-gray-600" />
@@ -1691,130 +1900,235 @@ const StreamlinedTripManagement = () => {
           )}
         </div>
         
-        {/* Trip Creation Section */}
-        <div className="mb-6">
-          <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
-            <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
-            Trip Creation & Management
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button
-              onClick={() => setShowSingleAddModal(true)}
-              className="p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center space-x-3"
-            >
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Plus className="w-5 h-5 text-blue-600" />
-              </div>
-              <div className="text-left">
-                <h4 className="font-semibold text-blue-900">Add Single Trip</h4>
-                <p className="text-sm text-blue-700">Add one trip with specific details</p>
-              </div>
-            </button>
-            
-            <button
-              onClick={() => setShowRouteBuilder(true)}
-              className="p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors flex items-center space-x-3"
-            >
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Route className="w-5 h-5 text-purple-600" />
-              </div>
-              <div className="text-left">
-                <h4 className="font-semibold text-purple-900">Smart Route Builder</h4>
-                <p className="text-sm text-purple-700">AI-powered route generation with auto-stops</p>
-              </div>
-            </button>
-            
-            <button
-              onClick={handleExportTrips}
-              className="p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors flex items-center space-x-3"
-            >
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <Download className="w-5 h-5 text-orange-600" />
-              </div>
-              <div className="text-left">
-                <h4 className="font-semibold text-orange-900">Export Trips</h4>
-                <p className="text-sm text-orange-700">Export trip data for analysis</p>
-              </div>
-            </button>
-          </div>
-        </div>
+        {/* All Quick Actions in One Line - Balanced Size */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
+          <button
+            onClick={() => setShowSingleAddModal(true)}
+            className="p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex flex-col items-center space-y-2"
+          >
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Plus className="w-5 h-5 text-blue-600" />
+            </div>
+            <div className="text-center">
+              <h4 className="text-sm font-semibold text-blue-900">Add Trip</h4>
+              <p className="text-xs text-blue-700">Single trip</p>
+            </div>
+          </button>
+          
+          <button
+            onClick={() => setShowRouteBuilder(true)}
+            className="p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors flex flex-col items-center space-y-2"
+          >
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <Route className="w-5 h-5 text-purple-600" />
+            </div>
+            <div className="text-center">
+              <h4 className="text-sm font-semibold text-purple-900">Route Builder</h4>
+              <p className="text-xs text-purple-700">Auto-stops</p>
+            </div>
+          </button>
+          
+          <button
+            onClick={handleExportTrips}
+            className="p-3 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors flex flex-col items-center space-y-2"
+          >
+            <div className="p-2 bg-orange-100 rounded-lg">
+              <Download className="w-5 h-5 text-orange-600" />
+            </div>
+            <div className="text-center">
+              <h4 className="text-sm font-semibold text-orange-900">Export</h4>
+              <p className="text-xs text-orange-700">Trip data</p>
+            </div>
+          </button>
 
-        {/* AI Scheduling Section */}
-        <div className="mb-6">
-          <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
-            <div className="w-2 h-2 bg-purple-500 rounded-full mr-2"></div>
-            AI-Powered Scheduling
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button
-              onClick={() => setShowAutoSchedulerModal(true)}
-              className="p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors flex items-center space-x-3"
-            >
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Sparkles className="w-5 h-5 text-purple-600" />
-              </div>
-              <div className="text-left">
-                <h4 className="font-semibold text-purple-900">AI Auto Scheduler</h4>
-                <p className="text-sm text-purple-700">Intelligent mass scheduling</p>
-              </div>
-            </button>
-            
-            <button
-              onClick={async () => {
-                try {
-                  setLoading(true);
-                  const today = new Date().toISOString().slice(0,10);
-                  const res = await apiFetch('/api/auto-scheduler/schedule-all', {
-                    method: 'POST',
-                    body: JSON.stringify({ startDate: today, endDate: today, options: { enableOptimization: true } })
-                  });
-                  if (res?.ok) { 
-                    toast.success('Scheduled all buses for today'); 
-                    await startTripsForDate(today);
-                  } else { 
-                    toast.error(res?.message || 'Scheduling failed'); 
-                  }
-                } catch (e) { console.error(e); toast.error('Scheduling failed'); } finally { setLoading(false); }
-              }}
-              className="p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center space-x-3"
-            >
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Play className="w-5 h-5 text-green-600" />
-              </div>
-              <div className="text-left">
-                <h4 className="font-semibold text-green-900">Schedule All Buses (Today)</h4>
-                <p className="text-sm text-green-700">Auto-assign crew & buses</p>
-              </div>
-            </button>
+          <button
+            onClick={handleScheduleToYearEnd}
+            className="p-3 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors flex flex-col items-center space-y-2"
+          >
+            <div className="p-2 bg-emerald-100 rounded-lg">
+              <Calendar className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div className="text-center">
+              <h4 className="text-sm font-semibold text-emerald-900">Schedule to Year End</h4>
+              <p className="text-xs text-emerald-700">Auto-assign all days</p>
+            </div>
+          </button>
 
-            <button
-              onClick={async () => {
-                try {
-                  setLoading(true);
-                  const today = new Date().toISOString().slice(0,10);
-                  const res = await apiFetch('/api/auto-scheduler/mass-schedule', {
-                    method: 'POST',
-                    body: JSON.stringify({ date: today, maxTripsPerRoute: 4, timeGap: 30, autoAssignCrew: true, autoAssignBuses: true, optimizeForDemand: true, region: 'KERALA' })
-                  });
-                  if (res?.ok || res?.data?.success) { 
-                    toast.success('Scheduled Kerala routes for today'); 
-                    await startTripsForDate(today);
-                  } else { 
-                    toast.error(res?.message || 'Scheduling failed'); 
+          <button
+            onClick={handleGenerate4PerDepot}
+            className="p-3 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors flex flex-col items-center space-y-2"
+          >
+            <div className="p-2 bg-indigo-100 rounded-lg">
+              <Calendar className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div className="text-center">
+              <h4 className="text-sm font-semibold text-indigo-900">4/Depot</h4>
+              <p className="text-xs text-indigo-700">Auto-assign</p>
+            </div>
+          </button>
+
+          <button
+            onClick={async () => {
+              try {
+                setLoading(true);
+                const today = new Date().toISOString().slice(0,10);
+                let res = await apiFetch('/api/trip-generator/finalize-schedule', { method: 'POST', body: JSON.stringify({ date: dateFilter || today }), suppressError: true });
+                if (!(res?.success || res?.ok)) {
+                  // Fallback to admin endpoint if trip-generator route not found
+                  res = await apiFetch('/api/admin/trips/finalize', { method: 'POST', body: JSON.stringify({ date: dateFilter || today }) });
+                }
+                if (res?.success || res?.ok) {
+                  toast.success('Schedule finalized');
+                  await fetchData();
+                } else {
+                  toast.error(res?.message || 'Failed to finalize schedule');
+                }
+              } catch (e) {
+                console.error(e);
+                toast.error('Failed to finalize schedule');
+              } finally {
+                setLoading(false);
+              }
+            }}
+            className="p-3 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors flex flex-col items-center space-y-2"
+          >
+            <div className="p-2 bg-emerald-100 rounded-lg">
+              <UserCheck className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div className="text-center">
+              <h4 className="text-sm font-semibold text-emerald-900">Finalize</h4>
+              <p className="text-xs text-emerald-700">Assign all</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setShowAutoSchedulerModal(true)}
+            className="p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors flex flex-col items-center space-y-2"
+          >
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <Sparkles className="w-5 h-5 text-purple-600" />
+            </div>
+            <div className="text-center">
+              <h4 className="text-sm font-semibold text-purple-900">Auto Scheduler</h4>
+              <p className="text-xs text-purple-700">Mass scheduling</p>
+            </div>
+          </button>
+          
+          <button
+            onClick={handleGenerate100Trips}
+            className="p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex flex-col items-center space-y-2"
+          >
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Calendar className="w-5 h-5 text-blue-600" />
+            </div>
+            <div className="text-center">
+              <h4 className="text-sm font-semibold text-blue-900">Generate</h4>
+              <p className="text-xs text-blue-700">New trips</p>
+            </div>
+          </button>
+          
+          <button
+            onClick={async () => {
+              try {
+                setLoading(true);
+                const targetDate = dateFilter || '';
+                const concurrency = 10;
+                const scheduleIds = async (ids) => {
+                  while (ids.length) {
+                    const batch = ids.splice(0, concurrency);
+                    await Promise.all(batch.map(id => apiFetch(`/api/admin/trips/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'scheduled' }), suppressError: true })));
                   }
-                } catch (e) { console.error(e); toast.error('Scheduling failed'); } finally { setLoading(false); }
-              }}
-              className="p-4 bg-teal-50 rounded-lg hover:bg-teal-100 transition-colors flex items-center space-x-3"
-            >
-              <div className="p-2 bg-teal-100 rounded-lg">
-                <Sparkles className="w-5 h-5 text-teal-600" />
-              </div>
-              <div className="text-left">
-                <h4 className="font-semibold text-teal-900">Schedule Kerala Only (Today)</h4>
-                <p className="text-sm text-teal-700">All routes within Kerala</p>
-              </div>
-            </button>
-          </div>
+                };
+
+                if (targetDate) {
+                  // Schedule trips for selected date only
+                  const d = new Date(targetDate);
+                  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).toISOString();
+                  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).toISOString();
+                  const params = new URLSearchParams({ page: '1', limit: '2000', dateFrom: start, dateTo: end });
+                  const listRes = await apiFetch('/api/admin/trips?' + params.toString(), { suppressError: true });
+                  const payload = listRes?.data?.data || listRes?.data || {};
+                  const allTrips = payload.trips || payload.data || [];
+                  const toSchedule = (allTrips || []).filter(t => t.status !== 'scheduled' && t.status !== 'completed' && t.status !== 'cancelled');
+                  const ids = toSchedule.map(t => t._id || t.id).filter(Boolean);
+                  await scheduleIds(ids);
+                  await startTripsForDate(targetDate);
+                  toast.success('All trips for selected date scheduled and started');
+                } else {
+                  // Schedule ALL trips across database (paginate until all fetched)
+                  const limitPerPage = 200;
+                  let pageIdx = 1;
+                  let total = 0;
+                  let processed = 0;
+                  do {
+                    const params = new URLSearchParams({ page: String(pageIdx), limit: String(limitPerPage) });
+                    const res = await apiFetch('/api/admin/trips?' + params.toString(), { suppressError: true });
+                    const data = res?.data || {};
+                    const tripsList = data?.data?.trips || data?.trips || [];
+                    total = data?.data?.pagination?.total || data?.pagination?.total || total;
+                    const ids = (tripsList || [])
+                      .filter(t => t.status !== 'scheduled' && t.status !== 'completed' && t.status !== 'cancelled')
+                      .map(t => t._id || t.id)
+                      .filter(Boolean);
+                    await scheduleIds(ids);
+                    processed += tripsList.length || 0;
+                    pageIdx += 1;
+                  } while (processed < (total || processed));
+                  toast.success('All trips in the system set to scheduled');
+                }
+              } catch (e) { console.error(e); toast.error('Scheduling failed'); } finally { setLoading(false); }
+            }}
+            className="p-3 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex flex-col items-center space-y-2"
+          >
+            <div className="p-2 bg-green-100 rounded-lg">
+              <Play className="w-5 h-5 text-green-600" />
+            </div>
+            <div className="text-center">
+              <h4 className="text-sm font-semibold text-green-900">Schedule All</h4>
+              <p className="text-xs text-green-700">Today</p>
+            </div>
+          </button>
+
+          <button
+            onClick={async () => {
+              try {
+                if (!window.confirm('This will delete ALL trips from the database. Are you sure?')) {
+                  return;
+                }
+                
+                setLoading(true);
+                toast.loading('Clearing all trips...', { id: 'clear-trips' });
+                
+                // Use the dedicated clear-only endpoint
+                const response = await apiFetch('/api/trip-generator/clear-all', {
+                  method: 'POST'
+                });
+                
+                if (response?.success) {
+                  // Don't create new trips, just clear
+                  toast.success('All trips cleared successfully!', { id: 'clear-trips' });
+                  // Refresh the data to show empty state
+                  await fetchData();
+                } else {
+                  toast.error(response?.error || 'Failed to clear trips', { id: 'clear-trips' });
+                }
+              } catch (error) {
+                console.error('Error clearing trips:', error);
+                toast.error('Failed to clear trips', { id: 'clear-trips' });
+              } finally {
+                setLoading(false);
+              }
+            }}
+            className="p-3 bg-red-50 rounded-lg hover:bg-red-100 transition-colors flex flex-col items-center space-y-2"
+          >
+            <div className="p-2 bg-red-100 rounded-lg">
+              <Trash2 className="w-5 h-5 text-red-600" />
+            </div>
+            <div className="text-center">
+              <h4 className="text-sm font-semibold text-red-900">Clear All</h4>
+              <p className="text-xs text-red-700">Delete all trips</p>
+            </div>
+          </button>
         </div>
       </div>
 

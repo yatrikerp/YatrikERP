@@ -6,7 +6,7 @@ export const GOOGLE_CONFIG = {
   CLIENT_ID: '889305333159-938odo67058fepqktsd8ro7pvsp5c4lv.apps.googleusercontent.com',
   
   // Backend OAuth endpoint (using relative URL for proxy)
-  BACKEND_OAUTH_URL: '/api/auth/google',
+  BACKEND_OAUTH_URL: `${(((typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_BACKEND_URL) || process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, ''))}/api/auth/google`,
   
   // Frontend callback URL
   FRONTEND_CALLBACK_URL: 'http://localhost:5173/oauth/callback'
