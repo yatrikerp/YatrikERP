@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MapPin, Navigation, RefreshCw, ExternalLink, Settings } from 'lucide-react';
+import { MapPin, Navigation, RefreshCw, ExternalLink } from 'lucide-react';
 
 const GoogleMapsRouteTracker = ({ 
   trip, 
@@ -9,11 +9,8 @@ const GoogleMapsRouteTracker = ({
 }) => {
   const mapRef = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState(null);
-  const [routePath, setRoutePath] = useState(null);
   const [isApiConfigured, setIsApiConfigured] = useState(false);
   const [isRealTimeEnabled, setIsRealTimeEnabled] = useState(false);
-  const [locationHistory, setLocationHistory] = useState([]);
 
   const getApiKey = () => (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GOOGLE_MAPS_API_KEY) || undefined;
 
@@ -112,7 +109,7 @@ const GoogleMapsRouteTracker = ({
     // Create markers array
     mapRef.current.markers = [];
 
-    // Add current location marker
+    // Add current location marker (Uber-style bus marker)
     if (trip.coordinates) {
       const currentMarker = new window.google.maps.Marker({
         position: { lat: trip.coordinates.lat, lng: trip.coordinates.lng },
@@ -120,16 +117,25 @@ const GoogleMapsRouteTracker = ({
         title: `Bus ${trip.busId?.busNumber || 'Unknown'} - ${trip.currentLocation}`,
         icon: {
           url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-            <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="20" cy="20" r="18" fill="#E91E63" stroke="#FFFFFF" stroke-width="3"/>
-              <path d="M12 16h16v8H12z" fill="#FFFFFF"/>
-              <circle cx="20" cy="20" r="3" fill="#E91E63"/>
+            <svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <!-- Outer pulse circle -->
+              <circle cx="24" cy="24" r="22" fill="#2196F3" opacity="0.2"/>
+              <circle cx="24" cy="24" r="18" fill="#2196F3" opacity="0.4"/>
+              <!-- Main bus circle -->
+              <circle cx="24" cy="24" r="14" fill="#1976D2" stroke="#FFFFFF" stroke-width="3"/>
+              <!-- Bus icon -->
+              <rect x="14" y="18" width="20" height="12" rx="2" fill="#FFFFFF"/>
+              <rect x="16" y="20" width="7" height="5" fill="#1976D2" opacity="0.7"/>
+              <rect x="25" y="20" width="7" height="5" fill="#1976D2" opacity="0.7"/>
+              <circle cx="18" cy="28" r="1.5" fill="#333333"/>
+              <circle cx="30" cy="28" r="1.5" fill="#333333"/>
             </svg>
           `),
-          scaledSize: new window.google.maps.Size(40, 40),
-          anchor: new window.google.maps.Point(20, 20)
+          scaledSize: new window.google.maps.Size(48, 48),
+          anchor: new window.google.maps.Point(24, 24)
         },
-        animation: window.google.maps.Animation.BOUNCE
+        animation: window.google.maps.Animation.DROP,
+        zIndex: 1000
       });
 
       mapRef.current.markers.push(currentMarker);
@@ -168,87 +174,239 @@ const GoogleMapsRouteTracker = ({
     const routeCoordinates = generateSampleRoute(tripData);
     
     if (routeCoordinates.length > 1) {
+      // Uber-style route path with gradient effect
       const routePath = new window.google.maps.Polyline({
         path: routeCoordinates,
         geodesic: true,
-        strokeColor: '#E91E63',
-        strokeOpacity: 0.8,
-        strokeWeight: 4,
-        map: map
+        strokeColor: '#1976D2',
+        strokeOpacity: 1.0,
+        strokeWeight: 5,
+        map: map,
+        zIndex: 100,
+        icons: [{
+          icon: {
+            path: 'M 0,-1 0,1',
+            strokeOpacity: 1,
+            strokeWeight: 2,
+            scale: 3
+          },
+          offset: '0',
+          repeat: '20px'
+        }]
+      });
+      
+      // Add a lighter background line for depth
+      new window.google.maps.Polyline({
+        path: routeCoordinates,
+        geodesic: true,
+        strokeColor: '#90CAF9',
+        strokeOpacity: 0.6,
+        strokeWeight: 8,
+        map: map,
+        zIndex: 50
       });
 
       mapRef.current.routePath = routePath;
+      mapRef.current.backgroundPath = routePath; // Store reference
 
-      // Add start and end markers
+      // Add start and end markers with city names
       if (routeCoordinates.length > 0) {
-        // Start marker
+        // Get city names from trip data
+        const startCity = tripData.routeId?.startingPoint?.city || 'Start';
+        const endCity = tripData.routeId?.endingPoint?.city || 'End';
+        
+        // Start marker (Green with A)
         const startMarker = new window.google.maps.Marker({
           position: routeCoordinates[0],
           map: map,
-          title: 'Start Point',
+          title: `Starting Point: ${startCity}`,
+          label: {
+            text: 'A',
+            color: 'white',
+            fontSize: '14px',
+            fontWeight: 'bold'
+          },
           icon: {
-            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-              <svg width="30" height="30" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="15" cy="15" r="12" fill="#00BCD4" stroke="#FFFFFF" stroke-width="2"/>
-                <text x="15" y="19" text-anchor="middle" fill="white" font-size="12" font-weight="bold">S</text>
-              </svg>
-            `),
-            scaledSize: new window.google.maps.Size(30, 30),
-            anchor: new window.google.maps.Point(15, 15)
+            path: window.google.maps.SymbolPath.CIRCLE,
+            scale: 15,
+            fillColor: '#00C853',
+            fillOpacity: 1,
+            strokeColor: '#FFFFFF',
+            strokeWeight: 3
           }
         });
 
-        // End marker
+        // Add info window for start marker
+        const startInfoWindow = new window.google.maps.InfoWindow({
+          content: `
+            <div style="padding: 8px;">
+              <h3 style="font-weight: 600; color: #00C853; margin: 0 0 4px 0;">Starting Point</h3>
+              <p style="margin: 0; font-size: 14px; color: #333;">${startCity}</p>
+              ${tripData.routeId?.startingPoint?.location ? 
+                `<p style="margin: 4px 0 0 0; font-size: 12px; color: #666;">${tripData.routeId.startingPoint.location}</p>` 
+                : ''}
+            </div>
+          `
+        });
+
+        startMarker.addListener('click', () => {
+          startInfoWindow.open(map, startMarker);
+        });
+
+        // End marker (Red with B)
         const endMarker = new window.google.maps.Marker({
           position: routeCoordinates[routeCoordinates.length - 1],
           map: map,
-          title: 'End Point',
+          title: `Destination: ${endCity}`,
+          label: {
+            text: 'B',
+            color: 'white',
+            fontSize: '14px',
+            fontWeight: 'bold'
+          },
           icon: {
-            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-              <svg width="30" height="30" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="15" cy="15" r="12" fill="#4CAF50" stroke="#FFFFFF" stroke-width="2"/>
-                <text x="15" y="19" text-anchor="middle" fill="white" font-size="12" font-weight="bold">E</text>
-              </svg>
-            `),
-            scaledSize: new window.google.maps.Size(30, 30),
-            anchor: new window.google.maps.Point(15, 15)
+            path: window.google.maps.SymbolPath.CIRCLE,
+            scale: 15,
+            fillColor: '#D32F2F',
+            fillOpacity: 1,
+            strokeColor: '#FFFFFF',
+            strokeWeight: 3
           }
         });
 
+        // Add info window for end marker
+        const endInfoWindow = new window.google.maps.InfoWindow({
+          content: `
+            <div style="padding: 8px;">
+              <h3 style="font-weight: 600; color: #D32F2F; margin: 0 0 4px 0;">Destination</h3>
+              <p style="margin: 0; font-size: 14px; color: #333;">${endCity}</p>
+              ${tripData.routeId?.endingPoint?.location ? 
+                `<p style="margin: 4px 0 0 0; font-size: 12px; color: #666;">${tripData.routeId.endingPoint.location}</p>` 
+                : ''}
+            </div>
+          `
+        });
+
+        endMarker.addListener('click', () => {
+          endInfoWindow.open(map, endMarker);
+        });
+
         mapRef.current.markers.push(startMarker, endMarker);
+        
+        // Fit map bounds to show entire route
+        const bounds = new window.google.maps.LatLngBounds();
+        routeCoordinates.forEach(coord => bounds.extend(coord));
+        map.fitBounds(bounds);
+        
+        // Add some padding to the bounds
+        setTimeout(() => {
+          const zoom = map.getZoom();
+          map.setZoom(zoom - 0.5); // Zoom out slightly for better view
+        }, 500);
       }
     }
   };
 
   const generateSampleRoute = (tripData) => {
-    // Use the specific coordinates from the provided URL
-    // URL: http://localhost:5000/route/v1/driving/76.9558,8.5241;76.5219,9.5916
-    const specificRoute = [
-      { lat: 8.5241, lng: 76.9558 }, // Start point (Thiruvananthapuram area)
-      { lat: 9.5916, lng: 76.5219 }  // End point (Kottayam area)
-    ];
+    // Kerala city coordinates mapping (actual locations)
+    const keralaCoordinates = {
+      'Thiruvananthapuram': { lat: 8.5241, lng: 76.9366 },
+      'Kollam': { lat: 8.8932, lng: 76.6141 },
+      'Alappuzha': { lat: 9.4981, lng: 76.3388 },
+      'Kottayam': { lat: 9.5916, lng: 76.5222 },
+      'Kochi': { lat: 9.9312, lng: 76.2673 },
+      'Ernakulam': { lat: 9.9816, lng: 76.2999 },
+      'Thrissur': { lat: 10.5276, lng: 76.2144 },
+      'Guruvayur': { lat: 10.5949, lng: 76.0400 },
+      'Palakkad': { lat: 10.7867, lng: 76.6548 },
+      'Malappuram': { lat: 11.0510, lng: 76.0711 },
+      'Kozhikode': { lat: 11.2588, lng: 75.7804 },
+      'Wayanad': { lat: 11.6854, lng: 76.1320 },
+      'Kannur': { lat: 11.8745, lng: 75.3704 },
+      'Kasaragod': { lat: 12.4996, lng: 74.9869 },
+      'Bangalore': { lat: 12.9716, lng: 77.5946 },
+      'Salem': { lat: 11.6643, lng: 78.1460 },
+      'Madurai': { lat: 9.9252, lng: 78.1198 }
+    };
+
+    // Try to get route starting and ending points from trip data
+    let startPoint = null;
+    let endPoint = null;
+    
+    if (tripData.routeId) {
+      const route = tripData.routeId;
+      
+      // Get starting point coordinates
+      if (route.startingPoint) {
+        const startCity = route.startingPoint.city || route.startingPoint;
+        if (typeof startCity === 'string' && keralaCoordinates[startCity]) {
+          startPoint = keralaCoordinates[startCity];
+        } else if (route.startingPoint.coordinates) {
+          const coords = route.startingPoint.coordinates;
+          if (coords.latitude && coords.longitude) {
+            startPoint = { lat: coords.latitude, lng: coords.longitude };
+          }
+        }
+      }
+      
+      // Get ending point coordinates
+      if (route.endingPoint) {
+        const endCity = route.endingPoint.city || route.endingPoint;
+        if (typeof endCity === 'string' && keralaCoordinates[endCity]) {
+          endPoint = keralaCoordinates[endCity];
+        } else if (route.endingPoint.coordinates) {
+          const coords = route.endingPoint.coordinates;
+          if (coords.latitude && coords.longitude) {
+            endPoint = { lat: coords.latitude, lng: coords.longitude };
+          }
+        }
+      }
+    }
+    
+    // Fallback to default route if no valid coordinates found
+    if (!startPoint || !endPoint) {
+      startPoint = { lat: 8.5241, lng: 76.9366 }; // Thiruvananthapuram
+      endPoint = { lat: 9.5916, lng: 76.5222 };    // Kottayam
+    }
 
     // Generate intermediate points for a more realistic route
-    const intermediatePoints = generateIntermediatePoints(specificRoute[0], specificRoute[1]);
+    const intermediatePoints = generateIntermediatePoints(startPoint, endPoint);
     
-    return [specificRoute[0], ...intermediatePoints, specificRoute[1]];
+    return [startPoint, ...intermediatePoints, endPoint];
   };
 
   const generateIntermediatePoints = (start, end) => {
     // Generate intermediate points along the route for better visualization
+    // Using Bezier curve-like path for more realistic road routing
     const points = [];
-    const numPoints = 5; // Number of intermediate points
+    const numPoints = 8; // More points for smoother curve
+    
+    // Add curvature offset based on distance
+    const distance = Math.sqrt(
+      Math.pow(end.lat - start.lat, 2) + Math.pow(end.lng - start.lng, 2)
+    );
+    const curveOffset = distance * 0.15; // 15% of distance for curve
+    
+    // Calculate perpendicular direction for curve
+    const dx = end.lng - start.lng;
+    const dy = end.lat - start.lat;
+    const perpLng = -dy * curveOffset;
+    const perpLat = dx * curveOffset;
     
     for (let i = 1; i < numPoints; i++) {
-      const ratio = i / numPoints;
-      const lat = start.lat + (end.lat - start.lat) * ratio;
-      const lng = start.lng + (end.lng - start.lng) * ratio;
+      const t = i / numPoints;
       
-      // Add some variation to make the route more realistic
-      const variation = 0.01;
+      // Quadratic Bezier curve formula for more natural path
+      const curveStrength = Math.sin(t * Math.PI); // Peak at middle
+      
+      const lat = start.lat + (end.lat - start.lat) * t + perpLat * curveStrength;
+      const lng = start.lng + (end.lng - start.lng) * t + perpLng * curveStrength;
+      
+      // Add slight random variation to simulate road irregularities
+      const microVariation = 0.002;
       points.push({
-        lat: lat + (Math.random() - 0.5) * variation,
-        lng: lng + (Math.random() - 0.5) * variation
+        lat: lat + (Math.random() - 0.5) * microVariation,
+        lng: lng + (Math.random() - 0.5) * microVariation
       });
     }
     
@@ -269,10 +427,6 @@ const GoogleMapsRouteTracker = ({
       lat: newLocation.lat + (Math.random() - 0.5) * variation,
       lng: newLocation.lng + (Math.random() - 0.5) * variation
     };
-
-    // Update location history
-    setLocationHistory(prev => [...prev.slice(-10), updatedLocation]);
-    setCurrentLocation(updatedLocation);
 
     // Update the map marker
     if (mapRef.current.markers && mapRef.current.markers.length > 0) {

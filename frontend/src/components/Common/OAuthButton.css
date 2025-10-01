@@ -1,0 +1,63 @@
+/* Mobile-Optimized OAuth Button Styles */
+
+.oauth-button {
+  position: relative;
+  z-index: 1;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  cursor: pointer;
+  min-height: 48px; /* Minimum touch target size for mobile */
+}
+
+/* Mobile-specific enhancements */
+@media (max-width: 768px) {
+  .oauth-button {
+    min-height: 52px; /* Larger touch target on mobile */
+    font-size: 15px; /* Slightly larger text on mobile */
+    padding: 12px 20px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .oauth-button:active {
+    transform: scale(0.98);
+    opacity: 0.9;
+  }
+
+  /* Ensure button is not behind any overlays */
+  .oauth-button {
+    isolation: isolate;
+  }
+}
+
+/* iOS-specific fixes */
+@supports (-webkit-touch-callout: none) {
+  .oauth-button {
+    -webkit-appearance: none;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+  }
+}
+
+/* Android-specific fixes */
+@media (max-width: 768px) and (hover: none) and (pointer: coarse) {
+  .oauth-button {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+}
+
+/* Prevent double-tap zoom on mobile */
+.oauth-button * {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+

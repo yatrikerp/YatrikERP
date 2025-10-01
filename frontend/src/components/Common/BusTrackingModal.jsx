@@ -118,12 +118,9 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
 
   useEffect(() => {
     if (isOpen) {
-      console.log('🚌 BusTrackingModal opened - Direct map fetch...');
-      // Immediately set sample data for instant map display
-      setRunningTrips(sampleTrips);
-      setSelectedTrip(sampleTrips[0]);
-      // Fetch from API in background without blocking UI
-      setTimeout(() => fetchRunningTrips(), 100);
+      console.log('🚌 BusTrackingModal opened - Fetching live data...');
+      // Fetch real data immediately
+      fetchRunningTrips();
       startAutoRefresh();
     } else {
       stopAutoRefresh();
@@ -133,9 +130,8 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
   }, [isOpen]);
 
   const fetchRunningTrips = async () => {
-    // Don't set loading state to avoid UI delays
+    setLoading(true);
     try {
-      // Try to fetch from API first
       const response = await fetch('/api/tracking/running-trips');
       if (response.ok) {
         const data = await response.json();
@@ -144,6 +140,12 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
           setRunningTrips(trips);
           if (trips.length > 0) {
             setSelectedTrip(trips[0]);
+          } else {
+            setSelectedTrip(null);
+            // Use sample data if no real trips are running
+            console.log('No running trips found, using sample data');
+            setRunningTrips(sampleTrips);
+            setSelectedTrip(sampleTrips[0]);
           }
           console.log('✅ Fetched running trips from API:', trips.length);
         } else {
@@ -154,8 +156,12 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
       }
     } catch (error) {
       console.error('❌ Error fetching running trips:', error);
-      // Keep sample data if API fails - no UI changes needed
-      console.warn('Keeping sample data as fallback');
+      // Use sample data as fallback
+      console.log('Using sample data as fallback');
+      setRunningTrips(sampleTrips);
+      setSelectedTrip(sampleTrips[0]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -218,51 +224,51 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col"
+            className="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                  <Navigation className="w-6 h-6 text-white" />
+            {/* Header - Compact */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                  <Navigation className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900">Live Bus Tracking</h2>
-                  <p className="text-gray-500">Track currently running buses in real-time</p>
+                  <h2 className="text-lg font-bold text-gray-900">Live Bus Tracking</h2>
+                  <p className="text-xs text-gray-500">Track currently running buses in real-time</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={fetchRunningTrips}
-                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-white rounded-lg transition-colors"
                   title="Refresh"
                 >
-                  <RefreshCw className="w-5 h-5" />
+                  <RefreshCw className="w-4 h-4" />
                 </button>
                 <button
                   onClick={onClose}
-                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-white rounded-lg transition-colors"
                 >
-                  <X className="w-6 h-6" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
             {/* Main Content */}
             <div className="flex-1 flex overflow-hidden">
-              {/* Left Panel - Trip List */}
-              <div className="w-96 border-r border-gray-200 flex flex-col">
-                <div className="p-4 border-b border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Running Trips ({runningTrips.length})</h3>
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              {/* Left Panel - Trip List (Compact) */}
+              <div className="w-80 border-r border-gray-200 flex flex-col bg-gray-50">
+                <div className="px-3 py-2 border-b border-gray-200 bg-white">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-1">Running Trips ({runningTrips.length})</h3>
+                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
                     <span>Live Updates</span>
                   </div>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto">
-                  <div className="p-4 space-y-3">
+                  <div className="p-2 space-y-2">
                     {runningTrips.map((trip) => {
                       const statusConfig = getStatusConfig(trip.status);
                       const StatusIcon = statusConfig.icon;
@@ -270,43 +276,43 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
                       return (
                         <motion.div
                           key={trip._id}
-                          initial={{ opacity: 0, y: 20 }}
+                          initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                          className={`p-3 rounded-lg border cursor-pointer transition-all ${
                             selectedTrip?._id === trip._id
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
+                              ? 'border-blue-500 bg-blue-50 shadow-sm'
+                              : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm'
                           }`}
                           onClick={() => setSelectedTrip(trip)}
                         >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-semibold text-gray-900">{trip.tripId}</span>
-                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${statusConfig.color}`}>
-                              <StatusIcon className="w-3 h-3 mr-1" />
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-sm font-semibold text-gray-900">{trip.tripId}</span>
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${statusConfig.color}`}>
+                              <StatusIcon className="w-3 h-3 mr-0.5" />
                               {statusConfig.text}
                             </span>
                           </div>
                           
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm">
-                              <Route className="w-4 h-4 text-blue-600" />
-                              <span className="font-medium text-gray-900">{trip.routeId.routeName}</span>
+                          <div className="space-y-1.5">
+                            <div className="flex items-start gap-1.5 text-xs">
+                              <Route className="w-3.5 h-3.5 text-blue-600 mt-0.5 flex-shrink-0" />
+                              <span className="font-medium text-gray-900 line-clamp-1">{trip.routeId.routeName}</span>
                             </div>
                             
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <Bus className="w-4 h-4 text-gray-500" />
-                              <span>{trip.busId.busNumber}</span>
+                            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                              <Bus className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                              <span className="truncate">{trip.busId.busNumber}</span>
                               <span className="text-gray-400">•</span>
-                              <span>{trip.busId.busType}</span>
+                              <span className="truncate">{trip.busId.busType}</span>
                             </div>
                             
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <MapPin className="w-4 h-4 text-green-600" />
-                              <span>{trip.currentLocation}</span>
+                            <div className="flex items-start gap-1.5 text-xs text-gray-600">
+                              <MapPin className="w-3.5 h-3.5 text-green-600 mt-0.5 flex-shrink-0" />
+                              <span className="line-clamp-1">{trip.currentLocation}</span>
                             </div>
                             
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <Navigation className="w-4 h-4 text-orange-600" />
+                            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                              <Navigation className="w-3.5 h-3.5 text-orange-600 flex-shrink-0" />
                               <span>{trip.currentSpeed}</span>
                               <span className="text-gray-400">•</span>
                               <span>{trip.lastUpdate}</span>
@@ -321,15 +327,15 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
                 </div>
               </div>
 
-              {/* Right Panel - Map and Trip Details */}
-              <div className="flex-1 flex flex-col">
-                {/* Map - Always Show (Same as Driver Dashboard) */}
-                <div className="h-2/3 relative m-4">
+              {/* Right Panel - Map and Trip Details (Optimized) */}
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Map - Balanced Height */}
+                <div className="h-[55%] relative p-3">
                   <div style={{
                     background: '#FFFFFF',
-                    borderRadius: '12px',
+                    borderRadius: '8px',
                     border: '1px solid #E5E7EB',
-                    boxShadow: '0 4px 10px rgba(0,0,0,0.06)',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
                     padding: 0,
                     overflow: 'hidden',
                     height: '100%'
@@ -360,63 +366,72 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
                   </div>
                 </div>
 
-                {/* Trip Details */}
-                <div className="h-1/3 p-4 border-t border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Trip Details</h3>
+                {/* Trip Details - Compact & Scrollable */}
+                <div className="h-[45%] px-3 pb-3 border-t border-gray-200 flex flex-col overflow-hidden">
+                  <h3 className="text-sm font-semibold text-gray-900 py-2 sticky top-0 bg-white">Trip Details</h3>
                   {selectedTrip ? (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-3">
+                    <div className="flex-1 overflow-y-auto">
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 pb-2">
                         <div>
-                          <label className="text-sm text-gray-500">Route</label>
-                          <p className="font-medium text-gray-900">{selectedTrip.routeId.routeName}</p>
+                          <label className="text-xs text-gray-500 block mb-0.5">Route</label>
+                          <p className="text-sm font-medium text-gray-900 truncate">{selectedTrip.routeId.routeName}</p>
                         </div>
                         <div>
-                          <label className="text-sm text-gray-500">Bus Number</label>
-                          <p className="font-medium text-gray-900">{selectedTrip.busId.busNumber}</p>
+                          <label className="text-xs text-gray-500 block mb-0.5">Current Speed</label>
+                          <p className="text-sm font-medium text-gray-900">{selectedTrip.currentSpeed}</p>
                         </div>
                         <div>
-                          <label className="text-sm text-gray-500">Driver</label>
-                          <p className="font-medium text-gray-900">{selectedTrip.driverId.name}</p>
+                          <label className="text-xs text-gray-500 block mb-0.5">Bus Number</label>
+                          <p className="text-sm font-medium text-gray-900">{selectedTrip.busId.busNumber}</p>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500 block mb-0.5">Estimated Arrival</label>
+                          <p className="text-sm font-medium text-gray-900">{selectedTrip.estimatedArrival}</p>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500 block mb-0.5">Driver</label>
+                          <p className="text-sm font-medium text-gray-900 truncate">{selectedTrip.driverId.name}</p>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500 block mb-0.5">Passengers</label>
+                          <p className="text-sm font-medium text-gray-900">{selectedTrip.passengers}/{selectedTrip.busId.capacity.total}</p>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500 block mb-0.5">Conductor</label>
+                          <p className="text-sm font-medium text-gray-900 truncate">{selectedTrip.conductorId?.name || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500 block mb-0.5">Bus Type</label>
+                          <p className="text-sm font-medium text-gray-900 truncate">{selectedTrip.busId.busType}</p>
                         </div>
                       </div>
-                      <div className="space-y-3">
-                        <div>
-                          <label className="text-sm text-gray-500">Current Speed</label>
-                          <p className="font-medium text-gray-900">{selectedTrip.currentSpeed}</p>
+                      
+                      <div className="mt-2 flex items-center justify-between bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-2 border border-green-100">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1">
+                            <Wifi className="w-3.5 h-3.5 text-green-600" />
+                            <span className="text-xs text-gray-700">GPS</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Signal className="w-3.5 h-3.5 text-green-600" />
+                            <span className="text-xs text-gray-700">Strong</span>
+                          </div>
                         </div>
-                        <div>
-                          <label className="text-sm text-gray-500">Estimated Arrival</label>
-                          <p className="font-medium text-gray-900">{selectedTrip.estimatedArrival}</p>
-                        </div>
-                        <div>
-                          <label className="text-sm text-gray-500">Passengers</label>
-                          <p className="font-medium text-gray-900">{selectedTrip.passengers}/{selectedTrip.busId.capacity.total}</p>
+                        <div className="flex items-center gap-1">
+                          <Battery className="w-3.5 h-3.5 text-green-600" />
+                          <span className="text-xs text-gray-700">100%</span>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center py-8">
-                      <Bus className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                      <p className="text-gray-500">No trip selected</p>
+                    <div className="flex-1 flex items-center justify-center">
+                      <div className="text-center">
+                        <Bus className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                        <p className="text-sm text-gray-500">No trip selected</p>
+                        <p className="text-xs text-gray-400 mt-1">Select a trip from the list</p>
+                      </div>
                     </div>
                   )}
-                  
-                  <div className="mt-4 flex items-center justify-between bg-gray-50 rounded-lg p-3">
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <Wifi className="w-4 h-4 text-green-600" />
-                        <span className="text-sm text-gray-600">GPS Active</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Signal className="w-4 h-4 text-green-600" />
-                        <span className="text-sm text-gray-600">Signal Strong</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Battery className="w-4 h-4 text-green-600" />
-                      <span className="text-sm text-gray-600">100%</span>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>

@@ -508,11 +508,11 @@ const Auth = ({ initialMode = 'login' }) => {
                   </div>
                   <div className="mt-6">
                     <OAuthButton 
-                      href={`${(((typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_BACKEND_URL) || process.env.REACT_APP_API_URL || '').replace(/\/$/, ''))}/api/auth/google?next=${encodeURIComponent(redirectTo)}`} 
+                      href={`${(((typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_BACKEND_URL) || process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, ''))}/api/auth/google?next=${encodeURIComponent(redirectTo)}`} 
                       ariaLabel="Sign in with Google" 
                       icon={<FaGoogle className="text-red-500" />}
                       disabled={isLoggingIn || isSigningUp}
-                      className="transform hover:scale-105 active:scale-95 transition-transform duration-100"
+                      className="transform hover:scale-105 active:scale-95 transition-transform duration-100 mobile-google-signin"
                     >
                       Sign in with Google
                     </OAuthButton>
@@ -643,10 +643,10 @@ const Auth = ({ initialMode = 'login' }) => {
                 </div>
                 <div className="mt-6">
                   <OAuthButton 
-                    href={`${(((typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_BACKEND_URL) || process.env.REACT_APP_API_URL || '').replace(/\/$/, ''))}/api/auth/google?next=${encodeURIComponent(redirectTo)}&mode=signup`} 
+                    href={`${(((typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_BACKEND_URL) || process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, ''))}/api/auth/google?next=${encodeURIComponent(redirectTo)}&mode=signup`} 
                     ariaLabel="Sign up with Google" 
                     icon={<FaGoogle className="text-red-500" />}
-                    className="py-2 transform hover:scale-105 active:scale-95 transition-transform duration-100"
+                    className="py-2 transform hover:scale-105 active:scale-95 transition-transform duration-100 mobile-google-signin"
                     disabled={isLoggingIn || isSigningUp}
                   >
                     Sign up with Google

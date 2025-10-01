@@ -361,37 +361,60 @@ const StreamlinedTripManagement = () => {
   // Fetch live counts from backend using pagination totals per status
   const fetchCounts = useCallback(async () => {
     try {
-      const baseParams = new URLSearchParams();
-      // respect date filter when present
-      if (dateFilter) {
-        const d = new Date(dateFilter);
-        const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).toISOString();
-        const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).toISOString();
-        baseParams.set('dateFrom', start);
-        baseParams.set('dateTo', end);
+      // Use the new live trip stats API
+      const res = await apiFetch('/api/admin/trip-stats', { suppressError: true });
+      if (res?.success && res?.data) {
+        const stats = res.data;
+        setStatsCounts({ 
+          total: stats.total, 
+          scheduled: stats.scheduled, 
+          running: stats.running, 
+          completed: stats.completed 
+        });
+        setTotal(stats.total);
+        console.log('📊 Live trip stats updated:', {
+          total: stats.total,
+          scheduled: stats.scheduled,
+          running: stats.running,
+          completed: stats.completed,
+          shouldBeRunning: stats.shouldBeRunning,
+          actuallyRunning: stats.actuallyRunning
+        });
+      } else {
+        // Fallback to old method if new API fails
+        const baseParams = new URLSearchParams();
+        // respect date filter when present
+        if (dateFilter) {
+          const d = new Date(dateFilter);
+          const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).toISOString();
+          const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).toISOString();
+          baseParams.set('dateFrom', start);
+          baseParams.set('dateTo', end);
+        }
+
+        const mk = async (status) => {
+          const p = new URLSearchParams(baseParams);
+          p.set('page', '1');
+          p.set('limit', '1');
+          if (status) p.set('status', status);
+          const res = await apiFetch('/api/admin/trips?' + p.toString(), { suppressError: true });
+          const data = res?.data || {};
+          const total = data?.data?.pagination?.total || data?.pagination?.total || 0;
+          return total;
+        };
+
+        const [totalAll, totalScheduled, totalRunning, totalCompleted] = await Promise.all([
+          mk(null),
+          mk('scheduled'),
+          mk('running'),
+          mk('completed')
+        ]);
+
+        setStatsCounts({ total: totalAll, scheduled: totalScheduled, running: totalRunning, completed: totalCompleted });
+        setTotal(totalAll);
       }
-
-      const mk = async (status) => {
-        const p = new URLSearchParams(baseParams);
-        p.set('page', '1');
-        p.set('limit', '1');
-        if (status) p.set('status', status);
-        const res = await apiFetch('/api/admin/trips?' + p.toString(), { suppressError: true });
-        const data = res?.data || {};
-        const total = data?.data?.pagination?.total || data?.pagination?.total || 0;
-        return total;
-      };
-
-      const [totalAll, totalScheduled, totalRunning, totalCompleted] = await Promise.all([
-        mk(null),
-        mk('scheduled'),
-        mk('running'),
-        mk('completed')
-      ]);
-
-      setStatsCounts({ total: totalAll, scheduled: totalScheduled, running: totalRunning, completed: totalCompleted });
-      setTotal(totalAll);
     } catch (e) {
+      console.error('Error fetching trip counts:', e);
       // ignore errors to avoid noisy UI; counts will be updated next cycle
     }
   }, [dateFilter]);

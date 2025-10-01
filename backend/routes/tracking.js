@@ -11,18 +11,20 @@ router.get('/running-trips', async (req, res) => {
   try {
     console.log('🚌 Fetching currently running trips...');
     
-    // Find trips with status 'running' for today
+    // Find trips that should be running now (both 'running' and 'scheduled' trips that should have started)
+    const now = new Date();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const runningTrips = await Trip.find({
-      status: 'running',
+    // Get all trips for today
+    const allTrips = await Trip.find({
       serviceDate: {
         $gte: today,
         $lt: tomorrow
-      }
+      },
+      status: { $in: ['scheduled', 'running', 'boarding'] }
     })
     .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
     .populate('busId', 'busNumber busType registrationNumber capacity')
@@ -31,7 +33,31 @@ router.get('/running-trips', async (req, res) => {
     .populate('depotId', 'name location')
     .lean();
 
-    console.log(`🚌 Found ${runningTrips.length} running trips`);
+    console.log(`🚌 Found ${allTrips.length} total trips for today`);
+
+    // Filter trips that should be running now
+    const runningTrips = allTrips.filter(trip => {
+      // If status is already 'running' or 'boarding', include it
+      if (trip.status === 'running' || trip.status === 'boarding') {
+        return true;
+      }
+      
+      // If status is 'scheduled', check if it should have started by now
+      if (trip.status === 'scheduled') {
+        const tripStartTime = new Date(trip.serviceDate);
+        const [hours, minutes] = trip.startTime.split(':');
+        tripStartTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+        
+        // Include trips that should have started within the last 12 hours
+        // This covers trips from early morning (6 AM) to current time
+        const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+        return tripStartTime >= twelveHoursAgo && tripStartTime <= now;
+      }
+      
+      return false;
+    });
+
+    console.log(`🚌 Found ${runningTrips.length} trips that should be running now`);
 
     // Transform trips to include tracking information
     const transformedTrips = runningTrips.map(trip => {
@@ -43,8 +69,18 @@ router.get('/running-trips', async (req, res) => {
       
       const elapsedMinutes = Math.floor((currentTime - startTime) / (1000 * 60));
       
-      // Calculate estimated progress (simplified)
-      const routeProgress = Math.min(elapsedMinutes / 180, 0.9); // Assume 3-hour journey max
+      // Calculate estimated progress based on actual trip status
+      let routeProgress = 0;
+      let currentStatus = trip.status;
+      
+      if (trip.status === 'running' || trip.status === 'boarding') {
+        // For actually running trips, calculate progress
+        routeProgress = Math.min(Math.max(elapsedMinutes / 180, 0.1), 0.9); // 10% to 90% progress
+      } else if (trip.status === 'scheduled') {
+        // For scheduled trips that should be running, simulate as just started
+        routeProgress = Math.min(Math.max(elapsedMinutes / 180, 0.05), 0.3); // 5% to 30% progress
+        currentStatus = 'running'; // Show as running in the UI
+      }
       
       // Generate coordinates based on route and progress
       const startCoords = trip.routeId?.startingPoint?.coordinates || { lat: 9.9312, lng: 76.2673 }; // Kochi default
@@ -90,7 +126,7 @@ router.get('/running-trips', async (req, res) => {
         serviceDate: trip.serviceDate,
         startTime: trip.startTime,
         endTime: trip.endTime,
-        status: trip.status,
+        status: currentStatus,
         fare: trip.fare || 0,
         depotId: trip.depotId,
         // Tracking specific data

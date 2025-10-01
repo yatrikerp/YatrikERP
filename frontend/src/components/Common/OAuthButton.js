@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import './OAuthButton.css';
 
 // provider: 'google' renders the official multi-color G icon
 const OAuthButton = ({ href, provider = 'google', icon, children, ariaLabel, onClick, className = '', disabled = false }) => {
@@ -31,6 +32,10 @@ const OAuthButton = ({ href, provider = 'google', icon, children, ariaLabel, onC
   const handleClick = async (e) => {
     if (disabled || isLoading) return;
     
+    // Prevent default and stop propagation for better mobile compatibility
+    if (e && e.preventDefault) e.preventDefault();
+    if (e && e.stopPropagation) e.stopPropagation();
+    
     setIsLoading(true);
     
     if (onClick) {
@@ -40,21 +45,41 @@ const OAuthButton = ({ href, provider = 'google', icon, children, ariaLabel, onC
         setIsLoading(false);
       }
     } else if (finalHref) {
-      // Force full-page navigation to backend, bypass SPA routing
-      try { e && e.preventDefault && e.preventDefault(); } catch {}
+      // For mobile compatibility, use window.location.href instead of assign
+      console.log('🔗 Google OAuth redirect:', finalHref);
       setTimeout(() => {
-        window.location.assign(finalHref);
-      }, 50);
+        // Force full-page navigation - works better on mobile
+        window.location.href = finalHref;
+      }, 100);
     }
+  };
+
+  // Mobile-specific touch event handlers
+  const handleTouchStart = (e) => {
+    if (disabled || isLoading) return;
+    // Add visual feedback on touch
+    e.currentTarget.style.transform = 'scale(0.98)';
+  };
+
+  const handleTouchEnd = (e) => {
+    if (disabled || isLoading) return;
+    // Remove visual feedback
+    e.currentTarget.style.transform = 'scale(1)';
   };
   
   if (onClick) {
     return (
       <button
         onClick={handleClick}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
         aria-label={ariaLabel}
         className={`${baseClasses} ${className}`}
         disabled={disabled || isLoading}
+        style={{
+          touchAction: 'manipulation', // Improve mobile touch response
+          WebkitTapHighlightColor: 'transparent' // Remove tap highlight on iOS
+        }}
       >
         {isLoading ? (
           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
@@ -72,6 +97,14 @@ const OAuthButton = ({ href, provider = 'google', icon, children, ariaLabel, onC
       aria-label={ariaLabel}
       className={`${baseClasses} ${className}`}
       onClick={handleClick}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      style={{
+        touchAction: 'manipulation', // Improve mobile touch response
+        WebkitTapHighlightColor: 'transparent', // Remove tap highlight on iOS
+        cursor: 'pointer',
+        userSelect: 'none' // Prevent text selection on mobile
+      }}
     >
       {isLoading ? (
         <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>

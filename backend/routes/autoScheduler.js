@@ -452,7 +452,8 @@ router.post('/mass-schedule', async (req, res) => {
     const { 
       date, 
       depotIds = [], 
-      maxTripsPerRoute = 5, 
+      maxTripsPerRoute = 2,  // Reduced from 5 to 2 to prevent over-scheduling
+      maxTripsPerBus = 3,    // NEW: Each bus can do max 3 trips per day
       timeGap = 30, 
       autoAssignCrew = true, 
       autoAssignBuses = true,
@@ -475,7 +476,7 @@ router.post('/mass-schedule', async (req, res) => {
     }
     
     console.log(`🚀 Starting mass scheduling for ${targetDate.toDateString()}`);
-    console.log(`📋 Parameters: maxTripsPerRoute=${maxTripsPerRoute}, timeGap=${timeGap}, autoAssignCrew=${autoAssignCrew}`);
+    console.log(`📋 Parameters: maxTripsPerRoute=${maxTripsPerRoute}, maxTripsPerBus=${maxTripsPerBus}, timeGap=${timeGap}, autoAssignCrew=${autoAssignCrew}`);
     
     // Get required models
     const Bus = require('../models/Bus');
@@ -596,6 +597,9 @@ router.post('/mass-schedule', async (req, res) => {
     let driversAssigned = 0;
     let conductorsAssigned = 0;
     
+    // NEW: Track trips per bus to enforce maxTripsPerBus limit
+    const busUsageTracker = new Map(); // busId -> trip count
+    
     try {
       for (const route of routes) {
       // Handle different route depot structures
@@ -628,7 +632,7 @@ router.post('/mass-schedule', async (req, res) => {
       
       console.log(`🛣️ Processing route ${route.routeNumber} (depot: ${routeDepotName}): ${routeBuses.length} buses, ${routeDrivers.length} drivers, ${routeConductors.length} conductors`);
       
-      // Create trips for this route
+      // Create trips for this route (limit by maxTripsPerRoute)
       const tripsForRoute = Math.min(maxTripsPerRoute, routeBuses.length);
       
       if (tripsForRoute === 0) {
@@ -637,9 +641,19 @@ router.post('/mass-schedule', async (req, res) => {
         continue;
       }
       
-      for (let i = 0; i < tripsForRoute; i++) {
+      let tripsCreatedForRoute = 0;
+      
+      for (let i = 0; i < routeBuses.length && tripsCreatedForRoute < tripsForRoute; i++) {
         const bus = routeBuses[i];
-        const timeSlot = timeSlots[i % timeSlots.length];
+        const busIdStr = bus._id.toString();
+        
+        // NEW: Check if bus has reached maxTripsPerBus limit
+        const currentBusTrips = busUsageTracker.get(busIdStr) || 0;
+        if (currentBusTrips >= maxTripsPerBus) {
+          continue; // Skip this bus, it's already at max trips
+        }
+        
+        const timeSlot = timeSlots[tripsCreatedForRoute % timeSlots.length];
         
         // Assign crew if auto-assign is enabled
         let assignedDriver = null;
@@ -647,12 +661,12 @@ router.post('/mass-schedule', async (req, res) => {
         
         if (autoAssignCrew) {
           if (routeDrivers.length > 0) {
-            assignedDriver = routeDrivers[i % routeDrivers.length];
+            assignedDriver = routeDrivers[tripsCreatedForRoute % routeDrivers.length];
             driversAssigned++;
           }
           
           if (routeConductors.length > 0) {
-            assignedConductor = routeConductors[i % routeConductors.length];
+            assignedConductor = routeConductors[tripsCreatedForRoute % routeConductors.length];
             conductorsAssigned++;
           }
         }
@@ -680,7 +694,11 @@ router.post('/mass-schedule', async (req, res) => {
         };
         
         tripsToCreate.push(trip);
+        
+        // NEW: Update bus usage tracker
+        busUsageTracker.set(busIdStr, currentBusTrips + 1);
         busesAssigned++;
+        tripsCreatedForRoute++;
       }
     }
     } catch (tripGenerationError) {
@@ -706,7 +724,15 @@ router.post('/mass-schedule', async (req, res) => {
     
     const successRate = tripsToCreate.length > 0 ? Math.round((createdTrips / tripsToCreate.length) * 100) : 0;
     
+    // NEW: Calculate bus utilization statistics
+    const busesUtilized = busUsageTracker.size;
+    const averageTripsPerBus = busesUtilized > 0 
+      ? (createdTrips / busesUtilized).toFixed(2) 
+      : 0;
+    
     console.log(`✅ Mass scheduling completed: ${createdTrips} trips created (${successRate}% success rate)`);
+    console.log(`📊 Bus Utilization: ${busesUtilized}/${buses.length} buses used (${averageTripsPerBus} avg trips/bus)`);
+    console.log(`📋 Limits Applied: maxTripsPerRoute=${maxTripsPerRoute}, maxTripsPerBus=${maxTripsPerBus}`);
     
     res.json({
       success: true,
@@ -719,6 +745,10 @@ router.post('/mass-schedule', async (req, res) => {
         successRate: `${successRate}%`,
         totalRoutes: routes.length,
         totalBuses: buses.length,
+        busesUtilized,
+        averageTripsPerBus: parseFloat(averageTripsPerBus),
+        maxTripsPerBus,
+        maxTripsPerRoute,
         date: targetDate.toISOString().split('T')[0],
         warnings: warnings.length > 0 ? warnings : undefined
       }

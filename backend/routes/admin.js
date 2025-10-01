@@ -7252,6 +7252,85 @@ router.post('/assign-trip', auth, requireRole(['admin', 'depot_manager']), async
   }
 });
 
+// GET /api/admin/trip-stats - Get live trip statistics
+router.get('/trip-stats', auth, requireRole(['admin', 'depot_manager']), async (req, res) => {
+  try {
+    const now = new Date();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    // Get basic counts
+    const [total, scheduled, actuallyRunning, completed] = await Promise.all([
+      Trip.countDocuments({}),
+      Trip.countDocuments({ status: 'scheduled' }),
+      Trip.countDocuments({ status: 'running' }),
+      Trip.countDocuments({ status: 'completed' })
+    ]);
+
+    // Calculate trips that should be running (scheduled but should have started)
+    const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+    
+    const shouldBeRunning = await Trip.countDocuments({
+      status: 'scheduled',
+      serviceDate: { $gte: today, $lt: tomorrow },
+      $expr: {
+        $and: [
+          {
+            $gte: [
+              {
+                $dateAdd: {
+                  startDate: "$serviceDate",
+                  unit: "hour",
+                  amount: { $toInt: { $arrayElemAt: [{ $split: ["$startTime", ":"] }, 0] } }
+                }
+              },
+              twelveHoursAgo
+            ]
+          },
+          {
+            $lte: [
+              {
+                $dateAdd: {
+                  startDate: "$serviceDate",
+                  unit: "hour",
+                  amount: { $toInt: { $arrayElemAt: [{ $split: ["$startTime", ":"] }, 0] } }
+                }
+              },
+              now
+            ]
+          }
+        ]
+      }
+    });
+
+    // Live running count = actually running + should be running
+    const liveRunning = actuallyRunning + shouldBeRunning;
+
+    res.json({
+      success: true,
+      data: {
+        total,
+        scheduled: scheduled - shouldBeRunning, // Subtract trips that should be running
+        running: liveRunning, // Show live running count
+        completed,
+        actuallyRunning,
+        shouldBeRunning,
+        lastUpdated: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching trip stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch trip statistics',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/admin/running-trips - Get all currently running trips
 router.get('/running-trips', auth, requireRole(['admin', 'depot_manager']), async (req, res) => {
   try {

@@ -16,8 +16,8 @@ class AutoScheduler {
       maxConsecutiveDays: 6,
       minRestHours: 8,
       
-      // Bus utilization rules
-      maxBusDailyTrips: 4,
+      // Bus utilization rules - UPDATED to prevent over-scheduling
+      maxBusDailyTrips: 3,  // Reduced from 4 to 3 to match realistic operations
       minMaintenanceGap: 2, // hours between trips
       
       // Route priority rules
