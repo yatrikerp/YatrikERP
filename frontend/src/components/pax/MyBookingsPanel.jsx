@@ -72,7 +72,7 @@ const MyBookingsPanel = () => {
         fare: 800,
         busType: 'AC Sleeper',
         driver: 'Rajesh Kumar',
-        conductor: 'Suresh Menon',
+        conductor: 'Priya Menon',
         bookingDate: '2025-08-10T09:00:00',
         bookingId: 'BK001230',
         paymentStatus: 'Paid',

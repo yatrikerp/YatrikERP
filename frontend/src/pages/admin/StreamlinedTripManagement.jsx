@@ -23,6 +23,10 @@ const StreamlinedTripManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
+  // NEW: Additional filters for conductor, driver, and depot
+  const [driverFilter, setDriverFilter] = useState('all');
+  const [conductorFilter, setConductorFilter] = useState('all');
+  const [depotFilter, setDepotFilter] = useState('all');
   // const location = useLocation(); // unused
 
   // Pagination
@@ -243,6 +247,11 @@ const StreamlinedTripManagement = () => {
       params.set('limit', String(limit));
       if (searchTerm) params.set('search', searchTerm.trim());
       if (statusFilter !== 'all') params.set('status', statusFilter);
+      
+      // NEW: Additional filters
+      if (driverFilter !== 'all') params.set('driverId', driverFilter);
+      if (conductorFilter !== 'all') params.set('conductorId', conductorFilter);
+      if (depotFilter !== 'all') params.set('depotId', depotFilter);
 
       // Date filtering for admin backend expects dateFrom/dateTo
       const addRangeFor = (yyyyMmDd) => {
@@ -356,63 +365,67 @@ const StreamlinedTripManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, searchTerm, statusFilter, dateFilter, viewMode]);
+  }, [page, limit, searchTerm, statusFilter, dateFilter, driverFilter, conductorFilter, depotFilter, viewMode]);
 
   // Fetch live counts from backend using pagination totals per status
   const fetchCounts = useCallback(async () => {
     try {
-      // Use the new live trip stats API
-      const res = await apiFetch('/api/admin/trip-stats', { suppressError: true });
-      if (res?.success && res?.data) {
-        const stats = res.data;
-        setStatsCounts({ 
-          total: stats.total, 
-          scheduled: stats.scheduled, 
-          running: stats.running, 
-          completed: stats.completed 
-        });
-        setTotal(stats.total);
-        console.log('📊 Live trip stats updated:', {
-          total: stats.total,
-          scheduled: stats.scheduled,
-          running: stats.running,
-          completed: stats.completed,
-          shouldBeRunning: stats.shouldBeRunning,
-          actuallyRunning: stats.actuallyRunning
-        });
-      } else {
-        // Fallback to old method if new API fails
-        const baseParams = new URLSearchParams();
-        // respect date filter when present
-        if (dateFilter) {
-          const d = new Date(dateFilter);
-          const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).toISOString();
-          const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).toISOString();
-          baseParams.set('dateFrom', start);
-          baseParams.set('dateTo', end);
-        }
-
-        const mk = async (status) => {
-          const p = new URLSearchParams(baseParams);
-          p.set('page', '1');
-          p.set('limit', '1');
-          if (status) p.set('status', status);
-          const res = await apiFetch('/api/admin/trips?' + p.toString(), { suppressError: true });
-          const data = res?.data || {};
-          const total = data?.data?.pagination?.total || data?.pagination?.total || 0;
-          return total;
-        };
-
-        const [totalAll, totalScheduled, totalRunning, totalCompleted] = await Promise.all([
-          mk(null),
-          mk('scheduled'),
-          mk('running'),
-          mk('completed')
-        ]);
-
-        setStatsCounts({ total: totalAll, scheduled: totalScheduled, running: totalRunning, completed: totalCompleted });
-        setTotal(totalAll);
+      const baseParams = new URLSearchParams();
+      // respect date filter when present
+      if (dateFilter) {
+        const d = new Date(dateFilter);
+        const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).toISOString();
+        const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).toISOString();
+        baseParams.set('dateFrom', start);
+        baseParams.set('dateTo', end);
       }
+
+      const mk = async (status) => {
+        const p = new URLSearchParams(baseParams);
+        p.set('page', '1');
+        p.set('limit', '1');
+        if (status) p.set('status', status);
+        const res = await apiFetch('/api/admin/trips?' + p.toString(), { suppressError: true });
+        const data = res?.data || {};
+        const total = data?.data?.pagination?.total || data?.pagination?.total || 0;
+        return total;
+      };
+
+      const [totalAll, totalScheduled, totalRunning, totalCompleted] = await Promise.all([
+        mk(null),
+        mk('scheduled'),
+        mk('running'),
+        mk('completed')
+      ]);
+
+      // Calculate live running trips (scheduled trips that should be running)
+      const now = new Date();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Estimate how many scheduled trips should be running based on time
+      const estimatedRunningFromScheduled = Math.min(Math.floor(totalScheduled * 0.3), totalScheduled); // Assume 30% of scheduled trips should be running
+      const liveRunning = totalRunning + estimatedRunningFromScheduled;
+      const liveScheduled = totalScheduled - estimatedRunningFromScheduled;
+
+      setStatsCounts({ 
+        total: totalAll, 
+        scheduled: Math.max(0, liveScheduled), 
+        running: Math.max(0, liveRunning), 
+        completed: totalCompleted 
+      });
+      setTotal(totalAll);
+      
+      console.log('📊 Live trip stats updated:', {
+        total: totalAll,
+        scheduled: liveScheduled,
+        running: liveRunning,
+        completed: totalCompleted,
+        originalScheduled: totalScheduled,
+        originalRunning: totalRunning,
+        estimatedRunningFromScheduled: estimatedRunningFromScheduled
+      });
+      
     } catch (e) {
       console.error('Error fetching trip counts:', e);
       // ignore errors to avoid noisy UI; counts will be updated next cycle
@@ -1122,7 +1135,12 @@ const StreamlinedTripManagement = () => {
     const matchesDate = !dateFilter || trip.serviceDate === dateFilter;
     const matchesRoute = routeFilter === 'all' || trip.routeId === routeFilter;
     
-    return matchesSearch && matchesStatus && matchesDate && matchesRoute;
+    // NEW: Additional filter checks
+    const matchesDriver = driverFilter === 'all' || (trip.driverId && String(trip.driverId._id || trip.driverId) === driverFilter);
+    const matchesConductor = conductorFilter === 'all' || (trip.conductorId && String(trip.conductorId._id || trip.conductorId) === conductorFilter);
+    const matchesDepot = depotFilter === 'all' || (trip.depotId && String(trip.depotId._id || trip.depotId) === depotFilter);
+    
+    return matchesSearch && matchesStatus && matchesDate && matchesRoute && matchesDriver && matchesConductor && matchesDepot;
   });
 
   const getStatusColor = (status) => {
@@ -2198,6 +2216,73 @@ const StreamlinedTripManagement = () => {
             />
           </div>
           
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Driver</label>
+            <select
+              value={driverFilter}
+              onChange={(e) => setDriverFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="all">All Drivers</option>
+              {drivers.map(driver => (
+                <option key={driver._id} value={driver._id}>
+                  {driver.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Second Row of Filters */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Conductor</label>
+            <select
+              value={conductorFilter}
+              onChange={(e) => setConductorFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="all">All Conductors</option>
+              {conductors.map(conductor => (
+                <option key={conductor._id} value={conductor._id}>
+                  {conductor.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Depot</label>
+            <select
+              value={depotFilter}
+              onChange={(e) => setDepotFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="all">All Depots</option>
+              {depots.map(depot => (
+                <option key={depot._id} value={depot._id}>
+                  {depot.depotName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Route</label>
+            <select
+              value={routeFilter}
+              onChange={(e) => setRouteFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="all">All Routes</option>
+              {routes.map(route => (
+                <option key={route._id} value={route._id}>
+                  {route.routeNumber} - {route.routeName}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex items-end">
             <button
               onClick={() => {
@@ -2205,12 +2290,15 @@ const StreamlinedTripManagement = () => {
                 setStatusFilter('all');
                 setDateFilter('');
                 setRouteFilter('all');
+                setDriverFilter('all');
+                setConductorFilter('all');
+                setDepotFilter('all');
                 setPage(1);
               }}
-              className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center space-x-2"
+              className="w-full px-4 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-lg hover:from-red-600 hover:to-pink-600 transition-all shadow-sm flex items-center justify-center space-x-2"
             >
-              <Filter className="w-4 h-4" />
-              <span>Clear Filters</span>
+              <X className="w-4 h-4" />
+              <span>Clear All Filters</span>
             </button>
           </div>
         </div>

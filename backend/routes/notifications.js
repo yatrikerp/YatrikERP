@@ -1,56 +1,47 @@
 const express = require('express');
 const router = express.Router();
-const { auth, requireRole } = require('../middleware/auth');
-const NotificationService = require('../services/notificationService');
 const Notification = require('../models/Notification');
+const { auth } = require('../middleware/auth');
 
-// Apply authentication to all routes
-router.use(auth);
-
-// GET /api/notifications - Get user notifications
-router.get('/', async (req, res) => {
+// ✅ GET /api/notifications - Get notifications for current user
+router.get('/', auth, async (req, res) => {
   try {
-    const { status, type, limit = 50, page = 1 } = req.query;
-    const userId = req.user._id;
-    const userRole = req.user.role;
-    const depotId = req.user.depotId;
+    const { page = 1, limit = 20, type, isRead } = req.query;
 
-    const options = {
-      status,
-      type,
-      limit: parseInt(limit),
-      page: parseInt(page)
+    const query = {
+      userId: req.user.id,
+      isArchived: false,
+      expiresAt: { $gt: new Date() } // Only get non-expired
     };
 
-    const notifications = await NotificationService.getUserNotifications(
-      userId, 
-      userRole, 
-      depotId, 
-      options
-    );
+    if (type) query.type = type;
+    if (isRead !== undefined) query.isRead = isRead === 'true';
 
-    // Get total count for pagination
-    const totalCount = await NotificationService.getNotificationCount(
-      userId, 
-      userRole, 
-      depotId
-    );
+    const notifications = await Notification.find(query)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .populate('data.tripId', 'routeId serviceDate startTime endTime status')
+      .populate('data.routeId', 'routeName routeNumber')
+      .populate('data.busId', 'busNumber busType')
+      .lean();
+
+    const total = await Notification.countDocuments(query);
 
     res.json({
       success: true,
       data: {
         notifications,
         pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(totalCount / parseInt(limit)),
-          totalItems: totalCount,
-          itemsPerPage: parseInt(limit)
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit)
         }
       }
     });
-
   } catch (error) {
-    console.error('Get notifications error:', error);
+    console.error('Error fetching notifications:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch notifications',
@@ -59,247 +50,110 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/notifications/count - Get notification count
-router.get('/count', async (req, res) => {
+// ✅ GET unread count
+router.get('/unread-count', auth, async (req, res) => {
   try {
-    const userId = req.user._id;
-    const userRole = req.user.role;
-    const depotId = req.user.depotId;
-
-    const count = await NotificationService.getNotificationCount(
-      userId, 
-      userRole, 
-      depotId
-    );
+    const count = await Notification.countDocuments({
+      userId: req.user.id,
+      isRead: false,
+      isArchived: false,
+      expiresAt: { $gt: new Date() }
+    });
 
     res.json({
       success: true,
-      data: { count }
+      data: { unreadCount: count }
     });
-
   } catch (error) {
-    console.error('Get notification count error:', error);
+    console.error('Error fetching unread count:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get notification count',
+      message: 'Failed to fetch unread count',
       error: error.message
     });
   }
 });
 
-// PUT /api/notifications/:id/read - Mark notification as read
-router.put('/:id/read', async (req, res) => {
+// ✅ PUT mark single notification as read
+router.put('/:id/read', auth, async (req, res) => {
   try {
-    const { id } = req.params;
-    const userId = req.user._id;
+    const notification = await Notification.findOne({
+      _id: req.params.id,
+      userId: req.user.id
+    });
 
-    const notification = await NotificationService.markAsRead(id, userId);
+    if (!notification) {
+      return res.status(404).json({ success: false, message: 'Notification not found' });
+    }
+
+    await notification.markAsRead();
 
     res.json({
       success: true,
       message: 'Notification marked as read',
       data: notification
     });
-
   } catch (error) {
-    console.error('Mark notification as read error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to mark notification as read',
-      error: error.message
-    });
+    console.error('Error marking notification as read:', error);
+    res.status(500).json({ success: false, message: 'Failed to mark notification as read', error: error.message });
   }
 });
 
-// PUT /api/notifications/read-all - Mark all notifications as read
-router.put('/read-all', async (req, res) => {
+// ✅ PUT mark all notifications as read
+router.put('/mark-all-read', auth, async (req, res) => {
   try {
-    const userId = req.user._id;
-
-    const result = await NotificationService.markAllAsRead(userId);
+    const result = await Notification.updateMany(
+      { userId: req.user.id, isRead: false, isArchived: false },
+      { isRead: true, readAt: new Date() }
+    );
 
     res.json({
       success: true,
-      message: 'All notifications marked as read',
-      data: { modifiedCount: result.modifiedCount }
+      message: `Marked ${result.modifiedCount} notifications as read`
     });
-
   } catch (error) {
-    console.error('Mark all notifications as read error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to mark all notifications as read',
-      error: error.message
-    });
+    console.error('Error marking all notifications as read:', error);
+    res.status(500).json({ success: false, message: 'Failed to mark all notifications as read', error: error.message });
   }
 });
 
-// PUT /api/notifications/:id/archive - Archive notification
-router.put('/:id/archive', async (req, res) => {
+// ✅ DELETE notification
+router.delete('/:id', auth, async (req, res) => {
   try {
-    const { id } = req.params;
-    const userId = req.user._id;
-
-    const notification = await NotificationService.archiveNotification(id, userId);
-
-    res.json({
-      success: true,
-      message: 'Notification archived',
-      data: notification
-    });
-
-  } catch (error) {
-    console.error('Archive notification error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to archive notification',
-      error: error.message
-    });
-  }
-});
-
-// DELETE /api/notifications/:id - Delete notification
-router.delete('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user._id;
-
     const notification = await Notification.findOneAndDelete({
-      _id: id,
-      recipientId: userId
+      _id: req.params.id,
+      userId: req.user.id
     });
 
     if (!notification) {
-      return res.status(404).json({
-        success: false,
-        message: 'Notification not found'
-      });
+      return res.status(404).json({ success: false, message: 'Notification not found' });
     }
 
-    res.json({
-      success: true,
-      message: 'Notification deleted'
-    });
-
+    res.json({ success: true, message: 'Notification deleted successfully' });
   } catch (error) {
-    console.error('Delete notification error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete notification',
-      error: error.message
-    });
+    console.error('Error deleting notification:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete notification', error: error.message });
   }
 });
 
-// GET /api/notifications/types - Get notification types
-router.get('/types', (req, res) => {
-  const types = [
-    { value: 'trip_assigned', label: 'Trip Assigned', icon: 'bus' },
-    { value: 'trip_updated', label: 'Trip Updated', icon: 'edit' },
-    { value: 'trip_cancelled', label: 'Trip Cancelled', icon: 'x-circle' },
-    { value: 'bus_assigned', label: 'Bus Assigned', icon: 'truck' },
-    { value: 'bus_maintenance', label: 'Bus Maintenance', icon: 'wrench' },
-    { value: 'route_created', label: 'Route Created', icon: 'map' },
-    { value: 'route_updated', label: 'Route Updated', icon: 'map-pin' },
-    { value: 'driver_assigned', label: 'Driver Assigned', icon: 'user' },
-    { value: 'conductor_assigned', label: 'Conductor Assigned', icon: 'users' },
-    { value: 'booking_created', label: 'Booking Created', icon: 'calendar' },
-    { value: 'booking_cancelled', label: 'Booking Cancelled', icon: 'calendar-x' },
-    { value: 'payment_received', label: 'Payment Received', icon: 'credit-card' },
-    { value: 'system_alert', label: 'System Alert', icon: 'alert-triangle' },
-    { value: 'maintenance_due', label: 'Maintenance Due', icon: 'clock' },
-    { value: 'fuel_low', label: 'Fuel Low', icon: 'droplet' },
-    { value: 'schedule_change', label: 'Schedule Change', icon: 'calendar-clock' },
-    { value: 'emergency', label: 'Emergency', icon: 'alert-circle' },
-    { value: 'general', label: 'General', icon: 'info' }
-  ];
-
-  res.json({
-    success: true,
-    data: types
-  });
-});
-
-// POST /api/notifications/test - Test notification (admin only)
-router.post('/test', requireRole(['admin']), async (req, res) => {
+// ✅ PUT archive notification
+router.put('/:id/archive', auth, async (req, res) => {
   try {
-    const { depotId, type = 'general', message } = req.body;
+    const notification = await Notification.findOne({
+      _id: req.params.id,
+      userId: req.user.id
+    });
 
-    if (!depotId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Depot ID is required'
-      });
+    if (!notification) {
+      return res.status(404).json({ success: false, message: 'Notification not found' });
     }
 
-    const notifications = await NotificationService.createDepotNotification(depotId, {
-      title: 'Test Notification',
-      message: message || 'This is a test notification',
-      type: type,
-          priority: 'medium',
-      senderId: req.user._id,
-      senderRole: req.user.role
-    });
+    await notification.archive();
 
-    res.json({
-      success: true,
-      message: 'Test notification sent',
-      data: { count: notifications.length }
-    });
-
+    res.json({ success: true, message: 'Notification archived successfully' });
   } catch (error) {
-    console.error('Test notification error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to send test notification',
-      error: error.message
-    });
-  }
-});
-
-// POST /api/notifications/send-trip-assignment - Send trip assignment notification (admin only)
-router.post('/send-trip-assignment', requireRole(['admin']), async (req, res) => {
-  try {
-    const { depotId, tripId, routeName } = req.body;
-
-    if (!depotId || !tripId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Depot ID and Trip ID are required'
-      });
-    }
-
-    const notifications = await NotificationService.createDepotNotification(depotId, {
-      title: 'New Trip Assigned',
-      message: `A new trip has been assigned to your depot. Route: ${routeName || 'Unknown Route'}`,
-      type: 'trip_assigned',
-      priority: 'high',
-      relatedEntity: {
-        type: 'trip',
-        id: tripId
-      },
-      actionData: {
-        action: 'view',
-        url: `/depot/trips/${tripId}`,
-        buttonText: 'View Trip'
-      },
-      senderId: req.user._id,
-      senderRole: req.user.role
-    });
-
-    res.json({
-      success: true,
-      message: 'Trip assignment notification sent',
-      data: { count: notifications.length }
-    });
-
-  } catch (error) {
-    console.error('Trip assignment notification error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to send trip assignment notification',
-      error: error.message
-    });
+    console.error('Error archiving notification:', error);
+    res.status(500).json({ success: false, message: 'Failed to archive notification', error: error.message });
   }
 });
 

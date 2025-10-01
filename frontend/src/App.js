@@ -5,6 +5,8 @@ import { AuthProvider } from './context/AuthContext';
 import QueryProvider from './providers/QueryProvider';
 import { initializeCacheManager } from './utils/cacheManager';
 import RequireAuth from './guards/RequireAuth';
+import { checkAndRedirectMobile } from './utils/mobileRedirect';
+import MobileRedirectHandler from './components/MobileRedirectHandler';
 import AppShell from './components/Layout/AppShell';
 import AdminLayout from './components/Admin/AdminLayout';
 import LandingPage from './pages/LandingPage';
@@ -123,6 +125,25 @@ function App() {
   // Initialize cache manager on app startup
   useEffect(() => {
     initializeCacheManager();
+    
+    // Check for mobile redirect on app load
+    const checkMobile = () => {
+      checkAndRedirectMobile();
+    };
+    
+    // Check immediately and on route changes
+    checkMobile();
+    
+    // Listen for route changes
+    const handleRouteChange = () => {
+      setTimeout(checkMobile, 100); // Small delay to let route settle
+    };
+    
+    window.addEventListener('popstate', handleRouteChange);
+    
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange);
+    };
   }, []);
 
   return (
@@ -130,6 +151,7 @@ function App() {
     <QueryProvider>
       <AuthProvider>
       <Router>
+        <MobileRedirectHandler>
           <Routes>
             {/* Public Routes */}
             {/* Logical guard: if the SPA ever lands on /api/*, forward to backend */}
@@ -781,6 +803,7 @@ function App() {
           } />
 
         </Routes>
+        </MobileRedirectHandler>
       </Router>
     </AuthProvider>
     </QueryProvider>

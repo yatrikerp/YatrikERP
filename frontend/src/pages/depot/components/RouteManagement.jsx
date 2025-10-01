@@ -197,7 +197,7 @@ const RouteManagement = () => {
             nextMaintenance: '2024-02-15',
             assignedBuses: ['KL-76-AB-5114', 'KL-76-BC-9076'],
             driver: 'Rajesh Kumar',
-            conductor: 'Joel',
+            conductor: 'Anil Kumar',
             crewStatus: 'assigned'
           },
           {
@@ -228,7 +228,7 @@ const RouteManagement = () => {
             nextMaintenance: '2024-02-10',
             assignedBuses: ['KL-76-CD-9722'],
             driver: 'Nidhin Shijo',
-            conductor: 'Rajesh Kumar',
+            conductor: 'Sunitha Raj',
             crewStatus: 'assigned'
           },
           {

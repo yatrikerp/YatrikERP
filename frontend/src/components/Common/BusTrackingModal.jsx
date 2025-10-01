@@ -48,7 +48,7 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
         capacity: { total: 35, available: 12 }
       },
       driverId: { name: 'Rajesh Kumar', phone: '+91-9876543210' },
-      conductorId: { name: 'Priya Menon', phone: '+91-9876543211' },
+      conductorId: { name: 'Priya Menon', phone: '+91-9876543216' },
       serviceDate: new Date().toISOString(),
       startTime: '08:00',
       endTime: '12:30',
@@ -75,7 +75,7 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
         capacity: { total: 40, available: 8 }
       },
       driverId: { name: 'Suresh Nair', phone: '+91-9876543212' },
-      conductorId: { name: 'Anita Raj', phone: '+91-9876543213' },
+      conductorId: { name: 'Anil Kumar', phone: '+91-9876543218' },
       serviceDate: new Date().toISOString(),
       startTime: '10:30',
       endTime: '15:00',
@@ -101,8 +101,8 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
         busType: 'AC Sleeper',
         capacity: { total: 30, available: 5 }
       },
-      driverId: { name: 'Vikram Singh', phone: '+91-9876543214' },
-      conductorId: { name: 'Lakshmi Devi', phone: '+91-9876543215' },
+      driverId: { name: 'Manoj Pillai', phone: '+91-9876543214' },
+      conductorId: { name: 'Sunitha Raj', phone: '+91-9876543220' },
       serviceDate: new Date().toISOString(),
       startTime: '20:00',
       endTime: '06:00',
@@ -329,7 +329,7 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
 
               {/* Right Panel - Map and Trip Details (Optimized) */}
               <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Map - Balanced Height */}
+                {/* Map - Enhanced with Route Display */}
                 <div className="h-[55%] relative p-3">
                   <div style={{
                     background: '#FFFFFF',
@@ -340,29 +340,68 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
                     overflow: 'hidden',
                     height: '100%'
                   }}>
-                    <GoogleMapsRouteTracker 
-                      trip={selectedTrip ? {
-                        busId: { 
-                          busNumber: selectedTrip.busId?.busNumber || 'N/A'
-                        },
-                        routeId: {
-                          routeName: selectedTrip.routeId?.routeName || 'Unknown Route'
-                        },
-                        currentLocation: selectedTrip.currentLocation || 'Current Location',
-                        currentSpeed: selectedTrip.currentSpeed || '0 km/h',
-                        lastUpdate: selectedTrip.lastUpdate || new Date().toLocaleTimeString(),
-                        coordinates: selectedTrip.coordinates || { lat: 10.8505, lng: 76.2711 },
-                        estimatedArrival: selectedTrip.estimatedArrival,
-                        passengers: selectedTrip.passengers,
-                        status: selectedTrip.status
-                      } : null}
-                      isTracking={true}
-                      onLocationUpdate={(trip) => {
-                        console.log('Location updated:', trip);
-                        // Handle location updates here
-                      }}
-                      className="w-full h-full"
-                    />
+                    {selectedTrip ? (
+                      <GoogleMapsRouteTracker 
+                        trip={{
+                          busId: { 
+                            busNumber: selectedTrip.busId?.busNumber || 'N/A'
+                          },
+                          routeId: {
+                            routeName: selectedTrip.routeId?.routeName || 'Unknown Route',
+                            startingPoint: selectedTrip.routeId?.startingPoint,
+                            endingPoint: selectedTrip.routeId?.endingPoint,
+                            routeNumber: selectedTrip.routeId?.routeNumber
+                          },
+                          currentLocation: selectedTrip.currentLocation || 'Current Location',
+                          currentSpeed: selectedTrip.currentSpeed || '0 km/h',
+                          lastUpdate: selectedTrip.lastUpdate || new Date().toLocaleTimeString(),
+                          coordinates: selectedTrip.coordinates || { lat: 10.8505, lng: 76.2711 },
+                          estimatedArrival: selectedTrip.estimatedArrival,
+                          passengers: selectedTrip.passengers,
+                          status: selectedTrip.status,
+                          routeProgress: selectedTrip.routeProgress || 0
+                        }}
+                        isTracking={true}
+                        onLocationUpdate={(trip) => {
+                          console.log('📍 Location updated:', trip);
+                          // Update the selected trip with new location data
+                          if (selectedTrip && trip) {
+                            setSelectedTrip(prevTrip => ({
+                              ...prevTrip,
+                              coordinates: trip.coordinates,
+                              currentLocation: trip.currentLocation,
+                              currentSpeed: trip.currentSpeed,
+                              lastUpdate: trip.lastUpdate
+                            }));
+                          }
+                        }}
+                        className="w-full h-full"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+                        <div className="text-center p-6">
+                          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <MapPin className="w-8 h-8 text-blue-600" />
+                          </div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">Live Bus Tracking</h3>
+                          <p className="text-gray-600 mb-4">Select a running trip from the left panel to view its live location and route</p>
+                          <div className="flex items-center justify-center space-x-4 text-sm text-gray-500">
+                            <div className="flex items-center space-x-1">
+                              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                              <span>Real-time Updates</span>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              <Navigation className="w-4 h-4" />
+                              <span>Route Tracking</span>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              <Bus className="w-4 h-4" />
+                              <span>Live Location</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -379,6 +418,18 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
                         <div>
                           <label className="text-xs text-gray-500 block mb-0.5">Current Speed</label>
                           <p className="text-sm font-medium text-gray-900">{selectedTrip.currentSpeed}</p>
+                        </div>
+                        <div className="col-span-2">
+                          <label className="text-xs text-gray-500 block mb-1">Route Progress</label>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-gradient-to-r from-blue-500 to-green-500 h-2 rounded-full transition-all duration-500"
+                                style={{ width: `${selectedTrip.routeProgress || 0}%` }}
+                              ></div>
+                            </div>
+                            <span className="text-xs font-medium text-gray-700">{selectedTrip.routeProgress || 0}%</span>
+                          </div>
                         </div>
                         <div>
                           <label className="text-xs text-gray-500 block mb-0.5">Bus Number</label>

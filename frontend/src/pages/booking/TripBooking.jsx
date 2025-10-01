@@ -181,7 +181,7 @@ const TripBooking = () => {
   }
 
   const seats = generateSeats(trip.capacity);
-  const totalAmount = trip.fare * selectedSeats.length;
+  const totalAmount = (trip?.fare || 250) * selectedSeats.length;
 
   // Use mobile booking component on mobile devices
   if (isMobile) {
@@ -595,7 +595,7 @@ const TripBooking = () => {
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Trip Fare</span>
-                  <span className="font-medium">₹{trip.fare}</span>
+                  <span className="font-medium">₹{trip?.fare || 250}</span>
                 </div>
                 
                 <div className="flex justify-between">

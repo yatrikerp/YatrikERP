@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MapPin, Navigation, RefreshCw, ExternalLink } from 'lucide-react';
+import { MapPin, Navigation, RefreshCw, ExternalLink, Bus } from 'lucide-react';
 
 const GoogleMapsRouteTracker = ({ 
   trip, 
@@ -322,11 +322,19 @@ const GoogleMapsRouteTracker = ({
       'Malappuram': { lat: 11.0510, lng: 76.0711 },
       'Kozhikode': { lat: 11.2588, lng: 75.7804 },
       'Wayanad': { lat: 11.6854, lng: 76.1320 },
+      'Kalpetta': { lat: 11.6854, lng: 76.1320 },
       'Kannur': { lat: 11.8745, lng: 75.3704 },
       'Kasaragod': { lat: 12.4996, lng: 74.9869 },
       'Bangalore': { lat: 12.9716, lng: 77.5946 },
       'Salem': { lat: 11.6643, lng: 78.1460 },
-      'Madurai': { lat: 9.9252, lng: 78.1198 }
+      'Madurai': { lat: 9.9252, lng: 78.1198 },
+      'Hyderabad': { lat: 17.3850, lng: 78.4867 },
+      'Mumbai': { lat: 19.0760, lng: 72.8777 },
+      'Goa': { lat: 15.2993, lng: 74.1240 },
+      'Mangalore': { lat: 12.9141, lng: 74.8560 },
+      'Chennai': { lat: 13.0827, lng: 80.2707 },
+      'Coimbatore': { lat: 11.0168, lng: 76.9558 },
+      'Tirupati': { lat: 13.6288, lng: 79.4192 }
     };
 
     // Try to get route starting and ending points from trip data
@@ -359,6 +367,23 @@ const GoogleMapsRouteTracker = ({
           if (coords.latitude && coords.longitude) {
             endPoint = { lat: coords.latitude, lng: coords.longitude };
           }
+        }
+      }
+    }
+    
+    // Also try to extract cities from route name if coordinates not found
+    if (!startPoint || !endPoint) {
+      const routeName = tripData.routeId?.routeName || '';
+      const routeParts = routeName.split(' → ');
+      if (routeParts.length === 2) {
+        const startCity = routeParts[0].trim();
+        const endCity = routeParts[1].trim();
+        
+        if (keralaCoordinates[startCity] && !startPoint) {
+          startPoint = keralaCoordinates[startCity];
+        }
+        if (keralaCoordinates[endCity] && !endPoint) {
+          endPoint = keralaCoordinates[endCity];
         }
       }
     }
@@ -503,49 +528,134 @@ const GoogleMapsRouteTracker = ({
 
   if (!isApiConfigured) {
     return (
-      <div className={`${className} relative bg-gray-200 flex items-center justify-center rounded-lg`}>
-        <div className="text-center">
-          <MapPin className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500 mb-2">Google Maps API key required</p>
-          <p className="text-sm text-gray-400">Please configure your Google Maps API key</p>
-          {trip && (
-            <div className="mt-4 p-4 bg-white rounded-lg shadow-lg max-w-sm">
-              <div className="flex items-center gap-2 mb-3">
+      <div className={`${className} relative bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col rounded-lg`}>
+        {trip ? (
+          <>
+            {/* Header */}
+            <div className="p-4 bg-white bg-opacity-80 border-b border-blue-200 rounded-t-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="font-semibold text-gray-900">Bus Information</span>
-              </div>
-              
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <Navigation className="w-4 h-4 text-blue-600" />
-                  <span className="font-medium">{trip.busId?.busNumber || 'Bus #123'}</span>
+                  <span className="text-sm font-medium text-gray-700">Live Tracking</span>
                 </div>
-                
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-green-600" />
-                  <span>{trip.currentLocation || 'Current Location'}</span>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <RefreshCw className="w-4 h-4 text-orange-600" />
-                  <span>{trip.currentSpeed || 'Unknown Speed'}</span>
+                <div className="text-xs text-gray-500">
+                  {trip.currentSpeed || '0 km/h'} • {trip.lastUpdate || new Date().toLocaleTimeString()}
                 </div>
               </div>
+              </div>
               
-              <div className="mt-3 pt-3 border-t border-gray-200">
-                <p className="text-xs text-gray-500 mb-2">
-                  Coordinates: {trip.coordinates?.lat?.toFixed(4)}, {trip.coordinates?.lng?.toFixed(4)}
-                </p>
+            {/* Route Information */}
+            <div className="flex-1 p-6">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Bus className="w-8 h-8 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Live Bus Tracking</h3>
+                <p className="text-gray-600 mb-4">Route and location information</p>
+                </div>
+                
+              {/* Route Details */}
+              <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-600">Route</span>
+                    <span className="text-sm font-semibold text-gray-900">{trip.routeId?.routeName || 'Unknown Route'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-600">Bus Number</span>
+                    <span className="text-sm font-semibold text-gray-900">{trip.busId?.busNumber || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-600">Current Location</span>
+                    <span className="text-sm font-semibold text-gray-900">{trip.currentLocation || 'Current Location'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-600">Speed</span>
+                    <span className="text-sm font-semibold text-green-600">{trip.currentSpeed || '0 km/h'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-600">Coordinates</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {trip.coordinates?.lat?.toFixed(4) || '0.0000'}, {trip.coordinates?.lng?.toFixed(4) || '0.0000'}
+                    </span>
+                  </div>
+                  {trip.routeId?.startingPoint && trip.routeId?.endingPoint && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-600">From</span>
+                        <span className="text-sm font-semibold text-gray-900">{trip.routeId.startingPoint.city || trip.routeId.startingPoint}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-600">To</span>
+                        <span className="text-sm font-semibold text-gray-900">{trip.routeId.endingPoint.city || trip.routeId.endingPoint}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+                </div>
+                
+              {/* Map Placeholder */}
+              <div className="bg-white rounded-lg p-4 shadow-sm">
+                <div className="aspect-video bg-gradient-to-br from-green-100 to-blue-100 rounded-lg flex items-center justify-center">
+                  <div className="text-center">
+                    <MapPin className="w-12 h-12 text-blue-500 mx-auto mb-2" />
+                    <p className="text-sm text-gray-600 mb-2">Route Map View</p>
+                    <p className="text-xs text-gray-500">Configure Google Maps API key for full map functionality</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Action Button */}
+              <div className="mt-4">
                 <button
                   onClick={openInGoogleMaps}
-                  className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-2"
+                  className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
                 >
-                  Open in Google Maps <ExternalLink className="w-4 h-4" />
+                  <ExternalLink className="w-4 h-4" />
+                  Open in Google Maps
                 </button>
+              </div>
+
+              {/* Features */}
+              <div className="flex items-center justify-center space-x-4 text-xs text-gray-500 mt-4">
+                <div className="flex items-center space-x-1">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span>Real-time Updates</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <Navigation className="w-3 h-3" />
+                  <span>Route Tracking</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <Bus className="w-3 h-3" />
+                  <span>Live Location</span>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center p-6">
+            <div className="text-center">
+              <MapPin className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Live Bus Tracking</h3>
+              <p className="text-gray-600 mb-4">Select a trip to view live tracking information</p>
+              <div className="flex items-center justify-center space-x-4 text-sm text-gray-500">
+                <div className="flex items-center space-x-1">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span>Live Updates</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <Navigation className="w-4 h-4" />
+                  <span>Route Tracking</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <Bus className="w-4 h-4" />
+                  <span>GPS Location</span>
+                </div>
+              </div>
               </div>
             </div>
           )}
-        </div>
       </div>
     );
   }

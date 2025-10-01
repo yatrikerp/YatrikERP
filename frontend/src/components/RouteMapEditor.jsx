@@ -53,6 +53,99 @@ const RouteMapEditor = ({
     return null;
   };
 
+  // Extract route name from route data
+  const getRouteDisplayName = (route) => {
+    if (route?.routeName) {
+      return route.routeName;
+    }
+    
+    if (route?.startingPoint?.city && route?.endingPoint?.city) {
+      return `${route.startingPoint.city} → ${route.endingPoint.city}`;
+    }
+    
+    if (route?.routeNumber) {
+      // Extract cities from route number (e.g., KL-KAN-HYD-207)
+      const parts = route.routeNumber.split('-');
+      if (parts.length >= 3) {
+        const startCity = parts[1]; // KAN
+        const endCity = parts[2];   // HYD
+        const cityMap = {
+          'KAN': 'Kannur',
+          'HYD': 'Hyderabad', 
+          'MUM': 'Mumbai',
+          'GOA': 'Goa',
+          'MAN': 'Mangalore',
+          'SAL': 'Salem',
+          'KAS': 'Kasaragod',
+          'TVM': 'Thiruvananthapuram',
+          'KOCHI': 'Kochi',
+          'BAN': 'Bangalore',
+          'CHE': 'Chennai',
+          'COI': 'Coimbatore',
+          'MAD': 'Madurai'
+        };
+        return `${cityMap[startCity] || startCity} → ${cityMap[endCity] || endCity}`;
+      }
+    }
+    
+    return 'Edit Route';
+  };
+
+  // Calculate fare per km based on bus type
+  const getFarePerKm = (busType) => {
+    const fareStructure = {
+      'ordinary': 1.2,
+      'fast_passenger': 1.5,
+      'super_fast': 1.8,
+      'ac': 2.0,
+      'volvo': 2.5,
+      'garuda': 3.0
+    };
+    return fareStructure[busType] || 1.5; // Default to fast_passenger rate
+  };
+
+  // Calculate total price based on distance, bus type, and intermediate stops
+  const calculateTotalPrice = (route, distance, intermediateStops) => {
+    if (!route || !distance) return 0;
+    
+    const busType = route.busType || route.busId?.busType || 'fast_passenger';
+    const farePerKm = getFarePerKm(busType);
+    
+    // Base price calculation
+    let basePrice = distance * farePerKm;
+    
+    // Add intermediate stop charges (₹5 per stop)
+    const stopCharges = intermediateStops.length * 5;
+    
+    // Add convenience charges based on distance
+    let convenienceCharges = 0;
+    if (distance > 500) {
+      convenienceCharges = 50; // Long distance convenience charge
+    } else if (distance > 200) {
+      convenienceCharges = 25; // Medium distance convenience charge
+    } else {
+      convenienceCharges = 10; // Short distance convenience charge
+    }
+    
+    // Calculate total
+    const totalPrice = basePrice + stopCharges + convenienceCharges;
+    
+    return Math.round(totalPrice * 100) / 100; // Round to 2 decimal places
+  };
+
+  // Get bus type display name
+  const getBusTypeDisplayName = (busType) => {
+    const busTypeNames = {
+      'ordinary': 'Ordinary',
+      'fast_passenger': 'Fast Passenger',
+      'super_fast': 'Super Fast',
+      'ac': 'AC',
+      'volvo': 'Volvo',
+      'garuda': 'Garuda'
+    };
+    return busTypeNames[busType] || 'Fast Passenger';
+  };
+
   // Simple distance calculator (Haversine)
   const calculateDistanceKm = (a, b) => {
     if (!a || !b) return 0;
@@ -542,6 +635,14 @@ const RouteMapEditor = ({
           endAddress: leg.end_address
         });
         
+        // Update route name if it's not properly set
+        if (routeData && (!routeData.routeName || routeData.routeName === 'Auto-Detected Route')) {
+          const startCity = leg.start_address.split(',')[0] || 'Start';
+          const endCity = leg.end_address.split(',')[0] || 'End';
+          const newRouteName = `${startCity} → ${endCity}`;
+          console.log('📍 Updated route name:', newRouteName);
+        }
+        
         setTotalDistance(leg.distance.value / 1000); // Convert to km
         setEstimatedDuration(leg.duration.value / 60); // Convert to minutes
         
@@ -556,6 +657,14 @@ const RouteMapEditor = ({
         }) || [];
         
         setIntermediateStops(stops);
+        
+        // Auto-fetch intermediate stops if none exist
+        if (stops.length === 0 && routeData.intermediateStops?.length === 0) {
+          console.log('🔄 Auto-fetching intermediate stops...');
+          toast.loading('Auto-generating intermediate stops...', { duration: 2000 });
+          autoFetchIntermediateStopsFromRoute(result);
+        }
+        
         toast.success('Route loaded successfully');
       } else {
         console.error('❌ Directions request failed:', status);
@@ -618,7 +727,63 @@ const RouteMapEditor = ({
     );
   };
 
-  // Auto-fetch intermediate stops
+  // Auto-fetch intermediate stops from route result
+  const autoFetchIntermediateStopsFromRoute = async (directionsResult) => {
+    if (!window.google || !window.google.maps) {
+      return;
+    }
+
+    try {
+      const route = directionsResult.routes[0];
+      const leg = route.legs[0];
+      
+      // Generate intermediate points along the route
+      const steps = leg.steps;
+      const intermediatePoints = [];
+      
+      // Take every 3rd step as an intermediate stop for better coverage
+      for (let i = 2; i < steps.length - 2; i += 3) {
+        const step = steps[i];
+        const location = step.end_location;
+        
+        // Use Geocoding to get address
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ location }, (results, status) => {
+          if (status === 'OK' && results[0]) {
+            const address = results[0].formatted_address;
+            const cityName = address.split(',')[1]?.trim() || address.split(',')[0]?.trim() || `Stop ${intermediatePoints.length + 1}`;
+            
+            intermediatePoints.push({
+              lat: location.lat(),
+              lng: location.lng(),
+              name: cityName,
+              price: 0
+            });
+            
+            // Update stops as they come in
+            setIntermediateStops(prev => [...prev, {
+              lat: location.lat(),
+              lng: location.lng(),
+              name: cityName,
+              price: 0
+            }]);
+          }
+        });
+      }
+
+      // Show success message after a delay
+      setTimeout(() => {
+        if (intermediatePoints.length > 0) {
+          toast.success(`Auto-generated ${intermediatePoints.length} intermediate stops`);
+        }
+      }, 3000);
+
+    } catch (error) {
+      console.error('Error auto-fetching intermediate stops:', error);
+    }
+  };
+
+  // Auto-fetch intermediate stops (manual trigger)
   const autoFetchIntermediateStops = async () => {
     if (!window.google || !window.google.maps) {
       toast.error('Google Maps is not loaded yet');
@@ -648,38 +813,7 @@ const RouteMapEditor = ({
 
       directionsService.route(request, (result, status) => {
         if (status === 'OK') {
-          const route = result.routes[0];
-          const leg = route.legs[0];
-          
-          // Generate intermediate points along the route
-          const steps = leg.steps;
-          const intermediatePoints = [];
-          
-          // Take every 5th step as an intermediate stop
-          for (let i = 4; i < steps.length - 4; i += 5) {
-            const step = steps[i];
-            const location = step.end_location;
-            
-            // Use Geocoding to get address
-            const geocoder = new window.google.maps.Geocoder();
-            geocoder.geocode({ location }, (results, status) => {
-              if (status === 'OK' && results[0]) {
-                intermediatePoints.push({
-                  lat: location.lat(),
-                  lng: location.lng(),
-                  name: results[0].formatted_address.split(',')[0] || `Stop ${intermediatePoints.length + 1}`,
-                  price: 0
-                });
-              }
-            });
-          }
-
-          // Update stops after geocoding completes
-          setTimeout(() => {
-            setIntermediateStops(intermediatePoints);
-            toast.success(`Auto-generated ${intermediatePoints.length} intermediate stops`);
-          }, 2000);
-
+          autoFetchIntermediateStopsFromRoute(result);
         } else {
           toast.error('Failed to generate intermediate stops');
         }
@@ -747,24 +881,26 @@ const RouteMapEditor = ({
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
-          className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[80vh] flex flex-col"
+          className="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col"
         >
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <MapIcon className="w-6 h-6 text-blue-600" />
+          {/* Header - Compact */}
+          <div className="flex items-center justify-between p-4 border-b border-gray-200">
+            <div className="flex items-center space-x-2">
+              <div className="p-1.5 bg-blue-100 rounded-lg">
+                <MapIcon className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Route Map Editor</h2>
-                <p className="text-gray-600">{route?.routeName || 'Edit Route'}</p>
+                <h2 className="text-lg font-bold text-gray-900">Route Map Editor</h2>
+                <p className="text-sm text-gray-600">
+                  {getRouteDisplayName(route)}
+                </p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
             >
-              <X className="w-6 h-6 text-gray-500" />
+              <X className="w-5 h-5 text-gray-500" />
             </button>
           </div>
 
@@ -791,35 +927,58 @@ const RouteMapEditor = ({
                 />
               )}
               
-              {/* Map Controls */}
-              <div className="absolute top-4 left-4 space-y-2">
+              {/* Map Controls - Moved Down and Smaller */}
+              <div className="absolute top-16 left-3 space-y-1.5">
                 <button
                   onClick={() => setIsEditing(!isEditing)}
-                  className={`p-3 rounded-lg shadow-lg transition-colors ${
+                  className={`p-2 rounded-md shadow-md transition-colors ${
                     isEditing 
                       ? 'bg-red-500 text-white' 
                       : 'bg-white text-gray-700 hover:bg-gray-50'
                   }`}
+                  title={isEditing ? "Exit edit mode" : "Enter edit mode"}
                 >
-                  <MapPin className="w-5 h-5" />
+                  <MapPin className="w-4 h-4" />
                 </button>
                 <button
                   onClick={autoFetchIntermediateStops}
-                  className="p-3 bg-white text-gray-700 rounded-lg shadow-lg hover:bg-gray-50 transition-colors"
+                  className="p-2 bg-white text-gray-700 rounded-md shadow-md hover:bg-gray-50 transition-colors"
                   title="Auto-fetch intermediate stops"
                 >
-                  <Route className="w-5 h-5" />
+                  <Route className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    if (intermediateStops.length === 0) {
+                      autoFetchIntermediateStops();
+                    } else {
+                      setIntermediateStops([]);
+                      toast.success('Intermediate stops cleared');
+                    }
+                  }}
+                  className={`p-2 rounded-md shadow-md transition-colors ${
+                    intermediateStops.length === 0 
+                      ? 'bg-green-500 text-white hover:bg-green-600' 
+                      : 'bg-red-500 text-white hover:bg-red-600'
+                  }`}
+                  title={intermediateStops.length === 0 ? "Auto-generate stops" : "Clear all stops"}
+                >
+                  {intermediateStops.length === 0 ? (
+                    <Navigation className="w-4 h-4" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
                 </button>
                 <button
                   onClick={resetRoute}
-                  className="p-3 bg-white text-gray-700 rounded-lg shadow-lg hover:bg-gray-50 transition-colors"
+                  className="p-2 bg-white text-gray-700 rounded-md shadow-md hover:bg-gray-50 transition-colors"
                   title="Reset route"
                 >
-                  <RefreshCw className="w-5 h-5" />
+                  <RefreshCw className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Route Info Overlay */}
+              {/* Route Info Overlay with Pricing */}
               <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg p-4">
                 {isLoadingRoute ? (
                   <div className="flex items-center space-x-2">
@@ -840,42 +999,48 @@ const RouteMapEditor = ({
                       <MapPin className="w-4 h-4 text-purple-600" />
                       <span className="text-sm font-medium">{intermediateStops.length} stops</span>
                     </div>
+                    <div className="flex items-center space-x-2">
+                      <DollarSign className="w-4 h-4 text-orange-600" />
+                      <span className="text-sm font-bold text-green-600">
+                        ₹{calculateTotalPrice(route, totalDistance, intermediateStops).toFixed(0)}
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Sidebar */}
-            <div className="w-96 border-l border-gray-200 bg-gray-50 flex flex-col">
-              {/* Intermediate Stops */}
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Intermediate Stops</h3>
-                  <span className="text-sm text-gray-500">{intermediateStops.length} stops</span>
+            {/* Sidebar - Compact */}
+            <div className="w-80 border-l border-gray-200 bg-gray-50 flex flex-col">
+              {/* Intermediate Stops - Compact */}
+              <div className="p-4 border-b border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-base font-semibold text-gray-900">Intermediate Stops</h3>
+                  <span className="text-xs text-gray-500">{intermediateStops.length} stops</span>
                 </div>
 
-                <div className="space-y-3 max-h-64 overflow-y-auto">
+                <div className="space-y-2 max-h-48 overflow-y-auto">
                   {intermediateStops.map((stop, index) => (
-                    <div key={index} className="bg-white rounded-lg p-3 shadow-sm">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-2">
-                            <Bus className="w-4 h-4 text-blue-600" />
-                            <span className="text-sm font-medium text-gray-900">
+                    <div key={index} className="bg-white rounded-lg p-2 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-1 mb-1">
+                            <Bus className="w-3 h-3 text-blue-600 flex-shrink-0" />
+                            <span className="text-xs font-medium text-gray-900 truncate">
                               {stop.name}
                             </span>
                           </div>
-                          <p className="text-xs text-gray-500 mb-2">
-                            {stop.lat.toFixed(4)}, {stop.lng.toFixed(4)}
+                          <p className="text-xs text-gray-500 mb-1">
+                            {stop.lat.toFixed(3)}, {stop.lng.toFixed(3)}
                           </p>
-                          <div className="flex items-center space-x-2">
-                            <DollarSign className="w-4 h-4 text-green-600" />
+                          <div className="flex items-center space-x-1">
+                            <DollarSign className="w-3 h-3 text-green-600 flex-shrink-0" />
                             <input
                               type="number"
                               value={stop.price}
                               onChange={(e) => updateStopPrice(index, e.target.value)}
-                              className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              placeholder="Price"
+                              className="w-16 px-1 py-0.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="0"
                               min="0"
                               step="0.1"
                             />
@@ -884,9 +1049,9 @@ const RouteMapEditor = ({
                         </div>
                         <button
                           onClick={() => removeIntermediateStop(index)}
-                          className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                          className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors ml-1"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
                     </div>
@@ -894,116 +1059,130 @@ const RouteMapEditor = ({
                 </div>
 
                 {intermediateStops.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <MapPin className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p className="text-sm">No intermediate stops</p>
+                  <div className="text-center py-4 text-gray-500">
+                    <MapPin className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                    <p className="text-xs">No intermediate stops</p>
                     <p className="text-xs">Click on the map to add stops</p>
                   </div>
                 )}
               </div>
 
-              {/* Route Summary */}
-              <div className="p-6 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Route Summary</h3>
-                <div className="space-y-3">
+              {/* Route Summary - Compact with Auto Pricing */}
+              <div className="p-4 border-b border-gray-200">
+                <h3 className="text-base font-semibold text-gray-900 mb-3">Route Summary</h3>
+                <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Total Distance</span>
-                    <span className="font-medium">{totalDistance.toFixed(1)} km</span>
+                    <span className="text-xs text-gray-600">Distance</span>
+                    <span className="text-sm font-medium">{totalDistance.toFixed(1)} km</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Estimated Duration</span>
-                    <span className="font-medium">{Math.round(estimatedDuration)} min</span>
+                    <span className="text-xs text-gray-600">Duration</span>
+                    <span className="text-sm font-medium">{Math.round(estimatedDuration)} min</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Intermediate Stops</span>
-                    <span className="font-medium">{intermediateStops.length}</span>
+                    <span className="text-xs text-gray-600">Stops</span>
+                    <span className="text-sm font-medium">{intermediateStops.length}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Total Stop Prices</span>
-                    <span className="font-medium">
-                      ₹{intermediateStops.reduce((sum, stop) => sum + stop.price, 0).toFixed(2)}
+                    <span className="text-xs text-gray-600">Bus Type</span>
+                    <span className="text-sm font-medium">
+                      {getBusTypeDisplayName(route?.busType || route?.busId?.busType)}
                     </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-600">Fare per km</span>
+                    <span className="text-sm font-medium">
+                      ₹{getFarePerKm(route?.busType || route?.busId?.busType).toFixed(1)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center border-t border-gray-200 pt-2">
+                    <span className="text-sm font-semibold text-gray-800">Total Price</span>
+                    <span className="text-lg font-bold text-green-600">
+                      ₹{calculateTotalPrice(route, totalDistance, intermediateStops).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Base: ₹{(totalDistance * getFarePerKm(route?.busType || route?.busId?.busType)).toFixed(2)} + 
+                    Stops: ₹{(intermediateStops.length * 5).toFixed(2)} + 
+                    Convenience: ₹{totalDistance > 500 ? '50' : totalDistance > 200 ? '25' : '10'}
                   </div>
                 </div>
               </div>
 
-              {/* Auto-Detection Section */}
+              {/* Auto-Detection Section - Compact */}
               {!route && !autoDetectedRoute && (
-                <div className="p-6 border-b border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Create Route</h3>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Choose how to create your route:
-                  </p>
+                <div className="p-4 border-b border-gray-200">
+                  <h3 className="text-base font-semibold text-gray-900 mb-3">Create Route</h3>
                   
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <button
                       onClick={autoDetectRoute}
                       disabled={isAutoDetecting || !map || !directionsService}
-                      className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                      className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                     >
                       {isAutoDetecting ? (
-                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        <RefreshCw className="w-4 h-4 animate-spin" />
                       ) : (
-                        <Navigation className="w-5 h-5" />
+                        <Navigation className="w-4 h-4" />
                       )}
-                      <span>{isAutoDetecting ? 'Detecting...' : 'Auto-Detect Route'}</span>
+                      <span className="text-sm">{isAutoDetecting ? 'Detecting...' : 'Auto-Detect Route'}</span>
                     </button>
                     
-                    <div className="text-center text-sm text-gray-500">
+                    <div className="text-center text-xs text-gray-500">
                       OR
                     </div>
                     
-                    <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
-                      <strong>Click Method:</strong> Click on the map to set start point, then click again to set end point
+                    <div className="text-xs text-gray-600 bg-blue-50 p-2 rounded-lg">
+                      <strong>Click Method:</strong> Click on map to set start/end points
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Click Detection Status */}
+              {/* Click Detection Status - Compact */}
               {autoDetectedRoute && !autoDetectedRoute.endingPoint && (
-                <div className="p-6 border-b border-gray-200 bg-yellow-50">
-                  <h3 className="text-lg font-semibold text-yellow-800 mb-2">Route Creation</h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <MapPin className="w-4 h-4 text-yellow-600" />
-                      <span className="text-sm text-yellow-700">
+                <div className="p-4 border-b border-gray-200 bg-yellow-50">
+                  <h3 className="text-base font-semibold text-yellow-800 mb-2">Route Creation</h3>
+                  <div className="space-y-1">
+                    <div className="flex items-center space-x-1">
+                      <MapPin className="w-3 h-3 text-yellow-600" />
+                      <span className="text-xs text-yellow-700">
                         <strong>Start:</strong> {autoDetectedRoute.startingPoint.name}
                       </span>
                     </div>
-                    <div className="text-sm text-yellow-600 bg-yellow-100 p-2 rounded">
+                    <div className="text-xs text-yellow-600 bg-yellow-100 p-2 rounded">
                       Click on the map to set the end point
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Auto-Detected Route Info */}
+              {/* Auto-Detected Route Info - Compact */}
               {autoDetectedRoute && autoDetectedRoute.endingPoint && (
-                <div className="p-6 border-b border-gray-200 bg-green-50">
-                  <h3 className="text-lg font-semibold text-green-800 mb-2">Detected Route</h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <MapPin className="w-4 h-4 text-green-600" />
-                      <span className="text-sm text-green-700">
+                <div className="p-4 border-b border-gray-200 bg-green-50">
+                  <h3 className="text-base font-semibold text-green-800 mb-2">Detected Route</h3>
+                  <div className="space-y-1">
+                    <div className="flex items-center space-x-1">
+                      <MapPin className="w-3 h-3 text-green-600" />
+                      <span className="text-xs text-green-700">
                         <strong>Start:</strong> {autoDetectedRoute.startingPoint.name}
                       </span>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <MapPin className="w-4 h-4 text-green-600" />
-                      <span className="text-sm text-green-700">
+                    <div className="flex items-center space-x-1">
+                      <MapPin className="w-3 h-3 text-green-600" />
+                      <span className="text-xs text-green-700">
                         <strong>End:</strong> {autoDetectedRoute.endingPoint.name}
                       </span>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <Route className="w-4 h-4 text-green-600" />
-                      <span className="text-sm text-green-700">
+                    <div className="flex items-center space-x-1">
+                      <Route className="w-3 h-3 text-green-600" />
+                      <span className="text-xs text-green-700">
                         <strong>Distance:</strong> {autoDetectedRoute.totalDistance.toFixed(1)} km
                       </span>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <Clock className="w-4 h-4 text-green-600" />
-                      <span className="text-sm text-green-700">
+                    <div className="flex items-center space-x-1">
+                      <Clock className="w-3 h-3 text-green-600" />
+                      <span className="text-xs text-green-700">
                         <strong>Duration:</strong> {Math.round(autoDetectedRoute.estimatedDuration)} min
                       </span>
                     </div>
@@ -1011,19 +1190,19 @@ const RouteMapEditor = ({
                 </div>
               )}
 
-              {/* Action Buttons */}
-              <div className="p-6 space-y-3">
+              {/* Action Buttons - Compact */}
+              <div className="p-4 space-y-2">
                 <button
                   onClick={handleSaveRoute}
                   disabled={loading}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                  className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                 >
                   {loading ? (
-                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    <RefreshCw className="w-4 h-4 animate-spin" />
                   ) : (
-                    <Save className="w-5 h-5" />
+                    <Save className="w-4 h-4" />
                   )}
-                  <span>Save Route Changes</span>
+                  <span className="text-sm">Save Route Changes</span>
                 </button>
                 
                 {autoDetectedRoute && (
@@ -1037,16 +1216,16 @@ const RouteMapEditor = ({
                       }
                       toast.success('Auto-detected route cleared');
                     }}
-                    className="w-full bg-yellow-600 text-white py-3 rounded-lg hover:bg-yellow-700 transition-colors flex items-center justify-center space-x-2"
+                    className="w-full bg-yellow-600 text-white py-2 rounded-lg hover:bg-yellow-700 transition-colors flex items-center justify-center space-x-2"
                   >
-                    <RefreshCw className="w-5 h-5" />
-                    <span>Reset Auto-Detection</span>
+                    <RefreshCw className="w-4 h-4" />
+                    <span className="text-sm">Reset Auto-Detection</span>
                   </button>
                 )}
                 
                 <button
                   onClick={onClose}
-                  className="w-full bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition-colors"
+                  className="w-full bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition-colors text-sm"
                 >
                   Cancel
                 </button>

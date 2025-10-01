@@ -1,18 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { 
-  Calendar, TrendingUp, Clock, MapPin, Users, 
-  ArrowRight, Star, Zap, Bus, Wallet, Ticket,
-  Menu, X, Bell, Search, User, Settings,
-  ChevronRight, ChevronDown, Filter
+  Calendar, Clock, MapPin, Users,
+  Star, Zap, Bus, Wallet, Ticket,
+  Menu, X, Bell, Search, User, Settings, LogOut,
+  ChevronRight, Filter
 } from 'lucide-react';
 
 const MobilePassengerDashboard = () => {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const [myTrips, setMyTrips] = useState([]);
+  const [tripsLoading, setTripsLoading] = useState(false);
+  const [searchFrom, setSearchFrom] = useState('');
+  const [searchTo, setSearchTo] = useState('');
+  const [searchDate, setSearchDate] = useState('');
+  const [popularRoutes, setPopularRoutes] = useState([]);
+  const [popularBuses, setPopularBuses] = useState([]);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [dashboardData, setDashboardData] = useState({
+  const [dashboardData] = useState({
     summary: {
       upcomingBookings: 2,
       completedTrips: 15,
@@ -55,7 +64,20 @@ const MobilePassengerDashboard = () => {
   });
 
   const handleQuickBook = (trip) => {
-    navigate(`/passenger/book-trip/${trip.tripId}`);
+    const from = trip?.route?.from || trip?.from || '';
+    const to = trip?.route?.to || trip?.to || '';
+    const date = (trip?.schedule?.date || trip?.departureDate || '').toString().slice(0, 10);
+    const params = new URLSearchParams({
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+      ...(date ? { date } : {})
+    });
+    if (trip?.tripId) {
+      // If we have a trip id, take user directly to seat selection
+      navigate(`/redbus/seats/${trip.tripId}`);
+    } else {
+      navigate(`/redbus-results?${params.toString()}`);
+    }
   };
 
   const handleQuickSearch = (suggestion) => {
@@ -67,6 +89,16 @@ const MobilePassengerDashboard = () => {
     });
   };
 
+  const handlePopularRouteBook = (routeData) => {
+    const from = routeData?.route?.from || routeData?.from || '';
+    const to = routeData?.route?.to || routeData?.to || '';
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const date = tomorrow.toISOString().split('T')[0];
+    const params = new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}), date });
+    navigate(`/redbus-results?${params.toString()}`);
+  };
+
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: Calendar },
     { id: 'trips', label: 'My Trips', icon: Ticket },
@@ -74,11 +106,99 @@ const MobilePassengerDashboard = () => {
     { id: 'profile', label: 'Profile', icon: User }
   ];
 
+  useEffect(() => {
+    async function fetchMyTrips() {
+      try {
+        setTripsLoading(true);
+        const token = localStorage.getItem('token');
+        const resp = await fetch('/api/passenger/dashboard', {
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : '',
+            'Content-Type': 'application/json'
+          }
+        });
+        if (resp.ok) {
+          const json = await resp.json();
+          const upcoming = json?.data?.upcomingTrips || [];
+          setMyTrips(Array.isArray(upcoming) ? upcoming : []);
+        } else {
+          setMyTrips([]);
+        }
+      } catch (e) {
+        setMyTrips([]);
+      } finally {
+        setTripsLoading(false);
+      }
+    }
+
+    if (activeTab === 'trips') {
+      fetchMyTrips();
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    async function loadPopular() {
+      try {
+        // Popular routes
+        const r = await fetch('/api/routes/popular?limit=6');
+        if (r.ok) {
+          const j = await r.json();
+          const list = (j?.data || []).map((it) => ({
+            from: it.from || it.start || it.origin || it.startingPoint || 'Kochi',
+            to: it.to || it.end || it.destination || it.endingPoint || 'Thiruvananthapuram',
+            price: it.minFare || it.fare || 450,
+            label: `${(it.from || it.startingPoint || 'Kochi')} → ${(it.to || it.endingPoint || 'Thiruvananthapuram')}`
+          }));
+          setPopularRoutes(Array.isArray(list) ? list : []);
+        } else {
+          setPopularRoutes([
+            { from: 'Kochi', to: 'Bangalore', price: 850, label: 'Kochi → Bangalore' },
+            { from: 'Kochi', to: 'Chennai', price: 750, label: 'Kochi → Chennai' },
+            { from: 'Kochi', to: 'Thiruvananthapuram', price: 450, label: 'Kochi → Thiruvananthapuram' }
+          ]);
+        }
+      } catch {
+        setPopularRoutes([
+          { from: 'Kochi', to: 'Bangalore', price: 850, label: 'Kochi → Bangalore' },
+          { from: 'Kochi', to: 'Chennai', price: 750, label: 'Kochi → Chennai' },
+          { from: 'Kochi', to: 'Thiruvananthapuram', price: 450, label: 'Kochi → Thiruvananthapuram' }
+        ]);
+      }
+
+      try {
+        // Popular buses (fall back to trips with bus info)
+        const t = await fetch('/api/trips/popular?limit=6');
+        if (t.ok) {
+          const j = await t.json();
+          const list = (j?.data || j?.trips || []).map((it) => ({
+            route: it.routeName || `${it.fromCity || it.from} → ${it.toCity || it.to}`,
+            busType: it.busType || 'AC',
+            fare: it.fare || it.price || 500
+          }));
+          setPopularBuses(Array.isArray(list) ? list : []);
+        } else {
+          setPopularBuses([
+            { route: 'Kochi → Bangalore', busType: 'AC Sleeper', fare: 850 },
+            { route: 'Kochi → Chennai', busType: 'AC Semi-Sleeper', fare: 750 },
+            { route: 'Kochi → Thiruvananthapuram', busType: 'Non-AC Seater', fare: 450 }
+          ]);
+        }
+      } catch {
+        setPopularBuses([
+          { route: 'Kochi → Bangalore', busType: 'AC Sleeper', fare: 850 },
+          { route: 'Kochi → Chennai', busType: 'AC Semi-Sleeper', fare: 750 },
+          { route: 'Kochi → Thiruvananthapuram', busType: 'Non-AC Seater', fare: 450 }
+        ]);
+      }
+    }
+    if (activeTab === 'search') loadPopular();
+  }, [activeTab]);
+
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-24 pt-2">
       {/* Mobile Header */}
       <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
-        <div className="flex items-center justify-between p-4">
+        <div className="flex items-center justify-between p-4 max-w-md mx-auto">
           <div className="flex items-center space-x-3">
             <button
               onClick={() => setShowMobileMenu(!showMobileMenu)}
@@ -87,7 +207,7 @@ const MobilePassengerDashboard = () => {
               <Menu className="w-5 h-5 text-gray-600" />
             </button>
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 bg-pink-600 rounded-lg flex items-center justify-center">
                 <Bus className="w-4 h-4 text-white" />
               </div>
               <span className="font-bold text-gray-900">YATRIK</span>
@@ -98,6 +218,13 @@ const MobilePassengerDashboard = () => {
               <Bell className="w-5 h-5 text-gray-600" />
               <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
             </button>
+            <button
+              onClick={() => { logout(); navigate('/login'); }}
+              className="p-2 rounded-lg hover:bg-gray-100"
+              title="Logout"
+            >
+              <LogOut className="w-5 h-5 text-gray-600" />
+            </button>
             <button className="p-2 rounded-lg hover:bg-gray-100">
               <Settings className="w-5 h-5 text-gray-600" />
             </button>
@@ -106,15 +233,15 @@ const MobilePassengerDashboard = () => {
       </div>
 
       {/* Mobile Navigation Tabs */}
-      <div className="bg-white border-b border-gray-200 sticky top-16 z-40">
-        <div className="flex overflow-x-auto scrollbar-hide">
+      <div className="bg-white border-b border-gray-200 sticky top-[56px] z-40">
+        <div className="flex overflow-x-auto scrollbar-hide max-w-md mx-auto">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center space-x-2 px-4 py-3 whitespace-nowrap border-b-2 transition-colors ${
                 activeTab === tab.id
-                  ? 'border-blue-500 text-blue-600 bg-blue-50'
+                  ? 'border-pink-500 text-pink-600 bg-pink-50'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -150,16 +277,63 @@ const MobilePassengerDashboard = () => {
                 <Users className="w-5 h-5 text-gray-600" />
                 <span>Support</span>
               </button>
+              <button
+                onClick={() => { setShowMobileMenu(false); logout(); navigate('/login'); }}
+                className="w-full text-left p-3 rounded-lg hover:bg-gray-100 flex items-center space-x-3 text-red-600"
+              >
+                <LogOut className="w-5 h-5" />
+                <span>Logout</span>
+              </button>
             </div>
+          </div>
+          {/* Popular Suggestions */}
+          <div className="max-w-md mx-auto mt-4 space-y-4">
+            {popularRoutes.length > 0 && (
+              <div className="bg-white rounded-xl p-4 shadow-sm">
+                <h3 className="font-semibold text-gray-900 mb-3">Popular Routes</h3>
+                <div className="grid grid-cols-1 gap-2">
+                  {popularRoutes.map((r, i) => (
+                    <button
+                      key={`${r.label}-${i}`}
+                      onClick={() => { setSearchFrom(r.from); setSearchTo(r.to); }}
+                      className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:border-pink-500 hover:shadow-sm text-left"
+                    >
+                      <div>
+                        <div className="font-medium text-gray-900 text-sm">{r.label}</div>
+                        <div className="text-xs text-gray-500">From ₹{r.price}</div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {popularBuses.length > 0 && (
+              <div className="bg-white rounded-xl p-4 shadow-sm">
+                <h3 className="font-semibold text-gray-900 mb-3">Popular Buses</h3>
+                <div className="space-y-2">
+                  {popularBuses.map((b, i) => (
+                    <div key={`${b.route}-${i}`} className="p-3 border border-gray-200 rounded-lg flex items-center justify-between">
+                      <div>
+                        <div className="font-medium text-gray-900 text-sm">{b.route}</div>
+                        <div className="text-xs text-gray-500">{b.busType}</div>
+                      </div>
+                      <div className="text-pink-600 font-semibold text-sm">₹{b.fare}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {/* Dashboard Content */}
       {activeTab === 'dashboard' && (
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-4 max-w-md mx-auto min-h-[60vh]">
           {/* Welcome Section */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-4 text-white">
+          <div className="bg-gradient-to-r from-pink-600 to-pink-700 rounded-xl p-4 text-white">
             <h1 className="text-xl font-bold mb-1">Welcome back!</h1>
             <p className="text-blue-100 text-sm">Find and book your next journey</p>
           </div>
@@ -168,7 +342,7 @@ const MobilePassengerDashboard = () => {
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-white rounded-lg p-4 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <Ticket className="w-5 h-5 text-blue-600" />
+                <Ticket className="w-5 h-5 text-pink-600" />
                 <span className="text-xs text-gray-500">Upcoming</span>
               </div>
               <p className="text-2xl font-bold text-gray-900">{dashboardData.summary.upcomingBookings}</p>
@@ -203,12 +377,12 @@ const MobilePassengerDashboard = () => {
                 <button
                   key={index}
                   onClick={() => handleQuickSearch(suggestion)}
-                  className="w-full p-3 border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all text-left"
+                  className="w-full p-3 border border-gray-200 rounded-lg hover:border-pink-500 hover:shadow-sm transition-all text-left"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-                        <MapPin className="w-4 h-4 text-blue-600" />
+                      <div className="w-8 h-8 bg-pink-50 rounded-lg flex items-center justify-center">
+                        <MapPin className="w-4 h-4 text-pink-600" />
                       </div>
                       <div>
                         <p className="font-medium text-gray-900 text-sm">
@@ -227,7 +401,7 @@ const MobilePassengerDashboard = () => {
           {/* Upcoming Trips */}
           <div className="bg-white rounded-xl p-4 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-3 flex items-center">
-              <Calendar className="w-4 h-4 mr-2 text-blue-500" />
+              <Calendar className="w-4 h-4 mr-2 text-pink-500" />
               Upcoming Trips
             </h2>
             <div className="space-y-3">
@@ -235,7 +409,7 @@ const MobilePassengerDashboard = () => {
                 <div
                   key={trip.tripId}
                   onClick={() => handleQuickBook(trip)}
-                  className="border border-gray-200 rounded-lg p-3 hover:border-blue-500 hover:shadow-sm transition-all cursor-pointer"
+                  className="border border-gray-200 rounded-lg p-3 hover:border-pink-500 hover:shadow-sm transition-all cursor-pointer"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div>
@@ -295,7 +469,10 @@ const MobilePassengerDashboard = () => {
                       </p>
                     </div>
                   </div>
-                  <button className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">
+                  <button 
+                    onClick={() => handlePopularRouteBook(routeData)}
+                    className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                  >
                     Book
                   </button>
                 </div>
@@ -308,25 +485,57 @@ const MobilePassengerDashboard = () => {
       {/* My Trips Tab */}
       {activeTab === 'trips' && (
         <div className="p-4">
-          <div className="bg-white rounded-xl p-4 shadow-sm">
+          <div className="bg-white rounded-xl p-4 shadow-sm max-w-md mx-auto">
             <h2 className="font-semibold text-gray-900 mb-4">My Trips</h2>
-            <div className="space-y-3">
-              {dashboardData.scheduledTrips.map((trip) => (
-                <div key={trip.tripId} className="border border-gray-200 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-medium text-gray-900 text-sm">
-                      {trip.route.from} → {trip.route.to}
-                    </h3>
-                    <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded">Confirmed</span>
-                  </div>
-                  <div className="text-xs text-gray-600 space-y-1">
-                    <p>Date: {new Date(trip.schedule.date).toLocaleDateString('en-IN')}</p>
-                    <p>Time: {trip.schedule.departureTime}</p>
-                    <p>Bus: {trip.bus.type}</p>
-                  </div>
+
+            {tripsLoading && (
+              <div className="py-8 text-center text-gray-500">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-500 mx-auto mb-2"></div>
+                Loading your trips...
+              </div>
+            )}
+
+            {!tripsLoading && (myTrips.length === 0 && dashboardData.scheduledTrips.length === 0) && (
+              <div className="py-10 text-center text-gray-500">
+                No upcoming trips. Start by searching a route.
+                <div className="mt-3">
+                  <button
+                    onClick={() => setActiveTab('search')}
+                    className="px-4 py-2 bg-pink-600 text-white rounded-lg text-sm"
+                  >
+                    Search Trips
+                  </button>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
+
+            {!tripsLoading && (
+              <div className="space-y-3">
+                {(myTrips.length ? myTrips : dashboardData.scheduledTrips).map((trip, idx) => {
+                  const from = trip.from || trip.route?.from;
+                  const to = trip.to || trip.route?.to;
+                  const date = trip.departureDate || trip.schedule?.date;
+                  const time = trip.departureTime || trip.schedule?.departureTime;
+                  const busType = trip.busType || trip.bus?.type;
+                  const key = trip.id || trip.tripId || idx;
+                  return (
+                    <div key={key} className="border border-gray-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-medium text-gray-900 text-sm">
+                          {from} → {to}
+                        </h3>
+                        <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded">Confirmed</span>
+                      </div>
+                      <div className="text-xs text-gray-600 space-y-1">
+                        <p>Date: {date ? new Date(date).toLocaleDateString('en-IN') : '-'}</p>
+                        <p>Time: {time || '-'}</p>
+                        <p>Bus: {busType || '-'}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -334,7 +543,7 @@ const MobilePassengerDashboard = () => {
       {/* Search Tab */}
       {activeTab === 'search' && (
         <div className="p-4">
-          <div className="bg-white rounded-xl p-4 shadow-sm mb-4">
+          <div className="bg-white rounded-xl p-4 shadow-sm mb-4 max-w-md mx-auto">
             <h2 className="font-semibold text-gray-900 mb-4">Search Trips</h2>
             <div className="space-y-3">
               <div>
@@ -342,7 +551,9 @@ const MobilePassengerDashboard = () => {
                 <input
                   type="text"
                   placeholder="Enter departure city"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={searchFrom}
+                  onChange={(e) => setSearchFrom(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                 />
               </div>
               <div>
@@ -350,19 +561,43 @@ const MobilePassengerDashboard = () => {
                 <input
                   type="text"
                   placeholder="Enter destination city"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={searchTo}
+                  onChange={(e) => setSearchTo(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
                 <input
                   type="date"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={searchDate}
+                  onChange={(e) => setSearchDate(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                 />
               </div>
               <button
-                onClick={() => navigate('/passenger/search')}
-                className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"
+                onClick={async () => {
+                  if (!searchFrom || !searchTo || !searchDate) {
+                    alert('Please fill From, To and Date');
+                    return;
+                  }
+                  try {
+                    const token = localStorage.getItem('token');
+                    await fetch(`/api/passenger/trips/search?from=${encodeURIComponent(searchFrom)}&to=${encodeURIComponent(searchTo)}&date=${searchDate}`, {
+                      headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                      }
+                    });
+                    // Navigate to results regardless; API precheck just helps UX
+                    const params = new URLSearchParams({ from: searchFrom, to: searchTo, date: searchDate });
+                    navigate(`/passenger/results?${params.toString()}`);
+                  } catch {
+                    const params = new URLSearchParams({ from: searchFrom, to: searchTo, date: searchDate });
+                    navigate(`/passenger/results?${params.toString()}`);
+                  }
+                }}
+                className="w-full py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors flex items-center justify-center space-x-2"
               >
                 <Search className="w-4 h-4" />
                 <span>Search Buses</span>
@@ -375,15 +610,15 @@ const MobilePassengerDashboard = () => {
       {/* Profile Tab */}
       {activeTab === 'profile' && (
         <div className="p-4">
-          <div className="bg-white rounded-xl p-4 shadow-sm">
+          <div className="bg-white rounded-xl p-4 shadow-sm max-w-md mx-auto">
             <h2 className="font-semibold text-gray-900 mb-4">Profile</h2>
             <div className="space-y-4">
               <div className="text-center">
-                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                <div className="w-16 h-16 bg-pink-600 rounded-full flex items-center justify-center mx-auto mb-3">
                   <User className="w-8 h-8 text-white" />
                 </div>
-                <h3 className="font-medium text-gray-900">John Doe</h3>
-                <p className="text-sm text-gray-600">john@example.com</p>
+                <h3 className="font-medium text-gray-900">{user?.name || 'Passenger'}</h3>
+                <p className="text-sm text-gray-600">{user?.email || '—'}</p>
               </div>
               <div className="space-y-2">
                 <button className="w-full text-left p-3 rounded-lg hover:bg-gray-100 flex items-center justify-between">
@@ -398,6 +633,27 @@ const MobilePassengerDashboard = () => {
                   <span>Notifications</span>
                   <ChevronRight className="w-4 h-4 text-gray-400" />
                 </button>
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <button
+                    onClick={() => navigate('/passenger/tickets')}
+                    className="p-3 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm"
+                  >
+                    My Tickets
+                  </button>
+                  <button
+                    onClick={() => navigate('/passenger/wallet')}
+                    className="p-3 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm"
+                  >
+                    Wallet
+                  </button>
+                </div>
+                <button
+                  onClick={() => { logout(); navigate('/login'); }}
+                  className="w-full text-left p-3 rounded-lg hover:bg-gray-100 flex items-center justify-between text-red-600"
+                >
+                  <span>Logout</span>
+                  <LogOut className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </div>
@@ -406,14 +662,14 @@ const MobilePassengerDashboard = () => {
 
       {/* Bottom Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2">
-        <div className="flex justify-around">
+        <div className="flex justify-around max-w-md mx-auto">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex flex-col items-center space-y-1 py-2 px-3 rounded-lg transition-colors ${
                 activeTab === tab.id
-                  ? 'text-blue-600 bg-blue-50'
+                  ? 'text-pink-600 bg-pink-50'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >

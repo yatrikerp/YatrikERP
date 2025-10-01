@@ -82,24 +82,90 @@ router.get('/running-trips', async (req, res) => {
         currentStatus = 'running'; // Show as running in the UI
       }
       
-      // Generate coordinates based on route and progress
-      const startCoords = trip.routeId?.startingPoint?.coordinates || { lat: 9.9312, lng: 76.2673 }; // Kochi default
-      const endCoords = trip.routeId?.endingPoint?.coordinates || { lat: 8.5241, lng: 76.9366 }; // TVM default
+      // Generate realistic coordinates based on Kerala geography and route progress
+      const keralaCities = {
+        'Thiruvananthapuram': { lat: 8.5241, lng: 76.9366 },
+        'Kollam': { lat: 8.8932, lng: 76.6141 },
+        'Alappuzha': { lat: 9.4981, lng: 76.3388 },
+        'Kottayam': { lat: 9.5916, lng: 76.5222 },
+        'Kochi': { lat: 9.9312, lng: 76.2673 },
+        'Ernakulam': { lat: 9.9816, lng: 76.2999 },
+        'Thrissur': { lat: 10.5276, lng: 76.2144 },
+        'Guruvayur': { lat: 10.5949, lng: 76.0400 },
+        'Palakkad': { lat: 10.7867, lng: 76.6548 },
+        'Malappuram': { lat: 11.0510, lng: 76.0711 },
+        'Kozhikode': { lat: 11.2588, lng: 75.7804 },
+        'Wayanad': { lat: 11.6854, lng: 76.1320 },
+        'Kannur': { lat: 11.8745, lng: 75.3704 },
+        'Kasaragod': { lat: 12.4996, lng: 74.9869 }
+      };
+
+      // Get route coordinates
+      const routeName = trip.routeId?.routeName || '';
+      let startCoords, endCoords, startCity, endCity;
       
-      const currentLat = startCoords.lat + (endCoords.lat - startCoords.lat) * routeProgress;
+      // Extract cities from route name or use defaults
+      for (const city of Object.keys(keralaCities)) {
+        if (routeName.toLowerCase().includes(city.toLowerCase())) {
+          if (!startCity) {
+            startCity = city;
+            startCoords = keralaCities[city];
+          } else if (city !== startCity) {
+            endCity = city;
+            endCoords = keralaCities[city];
+            break;
+          }
+        }
+      }
+      
+      // Fallback to default coordinates if not found
+      if (!startCoords) {
+        startCoords = { lat: 9.9312, lng: 76.2673 }; // Kochi
+        startCity = 'Kochi';
+      }
+      if (!endCoords) {
+        endCoords = { lat: 8.5241, lng: 76.9366 }; // TVM
+        endCity = 'Thiruvananthapuram';
+      }
+
+      // Calculate current position with realistic road curves
+      const distance = Math.sqrt(
+        Math.pow(endCoords.lat - startCoords.lat, 2) + 
+        Math.pow(endCoords.lng - startCoords.lng, 2)
+      );
+      
+      // Add realistic road curves (Kerala roads are winding)
+      const curveOffset = distance * 0.1 * Math.sin(routeProgress * Math.PI * 2);
+      const currentLat = startCoords.lat + (endCoords.lat - startCoords.lat) * routeProgress + curveOffset;
       const currentLng = startCoords.lng + (endCoords.lng - startCoords.lng) * routeProgress;
       
-      // Generate realistic speed (30-80 km/h)
-      const currentSpeed = Math.floor(Math.random() * 50) + 30;
+      
+      // Generate realistic speed based on bus type and progress
+      let baseSpeed = 45; // Base speed in km/h
+      if (trip.busId?.busType === 'garuda') baseSpeed = 65;
+      else if (trip.busId?.busType === 'super_fast') baseSpeed = 55;
+      else if (trip.busId?.busType === 'ac') baseSpeed = 50;
+      
+      // Speed varies based on route progress (slower in cities, faster on highways)
+      const speedVariation = Math.sin(routeProgress * Math.PI) * 15; // -15 to +15 km/h variation
+      const currentSpeed = Math.floor(baseSpeed + speedVariation + (Math.random() - 0.5) * 10);
       
       // Calculate estimated arrival
       const remainingMinutes = Math.max(0, 180 - elapsedMinutes);
       const estimatedArrival = new Date(currentTime.getTime() + remainingMinutes * 60000);
       
-      // Get current location name (simplified)
-      const locations = ['Kochi', 'Alappuzha', 'Kollam', 'Thiruvananthapuram'];
-      const currentLocationIndex = Math.floor(routeProgress * locations.length);
-      const currentLocation = locations[Math.min(currentLocationIndex, locations.length - 1)] + ', Kerala';
+      // Get realistic current location based on progress and route
+      const routeLocations = [
+        `${startCity}, Kerala`,
+        'Near Alappuzha, Kerala',
+        'Near Kollam, Kerala', 
+        'Near Thrissur, Kerala',
+        'Near Palakkad, Kerala',
+        'Near Kozhikode, Kerala',
+        `${endCity}, Kerala`
+      ];
+      const locationIndex = Math.floor(routeProgress * (routeLocations.length - 1));
+      const currentLocation = routeLocations[Math.min(locationIndex, routeLocations.length - 1)];
 
       return {
         _id: trip._id,
@@ -132,8 +198,8 @@ router.get('/running-trips', async (req, res) => {
         // Tracking specific data
         currentLocation: currentLocation,
         coordinates: {
-          lat: currentLat,
-          lng: currentLng
+          lat: parseFloat(currentLat?.toFixed(6) || 10.5276),
+          lng: parseFloat(currentLng?.toFixed(6) || 76.2144)
         },
         currentSpeed: `${currentSpeed} km/h`,
         estimatedArrival: estimatedArrival.toTimeString().slice(0, 5),
@@ -192,19 +258,80 @@ router.get('/trip/:tripId', async (req, res) => {
     const elapsedMinutes = Math.floor((currentTime - startTime) / (1000 * 60));
     const routeProgress = Math.min(elapsedMinutes / 180, 0.9);
     
-    const startCoords = trip.routeId?.startingPoint?.coordinates || { lat: 9.9312, lng: 76.2673 };
-    const endCoords = trip.routeId?.endingPoint?.coordinates || { lat: 8.5241, lng: 76.9366 };
+    // Use the same realistic coordinate generation logic
+    const keralaCities = {
+      'Thiruvananthapuram': { lat: 8.5241, lng: 76.9366 },
+      'Kollam': { lat: 8.8932, lng: 76.6141 },
+      'Alappuzha': { lat: 9.4981, lng: 76.3388 },
+      'Kottayam': { lat: 9.5916, lng: 76.5222 },
+      'Kochi': { lat: 9.9312, lng: 76.2673 },
+      'Ernakulam': { lat: 9.9816, lng: 76.2999 },
+      'Thrissur': { lat: 10.5276, lng: 76.2144 },
+      'Guruvayur': { lat: 10.5949, lng: 76.0400 },
+      'Palakkad': { lat: 10.7867, lng: 76.6548 },
+      'Malappuram': { lat: 11.0510, lng: 76.0711 },
+      'Kozhikode': { lat: 11.2588, lng: 75.7804 },
+      'Wayanad': { lat: 11.6854, lng: 76.1320 },
+      'Kannur': { lat: 11.8745, lng: 75.3704 },
+      'Kasaragod': { lat: 12.4996, lng: 74.9869 }
+    };
+
+    const routeName = trip.routeId?.routeName || '';
+    let startCoords, endCoords, startCity, endCity;
     
-    const currentLat = startCoords.lat + (endCoords.lat - startCoords.lat) * routeProgress;
+    for (const city of Object.keys(keralaCities)) {
+      if (routeName.toLowerCase().includes(city.toLowerCase())) {
+        if (!startCity) {
+          startCity = city;
+          startCoords = keralaCities[city];
+        } else if (city !== startCity) {
+          endCity = city;
+          endCoords = keralaCities[city];
+          break;
+        }
+      }
+    }
+    
+    if (!startCoords) {
+      startCoords = { lat: 9.9312, lng: 76.2673 };
+      startCity = 'Kochi';
+    }
+    if (!endCoords) {
+      endCoords = { lat: 8.5241, lng: 76.9366 };
+      endCity = 'Thiruvananthapuram';
+    }
+
+    const distance = Math.sqrt(
+      Math.pow(endCoords.lat - startCoords.lat, 2) + 
+      Math.pow(endCoords.lng - startCoords.lng, 2)
+    );
+    
+    const curveOffset = distance * 0.1 * Math.sin(routeProgress * Math.PI * 2);
+    const currentLat = startCoords.lat + (endCoords.lat - startCoords.lat) * routeProgress + curveOffset;
     const currentLng = startCoords.lng + (endCoords.lng - startCoords.lng) * routeProgress;
     
-    const currentSpeed = Math.floor(Math.random() * 50) + 30;
+    let baseSpeed = 45;
+    if (trip.busId?.busType === 'garuda') baseSpeed = 65;
+    else if (trip.busId?.busType === 'super_fast') baseSpeed = 55;
+    else if (trip.busId?.busType === 'ac') baseSpeed = 50;
+    
+    const speedVariation = Math.sin(routeProgress * Math.PI) * 15;
+    const currentSpeed = Math.floor(baseSpeed + speedVariation + (Math.random() - 0.5) * 10);
+    
     const remainingMinutes = Math.max(0, 180 - elapsedMinutes);
     const estimatedArrival = new Date(currentTime.getTime() + remainingMinutes * 60000);
     
-    const locations = ['Kochi', 'Alappuzha', 'Kollam', 'Thiruvananthapuram'];
-    const currentLocationIndex = Math.floor(routeProgress * locations.length);
-    const currentLocation = locations[Math.min(currentLocationIndex, locations.length - 1)] + ', Kerala';
+    const routeLocations = [
+      `${startCity}, Kerala`,
+      'Near Alappuzha, Kerala',
+      'Near Kollam, Kerala', 
+      'Near Thrissur, Kerala',
+      'Near Palakkad, Kerala',
+      'Near Kozhikode, Kerala',
+      `${endCity}, Kerala`
+    ];
+    const locationIndex = Math.floor(routeProgress * (routeLocations.length - 1));
+    const currentLocation = routeLocations[Math.min(locationIndex, routeLocations.length - 1)];
 
     const trackingData = {
       _id: trip._id,
@@ -237,8 +364,8 @@ router.get('/trip/:tripId', async (req, res) => {
       // Tracking specific data
       currentLocation: currentLocation,
       coordinates: {
-        lat: currentLat,
-        lng: currentLng
+        lat: parseFloat(currentLat?.toFixed(6) || 10.5276),
+        lng: parseFloat(currentLng?.toFixed(6) || 76.2144)
       },
       currentSpeed: `${currentSpeed} km/h`,
       estimatedArrival: estimatedArrival.toTimeString().slice(0, 5),

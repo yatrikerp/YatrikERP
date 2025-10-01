@@ -3,7 +3,7 @@ const router = express.Router();
 const Trip = require('../models/Trip');
 const Route = require('../models/Route');
 const Booking = require('../models/Booking');
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 
 // Get scheduled trips for passenger dashboard
 router.get('/scheduled-trips', auth, async (req, res) => {

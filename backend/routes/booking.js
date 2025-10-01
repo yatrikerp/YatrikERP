@@ -425,6 +425,87 @@ router.post('/search', async (req, res) => {
   }
 });
 
+// GET /api/booking/trip/:tripId - Get trip details for booking
+router.get('/trip/:tripId', async (req, res) => {
+  try {
+    const { tripId } = req.params;
+    
+    const trip = await Trip.findById(tripId)
+      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+      .populate('busId', 'busNumber busType capacity')
+      .populate('depotId', 'depotName depotLocation')
+      .populate('driverId', 'name phone')
+      .populate('conductorId', 'name phone')
+      .lean();
+    
+    if (!trip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trip not found'
+      });
+    }
+
+    // Calculate fare if not set
+    let fare = trip.fare;
+    if (!fare || fare === 0) {
+      // Calculate fare based on route distance and bus type
+      const route = trip.routeId;
+      if (route && route.startingPoint && route.endingPoint) {
+        // Simple fare calculation based on bus type
+        const busTypeFares = {
+          'ordinary': 1.2,
+          'fast_passenger': 1.5,
+          'super_fast': 1.8,
+          'ac': 2.0,
+          'volvo': 2.5,
+          'garuda': 3.0
+        };
+        
+        const baseFarePerKm = busTypeFares[trip.busId?.busType] || 1.5;
+        const estimatedDistance = 150; // Default distance in km
+        fare = Math.round(estimatedDistance * baseFarePerKm);
+      } else {
+        fare = 250; // Default fare
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        trip: {
+          _id: trip._id,
+          routeName: trip.routeId?.routeName || 'Unknown Route',
+          routeNumber: trip.routeId?.routeNumber || 'N/A',
+          startingPoint: trip.routeId?.startingPoint || 'Unknown',
+          endingPoint: trip.routeId?.endingPoint || 'Unknown',
+          startTime: trip.startTime,
+          endTime: trip.endTime,
+          serviceDate: trip.serviceDate,
+          fare: fare,
+          capacity: trip.busId?.capacity || 35,
+          availableSeats: trip.availableSeats || 35,
+          bookedSeats: trip.bookedSeats || 0,
+          busNumber: trip.busId?.busNumber || 'N/A',
+          busType: trip.busId?.busType || 'Standard',
+          depotName: trip.depotId?.depotName || 'Unknown',
+          driverName: trip.driverId?.name || 'N/A',
+          conductorName: trip.conductorId?.name || 'N/A',
+          status: trip.status,
+          bookingOpen: trip.bookingOpen !== false // Default to true if not set
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error fetching trip details:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch trip details',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/booking/seats/:tripId - Get available seats for a trip
 router.get('/seats/:tripId', async (req, res) => {
   try {

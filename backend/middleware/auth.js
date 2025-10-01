@@ -4,9 +4,9 @@ const DepotUser = require('../models/DepotUser');
 const Driver = require('../models/Driver');
 const Conductor = require('../models/Conductor');
 
-// Simple in-memory cache for user data (in production, use Redis)
-const userCache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+// In-memory user cache disabled to ensure live reads from DB
+const userCache = { get: () => null, set: () => {}, entries: () => [], delete: () => {} };
+const CACHE_TTL = 0;
 
 // Base authentication middleware
 const auth = async (req, res, next) => {
@@ -30,14 +30,8 @@ const auth = async (req, res, next) => {
     const payload = jwt.verify(token, process.env.JWT_SECRET || 'secret');
     console.log('Token payload:', payload);
     
-    // Check cache first
+    // Skip in-memory cache for always-live data
     const cacheKey = `${payload.userId}_${payload.role}`;
-    const cachedUser = userCache.get(cacheKey);
-    
-    if (cachedUser && Date.now() - cachedUser.timestamp < CACHE_TTL) {
-      req.user = cachedUser.user;
-      return next();
-    }
 
     // Fetch user from database with minimal fields
     let user = await User.findById(payload.userId)
@@ -128,11 +122,7 @@ const auth = async (req, res, next) => {
       });
     }
 
-    // Cache user data
-    userCache.set(cacheKey, {
-      user,
-      timestamp: Date.now()
-    });
+    // Do not cache user data to force live reads
 
     req.user = user;
     next();
@@ -194,13 +184,6 @@ const authWithRole = (roles) => {
 };
 
 // Clear expired cache entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of userCache.entries()) {
-    if (now - value.timestamp > CACHE_TTL) {
-      userCache.delete(key);
-    }
-  }
-}, 5 * 60 * 1000);
+// Cache pruning disabled as caching is off
 
 module.exports = { auth, requireRole, authWithRole };

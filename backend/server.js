@@ -1,4 +1,6 @@
 const express = require('express');
+const compression = require('compression');
+const helmet = require('helmet');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
@@ -11,6 +13,10 @@ require('dotenv').config();
 
 const app = express();
 
+// Express performance and security tuning
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors({
   origin: ['http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:3000', 'http://127.0.0.1:5173'],
@@ -18,9 +24,24 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+// HTTP compression (apply early)
+app.use(compression({ threshold: 1024 }));
+
+// Secure defaults and sane headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
+}));
 app.use(express.json());
 app.use(favicon(path.join(__dirname, '../frontend/public/favicon.ico')));
 // app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+// Enforce no-cache for all API responses to ensure live data
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
 
 // Session configuration for OAuth
 app.use(session({

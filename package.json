@@ -48,5 +48,8 @@
     "mocha": "^10.8.2",
     "mochawesome": "^7.1.4",
     "selenium-webdriver": "^4.24.0"
+  },
+  "dependencies": {
+    "compression": "^1.8.1"
   }
 }

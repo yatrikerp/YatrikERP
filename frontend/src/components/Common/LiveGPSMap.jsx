@@ -28,7 +28,7 @@ const KERALA_ROUTES = [
     status: 'active',
     busNumber: 'KL-BUS-001',
     driver: 'Rajesh Kumar',
-    conductor: 'Amit Patel',
+    conductor: 'Anil Kumar',
     currentLocation: { lat: 9.9312, lng: 76.2673 },
     speed: '65 km/h',
     eta: '2h 30m'

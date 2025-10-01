@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import useMobileDetection from '../hooks/useMobileDetection';
+import { isMobileDevice, shouldUseMobileUI } from '../utils/mobileDetection';
 
 const OAuthCallback = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { login } = useAuth();
+  const { isMobile } = useMobileDetection();
   const [isProcessing, setIsProcessing] = useState(true);
   const [error, setError] = useState(null);
 
@@ -32,7 +35,14 @@ const OAuthCallback = () => {
             const userData = JSON.parse(decodeURIComponent(user));
             
             // Log in the user with backend data
-            login(userData, token);
+            await login(userData, token);
+            
+            // Wait a bit for the login to complete and mobile detection to be ready
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Re-check mobile detection after login using multiple methods
+            const currentIsMobile = isMobileDevice() || window.innerWidth < 768;
+            const shouldUseMobile = shouldUseMobileUI();
             
             // Determine redirect destination - prioritize 'next' parameter
             const role = (userData.role || 'passenger').toUpperCase();
@@ -42,21 +52,48 @@ const OAuthCallback = () => {
               // Check if the user has access to the requested route
               const hasAccess = (
                 (nextParam.startsWith('/pax') && role === 'PASSENGER') ||
+                (nextParam.startsWith('/passenger') && role === 'PASSENGER') ||
                 (nextParam.startsWith('/admin') && role === 'ADMIN') ||
                 (nextParam.startsWith('/conductor') && role === 'CONDUCTOR') ||
                 (nextParam.startsWith('/driver') && role === 'DRIVER') ||
                 (nextParam.startsWith('/depot') && role === 'DEPOT_MANAGER')
               );
               
-              dest = hasAccess ? nextParam : getDefaultRoute(role);
+              if (hasAccess) {
+                // For mobile users, redirect /pax to mobile dashboard
+                if ((currentIsMobile || shouldUseMobile) && nextParam === '/pax' && role === 'PASSENGER') {
+                  dest = '/passenger/mobile';
+                } else {
+                  dest = nextParam;
+                }
+              } else {
+                dest = getDefaultRoute(role, currentIsMobile || shouldUseMobile);
+              }
             } else {
-              dest = getDefaultRoute(role);
+              dest = getDefaultRoute(role, currentIsMobile || shouldUseMobile);
             }
             
-            // Instant redirect
-            navigate(dest, { replace: true });
+            // Debug logging for mobile redirect
+            console.log('🔍 OAuth Callback Redirect Debug:');
+            console.log('  Role:', role);
+            console.log('  Hook isMobile:', isMobile);
+            console.log('  Current isMobile:', currentIsMobile);
+            console.log('  Should Use Mobile:', shouldUseMobile);
+            console.log('  Window width:', window.innerWidth);
+            console.log('  Touch device:', 'ontouchstart' in window);
+            console.log('  Max touch points:', navigator.maxTouchPoints);
+            console.log('  Next Param:', nextParam);
+            console.log('  Final Destination:', dest);
+            console.log('  User Agent:', navigator.userAgent);
+            console.log('  User Data:', userData);
+            
+            // Use a small delay to ensure state is fully updated
+            setTimeout(() => {
+              navigate(dest, { replace: true });
+            }, 200);
             return;
           } catch (parseError) {
+            console.error('Parse error:', parseError);
             setError('Invalid user data received. Please try again.');
             setTimeout(() => navigate('/login'), 2000);
             return;
@@ -68,6 +105,7 @@ const OAuthCallback = () => {
         setTimeout(() => navigate('/login'), 2000);
         
       } catch (error) {
+        console.error('OAuth callback error:', error);
         setError('Authentication failed. Please try again.');
         setTimeout(() => navigate('/login'), 2000);
       } finally {
@@ -75,19 +113,22 @@ const OAuthCallback = () => {
       }
     };
 
-    // Helper function for default routes
-    const getDefaultRoute = (role) => {
-      switch (role) {
-        case 'ADMIN': return '/admin';
-        case 'CONDUCTOR': return '/conductor';
-        case 'DRIVER': return '/driver';
-        case 'DEPOT_MANAGER': return '/depot';
-        default: return '/pax';
-      }
+    // Helper function for default routes - mobile aware
+    const getDefaultRoute = (role, mobileCheck) => {
+      const currentIsMobile = mobileCheck || isMobile;
+      const baseRoutes = {
+        'ADMIN': '/admin',
+        'CONDUCTOR': '/conductor',
+        'DRIVER': '/driver',
+        'DEPOT_MANAGER': '/depot',
+        'PASSENGER': currentIsMobile ? '/passenger/mobile' : '/pax' // Mobile users go to mobile dashboard
+      };
+      
+      return baseRoutes[role] || (currentIsMobile ? '/passenger/mobile' : '/pax');
     };
 
     handleGoogleCallback();
-  }, [searchParams, login, navigate]);
+  }, [searchParams, login, navigate, isMobile]);
 
   if (error) {
     return (

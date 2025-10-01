@@ -4,8 +4,9 @@ const Stop = require('../models/Stop');
 
 class PathfindingService {
   constructor() {
-    this.cache = new Map();
-    this.cacheTimeout = 5 * 60 * 1000; // 5 minutes
+    // Disable in-memory cache to ensure live results
+    this.cache = { has: () => false, get: () => null, set: () => {}, delete: () => {}, clear: () => {}, size: 0, keys: () => [] };
+    this.cacheTimeout = 0;
   }
 
   /**
@@ -19,14 +20,7 @@ class PathfindingService {
     try {
       const cacheKey = `fastest_${originStopId}_${destinationStopId}_${timeOfDay || 'any'}`;
       
-      // Check cache first
-      if (this.cache.has(cacheKey)) {
-        const cached = this.cache.get(cacheKey);
-        if (Date.now() - cached.timestamp < this.cacheTimeout) {
-          return cached.data;
-        }
-        this.cache.delete(cacheKey);
-      }
+      // Skip cache for live-only mode
 
       // Get latest route graph
       const graph = await RouteGraph.getLatest();
@@ -50,11 +44,7 @@ class PathfindingService {
       // Enhance result with additional information
       const enhancedResult = await this.enhanceRouteResult(result, timeOfDay, options);
 
-      // Cache result
-      this.cache.set(cacheKey, {
-        data: enhancedResult,
-        timestamp: Date.now()
-      });
+      // Do not cache to keep results live
 
       return enhancedResult;
     } catch (error) {
@@ -74,14 +64,7 @@ class PathfindingService {
     try {
       const cacheKey = `options_${originStopId}_${destinationStopId}_${timeOfDay || 'any'}_${JSON.stringify(options)}`;
       
-      // Check cache first
-      if (this.cache.has(cacheKey)) {
-        const cached = this.cache.get(cacheKey);
-        if (Date.now() - cached.timestamp < this.cacheTimeout) {
-          return cached.data;
-        }
-        this.cache.delete(cacheKey);
-      }
+      // Skip cache for live-only mode
 
       // Get latest route graph
       const graph = await RouteGraph.getLatest();
@@ -100,11 +83,7 @@ class PathfindingService {
       // Sort by preference
       const sortedOptions = this.sortRouteOptions(enhancedOptions, options.preference || 'duration');
 
-      // Cache result
-      this.cache.set(cacheKey, {
-        data: sortedOptions,
-        timestamp: Date.now()
-      });
+      // Do not cache to keep results live
 
       return sortedOptions;
     } catch (error) {
@@ -123,14 +102,7 @@ class PathfindingService {
     try {
       const cacheKey = `cheapest_${originStopId}_${destinationStopId}`;
       
-      // Check cache first
-      if (this.cache.has(cacheKey)) {
-        const cached = this.cache.get(cacheKey);
-        if (Date.now() - cached.timestamp < this.cacheTimeout) {
-          return cached.data;
-        }
-        this.cache.delete(cacheKey);
-      }
+      // Skip cache for live-only mode
 
       // Get latest route graph
       const graph = await RouteGraph.getLatest();
@@ -144,11 +116,7 @@ class PathfindingService {
       // Enhance result
       const enhancedResult = await this.enhanceRouteResult(result, null, options);
 
-      // Cache result
-      this.cache.set(cacheKey, {
-        data: enhancedResult,
-        timestamp: Date.now()
-      });
+      // Do not cache to keep results live
 
       return enhancedResult;
     } catch (error) {
@@ -167,14 +135,7 @@ class PathfindingService {
     try {
       const cacheKey = `least_transfers_${originStopId}_${destinationStopId}`;
       
-      // Check cache first
-      if (this.cache.has(cacheKey)) {
-        const cached = this.cache.get(cacheKey);
-        if (Date.now() - cached.timestamp < this.cacheTimeout) {
-          return cached.data;
-        }
-        this.cache.delete(cacheKey);
-      }
+      // Skip cache for live-only mode
 
       // Get latest route graph
       const graph = await RouteGraph.getLatest();
@@ -248,11 +209,7 @@ class PathfindingService {
       // Sort by distance
       enhancedStops.sort((a, b) => a.distance - b.distance);
 
-      // Cache result
-      this.cache.set(cacheKey, {
-        data: enhancedStops,
-        timestamp: Date.now()
-      });
+      // Do not cache to keep results live
 
       return enhancedStops;
     } catch (error) {
@@ -510,21 +467,20 @@ class PathfindingService {
    * Clear cache
    */
   clearCache() {
-    this.cache.clear();
+    // no-op
   }
 
   /**
    * Get cache statistics
    */
   getCacheStats() {
-    return {
-      size: this.cache.size,
-      keys: Array.from(this.cache.keys())
-    };
+    return { size: 0, keys: [] };
   }
 }
 
 module.exports = PathfindingService;
+
+
 
 
 

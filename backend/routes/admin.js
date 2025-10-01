@@ -10,6 +10,7 @@ const Bus = require('../models/Bus');
 const Duty = require('../models/Duty');
 const Driver = require('../models/Driver');
 const Conductor = require('../models/Conductor');
+const Notification = require('../models/Notification');
 const Stop = require('../models/Stop');
 const AIAnalyticsService = require('../services/aiAnalytics');
 const NotificationService = require('../services/notificationService');
@@ -37,24 +38,20 @@ router.use(adminAuth);
 // 1) Dashboard & Status
 // =================================================================
 
-// Simple in-memory cache for dashboard data
+// Dashboard in-memory cache disabled (always live data)
 const dashboardCache = {
   data: null,
   timestamp: null,
-  ttl: 60000 // 1 minute cache
+  ttl: 0
 };
 
 const getCachedDashboardData = () => {
-  if (dashboardCache.data && dashboardCache.timestamp && 
-      (Date.now() - dashboardCache.timestamp) < dashboardCache.ttl) {
-    return dashboardCache.data;
-  }
+  return null;
   return null;
 };
 
 const setCachedDashboardData = (data) => {
-  dashboardCache.data = data;
-  dashboardCache.timestamp = Date.now();
+  // no-op to avoid caching
 };
 
 // GET /api/admin/dashboard/summary - Get comprehensive dashboard summary
@@ -7613,6 +7610,371 @@ router.post('/trips/finalize', async (req, res) => {
   } catch (err) {
     console.error('Admin finalize error:', err);
     return res.status(500).json({ success: false, message: 'Failed to finalize', error: err.message });
+  }
+});
+
+// DELETE /api/admin/remove-specific-staff - Remove specific staff members
+router.delete('/remove-specific-staff', auth, requireRole(['admin']), async (req, res) => {
+  try {
+    console.log('🔍 Removing specific staff members...');
+    
+    let removedCount = 0;
+    const removedRecords = [];
+    
+    // Remove Rajesh Kumar from drivers
+    const rajeshDriver = await Driver.findOne({ name: 'Rajesh Kumar' });
+    if (rajeshDriver) {
+      // Check for trip assignments
+      const tripsWithRajesh = await Trip.find({ driverId: rajeshDriver._id });
+      console.log(`🚌 Found ${tripsWithRajesh.length} trips assigned to Rajesh Kumar`);
+      
+      if (tripsWithRajesh.length > 0) {
+        // Unassign from trips
+        await Trip.updateMany(
+          { driverId: rajeshDriver._id },
+          { $unset: { driverId: 1 } }
+        );
+        console.log('✅ Unassigned Rajesh Kumar from all trips');
+      }
+      
+      // Remove from duties
+      const dutiesWithRajesh = await Duty.find({ driverId: rajeshDriver._id });
+      if (dutiesWithRajesh.length > 0) {
+        await Duty.deleteMany({ driverId: rajeshDriver._id });
+        console.log(`✅ Removed ${dutiesWithRajesh.length} duties for Rajesh Kumar`);
+      }
+      
+      // Remove driver record
+      await Driver.findByIdAndDelete(rajeshDriver._id);
+      removedRecords.push('Rajesh Kumar (Driver)');
+      removedCount++;
+    }
+    
+    // Remove Rajesh Kumar from users
+    const rajeshUser = await User.findOne({ name: 'Rajesh Kumar' });
+    if (rajeshUser) {
+      await User.findByIdAndDelete(rajeshUser._id);
+      removedRecords.push('Rajesh Kumar (User)');
+      removedCount++;
+    }
+    
+    // Remove Priya Sharma from conductors
+    const priyaSharmaConductor = await Conductor.findOne({ name: 'Priya Sharma' });
+    if (priyaSharmaConductor) {
+      // Check for trip assignments
+      const tripsWithPriyaSharma = await Trip.find({ conductorId: priyaSharmaConductor._id });
+      console.log(`🚌 Found ${tripsWithPriyaSharma.length} trips assigned to Priya Sharma`);
+      
+      if (tripsWithPriyaSharma.length > 0) {
+        // Unassign from trips
+        await Trip.updateMany(
+          { conductorId: priyaSharmaConductor._id },
+          { $unset: { conductorId: 1 } }
+        );
+        console.log('✅ Unassigned Priya Sharma from all trips');
+      }
+      
+      // Remove from duties
+      const dutiesWithPriyaSharma = await Duty.find({ conductorId: priyaSharmaConductor._id });
+      if (dutiesWithPriyaSharma.length > 0) {
+        await Duty.deleteMany({ conductorId: priyaSharmaConductor._id });
+        console.log(`✅ Removed ${dutiesWithPriyaSharma.length} duties for Priya Sharma`);
+      }
+      
+      // Remove conductor record
+      await Conductor.findByIdAndDelete(priyaSharmaConductor._id);
+      removedRecords.push('Priya Sharma (Conductor)');
+      removedCount++;
+    }
+    
+    // Remove Priya Sharma from users
+    const priyaSharmaUser = await User.findOne({ name: 'Priya Sharma' });
+    if (priyaSharmaUser) {
+      await User.findByIdAndDelete(priyaSharmaUser._id);
+      removedRecords.push('Priya Sharma (User)');
+      removedCount++;
+    }
+    
+    // Also remove Priya Menon if requested
+    if (req.body.removePriyaMenon) {
+      const priyaMenonConductor = await Conductor.findOne({ name: 'Priya Menon' });
+      if (priyaMenonConductor) {
+        // Check for trip assignments
+        const tripsWithPriyaMenon = await Trip.find({ conductorId: priyaMenonConductor._id });
+        console.log(`🚌 Found ${tripsWithPriyaMenon.length} trips assigned to Priya Menon`);
+        
+        if (tripsWithPriyaMenon.length > 0) {
+          // Unassign from trips
+          await Trip.updateMany(
+            { conductorId: priyaMenonConductor._id },
+            { $unset: { conductorId: 1 } }
+          );
+          console.log('✅ Unassigned Priya Menon from all trips');
+        }
+        
+        // Remove from duties
+        const dutiesWithPriyaMenon = await Duty.find({ conductorId: priyaMenonConductor._id });
+        if (dutiesWithPriyaMenon.length > 0) {
+          await Duty.deleteMany({ conductorId: priyaMenonConductor._id });
+          console.log(`✅ Removed ${dutiesWithPriyaMenon.length} duties for Priya Menon`);
+        }
+        
+        // Remove conductor record
+        await Conductor.findByIdAndDelete(priyaMenonConductor._id);
+        removedRecords.push('Priya Menon (Conductor)');
+        removedCount++;
+      }
+      
+      const priyaMenonUser = await User.findOne({ name: 'Priya Menon' });
+      if (priyaMenonUser) {
+        await User.findByIdAndDelete(priyaMenonUser._id);
+        removedRecords.push('Priya Menon (User)');
+        removedCount++;
+      }
+    }
+    
+    console.log(`\n🎉 Successfully removed ${removedCount} staff records from the database!`);
+    
+    res.json({
+      success: true,
+      message: `Successfully removed ${removedCount} staff records`,
+      removedRecords: removedRecords,
+      count: removedCount
+    });
+    
+  } catch (error) {
+    console.error('❌ Error removing staff members:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to remove staff members',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/admin/auto-assign-staff - Automatically assign drivers and conductors to all unassigned trips
+router.post('/auto-assign-staff', auth, requireRole(['admin']), async (req, res) => {
+  try {
+    console.log('🚀 Starting automatic staff assignment...');
+    
+    // Get all available drivers and conductors
+    const drivers = await Driver.find({ status: 'active' }).select('_id name phone email');
+    const conductors = await Conductor.find({ status: 'active' }).select('_id name phone email');
+    
+    console.log(`📊 Found ${drivers.length} active drivers and ${conductors.length} active conductors`);
+    
+    if (drivers.length === 0 || conductors.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No active drivers or conductors found. Please create staff members first.'
+      });
+    }
+    
+    // Get all unassigned trips
+    const unassignedTrips = await Trip.find({
+      $or: [
+        { driverId: { $exists: false } },
+        { driverId: null },
+        { conductorId: { $exists: false } },
+        { conductorId: null }
+      ]
+    }).populate('routeId busId depotId');
+    
+    console.log(`🔍 Found ${unassignedTrips.length} unassigned trips`);
+    
+    let assignedCount = 0;
+    const assignments = [];
+    const notifications = [];
+    
+    // Round-robin assignment
+    let driverIndex = 0;
+    let conductorIndex = 0;
+    
+    for (const trip of unassignedTrips) {
+      // Select driver and conductor using round-robin
+      const assignedDriver = drivers[driverIndex % drivers.length];
+      const assignedConductor = conductors[conductorIndex % conductors.length];
+      
+      // Update trip with assignments
+      const updatedTrip = await Trip.findByIdAndUpdate(
+        trip._id,
+        {
+          driverId: assignedDriver._id,
+          conductorId: assignedConductor._id,
+          assignedAt: new Date(),
+          assignedBy: req.user.id
+        },
+        { new: true }
+      );
+      
+      assignments.push({
+        tripId: trip._id,
+        routeName: trip.routeId?.routeName || 'Unknown Route',
+        busNumber: trip.busId?.busNumber || 'N/A',
+        driverName: assignedDriver.name,
+        conductorName: assignedConductor.name,
+        serviceDate: trip.serviceDate,
+        startTime: trip.startTime
+      });
+      
+      // Create notifications for assigned staff
+      notifications.push({
+        type: 'trip_assigned',
+        title: 'New Trip Assignment',
+        message: `You have been assigned to trip ${trip.routeId?.routeName || 'Unknown Route'} on ${new Date(trip.serviceDate).toLocaleDateString()} at ${trip.startTime}`,
+        userId: assignedDriver._id,
+        tripId: trip._id,
+        driverId: assignedDriver._id,
+        conductorId: assignedConductor._id,
+        routeName: trip.routeId?.routeName || 'Unknown Route',
+        serviceDate: trip.serviceDate,
+        startTime: trip.startTime,
+        busNumber: trip.busId?.busNumber || 'N/A'
+      });
+      
+      notifications.push({
+        type: 'trip_assigned',
+        title: 'New Trip Assignment',
+        message: `You have been assigned to trip ${trip.routeId?.routeName || 'Unknown Route'} on ${new Date(trip.serviceDate).toLocaleDateString()} at ${trip.startTime}`,
+        userId: assignedConductor._id,
+        tripId: trip._id,
+        driverId: assignedDriver._id,
+        conductorId: assignedConductor._id,
+        routeName: trip.routeId?.routeName || 'Unknown Route',
+        serviceDate: trip.serviceDate,
+        startTime: trip.startTime,
+        busNumber: trip.busId?.busNumber || 'N/A'
+      });
+      
+      // Move to next staff member
+      driverIndex++;
+      conductorIndex++;
+      assignedCount++;
+    }
+    
+    // Save notifications to database
+    const savedNotifications = [];
+    for (const notificationData of notifications) {
+      try {
+        const notification = await Notification.createTripAssignmentNotification(
+          notificationData.userId,
+          {
+            tripId: notificationData.tripId,
+            routeId: notificationData.routeId,
+            driverId: notificationData.driverId,
+            conductorId: notificationData.conductorId,
+            routeName: notificationData.routeName,
+            busNumber: notificationData.busNumber,
+            serviceDate: notificationData.serviceDate,
+            startTime: notificationData.startTime
+          }
+        );
+        savedNotifications.push(notification);
+      } catch (error) {
+        console.error('Error creating notification:', error);
+      }
+    }
+    
+    console.log(`📬 Created ${savedNotifications.length} notifications for assigned staff`);
+    
+    console.log(`✅ Successfully assigned staff to ${assignedCount} trips`);
+    
+    res.json({
+      success: true,
+      message: `Successfully assigned staff to ${assignedCount} trips`,
+      assignedCount: assignedCount,
+      assignments: assignments,
+      notifications: notifications,
+      stats: {
+        totalTrips: unassignedTrips.length,
+        assignedTrips: assignedCount,
+        availableDrivers: drivers.length,
+        availableConductors: conductors.length
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in automatic staff assignment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to assign staff automatically',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/admin/assign-staff-to-route - Assign staff to a specific route
+router.post('/assign-staff-to-route', auth, requireRole(['admin']), async (req, res) => {
+  try {
+    const { routeId, driverId, conductorId } = req.body;
+    
+    if (!routeId || !driverId || !conductorId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route ID, Driver ID, and Conductor ID are required'
+      });
+    }
+    
+    // Verify driver and conductor exist
+    const driver = await Driver.findById(driverId);
+    const conductor = await Conductor.findById(conductorId);
+    const route = await Route.findById(routeId);
+    
+    if (!driver || !conductor || !route) {
+      return res.status(404).json({
+        success: false,
+        message: 'Driver, conductor, or route not found'
+      });
+    }
+    
+    // Get all trips for this route that are unassigned
+    const unassignedTrips = await Trip.find({
+      routeId: routeId,
+      $or: [
+        { driverId: { $exists: false } },
+        { driverId: null },
+        { conductorId: { $exists: false } },
+        { conductorId: null }
+      ]
+    });
+    
+    // Update all unassigned trips for this route
+    const updateResult = await Trip.updateMany(
+      {
+        routeId: routeId,
+        $or: [
+          { driverId: { $exists: false } },
+          { driverId: null },
+          { conductorId: { $exists: false } },
+          { conductorId: null }
+        ]
+      },
+      {
+        driverId: driverId,
+        conductorId: conductorId,
+        assignedAt: new Date(),
+        assignedBy: req.user.id
+      }
+    );
+    
+    console.log(`✅ Assigned ${driver.name} and ${conductor.name} to ${updateResult.modifiedCount} trips on route ${route.routeName}`);
+    
+    res.json({
+      success: true,
+      message: `Successfully assigned ${driver.name} and ${conductor.name} to ${updateResult.modifiedCount} trips`,
+      routeName: route.routeName,
+      driverName: driver.name,
+      conductorName: conductor.name,
+      assignedTrips: updateResult.modifiedCount
+    });
+    
+  } catch (error) {
+    console.error('❌ Error assigning staff to route:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to assign staff to route',
+      error: error.message
+    });
   }
 });
 

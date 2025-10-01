@@ -37,6 +37,7 @@ const StreamlinedRouteManagement = () => {
   const [showKeralaRoutesModal, setShowKeralaRoutesModal] = useState(false);
   const [showRouteDetailsModal, setShowRouteDetailsModal] = useState(false);
   const [showRouteMapEditor, setShowRouteMapEditor] = useState(false);
+  const [showStopsModal, setShowStopsModal] = useState(false);
   const [showConductorPricing, setShowConductorPricing] = useState(false);
   const [routeForm, setRouteForm] = useState({
     routeNumber: '',
@@ -2615,12 +2616,18 @@ const StreamlinedRouteManagement = () => {
 
   // Handle Route Map Editor
   const handleOpenRouteMapEditor = async (route) => {
-    const hasCoords = !!(
-      route?.startingPoint && (route.startingPoint.coordinates || (route.startingPoint.lat && route.startingPoint.lng)) &&
-      route?.endingPoint && (route.endingPoint.coordinates || (route.endingPoint.lat && route.endingPoint.lng))
+    const hasValidCoords = !!(
+      route?.startingPoint && 
+      route.startingPoint.coordinates && 
+      route.startingPoint.coordinates.latitude !== 0 && 
+      route.startingPoint.coordinates.longitude !== 0 &&
+      route?.endingPoint && 
+      route.endingPoint.coordinates && 
+      route.endingPoint.coordinates.latitude !== 0 && 
+      route.endingPoint.coordinates.longitude !== 0
     );
 
-    if (hasCoords) {
+    if (hasValidCoords) {
       setSelectedRoute(route);
       setShowRouteMapEditor(true);
       return;
@@ -2628,27 +2635,212 @@ const StreamlinedRouteManagement = () => {
 
     try {
       setLoading(true);
-      // Only fetch if coordinates missing
-      const response = await apiFetch(`/api/admin/routes/${route._id}`);
-      const full = response?.data?.route || response?.data || route;
-
-      const normalized = {
-        ...route,
-        ...full,
-        startingPoint: full?.startingPoint || route?.startingPoint || {},
-        endingPoint: full?.endingPoint || route?.endingPoint || {},
-        intermediateStops: full?.intermediateStops || route?.intermediateStops || [],
-      };
-
-      setSelectedRoute(normalized);
+      
+      // Create enhanced route with proper coordinates
+      const enhancedRoute = await enhanceRouteWithCoordinates(route);
+      
+      setSelectedRoute(enhancedRoute);
       setShowRouteMapEditor(true);
     } catch (err) {
-      // Graceful fallback without surfacing API error
+      console.error('Error enhancing route with coordinates:', err);
+      // Fallback with original route
       setSelectedRoute(route);
       setShowRouteMapEditor(true);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Calculate total stops count from all routes
+  const getTotalStopsCount = () => {
+    let totalStops = 0;
+    
+    routes.forEach(route => {
+      // Count intermediate stops
+      if (route.intermediateStops && Array.isArray(route.intermediateStops)) {
+        totalStops += route.intermediateStops.length;
+      }
+      
+      // Count start and end points as stops
+      if (route.startingPoint) totalStops += 1;
+      if (route.endingPoint) totalStops += 1;
+    });
+    
+    return totalStops;
+  };
+
+  // Get stops organized by district
+  const getStopsByDistrict = () => {
+    const districtStops = {};
+    
+    routes.forEach(route => {
+      const routeName = route.routeName || route.routeNumber || 'Unknown Route';
+      
+      // Add starting point
+      if (route.startingPoint?.city) {
+        const district = getDistrictFromCity(route.startingPoint.city);
+        if (!districtStops[district]) districtStops[district] = [];
+        districtStops[district].push({
+          type: 'start',
+          name: route.startingPoint.city,
+          route: routeName,
+          location: route.startingPoint.location || `${route.startingPoint.city} Bus Station`
+        });
+      }
+      
+      // Add intermediate stops
+      if (route.intermediateStops && Array.isArray(route.intermediateStops)) {
+        route.intermediateStops.forEach(stop => {
+          const city = stop.city || stop.name || stop.location || 'Unknown Stop';
+          const district = getDistrictFromCity(city);
+          if (!districtStops[district]) districtStops[district] = [];
+          districtStops[district].push({
+            type: 'intermediate',
+            name: city,
+            route: routeName,
+            location: stop.location || `${city} Stop`
+          });
+        });
+      }
+      
+      // Add ending point
+      if (route.endingPoint?.city) {
+        const district = getDistrictFromCity(route.endingPoint.city);
+        if (!districtStops[district]) districtStops[district] = [];
+        districtStops[district].push({
+          type: 'end',
+          name: route.endingPoint.city,
+          route: routeName,
+          location: route.endingPoint.location || `${route.endingPoint.city} Bus Station`
+        });
+      }
+    });
+    
+    return districtStops;
+  };
+
+  // Get district from city name
+  const getDistrictFromCity = (cityName) => {
+    const cityToDistrict = {
+      'Thiruvananthapuram': 'Thiruvananthapuram',
+      'Kollam': 'Kollam',
+      'Pathanamthitta': 'Pathanamthitta',
+      'Alappuzha': 'Alappuzha',
+      'Kottayam': 'Kottayam',
+      'Idukki': 'Idukki',
+      'Ernakulam': 'Ernakulam',
+      'Kochi': 'Ernakulam',
+      'Thrissur': 'Thrissur',
+      'Palakkad': 'Palakkad',
+      'Malappuram': 'Malappuram',
+      'Kozhikode': 'Kozhikode',
+      'Wayanad': 'Wayanad',
+      'Kalpetta': 'Wayanad',
+      'Kannur': 'Kannur',
+      'Kasaragod': 'Kasaragod',
+      'Hyderabad': 'Telangana',
+      'Mumbai': 'Maharashtra',
+      'Goa': 'Goa',
+      'Mangalore': 'Karnataka',
+      'Salem': 'Tamil Nadu',
+      'Bangalore': 'Karnataka',
+      'Chennai': 'Tamil Nadu',
+      'Coimbatore': 'Tamil Nadu',
+      'Madurai': 'Tamil Nadu',
+      'Tirupati': 'Andhra Pradesh',
+      'Pune': 'Maharashtra',
+      'Ahmedabad': 'Gujarat',
+      'Surat': 'Gujarat',
+      'Vadodara': 'Gujarat',
+      'Rajkot': 'Gujarat',
+      'Bhavnagar': 'Gujarat'
+    };
+    
+    // Try exact match first
+    if (cityToDistrict[cityName]) {
+      return cityToDistrict[cityName];
+    }
+    
+    // Try partial match
+    const normalizedCity = cityName.toLowerCase();
+    for (const [city, district] of Object.entries(cityToDistrict)) {
+      if (city.toLowerCase().includes(normalizedCity) || normalizedCity.includes(city.toLowerCase())) {
+        return district;
+      }
+    }
+    
+    // Default to Kerala if not found
+    return 'Kerala';
+  };
+
+  // Enhance route with proper coordinates
+  const enhanceRouteWithCoordinates = async (route) => {
+    const cityCoordinates = {
+      'Kannur': { latitude: 11.8745, longitude: 75.3704 },
+      'Hyderabad': { latitude: 17.3850, longitude: 78.4867 },
+      'Mumbai': { latitude: 19.0760, longitude: 72.8777 },
+      'Goa': { latitude: 15.2993, longitude: 74.1240 },
+      'Mangalore': { latitude: 12.9141, longitude: 74.8560 },
+      'Salem': { latitude: 11.6643, longitude: 78.1460 },
+      'Kasaragod': { latitude: 12.4996, longitude: 74.9869 },
+      'Thiruvananthapuram': { latitude: 8.5241, longitude: 76.9366 },
+      'Kochi': { latitude: 9.9312, longitude: 76.2673 },
+      'Bangalore': { latitude: 12.9716, longitude: 77.5946 },
+      'Chennai': { latitude: 13.0827, longitude: 80.2707 },
+      'Coimbatore': { latitude: 11.0168, longitude: 76.9558 },
+      'Madurai': { latitude: 9.9252, longitude: 78.1198 },
+      'Tirupati': { latitude: 13.6288, longitude: 79.4192 },
+      'Pune': { latitude: 18.5204, longitude: 73.8567 },
+      'Ahmedabad': { latitude: 23.0225, longitude: 72.5714 },
+      'Surat': { latitude: 21.1702, longitude: 72.8311 },
+      'Vadodara': { latitude: 22.3072, longitude: 73.1812 },
+      'Rajkot': { latitude: 22.3039, longitude: 70.8022 },
+      'Bhavnagar': { latitude: 21.7645, longitude: 72.1519 }
+    };
+
+    const getCoordinatesForCity = (cityName) => {
+      // Try exact match first
+      if (cityCoordinates[cityName]) {
+        return cityCoordinates[cityName];
+      }
+      
+      // Try partial match
+      const normalizedCity = cityName.toLowerCase();
+      for (const [city, coords] of Object.entries(cityCoordinates)) {
+        if (city.toLowerCase().includes(normalizedCity) || normalizedCity.includes(city.toLowerCase())) {
+          return coords;
+        }
+      }
+      
+      // Default fallback coordinates (Kerala center)
+      return { latitude: 10.8505, longitude: 76.2711 };
+    };
+
+    const startingCoords = getCoordinatesForCity(route.startingPoint?.city || route.startingPoint?.location || '');
+    const endingCoords = getCoordinatesForCity(route.endingPoint?.city || route.endingPoint?.location || '');
+
+    return {
+      ...route,
+      startingPoint: {
+        ...route.startingPoint,
+        city: route.startingPoint?.city || route.routeName?.split(' to ')[0] || 'Start',
+        location: route.startingPoint?.location || `${route.startingPoint?.city || 'Start'} Bus Station`,
+        coordinates: {
+          latitude: startingCoords.latitude,
+          longitude: startingCoords.longitude
+        }
+      },
+      endingPoint: {
+        ...route.endingPoint,
+        city: route.endingPoint?.city || route.routeName?.split(' to ')[1] || 'End',
+        location: route.endingPoint?.location || `${route.endingPoint?.city || 'End'} Bus Station`,
+        coordinates: {
+          latitude: endingCoords.latitude,
+          longitude: endingCoords.longitude
+        }
+      },
+      intermediateStops: route.intermediateStops || []
+    };
   };
 
   // Handle Conductor Pricing Dashboard
@@ -5046,6 +5238,118 @@ const StreamlinedRouteManagement = () => {
     />
   );
 
+  // Stops Modal
+  const StopsModal = () => {
+    const districtStops = getStopsByDistrict();
+    const totalStops = getTotalStopsCount();
+    
+    return (
+      <AnimatePresence>
+        {showStopsModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <span className="w-6 h-6 text-purple-600">📍</span>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">Stops by District</h2>
+                    <p className="text-sm text-gray-600">Total: {totalStops} stops across {Object.keys(districtStops).length} districts</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowStopsModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-6 h-6 text-gray-500" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="grid gap-4">
+                  {Object.entries(districtStops).map(([district, stops]) => (
+                    <div key={district} className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-lg font-semibold text-gray-900">{district}</h3>
+                        <span className="px-3 py-1 bg-purple-100 text-purple-800 text-sm rounded-full">
+                          {stops.length} stops
+                        </span>
+                      </div>
+                      
+                      <div className="grid gap-2">
+                        {stops.map((stop, index) => (
+                          <div key={index} className="flex items-center space-x-3 p-3 bg-white rounded-lg border border-gray-200">
+                            <div className={`w-3 h-3 rounded-full ${
+                              stop.type === 'start' ? 'bg-green-500' : 
+                              stop.type === 'end' ? 'bg-red-500' : 
+                              'bg-blue-500'
+                            }`}></div>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium text-gray-900">{stop.name}</span>
+                                <span className={`text-xs px-2 py-1 rounded-full ${
+                                  stop.type === 'start' ? 'bg-green-100 text-green-800' : 
+                                  stop.type === 'end' ? 'bg-red-100 text-red-800' : 
+                                  'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {stop.type === 'start' ? 'Start' : 
+                                   stop.type === 'end' ? 'End' : 
+                                   'Stop'}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-600">{stop.location}</p>
+                              <p className="text-xs text-gray-500">Route: {stop.route}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {Object.keys(districtStops).length === 0 && (
+                  <div className="text-center py-12">
+                    <span className="w-16 h-16 text-gray-300 mx-auto mb-4 block">📍</span>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Stops Found</h3>
+                    <p className="text-gray-600">No stops have been configured for the current routes.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="border-t border-gray-200 p-6">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-600">
+                    Showing {totalStops} stops across {Object.keys(districtStops).length} districts
+                  </div>
+                  <button
+                    onClick={() => setShowStopsModal(false)}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  };
+
   // Conductor Pricing Dashboard Modal
   const ConductorPricingModal = () => (
     <ConductorPricingDashboard
@@ -5321,11 +5625,15 @@ const StreamlinedRouteManagement = () => {
           </div>
         </div>
         
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div 
+          className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => setShowStopsModal(true)}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Total Stops</p>
-              <p className="text-2xl font-bold text-purple-600">{routes.reduce((acc, route) => acc + (route.intermediateStops?.length || 0), 0)}</p>
+              <p className="text-2xl font-bold text-purple-600">{getTotalStopsCount()}</p>
+              <p className="text-xs text-gray-500 mt-1">Click to view by district</p>
             </div>
             <div className="p-3 bg-purple-100 rounded-lg">
               <span className="w-6 h-6 text-purple-600">📍</span>
@@ -5543,6 +5851,7 @@ const StreamlinedRouteManagement = () => {
       <ConfirmationModal />
       <EditRouteModal />
       <RouteMapEditorModal />
+      <StopsModal />
       <ConductorPricingModal />
       <RouteDetailsModal />
     </div>

@@ -1,34 +1,31 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Bus, Clock, MapPin, Phone, Star } from 'lucide-react';
 import Navigation from '../components/LandingPage/Navigation';
 import TopInfoBar from '../components/LandingPage/TopInfoBar';
-import AppBanner from '../components/LandingPage/AppBanner';
-import PopularRoutes from '../components/LandingPage/PopularRoutes';
-import ServiceAlerts from '../components/LandingPage/ServiceAlerts';
 import SearchCard from '../components/SearchCard/SearchCard';
-import AnimatedMapPanel from '../components/Common/AnimatedMapPanel';
-import AnimatedStats from '../components/pax/AnimatedStats';
-import KeralaDestinationsShowcase from '../components/pax/KeralaDestinationsShowcase';
-import ManageBookingPanel from '../components/pax/ManageBookingPanel';
-import StatusCheckPanel from '../components/pax/StatusCheckPanel';
-import CancellationPolicyPanel from '../components/pax/CancellationPolicyPanel';
-import FeedbackPanel from '../components/pax/FeedbackPanel';
-import ContactUsPanel from '../components/pax/ContactUsPanel';
-import BusTrackingModal from '../components/Common/BusTrackingModal';
 import useMobileDetection from '../hooks/useMobileDetection';
 import './landing.css';
 import heroBus from '../assets/hero-bus.png';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../utils/api';
 
+const AppBanner = lazy(() => import('../components/LandingPage/AppBanner'));
+const PopularRoutes = lazy(() => import('../components/LandingPage/PopularRoutes'));
+const ServiceAlerts = lazy(() => import('../components/LandingPage/ServiceAlerts'));
+const BusTrackingModal = lazy(() => import('../components/Common/BusTrackingModal'));
+const GoogleMapsRouteTracker = lazy(() => import('../components/Common/GoogleMapsRouteTracker'));
+
 const LandingPage = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showBusTracking, setShowBusTracking] = useState(false);
+  const [featuredTrip, setFeaturedTrip] = useState(null);
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { isMobile, isMobileOrTablet } = useMobileDetection();
+  const { isMobile } = useMobileDetection();
+  const mapSectionRef = useRef(null);
+  const [isMapVisible, setIsMapVisible] = useState(false);
 
   // Redirect mobile users to mobile landing page
   useEffect(() => {
@@ -46,57 +43,90 @@ const LandingPage = () => {
   }, [navigate]);
 
   const handleBookNow = () => {
-    console.log('handleBookNow called:', { user, hasUser: !!user });
-    
     if (!user) {
-      console.log('No user, redirecting to login');
       navigate('/login?next=/passenger/dashboard');
       return;
     }
     
     const role = (user.role || 'passenger').toUpperCase();
-    console.log('User role:', role);
     
     // Send each role to its own dashboard; passengers to mobile or desktop dashboard
     if (role === 'PASSENGER') {
       if (isMobile) {
-        console.log('Redirecting to /passenger/mobile (mobile device)');
         navigate('/passenger/mobile');
       } else {
-        console.log('Redirecting to /passenger/dashboard (desktop)');
         navigate('/passenger/dashboard');
       }
     } else if (role === 'ADMIN') {
-      console.log('Redirecting to /admin');
       navigate('/admin');
     } else if (role === 'CONDUCTOR') {
-      console.log('Redirecting to /conductor');
       navigate('/conductor');
     } else if (role === 'DRIVER') {
-      console.log('Redirecting to /driver');
       navigate('/driver');
     } else if (role === 'DEPOT_MANAGER') {
-      console.log('Redirecting to /depot');
       navigate('/depot');
     } else {
-      console.log('Redirecting to /dashboard');
       navigate('/dashboard');
     }
   };
 
-  // Default popular Kerala routes for instant display
-  const defaultRoutes = [
-    { from: 'Kochi', to: 'Thiruvananthapuram', frequency: 'Multiple daily', fare: 'From ₹150' },
-    { from: 'Kozhikode', to: 'Kochi', frequency: 'Multiple daily', fare: 'From ₹120' },
-    { from: 'Thrissur', to: 'Kochi', frequency: 'Multiple daily', fare: 'From ₹80' },
-    { from: 'Kochi', to: 'Kannur', frequency: 'Daily service', fare: 'From ₹200' },
-    { from: 'Palakkad', to: 'Kochi', frequency: 'Multiple daily', fare: 'From ₹100' },
-    { from: 'Alappuzha', to: 'Thiruvananthapuram', frequency: 'Daily service', fare: 'From ₹90' }
-  ];
+  // Popular routes - live only (no static defaults)
+  const [popularRoutes, setPopularRoutes] = useState([]);
 
-  const [popularRoutes, setPopularRoutes] = useState(defaultRoutes);
+  // Fetch a featured active route from admin (prefer Thrissur → Guruvayur) and build a trip-like object
+  useEffect(() => {
+    const loadFeaturedRoute = async () => {
+      try {
+        // Preferred names kept for future use if needed
+        let route = null;
 
-  // Fetch live popular routes and refresh periodically
+        // Try public routes endpoint first (no auth required)
+        const publicPreferred = [
+          { fromCity: 'Thrissur', toCity: 'Guruvayur' },
+          { fromCity: 'Thrissur' },
+          { toCity: 'Guruvayur' }
+        ];
+        for (const q of publicPreferred) {
+          const params = new URLSearchParams({ ...q, limit: '1', status: 'active' });
+          const res = await apiFetch('/api/routes?' + params.toString(), { suppressError: true });
+          const found = res?.data?.data?.[0] || null;
+          if (found) { route = found; break; }
+        }
+
+        // No static fallback when not found; show nothing
+
+        if (!route) return;
+
+        const startingPoint = route.startingPoint || route.from || { city: 'Thrissur' };
+        const endingPoint = route.endingPoint || route.to || { city: 'Guruvayur' };
+
+        const demoTrip = {
+          busId: { busNumber: 'LIVE-TRACK' },
+          routeId: {
+            routeName: route.routeName || `${startingPoint.city} to ${endingPoint.city}`,
+            startingPoint,
+            endingPoint
+          },
+        	coordinates: startingPoint?.coordinates?.latitude && startingPoint?.coordinates?.longitude
+            ? { lat: startingPoint.coordinates.latitude, lng: startingPoint.coordinates.longitude }
+            : { lat: 10.5276, lng: 76.2144 },
+          currentLocation: startingPoint?.location || startingPoint?.city || 'Starting Point',
+          currentSpeed: '64 km/h',
+          lastUpdate: new Date().toLocaleTimeString(),
+          status: 'running',
+          estimatedArrival: ''
+        };
+
+        setFeaturedTrip(demoTrip);
+      } catch (e) {
+        // ignore errors on landing
+      }
+    };
+
+    loadFeaturedRoute();
+  }, []);
+
+  // Fetch live popular routes and refresh periodically (deferred)
   useEffect(() => {
     let isMounted = true;
     const fetchPopular = async () => {
@@ -119,43 +149,38 @@ const LandingPage = () => {
           }
         }
       } catch (error) {
-        console.log('Using default popular routes:', error);
-        // Keep default routes on error
+        // Live-only mode: on error, keep empty state
       }
     };
 
-    // Fetch after a short delay to not block initial render
-    const timeoutId = setTimeout(fetchPopular, 500);
+    // Defer initial fetch so it never blocks paint
+    const scheduleFetch = () => setTimeout(fetchPopular, 300);
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(scheduleFetch, { timeout: 800 });
+    } else {
+      scheduleFetch();
+    }
     const intervalId = setInterval(fetchPopular, 60000); // refresh every 60s
     return () => { 
       isMounted = false; 
-      clearTimeout(timeoutId);
       clearInterval(intervalId); 
     };
   }, []);
 
-  const serviceAlerts = [
+  const serviceAlerts = useMemo(() => ([
     { type: 'info', message: 'New Kerala routes added: Kochi to Thiruvananthapuram, Kozhikode to Kochi' },
     { type: 'warning', message: 'Monsoon season - expect delays on coastal routes' },
     { type: 'success', message: 'All buses now equipped with free WiFi and charging ports' },
-  ];
+  ]), []);
 
   // Add mobile class to body for CSS targeting
   useEffect(() => {
     const checkMobile = () => {
       const isMobileDevice = window.innerWidth < 768;
-      console.log('🔍 Mobile Check:', { 
-        width: window.innerWidth, 
-        isMobile: isMobileDevice,
-        hookResult: isMobile 
-      });
-      
       if (isMobileDevice) {
         document.body.classList.add('mobile-device');
-        console.log('📱 Mobile class added to body');
       } else {
         document.body.classList.remove('mobile-device');
-        console.log('🖥️ Mobile class removed from body');
       }
     };
     
@@ -163,6 +188,21 @@ const LandingPage = () => {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, [isMobile]);
+
+  // Observe map section to lazy-mount Google Maps when in view
+  useEffect(() => {
+    if (!mapSectionRef.current) return;
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          setIsMapVisible(true);
+          observer.disconnect();
+        }
+      });
+    }, { rootMargin: '200px 0px' });
+    observer.observe(mapSectionRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div className="landing-root">
@@ -251,19 +291,44 @@ const LandingPage = () => {
           <div className="grid-3">
             {/* Popular Routes */}
             <div className="lg:col-span-2">
-              <PopularRoutes routes={popularRoutes} />
+              <Suspense fallback={<div style={{height:'200px'}} />}> 
+                <PopularRoutes routes={popularRoutes} />
+              </Suspense>
             </div>
             
             {/* Service Alerts */}
             <div>
-              <ServiceAlerts alerts={serviceAlerts} />
+              <Suspense fallback={null}>
+                <ServiceAlerts alerts={serviceAlerts} />
+              </Suspense>
             </div>
           </div>
         </div>
       </section>
 
+      {/* Live Route Preview - Uber-style tracking on landing */}
+      <section className="section" ref={mapSectionRef}>
+          <div className="container">
+            <div className="section__intro">
+              <h2 className="section__title">Live Route Preview</h2>
+              <p className="section__subtitle">Real-time tracking preview from Streamlined Route Management</p>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" style={{ height: '360px' }}>
+              <Suspense fallback={<div className="w-full h-full" />}>
+                {isMapVisible && featuredTrip ? (
+                  <GoogleMapsRouteTracker trip={featuredTrip} isTracking={true} className="w-full h-full" />
+                ) : (
+                  <div className="w-full h-full" />
+                )}
+              </Suspense>
+            </div>
+          </div>
+        </section>
+
       {/* App Banner */}
-      <AppBanner />
+      <Suspense fallback={null}>
+        <AppBanner />
+      </Suspense>
 
       {/* Features Section */}
       <section className="section section--muted">
@@ -341,10 +406,10 @@ const LandingPage = () => {
               </p>
               <div className="footer__socials">
                 {[
-                  { icon: 'Facebook', href: "#" },
-                  { icon: 'Twitter', href: "#" },
-                  { icon: 'Instagram', href: "#" },
-                  { icon: 'YouTube', href: "#" }
+                  { icon: 'Facebook', href: "/" },
+                  { icon: 'Twitter', href: "/" },
+                  { icon: 'Instagram', href: "/" },
+                  { icon: 'YouTube', href: "/" }
                 ].map((social, index) => (
                   <a key={index} href={social.href} className="social" aria-label={social.icon}>
                     <span>{social.icon[0]}</span>
@@ -377,10 +442,12 @@ const LandingPage = () => {
       </footer>
 
       {/* Bus Tracking Modal */}
-      <BusTrackingModal 
-        isOpen={showBusTracking}
-        onClose={() => setShowBusTracking(false)}
-      />
+      <Suspense fallback={null}>
+        <BusTrackingModal 
+          isOpen={showBusTracking}
+          onClose={() => setShowBusTracking(false)}
+        />
+      </Suspense>
     </div>
   );
 };

@@ -1,26 +1,25 @@
 const mongoose = require('mongoose');
 
 const notificationSchema = new mongoose.Schema({
-  // Recipient information
-  recipientId: {
+  userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  recipientRole: {
+  type: {
     type: String,
-    enum: ['admin', 'depot_manager', 'depot_supervisor', 'depot_operator', 'driver', 'conductor', 'passenger'],
+    enum: [
+      'trip_assigned',
+      'trip_cancelled',
+      'trip_delayed',
+      'trip_completed',
+      'maintenance_due',
+      'route_changed',
+      'schedule_updated',
+      'system_announcement'
+    ],
     required: true
   },
-  depotId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Depot',
-    required: function() {
-      return ['depot_manager', 'depot_supervisor', 'depot_operator', 'driver', 'conductor'].includes(this.recipientRole);
-    }
-  },
-
-  // Notification content
   title: {
     type: String,
     required: true,
@@ -31,81 +30,57 @@ const notificationSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
-  type: {
-    type: String,
-    enum: [
-      'trip_assigned',
-      'trip_updated', 
-      'trip_cancelled',
-      'bus_assigned',
-      'bus_maintenance',
-      'route_created',
-      'route_updated',
-      'driver_assigned',
-      'conductor_assigned',
-      'booking_created',
-      'booking_cancelled',
-      'payment_received',
-      'system_alert',
-      'maintenance_due',
-      'fuel_low',
-      'schedule_change',
-      'emergency',
-      'general'
-    ],
-    required: true
+  data: {
+    // Additional data for the notification
+    tripId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Trip'
+    },
+    routeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Route'
+    },
+    busId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Bus'
+    },
+    driverId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Driver'
+    },
+    conductorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Conductor'
+    },
+    routeName: String,
+    busNumber: String,
+    serviceDate: Date,
+    startTime: String,
+    endTime: String
   },
   priority: {
     type: String,
     enum: ['low', 'medium', 'high', 'urgent'],
     default: 'medium'
   },
-
-  // Related entities
-  relatedEntity: {
-    type: {
-      type: String,
-      enum: ['trip', 'bus', 'route', 'booking', 'driver', 'conductor', 'depot', 'user']
-    },
-    id: {
-      type: mongoose.Schema.Types.ObjectId
-    }
+  isRead: {
+    type: Boolean,
+    default: false
   },
-
-  // Action data
-  actionData: {
-    action: String, // 'view', 'edit', 'approve', 'reject', 'assign'
-    url: String,    // Deep link to relevant page
-    buttonText: String
+  readAt: {
+    type: Date
   },
-
-  // Status
-  status: {
-    type: String,
-    enum: ['unread', 'read', 'archived'],
-    default: 'unread'
+  isArchived: {
+    type: Boolean,
+    default: false
   },
-  readAt: Date,
-  archivedAt: Date,
-
-  // Sender information
-  senderId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+  archivedAt: {
+    type: Date
   },
-  senderRole: String,
-
-  // Metadata
-  metadata: {
-    type: Map,
-    of: mongoose.Schema.Types.Mixed
-  },
-
-  // Expiration
   expiresAt: {
     type: Date,
     default: function() {
-      // Notifications expire after 30 days by default
+      // Notifications expire after 30 days
       return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     }
   }
@@ -113,84 +88,47 @@ const notificationSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for better performance
-notificationSchema.index({ recipientId: 1, status: 1 });
-notificationSchema.index({ recipientRole: 1, depotId: 1 });
-notificationSchema.index({ type: 1, priority: 1 });
-notificationSchema.index({ createdAt: -1 });
+// Indexes for performance
+notificationSchema.index({ userId: 1, createdAt: -1 });
+notificationSchema.index({ userId: 1, isRead: 1 });
+notificationSchema.index({ type: 1 });
 notificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
-// Virtual for time since creation
-notificationSchema.virtual('timeAgo').get(function() {
-  const now = new Date();
-  const diff = now - this.createdAt;
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  return `${days}d ago`;
-});
-
-// Static method to create notification
-notificationSchema.statics.createNotification = function(data) {
-  return this.create({
-    recipientId: data.recipientId,
-    recipientRole: data.recipientRole,
-    depotId: data.depotId,
-    title: data.title,
-    message: data.message,
-    type: data.type,
-    priority: data.priority || 'medium',
-    relatedEntity: data.relatedEntity,
-    actionData: data.actionData,
-    senderId: data.senderId,
-    senderRole: data.senderRole,
-    metadata: data.metadata
+// Static method to create trip assignment notification
+notificationSchema.statics.createTripAssignmentNotification = async function(userId, tripData) {
+  const notification = new this({
+    userId: userId,
+    type: 'trip_assigned',
+    title: 'New Trip Assignment',
+    message: `You have been assigned to trip ${tripData.routeName} on ${new Date(tripData.serviceDate).toLocaleDateString()} at ${tripData.startTime}`,
+    priority: 'high',
+    data: {
+      tripId: tripData.tripId,
+      routeId: tripData.routeId,
+      busId: tripData.busId,
+      driverId: tripData.driverId,
+      conductorId: tripData.conductorId,
+      routeName: tripData.routeName,
+      busNumber: tripData.busNumber,
+      serviceDate: tripData.serviceDate,
+      startTime: tripData.startTime,
+      endTime: tripData.endTime
+    }
   });
-};
-
-// Static method to get notifications for user
-notificationSchema.statics.getUserNotifications = function(userId, role, depotId, options = {}) {
-  const query = { recipientId: userId };
   
-  // Add depot filter for depot roles
-  if (['depot_manager', 'depot_supervisor', 'depot_operator'].includes(role) && depotId) {
-    query.$or = [
-      { depotId: depotId },
-      { recipientRole: role, depotId: { $exists: false } }
-    ];
-  }
-
-  // Add status filter
-  if (options.status) {
-    query.status = options.status;
-  }
-
-  // Add type filter
-  if (options.type) {
-    query.type = options.type;
-  }
-
-  return this.find(query)
-    .sort({ createdAt: -1 })
-    .limit(options.limit || 50)
-    .populate('senderId', 'name email')
-    .populate('relatedEntity.id');
+  return await notification.save();
 };
 
 // Method to mark as read
 notificationSchema.methods.markAsRead = function() {
-  this.status = 'read';
+  this.isRead = true;
   this.readAt = new Date();
   return this.save();
 };
 
 // Method to archive
 notificationSchema.methods.archive = function() {
-  this.status = 'archived';
+  this.isArchived = true;
   this.archivedAt = new Date();
   return this.save();
 };

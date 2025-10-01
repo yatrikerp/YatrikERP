@@ -10,10 +10,12 @@ import {
 } from 'lucide-react';
 import QuickSearch from '../../components/Common/QuickSearch';
 import NotificationButton from '../../components/passenger/NotificationButton';
+import useMobileDetection from '../../hooks/useMobileDetection';
 
 const PassengerDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { isMobile } = useMobileDetection();
   const [upcomingTrips, setUpcomingTrips] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
   const [walletBalance, setWalletBalance] = useState(0);
@@ -31,6 +33,13 @@ const PassengerDashboard = () => {
   const [popularRoutes, setPopularRoutes] = useState(defaultPopularRoutes);
 
   useEffect(() => {
+    // Redirect mobile users to mobile dashboard
+    if (isMobile && user) {
+      console.log('🔄 Redirecting mobile user to mobile dashboard');
+      navigate('/passenger/mobile', { replace: true });
+      return;
+    }
+    
     fetchDashboardData();
     fetchPopularRoutes();
     // Live refresh every 60 seconds
@@ -38,7 +47,7 @@ const PassengerDashboard = () => {
       fetchPopularRoutes();
     }, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isMobile, user, navigate]);
 
   const fetchDashboardData = async () => {
     try {

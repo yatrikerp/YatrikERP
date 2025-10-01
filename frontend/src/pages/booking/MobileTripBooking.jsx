@@ -304,7 +304,7 @@ const MobileTripBooking = () => {
               Fare
             </div>
             <div style={{ fontSize: '14px', fontWeight: '600', color: '#E91E63' }}>
-              ₹{trip?.fare}
+              ₹{trip?.fare || 250}
             </div>
           </div>
         </div>
@@ -361,7 +361,7 @@ const MobileTripBooking = () => {
                 {trip?.bus?.type} - {trip?.bus?.number}
               </div>
               <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                ₹{trip?.fare} per seat
+                ₹{trip?.fare || 250} per seat
               </div>
             </div>
           </div>
@@ -666,7 +666,7 @@ const MobileTripBooking = () => {
         }}>
           <Seat size={20} color="#6b7280" />
           <div style={{ fontSize: '14px', color: '#374151' }}>
-            Selected Seats: {selectedSeats.length} × ₹{trip?.fare} = ₹{selectedSeats.length * trip?.fare}
+            Selected Seats: {selectedSeats.length} × ₹{trip?.fare || 250} = ₹{selectedSeats.length * (trip?.fare || 250)}
           </div>
         </div>
       </div>
@@ -951,7 +951,7 @@ const MobileTripBooking = () => {
           }}>
             <span style={{ fontSize: '14px', color: '#6b7280' }}>Fare per Seat</span>
             <span style={{ fontSize: '14px', fontWeight: '500', color: '#111827' }}>
-              ₹{trip?.fare}
+              ₹{trip?.fare || 250}
             </span>
           </div>
           <div style={{
@@ -962,7 +962,7 @@ const MobileTripBooking = () => {
           }}>
             <span style={{ fontSize: '14px', color: '#6b7280' }}>Subtotal</span>
             <span style={{ fontSize: '14px', fontWeight: '500', color: '#111827' }}>
-              ₹{selectedSeats.length * trip?.fare}
+              ₹{selectedSeats.length * (trip?.fare || 250)}
             </span>
           </div>
           <div style={{
@@ -972,7 +972,7 @@ const MobileTripBooking = () => {
           }}>
             <span style={{ fontSize: '16px', fontWeight: '600', color: '#111827' }}>Total</span>
             <span style={{ fontSize: '16px', fontWeight: '600', color: '#111827' }}>
-              ₹{selectedSeats.length * trip?.fare}
+              ₹{selectedSeats.length * (trip?.fare || 250)}
             </span>
           </div>
         </div>
