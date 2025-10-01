@@ -123,12 +123,18 @@ router.get('/search', async (req, res) => {
 
     console.log('📅 Date range:', { startOfDay, endOfDay });
 
+    // Include scheduled AND running trips with bookingOpen=true
     const trips = await Trip.find({ 
       serviceDate: { 
         $gte: startOfDay, 
         $lte: endOfDay 
-      } 
-    }).lean();
+      },
+      status: { $in: ['scheduled', 'running', 'boarding'] },
+      bookingOpen: true
+    })
+    .populate('routeId', 'routeName routeNumber startingPoint endingPoint totalDistance')
+    .populate('busId', 'busNumber busType capacity')
+    .lean();
     
     console.log('🚌 Found trips:', trips.length);
 
@@ -137,7 +143,7 @@ router.get('/search', async (req, res) => {
 
     // Filter trips by route criteria
     const filteredTrips = trips.filter(trip => {
-      const route = routes.find(r => r._id.toString() === trip.routeId.toString());
+      const route = trip.routeId; // already populated
       if (!route) {
         console.log('❌ No route found for trip:', trip._id);
         return false;
@@ -145,15 +151,17 @@ router.get('/search', async (req, res) => {
       
       console.log('🔍 Checking route:', route.routeName, 'for cities:', from, 'to', to);
       
-      // Match against the nested city structure in Route model
-      const fromMatch = route.startingPoint?.city?.toLowerCase().includes(from.toLowerCase()) ||
-                       route.routeName?.toLowerCase().includes(from.toLowerCase()) ||
-                       (route.startingPoint?.city && from.toLowerCase().includes(route.startingPoint.city.toLowerCase()));
-      const toMatch = route.endingPoint?.city?.toLowerCase().includes(to.toLowerCase()) ||
-                     route.routeName?.toLowerCase().includes(to.toLowerCase()) ||
-                     (route.endingPoint?.city && to.toLowerCase().includes(route.endingPoint.city.toLowerCase()));
+      // Normalize city names for flexible matching
+      const normFrom = (from || '').toLowerCase().trim();
+      const normTo = (to || '').toLowerCase().trim();
+      const routeStartCity = (route.startingPoint?.city || route.startingPoint || '').toLowerCase().trim();
+      const routeEndCity = (route.endingPoint?.city || route.endingPoint || '').toLowerCase().trim();
       
-      console.log('✅ Route match:', { fromMatch, toMatch, route: route.routeName });
+      // Match if from/to partially match route start/end (e.g., 'Kochi' matches 'KOCHI' or 'kochi')
+      const fromMatch = routeStartCity.includes(normFrom) || normFrom.includes(routeStartCity);
+      const toMatch = routeEndCity.includes(normTo) || normTo.includes(routeEndCity);
+      
+      console.log('✅ Route match:', { fromMatch, toMatch, route: route.routeName, routeStartCity, routeEndCity });
       
       return fromMatch && toMatch;
     });
@@ -161,11 +169,13 @@ router.get('/search', async (req, res) => {
     console.log('🎯 Filtered trips:', filteredTrips.length);
 
     const items = filteredTrips.map(t => {
-      const route = routes.find(r => r._id.toString() === t.routeId.toString());
+      const route = t.routeId; // already populated
+      const bus = t.busId; // already populated
       const distanceKm = route?.totalDistance ?? 100;
       const fare = t.fare || Math.round(baseFare + distanceKm * perKm);
       return {
         _id: t._id,
+        tripId: t._id,
         routeName: route?.routeName || 'Route',
         routeNumber: route?.routeNumber || '',
         startTime: t.startTime,
@@ -175,8 +185,11 @@ router.get('/search', async (req, res) => {
         distanceKm,
         fare,
         capacity: t.capacity,
-        availableSeats: t.availableSeats,
-        bookedSeats: t.bookedSeats,
+        availableSeats: t.availableSeats ?? t.capacity,
+        bookedSeats: t.bookedSeats ?? 0,
+        busType: bus?.busType || 'Standard',
+        busNumber: bus?.busNumber || 'N/A',
+        bookingOpen: t.bookingOpen !== false,
         fromCity: typeof route?.startingPoint === 'object' ? 
           (route.startingPoint?.city || route.startingPoint?.location || 'Unknown') : 
           (route?.startingPoint || 'Unknown'),

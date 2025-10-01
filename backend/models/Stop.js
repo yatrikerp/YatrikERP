@@ -4,20 +4,37 @@ const stopSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   code: { type: String, required: true, unique: true, trim: true, uppercase: true },
   lat: { type: Number, required: true },
-  lon: { type: Number, required: true }
+  lon: { type: Number, required: true },
+  location: {
+    type: { type: String, enum: ['Point'], default: 'Point' },
+    coordinates: { type: [Number], required: true } // [longitude, latitude]
+  },
+  operatingHours: {
+    start: { type: String, default: '00:00' },
+    end: { type: String, default: '23:59' }
+  }
 }, { timestamps: true });
 
 // Indexes
 // code index is already defined as unique in schema
 stopSchema.index({ name: 'text' });
+stopSchema.index({ location: '2dsphere' });
+
+// Pre-save middleware to populate location coordinates from lat/lon
+stopSchema.pre('save', function(next) {
+  if (this.lat && this.lon && (!this.location || !this.location.coordinates)) {
+    this.location = {
+      type: 'Point',
+      coordinates: [this.lon, this.lat] // [longitude, latitude] format for GeoJSON
+    };
+  }
+  next();
+});
 
 // Virtual for full address
 stopSchema.virtual('fullAddress').get(function() {
-  const addr = this.location.address;
-  if (!addr) return '';
-  
-  const parts = [addr.street, addr.city, addr.state, addr.pincode, addr.country];
-  return parts.filter(Boolean).join(', ');
+  // For now, just return the stop name since we don't have address details
+  return this.name || '';
 });
 
 // Virtual for coordinates string

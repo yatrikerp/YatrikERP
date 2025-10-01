@@ -1,0 +1,14 @@
+frontend/
+mobile/
+tests/
+*.md
+.git/
+.gitignore
+node_modules/
+*.log
+.env.example
+*.test.js
+*.spec.js
+mochawesome-report/
+coverage/
+

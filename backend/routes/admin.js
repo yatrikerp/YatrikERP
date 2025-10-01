@@ -10,6 +10,7 @@ const Bus = require('../models/Bus');
 const Duty = require('../models/Duty');
 const Driver = require('../models/Driver');
 const Conductor = require('../models/Conductor');
+const Stop = require('../models/Stop');
 const AIAnalyticsService = require('../services/aiAnalytics');
 const NotificationService = require('../services/notificationService');
 const { auth, requireRole } = require('../middleware/auth');
@@ -1904,11 +1905,16 @@ router.post('/routes/:id/stops', async (req, res) => {
 // Stops
 router.get('/stops', async (req, res) => {
   try {
+    console.log('Fetching stops...');
     const stops = await Stop.find().sort({ createdAt: -1 });
+    console.log(`Found ${stops.length} stops`);
     res.json(stops);
   } catch (error) {
     console.error('Stops fetch error:', error);
-    res.status(500).json({ error: 'Failed to fetch stops' });
+    res.status(500).json({ 
+      error: 'Failed to fetch stops',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
