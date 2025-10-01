@@ -105,7 +105,10 @@ const FastestRouteSearch = () => {
       if (response.ok) {
         setSearchResults(response.data.routes);
         if (response.data.routes.length === 0) {
-          toast.info('No routes found for your search criteria');
+          toast('No routes found for your search criteria', {
+            icon: 'ℹ️',
+            duration: 3000
+          });
         }
       } else {
         toast.error('Failed to search routes');

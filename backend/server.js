@@ -190,6 +190,7 @@ app.use('/api/fastest-route', require('./routes/fastestRoute'));
 app.use('/api/fare-policy', require('./routes/farePolicy'));
 app.use('/api/admin/routes', require('./routes/conductorPricing'));
 app.use('/api/conductor', require('./routes/conductorPricing'));
+// app.use('/api/passenger-dashboard', require('./routes/passengerDashboard'));
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {

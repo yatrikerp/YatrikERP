@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import AuthLayout from '../components/Auth/AuthLayout';
+import MobileAuthLayout from '../components/Auth/MobileAuthLayout';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FaGoogle } from 'react-icons/fa';
 import InputField from '../components/Common/InputField';
@@ -8,6 +9,7 @@ import OAuthButton from '../components/Common/OAuthButton';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 import { apiFetch } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import useMobileDetection from '../hooks/useMobileDetection';
 import toast from 'react-hot-toast';
 
 const Auth = ({ initialMode = 'login' }) => {
@@ -16,6 +18,7 @@ const Auth = ({ initialMode = 'login' }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get('next') || '/pax';
+  const { isMobile } = useMobileDetection();
   
   // Form states with immediate validation
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
@@ -167,6 +170,33 @@ const Auth = ({ initialMode = 'login' }) => {
   // Navigate after successful login/signup
   useEffect(() => {
     if (user) {
+      // Check for pending booking from popular routes
+      const pendingBooking = localStorage.getItem('pendingBooking');
+      const returnUrl = searchParams.get('return');
+      
+      // If passenger with pending booking, redirect to booking choice
+      if (pendingBooking && (user.role || 'passenger').toUpperCase() === 'PASSENGER') {
+        console.log('[Auth] Found pending booking, redirecting to booking-choice');
+        try {
+          const bookingContext = JSON.parse(pendingBooking);
+          navigate('/booking-choice', { 
+            replace: true,
+            state: { bookingContext }
+          });
+          return;
+        } catch (e) {
+          console.error('Error parsing pending booking:', e);
+          localStorage.removeItem('pendingBooking');
+        }
+      }
+      
+      // If there's a return URL
+      if (returnUrl) {
+        console.log('[Auth] Using return URL:', returnUrl);
+        navigate(returnUrl, { replace: true });
+        return;
+      }
+      
       const role = (user.role || 'passenger').toUpperCase();
       const dest = role === 'ADMIN' ? '/admin' : 
                    role === 'CONDUCTOR' ? '/conductor' : 
@@ -176,7 +206,7 @@ const Auth = ({ initialMode = 'login' }) => {
       console.log('[Auth] existing session redirect:', { role, dest });
       navigate(dest, { replace: true });
     }
-  }, [user, navigate, redirectTo]);
+  }, [user, navigate, redirectTo, searchParams]);
 
   // Preload authentication endpoints for instant performance
   useEffect(() => {
@@ -438,8 +468,10 @@ const Auth = ({ initialMode = 'login' }) => {
     <span>Already with us? <button type="button" onClick={() => setMode('login')} className="font-medium text-primary-600 hover:text-primary-500 transition-colors" disabled={isLoggingIn || isSigningUp}>Sign in</button></span>
   );
 
+  const LayoutComponent = isMobile ? MobileAuthLayout : AuthLayout;
+  
   return (
-    <AuthLayout title={title} subtitle={subtitle}>
+    <LayoutComponent title={title} subtitle={subtitle}>
       <div className="fade-in">
         {/* Tabs */}
         <div className="mb-6 grid grid-cols-2 rounded-lg border border-gray-200 overflow-hidden">
@@ -625,7 +657,7 @@ const Auth = ({ initialMode = 'login' }) => {
           </div>
         )}
       </div>
-    </AuthLayout>
+    </LayoutComponent>
   );
 };
 

@@ -7,10 +7,13 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../../utils/api';
 import { toast } from 'react-hot-toast';
+import useMobileDetection from '../../hooks/useMobileDetection';
+import MobileTripBooking from './MobileTripBooking';
 
 const TripBooking = () => {
   const { tripId } = useParams();
   const navigate = useNavigate();
+  const { isMobile } = useMobileDetection();
   
   const [trip, setTrip] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -180,6 +183,11 @@ const TripBooking = () => {
   const seats = generateSeats(trip.capacity);
   const totalAmount = trip.fare * selectedSeats.length;
 
+  // Use mobile booking component on mobile devices
+  if (isMobile) {
+    return <MobileTripBooking />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -201,13 +209,60 @@ const TripBooking = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Trip Details */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Trip Info */}
+            {/* RedBus Style Route Display */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
+              className="bg-gradient-to-r from-pink-500 to-pink-600 rounded-xl shadow-lg p-6 text-white relative overflow-hidden"
+            >
+              {/* Background Pattern */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white bg-opacity-10 rounded-full transform translate-x-8 -translate-y-8"></div>
+              
+              <div className="relative z-10">
+                <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                  <Bus className="w-6 h-6" />
+                  Route Details
+                </h2>
+                
+                {/* Route Display */}
+                <div className="bg-white bg-opacity-15 rounded-lg p-4 backdrop-blur-sm border border-white border-opacity-20">
+                  {/* From Location */}
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                    <div>
+                      <div className="text-lg font-semibold">{trip.routeId?.startingPoint}</div>
+                      <div className="text-sm text-white text-opacity-80">Departure</div>
+                    </div>
+                  </div>
+
+                  {/* Route Line */}
+                  <div className="flex items-center gap-3 mb-3 ml-1">
+                    <div className="w-0.5 h-5 bg-gradient-to-b from-green-500 to-yellow-500 rounded"></div>
+                    <div className="text-sm text-white text-opacity-80 font-medium">
+                      {trip.routeId?.distance} km • {trip.duration}
+                    </div>
+                  </div>
+
+                  {/* To Location */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-red-500 rounded-full border-2 border-white"></div>
+                    <div>
+                      <div className="text-lg font-semibold">{trip.routeId?.endingPoint}</div>
+                      <div className="text-sm text-white text-opacity-80">Arrival</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Trip Information */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
               className="bg-white rounded-xl shadow-lg p-6"
             >
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Trip Details</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Trip Information</h2>
               
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
@@ -252,6 +307,47 @@ const TripBooking = () => {
               </div>
             </motion.div>
 
+            {/* RedBus Style Route Display in Seat Selection */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="bg-gradient-to-r from-pink-500 to-pink-600 rounded-xl shadow-lg p-4 text-white relative overflow-hidden"
+            >
+              {/* Background Pattern */}
+              <div className="absolute top-0 right-0 w-20 h-20 bg-white bg-opacity-10 rounded-full transform translate-x-4 -translate-y-4"></div>
+              
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-sm font-semibold">{trip.routeId?.startingPoint}</span>
+                  </div>
+                  <div className="text-xs text-white text-opacity-80">
+                    {trip.departureTime}
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-center my-2">
+                  <div className="w-full h-0.5 bg-white bg-opacity-30 relative">
+                    <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-pink-500 text-white px-2 py-1 rounded text-xs font-semibold">
+                      {trip.routeId?.distance} km
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                    <span className="text-sm font-semibold">{trip.routeId?.endingPoint}</span>
+                  </div>
+                  <div className="text-xs text-white text-opacity-80">
+                    {trip.arrivalTime}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
             {/* Seat Selection */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
@@ -259,39 +355,64 @@ const TripBooking = () => {
               transition={{ delay: 0.1 }}
               className="bg-white rounded-xl shadow-lg p-6"
             >
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Select Your Seat</h2>
-              
-              <div className="grid grid-cols-4 gap-2 max-w-md">
-                {seats.map((seat) => (
-                  <button
-                    key={seat.number}
-                    onClick={() => handleSeatSelect(seat.number)}
-                    disabled={!seat.available}
-                    className={`w-12 h-12 rounded-lg text-sm font-medium transition-colors ${
-                      selectedSeats.includes(seat.number)
-                        ? 'bg-blue-600 text-white'
-                        : seat.available
-                        ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    }`}
-                  >
-                    {seat.number}
-                  </button>
-                ))}
-              </div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Seat className="w-5 h-5 text-pink-600" />
+                Select Your Seat
+              </h2>
 
-              <div className="flex items-center gap-4 mt-4 text-sm">
+              {/* Seat Legend */}
+              <div className="flex justify-around mb-6 p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-gray-100 rounded"></div>
-                  <span>Available</span>
+                  <div className="w-4 h-4 bg-white border border-gray-300 rounded"></div>
+                  <span className="text-sm text-gray-600">Available</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-blue-600 rounded"></div>
-                  <span>Selected</span>
+                  <div className="w-4 h-4 bg-pink-600 text-white rounded flex items-center justify-center text-xs font-semibold">
+                    ✓
+                  </div>
+                  <span className="text-sm text-gray-600">Selected</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-gray-300 rounded"></div>
-                  <span>Occupied</span>
+                  <div className="w-4 h-4 bg-gray-400 rounded"></div>
+                  <span className="text-sm text-gray-600">Occupied</span>
+                </div>
+              </div>
+              
+              {/* Bus Layout */}
+              <div className="bg-gray-50 rounded-xl p-6 max-w-md mx-auto">
+                {/* Driver Section */}
+                <div className="text-center mb-6">
+                  <div className="w-12 h-8 bg-gray-700 rounded mx-auto mb-2 flex items-center justify-center text-white text-xs font-semibold">
+                    🚌
+                  </div>
+                  <div className="text-xs text-gray-500">Driver</div>
+                </div>
+
+                {/* Seat Grid */}
+                <div className="grid grid-cols-4 gap-3 mb-6">
+                  {seats.map((seat) => (
+                    <button
+                      key={seat.number}
+                      onClick={() => handleSeatSelect(seat.number)}
+                      disabled={!seat.available}
+                      className={`w-12 h-12 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                        selectedSeats.includes(seat.number)
+                          ? 'bg-pink-600 text-white shadow-lg shadow-pink-600/30 transform scale-105'
+                          : seat.available
+                          ? 'bg-white text-gray-700 hover:bg-pink-50 hover:border-pink-300 border border-gray-200 hover:shadow-md'
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {seat.number}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Door Section */}
+                <div className="text-center">
+                  <div className="w-16 h-10 bg-gray-600 rounded mx-auto mb-2 flex items-center justify-center text-white text-sm font-semibold">
+                    DOOR
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -436,6 +557,41 @@ const TripBooking = () => {
             >
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Booking Summary</h3>
               
+              {/* RedBus Style Route Display in Summary */}
+              <div className="bg-gradient-to-r from-pink-500 to-pink-600 rounded-lg p-4 mb-4 text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-16 h-16 bg-white bg-opacity-10 rounded-full transform translate-x-4 -translate-y-4"></div>
+                
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-sm font-semibold">{trip.routeId?.startingPoint}</span>
+                    </div>
+                    <div className="text-xs text-white text-opacity-80">
+                      {trip.departureTime}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-center my-2">
+                    <div className="w-full h-0.5 bg-white bg-opacity-30 relative">
+                      <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-pink-500 text-white px-2 py-1 rounded text-xs font-semibold">
+                        {trip.routeId?.distance} km
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                      <span className="text-sm font-semibold">{trip.routeId?.endingPoint}</span>
+                    </div>
+                    <div className="text-xs text-white text-opacity-80">
+                      {trip.arrivalTime}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Trip Fare</span>
@@ -456,7 +612,7 @@ const TripBooking = () => {
                 
                 <div className="flex justify-between text-lg font-semibold">
                   <span>Total</span>
-                  <span>₹{totalAmount}</span>
+                  <span className="text-pink-600">₹{totalAmount}</span>
                 </div>
               </div>
 

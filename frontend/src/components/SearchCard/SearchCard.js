@@ -3,8 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Bus, Link, MapPin, Calendar, Search, Clock, Navigation } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import './search-card.css';
+import useMobileDetection from '../../hooks/useMobileDetection';
+import MobileSearchCard from './MobileSearchCard';
 
 const SearchCard = ({ onSearchResults, showResults = false }) => {
+  const { isMobile } = useMobileDetection();
   const [activeTab, setActiveTab] = useState('book');
   const [tripType, setTripType] = useState('oneWay');
   const [formData, setFormData] = useState({
@@ -197,7 +200,13 @@ const SearchCard = ({ onSearchResults, showResults = false }) => {
         if (searchData.success && searchData.data.trips.length > 0) {
           toast.success(`Found ${searchData.data.trips.length} trips available!`);
         } else {
-          toast.info('No trips found for your search criteria, but you can still view all available trips.');
+          toast('No trips found for your search criteria, but you can still view all available trips.', {
+            icon: 'ℹ️',
+            style: {
+              background: '#3B82F6',
+              color: '#fff',
+            }
+          });
         }
       }
 
@@ -225,6 +234,11 @@ const SearchCard = ({ onSearchResults, showResults = false }) => {
     if (!duration) return '';
     return duration;
   };
+
+  // Use mobile search card on mobile devices
+  if (isMobile) {
+    return <MobileSearchCard onSearchResults={onSearchResults} showResults={showResults} />;
+  }
 
   return (
     <div className="searchCard">

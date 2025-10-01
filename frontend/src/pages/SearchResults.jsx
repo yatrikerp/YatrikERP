@@ -101,7 +101,10 @@ const SearchResults = () => {
           generateFilterOptions(tripsData);
           
           if (tripsData.length === 0) {
-            toast.info('No trips found for your search criteria');
+            toast('No trips found for your search criteria', {
+              icon: 'ℹ️',
+              duration: 3000
+            });
           } else {
             toast.success(`Found ${tripsData.length} trips available!`);
           }

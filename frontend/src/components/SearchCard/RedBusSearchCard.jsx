@@ -204,7 +204,10 @@ const RedBusSearchCard = ({ onSearchResults, showResults = false }) => {
         if (searchData.success && searchData.data.trips.length > 0) {
           toast.success(`Found ${searchData.data.trips.length} trips available!`);
         } else {
-          toast.info('No trips found for your search criteria, but you can still view all available trips.');
+          toast('No trips found for your search criteria, but you can still view all available trips.', {
+            icon: 'ℹ️',
+            duration: 3000
+          });
         }
       }
 

@@ -1,398 +1,813 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import {
-  Calendar, MapPin, Clock, Users, DollarSign, CheckCircle,
-  AlertCircle, Navigation, Phone, User, Route, Bus,
-  Star, Award, TrendingUp, Activity, Ticket, Scan, Snowflake
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import './conductor.modern.css';
+import { 
+  MapPin, 
+  CheckCircle, 
+  Play, 
+  LogOut,
+  Activity,
+  AlertTriangle,
+  Bus,
+  Bell,
+  AlertCircle,
+  Users,
+  QrCode,
+  Camera,
+  Route,
+  Building,
+  Ticket,
+  Plus,
+  Wifi,
+  WifiOff,
+  Volume2,
+  VolumeX,
+  Monitor,
+  Smartphone,
+  Menu,
+  X,
+  Clock,
+  XCircle,
+  Search,
+  ArrowUpDown
 } from 'lucide-react';
-import { apiFetch } from '../../utils/api';
 
 const ConductorDashboard = () => {
-  const [conductorData, setConductorData] = useState(null);
-  const [todayTrips, setTodayTrips] = useState([]);
-  const [upcomingTrips, setUpcomingTrips] = useState([]);
-  const [completedTrips, setCompletedTrips] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    todayTrips: 0,
-    completedTrips: 0,
-    ticketsSold: 0,
-    totalRevenue: 0,
-    rating: 4.7,
-    passengersServed: 0
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  
+  // Core State Management - Updated v2
+  const [refreshInterval, setRefreshInterval] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [notifications] = useState(3);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  
+  // Responsive View Mode State
+  const [viewMode, setViewMode] = useState('desktop'); // desktop, mobile
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // Duty Workflow State
+  const [dutyStatus, setDutyStatus] = useState('assigned'); // not_assigned, assigned, active, completed
+  const [currentDuty, setCurrentDuty] = useState(null);
+  const [activeView, setActiveView] = useState('dashboard'); // dashboard, passengers, scanning
+  
+  // Trip Information
+  const [tripInfo, setTripInfo] = useState({
+    routeName: 'Kochi → Alappuzha',
+    routeNumber: 'KL-07-CD-5678',
+    depotName: 'Kochi Depot',
+    dutyId: 'DUTY-2024-001',
+    busNumber: 'KL-07-CD-5678',
+    startTime: '09:00',
+    endTime: '10:30',
+    totalSeats: 45,
+    currentStop: 'Cherthala Junction',
+    nextStop: 'Alappuzha Central',
+    progress: 60
   });
+  
+  // Passenger Management
+  const [passengers, setPassengers] = useState([
+    { id: 1, name: 'John Doe', seat: 'A1', boardingStop: 'Kochi Central', destination: 'Alappuzha', status: 'boarded', pnr: 'PNR123456' },
+    { id: 2, name: 'Jane Smith', seat: 'A2', boardingStop: 'Edappally', destination: 'Alappuzha', status: 'boarded', pnr: 'PNR123457' },
+    { id: 3, name: 'Bob Wilson', seat: 'B1', boardingStop: 'Cherthala', destination: 'Alappuzha', status: 'expected', pnr: 'PNR123458' },
+    { id: 4, name: 'Alice Johnson', seat: 'B2', boardingStop: 'Kochi Central', destination: 'Alappuzha', status: 'expected', pnr: 'PNR123459' },
+    { id: 5, name: 'Charlie Brown', seat: 'C1', boardingStop: 'Edappally', destination: 'Alappuzha', status: 'no_show', pnr: 'PNR123460' },
+    { id: 6, name: 'Diana Prince', seat: 'C2', boardingStop: 'Cherthala', destination: 'Alappuzha', status: 'boarded', pnr: 'PNR123461' }
+  ]);
+  const [passengerFilter, setPassengerFilter] = useState('all'); // all, boarded, expected, no_show
+  const [sortBy, setSortBy] = useState('seat'); // seat, name, stop, status, pnr
+  const [searchQuery, setSearchQuery] = useState(''); // Search passengers by name, PNR, or seat
+  
+  // QR Scanning
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanResult, setScanResult] = useState(null);
+  const [scanHistory, setScanHistory] = useState([]);
+  
+  // Vacant Seat Booking
+  const [showVacantBooking, setShowVacantBooking] = useState(false);
+  const [availableSeats, setAvailableSeats] = useState(['A3', 'A4', 'B2', 'B3', 'C1', 'C2']);
+  
+  // Alerts and Notifications
+  const [alerts, setAlerts] = useState([
+    { id: 1, type: 'warning', message: 'Invalid ticket scanned', time: '2 min ago' },
+    { id: 2, type: 'error', message: 'Duplicate ticket detected', time: '5 min ago' },
+    { id: 3, type: 'info', message: 'Passenger request: Seat change', time: '8 min ago' }
+  ]);
 
-  useEffect(() => {
-    fetchConductorData();
-    fetchTrips();
+  // Helper Functions
+  const playSound = useCallback((type) => {
+    if (!soundEnabled) return;
+    // Add actual sound implementation here
+    console.log(`Playing ${type} sound`);
+  }, [soundEnabled]);
+
+  // Toggle View Mode Function
+  const toggleViewMode = useCallback(() => {
+    setViewMode(prev => prev === 'desktop' ? 'mobile' : 'desktop');
+    playSound('toggle');
+  }, [playSound]);
+
+  // Toggle Mobile Menu Function
+  const toggleMobileMenu = useCallback(() => {
+    setIsMobileMenuOpen(prev => !prev);
+    playSound('menu');
+  }, [playSound]);
+
+  // Workflow Functions
+  const startDuty = useCallback(() => {
+    setDutyStatus('active');
+    setCurrentDuty({
+      id: tripInfo.dutyId,
+      startTime: new Date(),
+      route: tripInfo.routeName,
+      bus: tripInfo.busNumber
+    });
+    playSound('success');
+  }, [tripInfo, playSound]);
+
+  const endDuty = useCallback(() => {
+    setDutyStatus('completed');
+    playSound('success');
+  }, [playSound]);
+
+  const startQRScan = useCallback(() => {
+    setIsScanning(true);
+    setScanResult(null);
+    // Simulate QR scan
+    setTimeout(() => {
+      const mockResult = {
+        success: Math.random() > 0.2, // 80% success rate
+        pnr: 'PNR' + Math.random().toString().substr(2, 8),
+        passenger: 'Sample Passenger',
+        seat: 'A' + Math.floor(Math.random() * 5 + 1)
+      };
+      setScanResult(mockResult);
+      setIsScanning(false);
+      setScanHistory(prev => [mockResult, ...prev.slice(0, 9)]);
+      playSound(mockResult.success ? 'success' : 'error');
+    }, 2000);
+  }, [playSound]);
+
+  const refreshDashboard = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      // Add refresh logic here
+      console.log('Refreshing dashboard data...');
+    } catch (error) {
+      console.error('Error refreshing dashboard:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
   }, []);
 
-  const fetchConductorData = async () => {
-    try {
-      const response = await apiFetch('/api/conductor/profile');
-      if (response.success) {
-        setConductorData(response.data);
+  const handleLogout = useCallback(() => {
+    logout();
+    navigate('/login');
+  }, [logout, navigate]);
+
+  // Online/Offline detection
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Initialize dashboard
+  useEffect(() => {
+    refreshDashboard();
+    
+    // Set up auto-refresh every 30 seconds
+    const interval = setInterval(refreshDashboard, 30000);
+    setRefreshInterval(interval);
+    
+    // Update time every second
+    const timeInterval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval);
       }
-    } catch (error) {
-      console.error('Error fetching conductor data:', error);
-    }
-  };
-
-  const fetchTrips = async () => {
-    try {
-      setLoading(true);
-      const today = new Date().toISOString().split('T')[0];
-      const token = localStorage.getItem('token');
-      
-      // Get current user ID from token or context
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      const conductorId = user._id || user.id;
-
-      if (!conductorId) {
-        console.error('Conductor ID not found');
-        return;
+      if (timeInterval) {
+        clearInterval(timeInterval);
       }
+    };
+  }, [refreshDashboard]);
 
-      // Fetch today's trips
-      const todayResponse = await fetch(`/api/trips/conductor/${conductorId}?date=${today}&status=scheduled,running`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (todayResponse.ok) {
-        const todayData = await todayResponse.json();
-        if (todayData.success) {
-          setTodayTrips(todayData.data.trips || []);
-        }
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
       }
+    };
+  }, [refreshInterval]);
 
-      // Fetch upcoming trips
-      const upcomingResponse = await fetch(`/api/trips/conductor/${conductorId}?status=scheduled`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (upcomingResponse.ok) {
-        const upcomingData = await upcomingResponse.json();
-        if (upcomingData.success) {
-          setUpcomingTrips(upcomingData.data.trips || []);
-        }
-      }
-
-      // Fetch completed trips for stats
-      const completedResponse = await fetch(`/api/trips/conductor/${conductorId}?status=completed`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (completedResponse.ok) {
-        const completedData = await completedResponse.json();
-        if (completedData.success) {
-          setCompletedTrips(completedData.data.trips || []);
-          calculateStats(completedData.data.trips || []);
-        }
-      }
-
-    } catch (error) {
-      console.error('Error fetching trips:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const calculateStats = (trips) => {
-    const totalRevenue = trips.reduce((sum, trip) => sum + (trip.fare * (trip.bookedSeats || 0)), 0);
-    const totalTickets = trips.reduce((sum, trip) => sum + (trip.bookedSeats || 0), 0);
-    const totalPassengers = trips.reduce((sum, trip) => sum + (trip.bookedSeats || 0), 0);
-
-    setStats(prev => ({
-      ...prev,
-      completedTrips: trips.length,
-      ticketsSold: totalTickets,
-      totalRevenue,
-      passengersServed: totalPassengers
-    }));
-  };
-
-  const getTripStatusColor = (status) => {
-    switch (status) {
-      case 'scheduled': return 'bg-blue-100 text-blue-800';
-      case 'running': return 'bg-green-100 text-green-800';
-      case 'completed': return 'bg-gray-100 text-gray-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const formatTime = (timeString) => {
-    if (!timeString) return 'N/A';
-    const [hours, minutes] = timeString.split(':');
-    return `${hours}:${minutes}`;
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short'
-    });
-  };
-
-  if (loading) {
+  if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+      <div className="loading-container">
+        <h3>Loading Conductor Dashboard...</h3>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-green-100 rounded-full">
-                <User className="w-8 h-8 text-green-600" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Welcome back, {conductorData?.name || 'Conductor'}
-                </h1>
-                <p className="text-gray-600">Here's your schedule and performance overview</p>
-              </div>
+    <div className={`conductor-dashboard ${viewMode === 'mobile' ? 'mobile-view' : 'desktop-view'}`}>
+      {/* Browser Top Bar */}
+      <div className="browser-top-bar">
+        <div className="browser-controls">
+          <div className="browser-info">
+            <span className="page-title">YATRIK ERP - Smart Bus Travel Management</span>
+          </div>
+          <div className="browser-right">
+            <button className="notification-btn-browser" title="Notifications">
+              <Bell size={14} />
+              {notifications > 0 && (
+                <span className="notification-badge-browser">{notifications}</span>
+              )}
+            </button>
+            <div className="browser-time">
+              {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-right">
-                <div className="flex items-center space-x-1">
-                  <Star className="w-5 h-5 text-yellow-500 fill-current" />
-                  <span className="font-semibold">{stats.rating}</span>
+            <button 
+              className={`view-mode-btn-browser ${viewMode === 'mobile' ? 'mobile-active' : 'desktop-active'}`}
+              onClick={toggleViewMode}
+              title={`Currently in ${viewMode === 'desktop' ? 'Desktop' : 'Mobile'} View - Click to switch to ${viewMode === 'desktop' ? 'Mobile' : 'Desktop'} View`}
+            >
+              {viewMode === 'desktop' ? 'DESKTOP' : 'MOBILE'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Header Section - Efficient Layout */}
+      <div className="dashboard-header">
+        {/* Left: Branding */}
+        <div className="header-left">
+          {viewMode === 'mobile' && (
+            <button 
+              className="mobile-menu-btn"
+              onClick={toggleMobileMenu}
+              title="Toggle Menu"
+            >
+              {isMobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
+          )}
+          <div className="logo-section">
+            <div className="logo-icon">
+              <Bus size={18} />
+            </div>
+            <div className="logo-text">
+              <h1>CONDUCTOR DASHBOARD</h1>
+            </div>
+          </div>
+        </div>
+
+        {/* Center: Conductor Info & Time */}
+        <div className="header-center">
+          <div className="conductor-profile">
+            <div className="conductor-details">
+              <span className="conductor-name">{user?.name || 'Joel'}</span>
+              <span className="conductor-id">ID: {user?.id?.slice(-8) || '2ff588c8'}</span>
+            </div>
+            <div className="connection-status">
+              {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
+              <span>{isOnline ? 'Online' : 'Offline'}</span>
+            </div>
+          </div>
+        </div>
+            
+        {/* Right: Controls */}
+        <div className="header-right">
+          <button 
+            className={`sound-btn ${soundEnabled ? 'active' : ''}`}
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            title={soundEnabled ? 'Sound On' : 'Sound Off'}
+          >
+            {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+          </button>
+          <button className="logout-btn-header" onClick={handleLogout} title="Logout">
+            <LogOut size={16} />
+            <span className="logout-text">Logout</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Trip Context Bar */}
+      <div className="trip-context-bar">
+        <div className="trip-info-main">
+          <div className="route-info">
+            <Route size={16} />
+            <span className="route-name">{tripInfo.routeName}</span>
+            <span className="route-number">{tripInfo.routeNumber}</span>
+          </div>
+          <div className="depot-info">
+            <Building size={16} />
+            <span>{tripInfo.depotName}</span>
+          </div>
+          <div className="duty-info">
+            <span className="duty-id">Duty: {tripInfo.dutyId}</span>
+            <span className="bus-number">Bus: {tripInfo.busNumber}</span>
+          </div>
+        </div>
+        
+        <div className="trip-status">
+          <div className="current-stop">
+            <MapPin size={14} />
+            <span>Now: {tripInfo.currentStop}</span>
+          </div>
+          <div className="next-stop">
+            <span>Next: {tripInfo.nextStop}</span>
+            </div>
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${tripInfo.progress}%` }}></div>
                 </div>
-                <p className="text-sm text-gray-600">Conductor Rating</p>
               </div>
+        
+        <div className="duty-status-indicator">
+          <div className={`duty-status-dot ${dutyStatus}`}></div>
+          <span className="duty-status-text">
+            {dutyStatus === 'not_assigned' ? 'No Duty' : 
+             dutyStatus === 'assigned' ? 'Ready' :
+             dutyStatus === 'active' ? 'On Duty' : 'Completed'}
+          </span>
             </div>
           </div>
-        </div>
+          
+      {/* Navigation Tabs */}
+      <div className={`dashboard-nav ${viewMode === 'mobile' ? 'mobile-nav' : ''}`}>
+        <button 
+          className={`nav-tab ${activeView === 'dashboard' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveView('dashboard');
+            if (viewMode === 'mobile') setIsMobileMenuOpen(false);
+          }}
+        >
+          <Activity size={16} />
+          <span>Dashboard</span>
+        </button>
+        <button 
+          className={`nav-tab ${activeView === 'passengers' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveView('passengers');
+            if (viewMode === 'mobile') setIsMobileMenuOpen(false);
+          }}
+        >
+          <Users size={16} />
+          <span>Passengers</span>
+        </button>
+        <button 
+          className={`nav-tab ${activeView === 'scanning' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveView('scanning');
+            if (viewMode === 'mobile') setIsMobileMenuOpen(false);
+          }}
+        >
+          <QrCode size={16} />
+          <span>Scan Tickets</span>
+        </button>
+                </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Today's Trips</p>
-                <p className="text-2xl font-bold text-gray-900">{todayTrips.length}</p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Calendar className="w-6 h-6 text-blue-600" />
-              </div>
+      {/* Mobile Menu Overlay */}
+      {viewMode === 'mobile' && isMobileMenuOpen && (
+        <div className="mobile-menu-overlay">
+          <div className="mobile-menu-content">
+            <div className="mobile-menu-header">
+              <h3>Menu</h3>
+              <button 
+                className="close-menu-btn"
+                onClick={toggleMobileMenu}
+              >
+                <X size={20} />
+              </button>
+                </div>
+            <div className="mobile-menu-items">
+              <button 
+                className={`mobile-menu-item ${activeView === 'dashboard' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveView('dashboard');
+                  setIsMobileMenuOpen(false);
+                }}
+              >
+                <Activity size={20} />
+                <span>Dashboard</span>
+              </button>
+                      <button 
+                className={`mobile-menu-item ${activeView === 'passengers' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveView('passengers');
+                  setIsMobileMenuOpen(false);
+                }}
+              >
+                <Users size={20} />
+                <span>Passengers</span>
+                      </button>
+                      <button 
+                className={`mobile-menu-item ${activeView === 'scanning' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveView('scanning');
+                  setIsMobileMenuOpen(false);
+                }}
+              >
+                <QrCode size={20} />
+                <span>Scan Tickets</span>
+                      </button>
             </div>
           </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Tickets Sold</p>
-                <p className="text-2xl font-bold text-green-600">{stats.ticketsSold}</p>
-              </div>
-              <div className="p-3 bg-green-100 rounded-lg">
-                <Ticket className="w-6 h-6 text-green-600" />
-              </div>
             </div>
-          </div>
+      )}
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                <p className="text-2xl font-bold text-purple-600">₹{stats.totalRevenue.toFixed(2)}</p>
+      {/* Main Content */}
+      <div className="dashboard-content">
+        {/* Dashboard View */}
+        {activeView === 'dashboard' && (
+          <div className="dashboard-view">
+            {/* Quick Actions */}
+            <div className="quick-actions">
+              <button 
+                className={`quick-action-btn ${dutyStatus === 'active' ? 'end-duty' : 'start-duty'}`}
+                onClick={dutyStatus === 'active' ? endDuty : startDuty}
+              >
+                <div className="action-icon">
+                  {dutyStatus === 'active' ? <CheckCircle size={24} /> : <Play size={24} />}
               </div>
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <DollarSign className="w-6 h-6 text-purple-600" />
-              </div>
+                <div className="action-text">
+                  <span className="action-title">
+                    {dutyStatus === 'active' ? 'End Duty' : 'Start Duty'}
+                  </span>
+                  <span className="action-subtitle">
+                    {dutyStatus === 'active' ? 'Complete your duty' : 'Begin ticket scanning'}
+                  </span>
             </div>
+              </button>
+
+              <button 
+                className="quick-action-btn scan-tickets"
+                onClick={() => setActiveView('scanning')}
+              >
+                <div className="action-icon">
+                  <QrCode size={24} />
+                </div>
+                <div className="action-text">
+                  <span className="action-title">Scan Tickets</span>
+                  <span className="action-subtitle">QR code validation</span>
+                </div>
+              </button>
+
+              <button 
+                className="quick-action-btn passenger-list"
+                onClick={() => setActiveView('passengers')}
+              >
+                <div className="action-icon">
+                  <Users size={24} />
+                </div>
+                <div className="action-text">
+                  <span className="action-title">Passenger List</span>
+                  <span className="action-subtitle">Manage passengers</span>
+                </div>
+              </button>
+
+              <button 
+                className="quick-action-btn vacant-seats"
+                onClick={() => setShowVacantBooking(true)}
+              >
+                <div className="action-icon">
+                  <Plus size={24} />
+                </div>
+                <div className="action-text">
+                  <span className="action-title">Vacant Seats</span>
+                  <span className="action-subtitle">Sell available seats</span>
+                </div>
+              </button>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Passengers Served</p>
-                <p className="text-2xl font-bold text-orange-600">{stats.passengersServed}</p>
-              </div>
-              <div className="p-3 bg-orange-100 rounded-lg">
-                <Users className="w-6 h-6 text-orange-600" />
-              </div>
+            {/* Live Status Widgets */}
+            <div className="status-widgets">
+              <div className="status-widget">
+                <div className="widget-header">
+                  <Users size={16} />
+                  <span>Passengers</span>
             </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Today's Schedule */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <Calendar className="w-5 h-5 mr-2 text-blue-600" />
-              Today's Schedule
-            </h3>
-
-            {todayTrips.length === 0 ? (
-              <div className="text-center py-8">
-                <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-500">No trips scheduled for today</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {todayTrips.map((trip, index) => (
-                  <motion.div
-                    key={trip._id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTripStatusColor(trip.status)}`}>
-                        {trip.status}
-                      </span>
-                      <span className="text-sm text-gray-500">
-                        Trip #{trip._id?.slice(-6)}
-                      </span>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Route className="w-4 h-4 mr-2" />
-                        <span className="font-medium">{trip.route?.routeNumber || 'N/A'}</span>
-                        <span className="mx-2">•</span>
-                        <span>{trip.route?.routeName || 'Unknown Route'}</span>
-                      </div>
-
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Clock className="w-4 h-4 mr-2" />
-                        <span>{formatTime(trip.startTime)} - {formatTime(trip.endTime)}</span>
-                      </div>
-
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Bus className="w-4 h-4 mr-2" />
-                        <span>{trip.bus?.busNumber || 'N/A'}</span>
-                        <span className="mx-2">•</span>
-                        <span>{trip.bus?.capacity?.total || 0} seats</span>
-                      </div>
-
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Users className="w-4 h-4 mr-2" />
-                        <span>{trip.bookedSeats || 0}/{trip.capacity} booked</span>
-                      </div>
-
-                      <div className="flex items-center text-sm text-gray-600">
-                        <DollarSign className="w-4 h-4 mr-2" />
-                        <span>Fare: ₹{trip.fare}</span>
-                      </div>
-                    </div>
-
-                    {trip.status === 'running' && (
-                      <div className="mt-3 flex space-x-2">
-                        <button className="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors flex items-center">
-                          <Scan className="w-4 h-4 mr-1" />
-                          Scan Ticket
-                        </button>
-                        <button className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
-                          View Passengers
-                        </button>
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Upcoming Trips */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <Clock className="w-5 h-5 mr-2 text-purple-600" />
-              Upcoming Trips
-            </h3>
-
-            {upcomingTrips.length === 0 ? (
-              <div className="text-center py-8">
-                <Clock className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-500">No upcoming trips scheduled</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {upcomingTrips.slice(0, 5).map((trip, index) => (
-                  <div key={trip._id} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-900">
-                        {formatDate(trip.serviceDate)}
-                      </span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTripStatusColor(trip.status)}`}>
-                        {trip.status}
-                      </span>
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Route className="w-4 h-4 mr-2" />
-                        <span>{trip.route?.routeNumber} - {trip.route?.routeName}</span>
-                      </div>
-
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Clock className="w-4 h-4 mr-2" />
-                        <span>{formatTime(trip.startTime)} - {formatTime(trip.endTime)}</span>
-                      </div>
-
-                      <div className="flex items-center text-sm text-gray-600">
-                        <MapPin className="w-4 h-4 mr-2" />
-                        <span>{trip.route?.startingPoint?.city} → {trip.route?.endingPoint?.city}</span>
-                      </div>
-                    </div>
+                <div className="widget-content">
+                  <div className="stat-row">
+                    <span className="stat-label">Boarded:</span>
+                    <span className="stat-value boarded">{passengers.filter(p => p.status === 'boarded').length}</span>
                   </div>
-                ))}
+                  <div className="stat-row">
+                    <span className="stat-label">Expected:</span>
+                    <span className="stat-value expected">{passengers.filter(p => p.status === 'expected').length}</span>
+                  </div>
+                  <div className="stat-row">
+                    <span className="stat-label">Total Seats:</span>
+                    <span className="stat-value total">{tripInfo.totalSeats}</span>
+            </div>
+          </div>
+        </div>
+
+              <div className="status-widget">
+                <div className="widget-header">
+                  <MapPin size={16} />
+                  <span>Route Status</span>
+                </div>
+                <div className="widget-content">
+                  <div className="stat-row">
+                    <span className="stat-label">Current:</span>
+                    <span className="stat-value current">{tripInfo.currentStop}</span>
+                  </div>
+                  <div className="stat-row">
+                    <span className="stat-label">Next:</span>
+                    <span className="stat-value next">{tripInfo.nextStop}</span>
+                  </div>
+                  <div className="stat-row">
+                    <span className="stat-label">Progress:</span>
+                    <span className="stat-value progress">{tripInfo.progress}%</span>
+              </div>
+            </div>
+          </div>
+
+              <div className="status-widget">
+                <div className="widget-header">
+                  <Ticket size={16} />
+                  <span>Tickets Scanned</span>
+            </div>
+                <div className="widget-content">
+                  <div className="stat-row">
+                    <span className="stat-label">Today:</span>
+                    <span className="stat-value scanned">{scanHistory.filter(s => s.success).length}</span>
+                  </div>
+                  <div className="stat-row">
+                    <span className="stat-label">Failed:</span>
+                    <span className="stat-value failed">{scanHistory.filter(s => !s.success).length}</span>
+                  </div>
+                  <div className="stat-row">
+                    <span className="stat-label">Success Rate:</span>
+                    <span className="stat-value success">
+                      {scanHistory.length > 0 ? Math.round((scanHistory.filter(s => s.success).length / scanHistory.length) * 100) : 0}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Trip Progress Indicator */}
+            <div className="trip-progress">
+              <div className="progress-header">
+                <h3>Trip Progress</h3>
+                <span className="progress-percentage">{tripInfo.progress}% Complete</span>
+              </div>
+              <div className="progress-bar-large">
+                <div className="progress-fill-large" style={{ width: `${tripInfo.progress}%` }}></div>
+              </div>
+              <div className="progress-stops">
+                <div className="stop-item completed">
+                  <div className="stop-dot"></div>
+                  <span>Kochi Central</span>
+                </div>
+                <div className="stop-item completed">
+                  <div className="stop-dot"></div>
+                  <span>Edappally</span>
+                </div>
+                <div className="stop-item current">
+                  <div className="stop-dot"></div>
+                  <span>Cherthala</span>
+                </div>
+                <div className="stop-item pending">
+                  <div className="stop-dot"></div>
+                  <span>Alappuzha</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Alerts/Notifications */}
+            {alerts.length > 0 && (
+              <div className="alerts-section">
+                <div className="alerts-header">
+                  <AlertTriangle size={16} />
+                  <span>Recent Alerts</span>
+          </div>
+                <div className="alerts-list">
+                  {alerts.slice(0, 3).map(alert => (
+                    <div key={alert.id} className={`alert-item ${alert.type}`}>
+                      <div className="alert-icon">
+                        {alert.type === 'error' ? <AlertCircle size={14} /> :
+                         alert.type === 'warning' ? <AlertTriangle size={14} /> :
+                         <Bell size={14} />}
+                      </div>
+                      <div className="alert-content">
+                        <span className="alert-message">{alert.message}</span>
+                        <span className="alert-time">{alert.time}</span>
+                      </div>
+                  </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
-        </div>
+        )}
 
-        {/* Performance Metrics */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <TrendingUp className="w-5 h-5 mr-2 text-green-600" />
-            Performance Metrics
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <div className="flex items-center justify-center mb-2">
-                <Ticket className="w-6 h-6 text-blue-600 mr-2" />
-                <span className="text-2xl font-bold text-gray-900">{stats.ticketsSold}</span>
-              </div>
-              <p className="text-sm text-gray-600">Tickets Sold</p>
+        {/* Passengers View */}
+        {activeView === 'passengers' && (
+          <div className="passengers-view">
+            <div className="view-header">
+              <h2>Passenger Management</h2>
+              <p>Manage current passengers and seat assignments</p>
             </div>
-
-            <div className="text-center">
-              <div className="flex items-center justify-center mb-2">
-                <DollarSign className="w-6 h-6 text-green-600 mr-2" />
-                <span className="text-2xl font-bold text-gray-900">₹{stats.totalRevenue.toFixed(0)}</span>
+            
+            <div className="passenger-management">
+              <div className="passenger-controls">
+                <div className="filter-controls">
+                  <button 
+                    className={`filter-btn ${passengerFilter === 'all' ? 'active' : ''}`}
+                    onClick={() => setPassengerFilter('all')}
+                  >
+                    <Users size={16} />
+                    <span>All</span>
+                    <span className="filter-count">{passengers.length}</span>
+                  </button>
+                  <button 
+                    className={`filter-btn ${passengerFilter === 'boarded' ? 'active' : ''}`}
+                    onClick={() => setPassengerFilter('boarded')}
+                  >
+                    <CheckCircle size={16} />
+                    <span>Boarded</span>
+                    <span className="filter-count">{passengers.filter(p => p.status === 'boarded').length}</span>
+                  </button>
+                  <button 
+                    className={`filter-btn ${passengerFilter === 'expected' ? 'active' : ''}`}
+                    onClick={() => setPassengerFilter('expected')}
+                  >
+                    <Clock size={16} />
+                    <span>Expected</span>
+                    <span className="filter-count">{passengers.filter(p => p.status === 'expected').length}</span>
+                  </button>
+                  <button 
+                    className={`filter-btn ${passengerFilter === 'no_show' ? 'active' : ''}`}
+                    onClick={() => setPassengerFilter('no_show')}
+                  >
+                    <XCircle size={16} />
+                    <span>No Show</span>
+                    <span className="filter-count">{passengers.filter(p => p.status === 'no_show').length}</span>
+                  </button>
+                </div>
+                
+                <div className="search-sort-controls">
+                  <div className="search-control">
+                    <Search size={16} />
+                    <input 
+                      type="text"
+                      placeholder="Search passengers..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="search-input"
+                    />
+                  </div>
+                  
+                  <div className="sort-control">
+                    <ArrowUpDown size={16} />
+                    <select 
+                      value={sortBy} 
+                      onChange={(e) => setSortBy(e.target.value)}
+                      className="sort-select"
+                    >
+                      <option value="seat">Sort by Seat</option>
+                      <option value="name">Sort by Name</option>
+                      <option value="stop">Sort by Stop</option>
+                      <option value="status">Sort by Status</option>
+                      <option value="pnr">Sort by PNR</option>
+                    </select>
+                  </div>
+                </div>
               </div>
-              <p className="text-sm text-gray-600">Total Revenue</p>
-            </div>
-
-            <div className="text-center">
-              <div className="flex items-center justify-center mb-2">
-                <Users className="w-6 h-6 text-purple-600 mr-2" />
-                <span className="text-2xl font-bold text-gray-900">{stats.passengersServed}</span>
+              
+              <div className="passenger-list">
+                {passengers
+                  .filter(p => {
+                    // Status filter
+                    const statusMatch = passengerFilter === 'all' || p.status === passengerFilter;
+                    
+                    // Search filter
+                    const searchMatch = !searchQuery || 
+                      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      p.pnr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      p.seat.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      p.boardingStop.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      p.destination.toLowerCase().includes(searchQuery.toLowerCase());
+                    
+                    return statusMatch && searchMatch;
+                  })
+                  .sort((a, b) => {
+                    switch(sortBy) {
+                      case 'seat': return a.seat.localeCompare(b.seat);
+                      case 'name': return a.name.localeCompare(b.name);
+                      case 'stop': return a.boardingStop.localeCompare(b.boardingStop);
+                      case 'status': return a.status.localeCompare(b.status);
+                      case 'pnr': return a.pnr.localeCompare(b.pnr);
+                      default: return 0;
+                    }
+                  })
+                  .map(passenger => (
+                    <div key={passenger.id} className={`passenger-item ${passenger.status}`}>
+                      <div className="passenger-info">
+                        <div className="passenger-name">{passenger.name}</div>
+                        <div className="passenger-details">
+                          <span className="seat">Seat: {passenger.seat}</span>
+                          <span className="pnr">PNR: {passenger.pnr}</span>
+                        </div>
+                        <div className="passenger-route">
+                          {passenger.boardingStop} → {passenger.destination}
+                        </div>
+                      </div>
+                      <div className="passenger-status">
+                        <span className={`status-badge ${passenger.status}`}>
+                          {passenger.status === 'boarded' ? '✓ Boarded' : 
+                           passenger.status === 'expected' ? '⏳ Expected' : '❌ No Show'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
               </div>
-              <p className="text-sm text-gray-600">Passengers Served</p>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Scanning View */}
+        {activeView === 'scanning' && (
+          <div className="scanning-view">
+            <div className="view-header">
+              <h2>QR Ticket Scanning</h2>
+              <p>Scan passenger tickets for validation</p>
+            </div>
+            
+            <div className="qr-scanning-section">
+              <div className="scan-area">
+                <div className={`scan-camera ${isScanning ? 'scanning' : ''}`}>
+                  <Camera size={48} />
+                  {isScanning ? (
+                    <div className="scanning-overlay">
+                      <div className="scan-line"></div>
+                      <p>Scanning...</p>
+                    </div>
+                  ) : (
+                    <p>Tap to start scanning</p>
+                  )}
+                </div>
+                
+                <button 
+                  className={`scan-btn ${isScanning ? 'scanning' : ''}`}
+                  onClick={startQRScan}
+                  disabled={isScanning}
+                >
+                  {isScanning ? 'Scanning...' : 'Start QR Scan'}
+                </button>
+              </div>
+              
+              {scanResult && (
+                <div className={`scan-result ${scanResult.success ? 'success' : 'error'}`}>
+                  <div className="result-icon">
+                    {scanResult.success ? <CheckCircle size={24} /> : <AlertCircle size={24} />}
+                  </div>
+                  <div className="result-details">
+                    <h4>{scanResult.success ? 'Ticket Validated!' : 'Scan Failed'}</h4>
+                    {scanResult.success ? (
+                      <div className="ticket-info">
+                        <p><strong>PNR:</strong> {scanResult.pnr}</p>
+                        <p><strong>Passenger:</strong> {scanResult.passenger}</p>
+                        <p><strong>Seat:</strong> {scanResult.seat}</p>
+                </div>
+                    ) : (
+                      <p>Invalid or duplicate ticket. Please try again.</p>
+                    )}
+            </div>
+          </div>
+        )}
+
+              <div className="scan-history">
+                <h4>Recent Scans</h4>
+                <div className="history-list">
+                  {scanHistory.slice(0, 5).map((scan, index) => (
+                    <div key={index} className={`history-item ${scan.success ? 'success' : 'error'}`}>
+                      <span className="scan-time">{new Date().toLocaleTimeString()}</span>
+                      <span className="scan-pnr">{scan.pnr}</span>
+                      <span className="scan-status">{scan.success ? '✓' : '✗'}</span>
+            </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

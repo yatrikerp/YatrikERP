@@ -478,7 +478,7 @@ const BusOperationsPanel = ({
 
         {/* Add Button */}
         <button
-          onClick={() => toast.info('Add functionality coming soon')}
+          onClick={() => toast('Add functionality coming soon', { icon: 'ℹ️' })}
           className="flex items-center justify-center p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
         >
           <Plus className="w-4 h-4" />
@@ -486,7 +486,7 @@ const BusOperationsPanel = ({
 
         {/* View Button */}
         <button
-          onClick={() => toast.info('View details functionality coming soon')}
+          onClick={() => toast('View details functionality coming soon', { icon: 'ℹ️' })}
           className="flex items-center justify-center p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
         >
           <Eye className="w-4 h-4" />
@@ -494,7 +494,7 @@ const BusOperationsPanel = ({
 
         {/* Edit Button */}
         <button
-          onClick={() => toast.info('Edit functionality coming soon')}
+          onClick={() => toast('Edit functionality coming soon', { icon: 'ℹ️' })}
           className="flex items-center justify-center p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
         >
           <Edit className="w-4 h-4" />

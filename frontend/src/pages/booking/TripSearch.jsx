@@ -47,7 +47,10 @@ const TripSearch = () => {
       if (response.ok) {
         setTrips(response.data.trips);
         if (response.data.trips.length === 0) {
-          toast.info('No trips found for your search criteria');
+          toast('No trips found for your search criteria', {
+            icon: 'ℹ️',
+            duration: 3000
+          });
         }
       } else {
         toast.error('Failed to search trips');

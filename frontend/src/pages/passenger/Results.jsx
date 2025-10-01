@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import {
   MapPin, Clock, Bus, Users, Star,
   Filter, ArrowRight, Wifi,
-  Snowflake, Tv, RefreshCw, AlertCircle
+  Snowflake, Tv, RefreshCw, AlertCircle,
+  Zap, Eye
 } from 'lucide-react';
 import { apiFetch } from '../../utils/api';
 
@@ -129,8 +130,20 @@ const PassengerResults = () => {
   };
 
   const handleBookTrip = (trip) => {
-    // Navigate to booking page with trip details
-    navigate(`/passenger/booking/${trip._id}`, {
+    // Save trip context for booking flow
+    const tripContext = {
+      tripId: trip._id || trip.id,
+      trip: trip,
+      searchCriteria: searchCriteria,
+      from: searchCriteria.from,
+      to: searchCriteria.to,
+      date: searchCriteria.date
+    };
+    
+    localStorage.setItem('currentTripBooking', JSON.stringify(tripContext));
+    
+    // Navigate to board/drop selection (Step 1 of RedBus flow)
+    navigate(`/passenger/boarddrop/${trip._id}`, {
       state: { trip, searchCriteria }
     });
   };
@@ -151,18 +164,35 @@ const PassengerResults = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Header */}
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Available Trips</h1>
-              <p className="text-gray-600">
-                {searchCriteria.from} → {searchCriteria.to} on {new Date(searchCriteria.date).toLocaleDateString()}
-              </p>
+        {/* Header - RedBus Style */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-md p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <button
+                  onClick={() => navigate(-1)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <ArrowRight className="w-5 h-5 rotate-180 text-gray-600" />
+                </button>
+                <h1 className="text-2xl font-bold text-gray-900">Available Buses</h1>
+              </div>
+              <div className="flex items-center gap-4 text-sm ml-14">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-pink-50 rounded-lg">
+                  <MapPin className="w-4 h-4 text-pink-600" />
+                  <span className="font-semibold text-gray-900">{searchCriteria.from}</span>
+                  <ArrowRight className="w-4 h-4 text-gray-400" />
+                  <span className="font-semibold text-gray-900">{searchCriteria.to}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-gray-400" />
+                  <span className="text-gray-600">{new Date(searchCriteria.date).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                </div>
+              </div>
             </div>
             <button
               onClick={fetchAvailableTrips}
-              className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors flex items-center gap-2"
+              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
               <RefreshCw className="w-4 h-4" />
               Refresh
@@ -232,19 +262,38 @@ const PassengerResults = () => {
 
           {/* Results */}
           <div className="lg:col-span-3">
+            <div className="mb-4 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-gray-900">
+                {filteredTrips.length} {filteredTrips.length === 1 ? 'Bus' : 'Buses'} Found
+              </h2>
+              <div className="text-sm text-gray-600">
+                Sorted by: <span className="font-medium">Departure Time</span>
+              </div>
+            </div>
+
             {filteredTrips.length === 0 ? (
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-8 text-center">
-                <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No trips found</h3>
-                <p className="text-gray-600 mb-4">
-                  No buses are available for your selected route and date.
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-12 text-center">
+                <div className="w-20 h-20 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <AlertCircle className="w-10 h-10 text-pink-600" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">No Buses Available</h3>
+                <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                  Sorry, no buses are available for <strong>{searchCriteria.from}</strong> to <strong>{searchCriteria.to}</strong> on {new Date(searchCriteria.date).toLocaleDateString()}
                 </p>
-                <button
-                  onClick={() => navigate('/passenger/search')}
-                  className="px-6 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors"
-                >
-                  Modify Search
-                </button>
+                <div className="flex gap-4 justify-center">
+                  <button
+                    onClick={() => navigate('/passenger/search')}
+                    className="px-6 py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors font-medium"
+                  >
+                    Modify Search
+                  </button>
+                  <button
+                    onClick={() => navigate('/passenger/dashboard')}
+                    className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                  >
+                    Go to Dashboard
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="space-y-4">
@@ -253,113 +302,149 @@ const PassengerResults = () => {
                     key={trip._id || trip.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow"
+                    transition={{ delay: index * 0.05 }}
+                    className="bg-white rounded-xl border-2 border-gray-100 shadow-sm p-6 hover:shadow-lg hover:border-pink-200 transition-all"
                   >
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="p-2 bg-pink-100 rounded-lg">
-                          <Bus className="w-6 h-6 text-pink-600" />
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-14 h-14 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl flex items-center justify-center shadow-md">
+                          <Bus className="w-7 h-7 text-white" />
                         </div>
                         <div>
-                          <h3 className="font-semibold text-gray-900">
-                            {trip.route?.routeNumber || trip.routeNumber || 'N/A'}
+                          <h3 className="text-lg font-bold text-gray-900">
+                            {trip.route?.routeName || trip.routeName || 'Kerala State Transport'}
                           </h3>
-                          <p className="text-sm text-gray-600">
-                            {trip.route?.routeName || trip.routeName || 'Unknown Route'}
-                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded">
+                              {trip.route?.routeNumber || trip.routeNumber || 'KL-Express'}
+                            </span>
+                            <div className="flex items-center">
+                              <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                              <span className="text-sm font-medium text-gray-700 ml-1">4.3</span>
+                              <span className="text-xs text-gray-500 ml-1">(856 ratings)</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-2xl font-bold text-pink-600">₹{trip.fare}</div>
-                        <div className="text-sm text-gray-600">per person</div>
+                        <div className="text-sm text-gray-500 mb-1">Starts from</div>
+                        <div className="text-3xl font-bold text-pink-600">₹{trip.fare}</div>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Clock className="w-4 h-4 mr-2" />
-                        <span>{formatTime(trip.startTime || trip.departureTime)} - {formatTime(trip.endTime || trip.arrivalTime)}</span>
-                      </div>
-
-                      <div className="flex items-center text-sm text-gray-600">
-                        <MapPin className="w-4 h-4 mr-2" />
-                        <span>{formatDuration(trip.startTime || trip.departureTime, trip.endTime || trip.arrivalTime)}</span>
-                      </div>
-
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Users className="w-4 h-4 mr-2" />
-                        <span>{trip.bookedSeats || 0}/{trip.capacity || trip.totalSeats || 0} seats</span>
-                      </div>
-
-                      <div className="flex items-center text-sm text-gray-600">
-                        {getBusTypeIcon(trip.bus?.busType || trip.busType)}
-                        <span className="ml-2">{getBusTypeName(trip.bus?.busType || trip.busType)}</span>
-                      </div>
-                    </div>
-
-                    {/* Bus Amenities */}
-                    {trip.bus?.amenities && trip.bus.amenities.length > 0 && (
-                      <div className="flex items-center space-x-4 mb-4">
-                        {trip.bus.amenities.includes('wifi') && (
-                          <div className="flex items-center text-sm text-gray-600">
-                            <Wifi className="w-4 h-4 mr-1" />
-                            <span>WiFi</span>
+                    {/* Journey Timeline - RedBus Style */}
+                    <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-6">
+                          <div>
+                            <div className="text-2xl font-bold text-gray-900">{formatTime(trip.startTime || trip.departureTime)}</div>
+                            <div className="text-sm text-gray-600">{searchCriteria.from}</div>
                           </div>
-                        )}
-                        {trip.bus.amenities.includes('ac') && (
-                          <div className="flex items-center text-sm text-gray-600">
-                            <Snowflake className="w-4 h-4 mr-1" />
-                            <span>AC</span>
+                          <div className="flex-1 flex flex-col items-center">
+                            <div className="text-xs text-gray-500 mb-1">{formatDuration(trip.startTime || trip.departureTime, trip.endTime || trip.arrivalTime)}</div>
+                            <div className="w-full h-0.5 bg-gray-300 relative">
+                              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-green-500 rounded-full"></div>
+                              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-red-500 rounded-full"></div>
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">Non-stop</div>
                           </div>
-                        )}
-                        {trip.bus.amenities.includes('tv') && (
-                          <div className="flex items-center text-sm text-gray-600">
-                            <Tv className="w-4 h-4 mr-1" />
-                            <span>TV</span>
+                          <div>
+                            <div className="text-2xl font-bold text-gray-900">{formatTime(trip.endTime || trip.arrivalTime)}</div>
+                            <div className="text-sm text-gray-600">{searchCriteria.to}</div>
                           </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Route Stops Preview */}
-                    {trip.route?.stops && trip.route.stops.length > 0 && (
-                      <div className="mb-4">
-                        <p className="text-sm text-gray-600 mb-2">Route stops:</p>
-                        <div className="flex items-center space-x-2 text-xs text-gray-500">
-                          <span>{trip.route.startingPoint?.city}</span>
-                          <ArrowRight className="w-3 h-3" />
-                          <span className="truncate max-w-xs">
-                            {trip.route.stops.slice(0, 2).map(stop => stop.stopName).join(' → ')}
-                            {trip.route.stops.length > 2 && ' ...'}
-                          </span>
-                          <ArrowRight className="w-3 h-3" />
-                          <span>{trip.route.endingPoint?.city}</span>
                         </div>
                       </div>
-                    )}
+                    </div>
 
+                    {/* Trip Details */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
+                          {getBusTypeIcon(trip.bus?.busType || trip.busType)}
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Bus Type</div>
+                          <div className="text-sm font-semibold text-gray-900">{getBusTypeName(trip.bus?.busType || trip.busType)}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center">
+                          <Users className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Available</div>
+                          <div className="text-sm font-semibold text-green-600">{trip.availableSeats || trip.capacity || 0} Seats</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center">
+                          <Star className="w-4 h-4 text-purple-600" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Rating</div>
+                          <div className="text-sm font-semibold text-gray-900">4.3 ⭐</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center">
+                          <Bus className="w-4 h-4 text-orange-600" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Bus Number</div>
+                          <div className="text-sm font-semibold text-gray-900">{trip.bus?.busNumber || 'KL-01-AB-1234'}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Amenities - RedBus Style */}
+                    <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+                      <span className="text-sm font-medium text-gray-600">Amenities:</span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 rounded-md">
+                          <Wifi className="w-4 h-4 text-blue-600" />
+                          <span className="text-xs font-medium text-blue-700">WiFi</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-cyan-50 rounded-md">
+                          <Snowflake className="w-4 h-4 text-cyan-600" />
+                          <span className="text-xs font-medium text-cyan-700">AC</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 rounded-md">
+                          <Zap className="w-4 h-4 text-purple-600" />
+                          <span className="text-xs font-medium text-purple-700">Charging</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 rounded-md">
+                          <Tv className="w-4 h-4 text-green-600" />
+                          <span className="text-xs font-medium text-green-700">Screen</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons - RedBus Style */}
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="text-sm text-gray-600">
-                          <span className="font-medium">Bus:</span> {trip.bus?.busNumber || 'N/A'}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          <span className="font-medium">Available:</span> {trip.availableSeats || 0} seats
+                      <div className="flex items-center gap-4">
+                        <button className="text-sm text-gray-600 hover:text-pink-600 font-medium transition-colors flex items-center gap-1">
+                          <Eye className="w-4 h-4" />
+                          View Seat Layout
+                        </button>
+                        <button className="text-sm text-gray-600 hover:text-pink-600 font-medium transition-colors flex items-center gap-1">
+                          <MapPin className="w-4 h-4" />
+                          Boarding Points
+                        </button>
+                        <div className="px-3 py-1 bg-green-50 border border-green-200 rounded-md">
+                          <span className="text-sm font-semibold text-green-700">{trip.availableSeats || trip.capacity || 0} seats left</span>
                         </div>
                       </div>
 
-                      <div className="flex items-center space-x-2">
-                        <button className="px-4 py-2 text-pink-600 border border-pink-600 rounded-lg hover:bg-pink-50 transition-colors">
-                          View Details
-                        </button>
-                        <button
-                          onClick={() => handleBookTrip(trip)}
-                          className="px-6 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors"
-                        >
-                          Book Now
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => handleBookTrip(trip)}
+                        className="px-8 py-3.5 bg-gradient-to-r from-pink-600 via-pink-600 to-pink-700 text-white rounded-xl hover:from-pink-700 hover:via-pink-700 hover:to-pink-800 transition-all shadow-lg hover:shadow-2xl transform hover:-translate-y-1 font-bold text-base flex items-center gap-2"
+                      >
+                        Select Seats
+                        <ArrowRight className="w-5 h-5" />
+                      </button>
                     </div>
                   </motion.div>
                 ))}

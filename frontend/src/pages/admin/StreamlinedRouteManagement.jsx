@@ -870,7 +870,10 @@ const StreamlinedRouteManagement = () => {
       if (uniqueRoutes?.length > 0 || depotsData?.length > 0 || stopsData?.length > 0) {
         toast.success(`Data loaded: ${uniqueRoutes?.length || 0} routes, ${depotsData?.length || 0} depots, ${stopsData?.length || 0} stops`);
       } else {
-        toast.info('No routes found. Click "Kerala Routes" to browse and add predefined Kerala depot routes.');
+        toast('No routes found. Click "Kerala Routes" to browse and add predefined Kerala depot routes.', {
+          icon: 'ℹ️',
+          duration: 4000
+        });
       }
       
     } catch (error) {
@@ -1333,7 +1336,7 @@ const StreamlinedRouteManagement = () => {
         
         // If target date is set, schedule trips for the new routes
         if (bulkForm.targetDate) {
-          toast.info('🎯 Scheduling trips for new routes...');
+          toast.loading('🎯 Scheduling trips for new routes...');
           await handleBulkScheduleTrips();
         }
         
@@ -1682,7 +1685,7 @@ const StreamlinedRouteManagement = () => {
         
         // If trips should be generated, trigger bulk scheduling for each depot
         if (keralaAutoForm.generateTrips) {
-          toast.info('🎯 Generating trips for Kerala routes...');
+          toast.loading('🎯 Generating trips for Kerala routes...');
           await handleKeralaTripGeneration();
         }
         

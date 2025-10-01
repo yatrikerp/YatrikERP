@@ -274,16 +274,136 @@ const AuthLayout = ({ title, subtitle, children }) => {
           padding: 1.25rem;
         }
 
-        /* Responsiveness */
+        /* Enhanced Mobile Responsiveness */
         @media (max-width: 1024px) {
           .auth-form-wrap { max-width: 400px; }
+          .auth-header-content { padding: 0 1.5rem; }
         }
 
         @media (max-width: 768px) {
-          .auth-page { flex-direction: column; }
-          .auth-divider { height: 1px; width: 100%; }
-          .auth-left { padding-bottom: 0.5rem; }
-          .auth-right { padding-top: 0.5rem; }
+          .auth-page { 
+            flex-direction: column; 
+            min-height: 100vh;
+          }
+          .auth-divider { 
+            height: 1px; 
+            width: 100%; 
+            background: linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0) 100%);
+          }
+          .auth-left { 
+            padding: 1rem 1rem 0.5rem; 
+            min-height: 40vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .auth-right { 
+            padding: 0.5rem 1rem 1rem;
+            flex: 1;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+          }
+          .auth-form-wrap {
+            max-width: 100%;
+            margin-top: 20px;
+            padding: 0;
+          }
+          .auth-header-bar {
+            height: 56px;
+          }
+          .auth-header-content {
+            padding: 0 1rem;
+          }
+          .auth-logo-container {
+            gap: 0.5rem;
+          }
+          .auth-logo-icon {
+            width: 24px;
+            height: 24px;
+            font-size: 1rem;
+          }
+          .auth-logo-text {
+            font-size: 1rem;
+          }
+          .auth-erp-badge {
+            padding: 0.2rem 0.6rem;
+            font-size: 0.8rem;
+          }
+          .auth-help-link {
+            font-size: 0.8rem;
+            padding: 0.4rem 0.8rem;
+          }
+          .auth-card {
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(2, 6, 23, 0.08);
+          }
+          .auth-title h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+          }
+          .auth-title p {
+            font-size: 0.9rem;
+            line-height: 1.5;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .auth-page {
+            background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+          }
+          .auth-left {
+            min-height: 35vh;
+            padding: 0.5rem;
+          }
+          .auth-right {
+            padding: 0.5rem;
+          }
+          .auth-form-wrap {
+            margin-top: 10px;
+          }
+          .auth-header-bar {
+            height: 52px;
+          }
+          .auth-header-content {
+            padding: 0 0.75rem;
+          }
+          .auth-logo-container {
+            gap: 0.4rem;
+          }
+          .auth-logo-text {
+            font-size: 0.9rem;
+          }
+          .auth-erp-badge {
+            padding: 0.15rem 0.5rem;
+            font-size: 0.75rem;
+          }
+          .auth-card {
+            padding: 1.25rem;
+            border-radius: 10px;
+            margin: 0 0.5rem;
+          }
+          .auth-title h1 {
+            font-size: 1.375rem;
+          }
+          .login-hero-circle {
+            width: clamp(200px, 50vw, 300px);
+            height: clamp(200px, 50vw, 300px);
+          }
+        }
+
+        @media (max-width: 360px) {
+          .auth-card {
+            margin: 0 0.25rem;
+            padding: 1rem;
+          }
+          .auth-title h1 {
+            font-size: 1.25rem;
+          }
+          .auth-title p {
+            font-size: 0.85rem;
+          }
         }
 
         .login-hero-circle {

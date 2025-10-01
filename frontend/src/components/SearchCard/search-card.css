@@ -15,13 +15,91 @@
 	position: relative;
 }
 
-/* Mobile optimizations */
+/* Mobile device class for more aggressive mobile styling */
+body.mobile-device .searchCard {
+  max-width: 95% !important;
+  padding: 1.25rem !important;
+  border-radius: 20px !important;
+  margin: 0 auto !important;
+  font-size: 16px !important;
+}
+
+body.mobile-device .searchCard .input {
+  padding: 16px 12px 16px 44px !important;
+  font-size: 16px !important;
+  border-radius: 14px !important;
+  min-height: 48px !important;
+}
+
+body.mobile-device .searchCard .btnSearch {
+  padding: 18px 20px !important;
+  font-size: 16px !important;
+  border-radius: 14px !important;
+  min-height: 52px !important;
+}
+
+body.mobile-device .searchCard .tab {
+  padding: 16px 8px !important;
+  font-size: 14px !important;
+  min-height: 48px !important;
+}
+
+body.mobile-device .searchCard .toggle__btn {
+  padding: 14px 14px !important;
+  font-size: 14px !important;
+  min-height: 44px !important;
+}
+
+/* Enhanced Mobile optimizations */
 @media (max-width: 768px) {
 	.searchCard {
 		max-width: 95%;
 		padding: 1.25rem;
 		border-radius: 20px;
 		margin: 0 auto;
+		font-size: 16px; /* Prevent zoom on iOS */
+	}
+	
+	.tabs {
+		margin-bottom: 12px;
+		gap: 2px;
+		padding: 3px;
+	}
+	
+	.tab {
+		padding: 14px 8px;
+		font-size: 14px;
+	}
+	
+	.toggle {
+		margin-bottom: 12px;
+	}
+	
+	.toggle__btn {
+		padding: 12px 14px;
+		font-size: 14px;
+	}
+	
+	.form {
+		gap: 16px;
+	}
+	
+	.input {
+		padding: 14px 12px 14px 42px;
+		font-size: 16px; /* Prevent zoom on iOS */
+		border-radius: 14px;
+	}
+	
+	.field__icon {
+		width: 18px;
+		height: 18px;
+		left: 14px;
+	}
+	
+	.btnSearch {
+		padding: 16px 20px;
+		font-size: 16px;
+		border-radius: 14px;
 	}
 }
 
@@ -31,6 +109,86 @@
 		padding: 1rem;
 		border-radius: 16px;
 		box-shadow: 0 15px 30px rgba(0,0,0,.12), 0 5px 15px rgba(0,0,0,.08);
+		margin: 0 8px;
+	}
+	
+	.tabs {
+		margin-bottom: 10px;
+	}
+	
+	.tab {
+		padding: 12px 6px;
+		font-size: 13px;
+		gap: 6px;
+	}
+	
+	.tab__icon {
+		width: 16px;
+		height: 16px;
+	}
+	
+	.toggle {
+		margin-bottom: 10px;
+	}
+	
+	.toggle__btn {
+		padding: 10px 12px;
+		font-size: 13px;
+	}
+	
+	.form {
+		gap: 14px;
+	}
+	
+	.input {
+		padding: 12px 10px 12px 40px;
+		font-size: 16px;
+		border-radius: 12px;
+	}
+	
+	.field__icon {
+		width: 16px;
+		height: 16px;
+		left: 12px;
+	}
+	
+	.btnSearch {
+		padding: 14px 16px;
+		font-size: 15px;
+		border-radius: 12px;
+	}
+	
+	.label {
+		font-size: 14px;
+		margin-bottom: 8px;
+	}
+}
+
+@media (max-width: 360px) {
+	.searchCard {
+		margin: 0 4px;
+		padding: 0.875rem;
+	}
+	
+	.tab {
+		padding: 10px 4px;
+		font-size: 12px;
+	}
+	
+	.input {
+		padding: 11px 8px 11px 36px;
+		font-size: 16px;
+	}
+	
+	.field__icon {
+		width: 14px;
+		height: 14px;
+		left: 10px;
+	}
+	
+	.btnSearch {
+		padding: 12px 14px;
+		font-size: 14px;
 	}
 }
 
@@ -169,8 +327,8 @@
   max-height: 300px;
   overflow-y: auto;
   margin-top: 4px;
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 .suggestion-item {

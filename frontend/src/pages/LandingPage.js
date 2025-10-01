@@ -17,6 +17,7 @@ import CancellationPolicyPanel from '../components/pax/CancellationPolicyPanel';
 import FeedbackPanel from '../components/pax/FeedbackPanel';
 import ContactUsPanel from '../components/pax/ContactUsPanel';
 import BusTrackingModal from '../components/Common/BusTrackingModal';
+import useMobileDetection from '../hooks/useMobileDetection';
 import './landing.css';
 import heroBus from '../assets/hero-bus.png';
 import { useAuth } from '../context/AuthContext';
@@ -27,6 +28,22 @@ const LandingPage = () => {
   const [showBusTracking, setShowBusTracking] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isMobile, isMobileOrTablet } = useMobileDetection();
+
+  // Redirect mobile users to mobile landing page
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMobileDevice = window.innerWidth < 768;
+      if (isMobileDevice && window.location.pathname === '/') {
+        navigate('/mobile', { replace: true });
+      }
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, [navigate]);
 
   const handleBookNow = () => {
     console.log('handleBookNow called:', { user, hasUser: !!user });
@@ -40,10 +57,15 @@ const LandingPage = () => {
     const role = (user.role || 'passenger').toUpperCase();
     console.log('User role:', role);
     
-    // Send each role to its own dashboard; passengers to new passenger dashboard
+    // Send each role to its own dashboard; passengers to mobile or desktop dashboard
     if (role === 'PASSENGER') {
-      console.log('Redirecting to /passenger/dashboard');
-      navigate('/passenger/dashboard');
+      if (isMobile) {
+        console.log('Redirecting to /passenger/mobile (mobile device)');
+        navigate('/passenger/mobile');
+      } else {
+        console.log('Redirecting to /passenger/dashboard (desktop)');
+        navigate('/passenger/dashboard');
+      }
     } else if (role === 'ADMIN') {
       console.log('Redirecting to /admin');
       navigate('/admin');
@@ -62,30 +84,54 @@ const LandingPage = () => {
     }
   };
 
-  const [popularRoutes, setPopularRoutes] = useState([]);
+  // Default popular Kerala routes for instant display
+  const defaultRoutes = [
+    { from: 'Kochi', to: 'Thiruvananthapuram', frequency: 'Multiple daily', fare: 'From ₹150' },
+    { from: 'Kozhikode', to: 'Kochi', frequency: 'Multiple daily', fare: 'From ₹120' },
+    { from: 'Thrissur', to: 'Kochi', frequency: 'Multiple daily', fare: 'From ₹80' },
+    { from: 'Kochi', to: 'Kannur', frequency: 'Daily service', fare: 'From ₹200' },
+    { from: 'Palakkad', to: 'Kochi', frequency: 'Multiple daily', fare: 'From ₹100' },
+    { from: 'Alappuzha', to: 'Thiruvananthapuram', frequency: 'Daily service', fare: 'From ₹90' }
+  ];
+
+  const [popularRoutes, setPopularRoutes] = useState(defaultRoutes);
 
   // Fetch live popular routes and refresh periodically
   useEffect(() => {
     let isMounted = true;
     const fetchPopular = async () => {
-      const res = await apiFetch('/api/routes/popular', { method: 'GET', suppressError: true });
-      if (!isMounted) return;
-      if (res && res.ok) {
-        // API returns { success: true, data: [...] }
-        if (res.data && Array.isArray(res.data.data)) {
-          setPopularRoutes(res.data.data);
-          return;
+      try {
+        const res = await apiFetch('/api/routes/popular?limit=6', { 
+          method: 'GET', 
+          suppressError: true,
+          timeout: 5000 // 5 second timeout
+        });
+        if (!isMounted) return;
+        if (res && res.ok) {
+          // API returns { success: true, data: [...] }
+          if (res.data && Array.isArray(res.data.data)) {
+            setPopularRoutes(res.data.data);
+            return;
+          }
+          // Fallback if endpoint returns an array directly
+          if (Array.isArray(res.data)) {
+            setPopularRoutes(res.data);
+          }
         }
-        // Fallback if endpoint returns an array directly
-        if (Array.isArray(res.data)) {
-          setPopularRoutes(res.data);
-        }
+      } catch (error) {
+        console.log('Using default popular routes:', error);
+        // Keep default routes on error
       }
     };
 
-    fetchPopular();
+    // Fetch after a short delay to not block initial render
+    const timeoutId = setTimeout(fetchPopular, 500);
     const intervalId = setInterval(fetchPopular, 60000); // refresh every 60s
-    return () => { isMounted = false; clearInterval(intervalId); };
+    return () => { 
+      isMounted = false; 
+      clearTimeout(timeoutId);
+      clearInterval(intervalId); 
+    };
   }, []);
 
   const serviceAlerts = [
@@ -94,8 +140,51 @@ const LandingPage = () => {
     { type: 'success', message: 'All buses now equipped with free WiFi and charging ports' },
   ];
 
+  // Add mobile class to body for CSS targeting
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMobileDevice = window.innerWidth < 768;
+      console.log('🔍 Mobile Check:', { 
+        width: window.innerWidth, 
+        isMobile: isMobileDevice,
+        hookResult: isMobile 
+      });
+      
+      if (isMobileDevice) {
+        document.body.classList.add('mobile-device');
+        console.log('📱 Mobile class added to body');
+      } else {
+        document.body.classList.remove('mobile-device');
+        console.log('🖥️ Mobile class removed from body');
+      }
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, [isMobile]);
+
   return (
     <div className="landing-root">
+      {/* Mobile Detection Banner - Remove this after testing */}
+      {isMobile && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          background: 'linear-gradient(90deg, #ff6b6b, #4ecdc4)',
+          color: 'white',
+          padding: '8px',
+          textAlign: 'center',
+          fontSize: '12px',
+          zIndex: 9999,
+          fontWeight: 'bold'
+        }}>
+          📱 MOBILE MODE DETECTED - Screen Width: {window.innerWidth}px
+        </div>
+      )}
+      
       <TopInfoBar />
       <Navigation 
         isMobileMenuOpen={isMobileMenuOpen}

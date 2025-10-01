@@ -17,7 +17,18 @@ const PassengerDashboard = () => {
   const [upcomingTrips, setUpcomingTrips] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
   const [walletBalance, setWalletBalance] = useState(0);
-  const [popularRoutes, setPopularRoutes] = useState([]);
+  
+  // Default popular routes for instant display
+  const defaultPopularRoutes = [
+    { from: 'Kochi', to: 'Thiruvananthapuram', label: 'Kochi → Thiruvananthapuram', route: 'KL-01' },
+    { from: 'Kozhikode', to: 'Kochi', label: 'Kozhikode → Kochi', route: 'KL-02' },
+    { from: 'Thrissur', to: 'Kochi', label: 'Thrissur → Kochi', route: 'KL-03' },
+    { from: 'Kochi', to: 'Kannur', label: 'Kochi → Kannur', route: 'KL-04' },
+    { from: 'Palakkad', to: 'Kochi', label: 'Palakkad → Kochi', route: 'KL-05' },
+    { from: 'Alappuzha', to: 'Thiruvananthapuram', label: 'Alappuzha → Thiruvananthapuram', route: 'KL-06' }
+  ];
+  
+  const [popularRoutes, setPopularRoutes] = useState(defaultPopularRoutes);
 
   useEffect(() => {
     fetchDashboardData();
@@ -80,12 +91,11 @@ const PassengerDashboard = () => {
           route: r.routeName || r.routeNumber || ''
         }));
         setPopularRoutes(mapped);
-      } else {
-        setPopularRoutes([]);
       }
+      // Keep default routes on error instead of empty array
     } catch (error) {
       console.error('Error fetching popular routes:', error);
-      setPopularRoutes([]);
+      // Keep default routes on error
     }
   };
 

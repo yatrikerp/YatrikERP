@@ -97,6 +97,14 @@ import PassengerWallet from './pages/passenger/Wallet';
 import PassengerRecommendations from './pages/passenger/Recommendations';
 import PassengerProfile from './pages/passenger/Profile';
 import AvailableTrips from './pages/passenger/AvailableTrips';
+import MobilePassengerDashboard from './components/passenger/MobilePassengerDashboard';
+import BookingChoice from './pages/BookingChoice';
+import CompleteBookingFlow from './pages/passenger/CompleteBookingFlow';
+import MobileLanding from './components/MobileLanding';
+import MobileLandingNew from './components/MobileLandingNew';
+import MinimalMobileLanding from './components/MinimalMobileLanding';
+import UltraMobileLanding from './components/UltraMobileLanding';
+import EnhancedMobileLanding from './components/EnhancedMobileLanding';
 
 import './index.css';
 
@@ -127,6 +135,11 @@ function App() {
             {/* Logical guard: if the SPA ever lands on /api/*, forward to backend */}
             <Route path="/api/*" element={<ApiRedirect />} />
             <Route path="/" element={<LandingPage />} />
+        <Route path="/mobile" element={<EnhancedMobileLanding />} />
+        <Route path="/mobile-test" element={<EnhancedMobileLanding />} />
+        <Route path="/mobile-minimal" element={<MinimalMobileLanding />} />
+        <Route path="/mobile-new" element={<MobileLandingNew />} />
+        <Route path="/mobile-ultra" element={<UltraMobileLanding />} />
             {/* Legacy search routes removed in favor of unified RedBus flow */}
           {/* Use unified Auth page for both login and signup */}
           <Route path="/login" element={<Auth initialMode="login" />} />
@@ -352,6 +365,13 @@ function App() {
             </RequireAuth>
           } />
 
+          {/* Mobile-optimized Passenger Dashboard */}
+          <Route path="/passenger/mobile" element={
+            <RequireAuth roles={['passenger']}>
+              <MobilePassengerDashboard />
+            </RequireAuth>
+          } />
+
           <Route path="/passenger/booking" element={
             <RequireAuth roles={['passenger']}>
               <PassengerLayout>
@@ -461,6 +481,20 @@ function App() {
               <PassengerLayout>
                 <PassengerProfile />
               </PassengerLayout>
+            </RequireAuth>
+          } />
+
+          {/* Booking Choice Modal - After Login from Popular Routes */}
+          <Route path="/booking-choice" element={
+            <RequireAuth roles={['passenger']}>
+              <BookingChoice />
+            </RequireAuth>
+          } />
+
+          {/* Complete Booking Flow - RedBus Style from Popular Routes */}
+          <Route path="/complete-booking/:tripId" element={
+            <RequireAuth roles={['passenger']}>
+              <CompleteBookingFlow />
             </RequireAuth>
           } />
             

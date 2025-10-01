@@ -297,7 +297,10 @@ const MassSchedulingDashboard = () => {
       await apiFetch('/api/auto-scheduler/stop', { method: 'POST' });
       setSchedulerStatus('stopped');
       setCurrentOperation('Scheduling stopped by user');
-      toast.info('Scheduling stopped');
+      toast('Scheduling stopped', {
+        icon: '⏸️',
+        duration: 2000
+      });
     } catch (error) {
       console.error('Error stopping scheduler:', error);
       toast.error('Failed to stop scheduler');
