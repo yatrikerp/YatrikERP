@@ -15,7 +15,7 @@ const AppBanner = lazy(() => import('../components/LandingPage/AppBanner'));
 const PopularRoutes = lazy(() => import('../components/LandingPage/PopularRoutes'));
 const ServiceAlerts = lazy(() => import('../components/LandingPage/ServiceAlerts'));
 const BusTrackingModal = lazy(() => import('../components/Common/BusTrackingModal'));
-const GoogleMapsRouteTracker = lazy(() => import('../components/Common/GoogleMapsRouteTracker'));
+const EnhancedGoogleMapsTracker = lazy(() => import('../components/Common/EnhancedGoogleMapsTracker'));
 
 const LandingPage = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -315,11 +315,25 @@ const LandingPage = () => {
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" style={{ height: '360px' }}>
               <Suspense fallback={<div className="w-full h-full" />}>
-                {isMapVisible && featuredTrip ? (
-                  <GoogleMapsRouteTracker trip={featuredTrip} isTracking={true} className="w-full h-full" />
-                ) : (
-                  <div className="w-full h-full" />
-                )}
+                {isMapVisible ? (
+                  <EnhancedGoogleMapsTracker 
+                    trip={featuredTrip || {
+                      busId: { busNumber: 'LIVE-TRACK' },
+                      routeId: {
+                        routeName: 'Thrissur to Guruvayur',
+                        startingPoint: { city: 'Thrissur' },
+                        endingPoint: { city: 'Guruvayur' }
+                      },
+                      coordinates: { lat: 10.5276, lng: 76.2144 },
+                      currentLocation: 'Thrissur, Kerala',
+                      currentSpeed: '0 km/h',
+                      lastUpdate: new Date().toLocaleTimeString(),
+                      status: 'running'
+                    }}
+                    isTracking={true}
+                    className="w-full h-full" 
+                  />
+                ) : <div className="w-full h-full" />}
               </Suspense>
             </div>
           </div>

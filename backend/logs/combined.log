@@ -1,0 +1,5 @@
+{"level":"info","message":"🛑 Received SIGINT. Graceful shutdown...","service":"yatrik-erp-backend","timestamp":"2025-10-02T11:12:41.996Z"}
+{"level":"info","message":"🛑 Received SIGINT. Graceful shutdown...","service":"yatrik-erp-backend","timestamp":"2025-10-02T11:13:20.109Z"}
+{"level":"info","message":"🛑 Received SIGINT. Graceful shutdown...","service":"yatrik-erp-backend","timestamp":"2025-10-02T11:15:48.316Z"}
+{"level":"info","message":"🛑 Received SIGINT. Graceful shutdown...","service":"yatrik-erp-backend","timestamp":"2025-10-02T12:11:32.060Z"}
+{"level":"info","message":"🛑 Received SIGINT. Graceful shutdown...","service":"yatrik-erp-backend","timestamp":"2025-10-02T12:14:08.362Z"}

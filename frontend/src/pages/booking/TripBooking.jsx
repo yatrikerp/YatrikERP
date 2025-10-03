@@ -180,7 +180,7 @@ const TripBooking = () => {
     );
   }
 
-  const seats = generateSeats(trip.capacity);
+  const seats = generateSeats(trip.capacity?.total || trip.capacity || 35);
   const totalAmount = (trip?.fare || 250) * selectedSeats.length;
 
   // Use mobile booking component on mobile devices

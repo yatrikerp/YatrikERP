@@ -104,7 +104,13 @@ const Login = () => {
         );
         
         // OPTIMIZED: Navigate immediately for fastest performance
-        navigate('/dashboard');
+        // Check if user is on mobile device
+        const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (isMobile && user.role === 'passenger') {
+          navigate('/mobile/passenger');
+        } else {
+          navigate('/dashboard');
+        }
         
         // OPTIMIZED: Show success message in background
         setTimeout(() => {
@@ -250,7 +256,14 @@ const Login = () => {
               </div>
 
               <div className="login-slide">
-                <SignupForm onSuccess={() => navigate('/dashboard')} />
+                <SignupForm onSuccess={(user) => {
+                  const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                  if (isMobile && user.role === 'passenger') {
+                    navigate('/mobile/passenger');
+                  } else {
+                    navigate('/dashboard');
+                  }
+                }} />
               </div>
             </div>
           </div>

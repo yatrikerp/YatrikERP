@@ -32,7 +32,7 @@ const PaxBooking = () => {
         if (tripRes.ok) {
           const tripData = tripRes.data?.data || tripRes.data;
           setTrip(tripData);
-          setFare(tripData.fare);
+          setFare(tripData.fare || 0);
         }
       } finally {
         setLoading(false);

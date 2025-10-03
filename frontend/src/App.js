@@ -100,13 +100,33 @@ import PassengerRecommendations from './pages/passenger/Recommendations';
 import PassengerProfile from './pages/passenger/Profile';
 import AvailableTrips from './pages/passenger/AvailableTrips';
 import MobilePassengerDashboard from './components/passenger/MobilePassengerDashboard';
+import OptimizedMobileDashboard from './components/passenger/OptimizedMobileDashboard';
 import BookingChoice from './pages/BookingChoice';
+import MobileBookingChoice from './pages/MobileBookingChoice';
+import MobilePassengerSearch from './pages/passenger/MobileSearch';
+import MobilePassengerResults from './pages/passenger/MobileResults';
+import MobilePassengerWallet from './pages/passenger/MobileWallet';
+import MobilePassengerProfile from './pages/passenger/MobileProfile';
+import MobilePassengerBooking from './pages/passenger/MobileBooking';
+import MobilePassengerSeats from './pages/passenger/MobileSeats';
+import MobilePassengerTicket from './pages/passenger/MobileTicket';
 import CompleteBookingFlow from './pages/passenger/CompleteBookingFlow';
 import MobileLanding from './components/MobileLanding';
 import MobileLandingNew from './components/MobileLandingNew';
 import MinimalMobileLanding from './components/MinimalMobileLanding';
 import UltraMobileLanding from './components/UltraMobileLanding';
 import EnhancedMobileLanding from './components/EnhancedMobileLanding';
+import MobileWrapper from './components/MobileWrapper';
+
+// Mobile Flow Components
+import MobileLandingPage from './mobile/LandingPage';
+import PassengerFlow from './mobile/PassengerFlow';
+import ConductorFlow from './mobile/ConductorFlow';
+import DriverFlow from './mobile/DriverFlow';
+import BookingsPage from './mobile/BookingsPage';
+import TrackPage from './mobile/TrackPage';
+import OffersPage from './mobile/OffersPage';
+import WalletPage from './mobile/WalletPage';
 
 import './index.css';
 
@@ -150,18 +170,47 @@ function App() {
     <>
     <QueryProvider>
       <AuthProvider>
-      <Router>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <MobileRedirectHandler>
           <Routes>
             {/* Public Routes */}
             {/* Logical guard: if the SPA ever lands on /api/*, forward to backend */}
             <Route path="/api/*" element={<ApiRedirect />} />
             <Route path="/" element={<LandingPage />} />
-        <Route path="/mobile" element={<EnhancedMobileLanding />} />
+        <Route path="/mobile" element={<MobileLandingPage />} />
         <Route path="/mobile-test" element={<EnhancedMobileLanding />} />
         <Route path="/mobile-minimal" element={<MinimalMobileLanding />} />
         <Route path="/mobile-new" element={<MobileLandingNew />} />
         <Route path="/mobile-ultra" element={<UltraMobileLanding />} />
+        
+        {/* New Mobile Flow Routes */}
+        <Route path="/mobile/passenger" element={
+          <RequireAuth roles={['passenger']}>
+            <PassengerFlow />
+          </RequireAuth>
+        } />
+        <Route path="/mobile/conductor" element={
+          <RequireAuth roles={['conductor']}>
+            <ConductorFlow />
+          </RequireAuth>
+        } />
+        <Route path="/mobile/driver" element={
+          <RequireAuth roles={['driver']}>
+            <DriverFlow />
+          </RequireAuth>
+        } />
+        <Route path="/mobile/bookings" element={
+          <RequireAuth roles={['passenger']}>
+            <BookingsPage />
+          </RequireAuth>
+        } />
+        <Route path="/mobile/track" element={<TrackPage />} />
+        <Route path="/mobile/offers" element={<OffersPage />} />
+        <Route path="/mobile/wallet" element={
+          <RequireAuth roles={['passenger']}>
+            <WalletPage />
+          </RequireAuth>
+        } />
             {/* Legacy search routes removed in favor of unified RedBus flow */}
           {/* Use unified Auth page for both login and signup */}
           <Route path="/login" element={<Auth initialMode="login" />} />
@@ -388,11 +437,11 @@ function App() {
           } />
 
           {/* Mobile-optimized Passenger Dashboard */}
-          <Route path="/passenger/mobile" element={
-            <RequireAuth roles={['passenger']}>
-              <MobilePassengerDashboard />
-            </RequireAuth>
-          } />
+        <Route path="/passenger/mobile" element={
+          <RequireAuth roles={['passenger']}>
+            <OptimizedMobileDashboard />
+          </RequireAuth>
+        } />
 
           <Route path="/passenger/booking" element={
             <RequireAuth roles={['passenger']}>
@@ -404,17 +453,19 @@ function App() {
 
           <Route path="/passenger/search" element={
             <RequireAuth roles={['passenger']}>
-              <PassengerLayout>
-                <PassengerSearch />
-              </PassengerLayout>
+              {window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+                ? <MobilePassengerSearch /> 
+                : <PassengerLayout><PassengerSearch /></PassengerLayout>
+              }
             </RequireAuth>
           } />
 
           <Route path="/passenger/results" element={
             <RequireAuth roles={['passenger']}>
-              <PassengerLayout>
-                <PassengerResults />
-              </PassengerLayout>
+              {window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+                ? <MobilePassengerResults /> 
+                : <PassengerLayout><PassengerResults /></PassengerLayout>
+              }
             </RequireAuth>
           } />
 
@@ -436,25 +487,28 @@ function App() {
 
           <Route path="/passenger/seats/:tripId" element={
             <RequireAuth roles={['passenger']}>
-              <PassengerLayout>
-                <PassengerSeatSelection />
-              </PassengerLayout>
+              {window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+                ? <MobilePassengerSeats /> 
+                : <PassengerLayout><PassengerSeatSelection /></PassengerLayout>
+              }
             </RequireAuth>
           } />
 
           <Route path="/passenger/booking/:tripId" element={
             <RequireAuth roles={['passenger']}>
-              <PassengerLayout>
-                <PassengerBookingNew />
-              </PassengerLayout>
+              {window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+                ? <MobilePassengerBooking /> 
+                : <PassengerLayout><PassengerBookingNew /></PassengerLayout>
+              }
             </RequireAuth>
           } />
 
           <Route path="/passenger/ticket/:pnr" element={
             <RequireAuth roles={['passenger']}>
-              <PassengerLayout>
-                <PassengerTicket />
-              </PassengerLayout>
+              {window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+                ? <MobilePassengerTicket /> 
+                : <PassengerLayout><PassengerTicket /></PassengerLayout>
+              }
             </RequireAuth>
           } />
 
@@ -484,9 +538,10 @@ function App() {
 
           <Route path="/passenger/wallet" element={
             <RequireAuth roles={['passenger']}>
-              <PassengerLayout>
-                <PassengerWallet />
-              </PassengerLayout>
+              {window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+                ? <MobilePassengerWallet /> 
+                : <PassengerLayout><PassengerWallet /></PassengerLayout>
+              }
             </RequireAuth>
           } />
 
@@ -500,16 +555,20 @@ function App() {
 
           <Route path="/passenger/profile" element={
             <RequireAuth roles={['passenger']}>
-              <PassengerLayout>
-                <PassengerProfile />
-              </PassengerLayout>
+              {window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+                ? <MobilePassengerProfile /> 
+                : <PassengerLayout><PassengerProfile /></PassengerLayout>
+              }
             </RequireAuth>
           } />
 
           {/* Booking Choice Modal - After Login from Popular Routes */}
           <Route path="/booking-choice" element={
             <RequireAuth roles={['passenger']}>
-              <BookingChoice />
+              {window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+                ? <MobileBookingChoice /> 
+                : <BookingChoice />
+              }
             </RequireAuth>
           } />
 

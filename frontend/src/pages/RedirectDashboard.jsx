@@ -61,8 +61,15 @@ export default function RedirectDashboard() {
         destination = '/driver';
         console.log('Redirecting driver to:', destination);
       } else {
-        destination = '/pax';
-        console.log('Redirecting passenger to:', destination);
+        // Check if user is on mobile device
+        const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (isMobile) {
+          destination = '/mobile/passenger';
+          console.log('Redirecting mobile passenger to:', destination);
+        } else {
+          destination = '/pax';
+          console.log('Redirecting passenger to:', destination);
+        }
       }
 
       console.log(`Final destination: ${destination} for role: ${role}`);

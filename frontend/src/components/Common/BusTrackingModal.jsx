@@ -22,6 +22,7 @@ import {
 import { apiFetch } from '../../utils/api';
 import { generateMapsEmbedUrl, isMapsApiConfigured } from '../../config/maps';
 import GoogleMapsRouteTracker from './GoogleMapsRouteTracker';
+import EnhancedGoogleMapsTracker from './EnhancedGoogleMapsTracker';
 import FreeMapTracker from './FreeMapTracker';
 
 const BusTrackingModal = ({ isOpen, onClose }) => {
@@ -341,7 +342,7 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
                     height: '100%'
                   }}>
                     {selectedTrip ? (
-                      <GoogleMapsRouteTracker 
+                      <EnhancedGoogleMapsTracker 
                         trip={{
                           busId: { 
                             busNumber: selectedTrip.busId?.busNumber || 'N/A'

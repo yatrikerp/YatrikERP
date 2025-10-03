@@ -1,0 +1,70 @@
+/* Mobile Booking Choice Optimizations */
+.mobile-booking-choice {
+  /* Ensure proper mobile viewport */
+  width: 100vw;
+  max-width: 100vw;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Prevent horizontal overflow */
+.mobile-booking-choice * {
+  box-sizing: border-box;
+}
+
+/* Ensure containers don't exceed viewport */
+.mobile-booking-choice .container {
+  width: 100%;
+  max-width: 100vw;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* Mobile-optimized text */
+.mobile-booking-choice .mobile-text {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Touch-friendly buttons */
+.mobile-booking-choice button {
+  min-height: 44px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent zoom on input focus */
+.mobile-booking-choice input,
+.mobile-booking-choice textarea,
+.mobile-booking-choice select {
+  font-size: 16px;
+}
+
+/* Mobile-specific media queries */
+@media (max-width: 480px) {
+  .mobile-booking-choice {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  
+  .mobile-booking-choice .container {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+@media (max-width: 375px) {
+  .mobile-booking-choice {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  
+  .mobile-booking-choice .container {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+}
+

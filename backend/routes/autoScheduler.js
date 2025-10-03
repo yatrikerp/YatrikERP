@@ -1175,5 +1175,598 @@ router.post('/mass-schedule-kerala', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/auto-scheduler/yearly-schedule
+ * Yearly scheduling endpoint with cyclical patterns
+ */
+router.post('/yearly-schedule', async (req, res) => {
+  try {
+    const { 
+      startDate, 
+      endDate,
+      selectedDepots = [], 
+      enableSeasonalAdjustments = true,
+      enableHolidayAdjustments = true,
+      enableMaintenanceWindows = true,
+      enableWeekendSchedules = true,
+      crewRotationCycle = 7,
+      patternConfig = {}
+    } = req.body;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Start date and end date are required'
+      });
+    }
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format'
+      });
+    }
+    
+    if (start >= end) {
+      return res.status(400).json({
+        success: false,
+        message: 'Start date must be before end date'
+      });
+    }
+    
+    console.log(`🚀 Starting yearly scheduling from ${start.toDateString()} to ${end.toDateString()}`);
+    
+    // Get required models
+    const Bus = require('../models/Bus');
+    const Route = require('../models/Route');
+    const Trip = require('../models/Trip');
+    const User = require('../models/User');
+    const Depot = require('../models/Depot');
+    
+    // Build queries
+    const busQuery = { status: 'active' };
+    const routeQuery = { status: 'active', isActive: true };
+    const userQuery = { status: 'active' };
+    
+    if (selectedDepots && selectedDepots.length > 0) {
+      busQuery.depotId = { $in: selectedDepots };
+      routeQuery['depot.depotId'] = { $in: selectedDepots };
+      userQuery.depotId = { $in: selectedDepots };
+    }
+    
+    // Execute queries
+    const [buses, routes, drivers, conductors, depots] = await Promise.all([
+      Bus.find(busQuery).populate('depotId', 'depotName').lean(),
+      Route.find(routeQuery).populate('depot.depotId', 'depotName').lean(),
+      User.find({ ...userQuery, role: 'driver' }).select('_id name depotId').lean(),
+      User.find({ ...userQuery, role: 'conductor' }).select('_id name depotId').lean(),
+      Depot.find(selectedDepots && selectedDepots.length > 0 ? { _id: { $in: selectedDepots } } : {}).lean()
+    ]);
+    
+    console.log(`📊 Found ${buses.length} buses, ${routes.length} routes, ${drivers.length} drivers, ${conductors.length} conductors, ${depots.length} depots`);
+    
+    // Early validation
+    const warnings = [];
+    if (buses.length === 0) warnings.push('No active buses found for selected depots.');
+    if (routes.length === 0) warnings.push('No active routes found for selected depots.');
+    if (drivers.length === 0) warnings.push('No active drivers found for selected depots.');
+    if (conductors.length === 0) warnings.push('No active conductors found for selected depots.');
+    
+    if (routes.length === 0 || buses.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No eligible items to schedule for the given configuration',
+        data: {
+          tripsCreated: 0,
+          busesAssigned: 0,
+          driversAssigned: 0,
+          conductorsAssigned: 0,
+          successRate: '0%',
+          totalRoutes: routes.length,
+          totalBuses: buses.length,
+          startDate: start.toISOString().split('T')[0],
+          endDate: end.toISOString().split('T')[0],
+          warnings
+        }
+      });
+    }
+    
+    // Time slots configuration
+    const weekdayTimeSlots = [
+      '06:00', '06:30', '07:00', '07:30', '08:00', '08:30',
+      '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+      '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
+      '15:00', '15:30', '16:00', '16:30', '17:00', '17:30',
+      '18:00', '18:30', '19:00', '19:30', '20:00'
+    ];
+    
+    const weekendTimeSlots = [
+      '07:00', '08:00', '09:00', '10:00', '11:00',
+      '12:00', '13:00', '14:00', '15:00', '16:00',
+      '17:00', '18:00', '19:00'
+    ];
+    
+    // Seasonal multipliers
+    const seasonalMultipliers = {
+      spring: 1.0,    // March-May
+      summer: 1.2,    // June-August
+      autumn: 0.9,    // September-November
+      winter: 0.8     // December-February
+    };
+    
+    // Helper functions
+    const getSeason = (date) => {
+      const month = date.getMonth() + 1;
+      if (month >= 3 && month <= 5) return 'spring';
+      if (month >= 6 && month <= 8) return 'summer';
+      if (month >= 9 && month <= 11) return 'autumn';
+      return 'winter';
+    };
+    
+    const isWeekend = (date) => {
+      const day = date.getDay();
+      return day === 0 || day === 6; // Sunday or Saturday
+    };
+    
+    const calculateEndTime = (startTime, durationMinutes) => {
+      const [hours, minutes] = startTime.split(':').map(Number);
+      const totalMinutes = hours * 60 + minutes + durationMinutes;
+      const endHours = Math.floor(totalMinutes / 60) % 24;
+      const endMinutes = totalMinutes % 60;
+      return `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+    };
+    
+    // Group buses by depot name
+    const busesByDepotName = buses.reduce((acc, bus) => {
+      const depotName = bus.depotId?.depotName || 'unknown';
+      if (!acc[depotName]) acc[depotName] = [];
+      acc[depotName].push(bus);
+      return acc;
+    }, {});
+    
+    // Group crew by depot name
+    const driversByDepotName = {};
+    const conductorsByDepotName = {};
+    
+    for (const driver of drivers) {
+      const depotId = driver.depotId?.toString();
+      if (depotId) {
+        const depot = depots.find(d => d._id.toString() === depotId);
+        if (depot) {
+          const depotName = depot.depotName || depot.name;
+          if (!driversByDepotName[depotName]) driversByDepotName[depotName] = [];
+          driversByDepotName[depotName].push(driver);
+        }
+      }
+    }
+    
+    for (const conductor of conductors) {
+      const depotId = conductor.depotId?.toString();
+      if (depotId) {
+        const depot = depots.find(d => d._id.toString() === depotId);
+        if (depot) {
+          const depotName = depot.depotName || depot.name;
+          if (!conductorsByDepotName[depotName]) conductorsByDepotName[depotName] = [];
+          conductorsByDepotName[depotName].push(conductor);
+        }
+      }
+    }
+    
+    // Generate trips for the entire year
+    const tripsToCreate = [];
+    let busesAssigned = 0;
+    let driversAssigned = 0;
+    let conductorsAssigned = 0;
+    
+    const busUsageTracker = new Map();
+    const crewRotationTracker = new Map();
+    
+    // Calculate days to schedule
+    const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+    
+    console.log(`📅 Scheduling ${daysDiff} days with cyclical patterns...`);
+    
+    for (let dayOffset = 0; dayOffset < daysDiff; dayOffset++) {
+      const serviceDate = new Date(start);
+      serviceDate.setDate(serviceDate.getDate() + dayOffset);
+      
+      const isWeekendDay = isWeekend(serviceDate);
+      const season = getSeason(serviceDate);
+      const timeSlots = isWeekendDay ? weekendTimeSlots : weekdayTimeSlots;
+      const seasonalMultiplier = seasonalMultipliers[season];
+      
+      // Progress indicator
+      if (dayOffset % 30 === 0) {
+        const progress = Math.round((dayOffset / daysDiff) * 100);
+        console.log(`   📊 Progress: ${progress}% (${dayOffset}/${daysDiff} days) - ${serviceDate.toDateString()}`);
+      }
+      
+      for (const route of routes) {
+        // Get route depot info
+        let routeDepotName = null;
+        let routeDepotId = null;
+        
+        if (route.depot?.depotId?.depotName) {
+          routeDepotName = route.depot.depotId.depotName;
+          routeDepotId = route.depot.depotId._id || route.depot.depotId;
+        } else if (route.depot?.depotName) {
+          routeDepotName = route.depot.depotName;
+          routeDepotId = route.depot._id;
+        } else if (route.depotId) {
+          routeDepotId = route.depotId;
+          const depot = depots.find(d => d._id.toString() === routeDepotId.toString());
+          routeDepotName = depot?.depotName || depot?.name;
+        }
+        
+        if (!routeDepotName) {
+          warnings.push(`Route ${route.routeNumber || route._id} missing depot info. Skipped.`);
+          continue;
+        }
+        
+        // Get resources for this route's depot
+        const routeBuses = busesByDepotName[routeDepotName] || [];
+        const routeDrivers = driversByDepotName[routeDepotName] || [];
+        const routeConductors = conductorsByDepotName[routeDepotName] || [];
+        
+        if (routeBuses.length === 0) {
+          warnings.push(`Route ${route.routeNumber} has no buses in depot ${routeDepotName}`);
+          continue;
+        }
+        
+        // Calculate trip frequency based on season and day type
+        const baseFrequency = isWeekendDay ? 13 : 29;
+        const adjustedFrequency = Math.round(baseFrequency * seasonalMultiplier);
+        const actualTrips = Math.min(adjustedFrequency, routeBuses.length, timeSlots.length);
+        
+        for (let tripIndex = 0; tripIndex < actualTrips; tripIndex++) {
+          const bus = routeBuses[tripIndex % routeBuses.length];
+          const busIdStr = bus._id.toString();
+          
+          // Check bus usage limits
+          const currentBusTrips = busUsageTracker.get(busIdStr) || 0;
+          if (currentBusTrips >= 3) { // Max 3 trips per bus per day
+            continue;
+          }
+          
+          const startTime = timeSlots[tripIndex % timeSlots.length];
+          
+          // Crew rotation based on cycle
+          const crewIndex = Math.floor(dayOffset / crewRotationCycle);
+          const driver = routeDrivers[(crewIndex + tripIndex) % routeDrivers.length];
+          const conductor = routeConductors[(crewIndex + tripIndex) % routeConductors.length];
+          
+          const trip = {
+            routeId: route._id,
+            busId: bus._id,
+            driverId: driver?._id,
+            conductorId: conductor?._id,
+            serviceDate: serviceDate,
+            startTime: startTime,
+            endTime: calculateEndTime(startTime, route.estimatedDuration || 180),
+            fare: Math.round((route.baseFare || 100) * seasonalMultiplier),
+            capacity: bus.capacity?.total || 45,
+            availableSeats: bus.capacity?.total || 45,
+            bookedSeats: 0,
+            status: 'scheduled',
+            depotId: routeDepotId,
+            bookingOpen: true,
+            notes: `Yearly scheduled trip - ${route.routeName} (${season}, ${isWeekendDay ? 'Weekend' : 'Weekday'})`,
+            createdBy: req.user?._id || undefined,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            // Yearly scheduling metadata
+            schedulingMetadata: {
+              year: serviceDate.getFullYear(),
+              week: Math.ceil((serviceDate - new Date(serviceDate.getFullYear(), 0, 1)) / (7 * 24 * 60 * 60 * 1000)),
+              dayOfWeek: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][serviceDate.getDay()],
+              season: season,
+              isWeekend: isWeekendDay,
+              tripPattern: 'yearly_cycle',
+              crewRotationCycle: crewRotationCycle
+            }
+          };
+          
+          tripsToCreate.push(trip);
+          busUsageTracker.set(busIdStr, currentBusTrips + 1);
+          busesAssigned++;
+          if (driver) driversAssigned++;
+          if (conductor) conductorsAssigned++;
+        }
+      }
+      
+      // Reset bus usage tracker for next day
+      busUsageTracker.clear();
+    }
+    
+    // Create trips in batches
+    const batchSize = 50;
+    let createdTrips = 0;
+    
+    console.log(`💾 Creating ${tripsToCreate.length} trips in batches...`);
+    
+    for (let i = 0; i < tripsToCreate.length; i += batchSize) {
+      const batch = tripsToCreate.slice(i, i + batchSize);
+      try {
+        await Trip.insertMany(batch, { ordered: false });
+        createdTrips += batch.length;
+        const progress = Math.round((createdTrips / tripsToCreate.length) * 100);
+        process.stdout.write(`\r   Progress: ${progress}% (${createdTrips}/${tripsToCreate.length} trips)`);
+      } catch (error) {
+        console.error(`\n   ⚠️ Error creating batch ${Math.floor(i / batchSize) + 1}:`, error.message);
+      }
+    }
+    
+    const successRate = tripsToCreate.length > 0 ? Math.round((createdTrips / tripsToCreate.length) * 100) : 0;
+    const busesUtilized = new Set(tripsToCreate.map(t => t.busId.toString())).size;
+    const averageTripsPerBus = busesUtilized > 0 ? (createdTrips / busesUtilized).toFixed(2) : 0;
+    
+    console.log(`\n✅ Yearly scheduling completed: ${createdTrips} trips created (${successRate}% success rate)`);
+    console.log(`📊 Bus Utilization: ${busesUtilized}/${buses.length} buses used (${averageTripsPerBus} avg trips/bus)`);
+    console.log(`📅 Coverage: ${daysDiff} days with cyclical patterns`);
+    
+    res.json({
+      success: true,
+      message: 'Yearly scheduling completed successfully',
+      data: {
+        tripsCreated: createdTrips,
+        busesAssigned,
+        driversAssigned,
+        conductorsAssigned,
+        successRate: `${successRate}%`,
+        totalRoutes: routes.length,
+        totalBuses: buses.length,
+        busesUtilized,
+        averageTripsPerBus: parseFloat(averageTripsPerBus),
+        startDate: start.toISOString().split('T')[0],
+        endDate: end.toISOString().split('T')[0],
+        daysScheduled: daysDiff,
+        seasonalAdjustments: enableSeasonalAdjustments,
+        holidayAdjustments: enableHolidayAdjustments,
+        maintenanceWindows: enableMaintenanceWindows,
+        weekendSchedules: enableWeekendSchedules,
+        crewRotationCycle: crewRotationCycle,
+        warnings: warnings.length > 0 ? warnings : undefined
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Yearly schedule error:', error);
+    console.error('❌ Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Yearly scheduling failed',
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+/**
+ * GET /api/auto-scheduler/yearly-stats
+ * Get yearly scheduling statistics
+ */
+router.get('/yearly-stats', async (req, res) => {
+  try {
+    const Trip = require('../models/Trip');
+    
+    const currentYear = new Date().getFullYear();
+    const yearStart = new Date(currentYear, 0, 1);
+    const yearEnd = new Date(currentYear, 11, 31);
+    
+    // Get monthly breakdown
+    const monthlyTrips = {};
+    for (let month = 0; month < 12; month++) {
+      const monthStart = new Date(currentYear, month, 1);
+      const monthEnd = new Date(currentYear, month + 1, 0);
+      
+      const count = await Trip.countDocuments({
+        serviceDate: { $gte: monthStart, $lte: monthEnd },
+        status: 'scheduled'
+      });
+      
+      const monthName = monthStart.toLocaleString('default', { month: 'long' });
+      monthlyTrips[monthName] = count;
+    }
+    
+    // Get seasonal breakdown
+    const seasonalTrips = {
+      spring: 0, summer: 0, autumn: 0, winter: 0
+    };
+    
+    for (const [month, count] of Object.entries(monthlyTrips)) {
+      const monthIndex = new Date(`${month} 1, ${currentYear}`).getMonth();
+      if (monthIndex >= 2 && monthIndex <= 4) seasonalTrips.spring += count;
+      else if (monthIndex >= 5 && monthIndex <= 7) seasonalTrips.summer += count;
+      else if (monthIndex >= 8 && monthIndex <= 10) seasonalTrips.autumn += count;
+      else seasonalTrips.winter += count;
+    }
+    
+    // Get weekly breakdown
+    const weeklyTrips = { weekday: 0, weekend: 0 };
+    const trips = await Trip.find({
+      serviceDate: { $gte: yearStart, $lte: yearEnd },
+      status: 'scheduled'
+    }).select('serviceDate').lean();
+    
+    trips.forEach(trip => {
+      const dayOfWeek = new Date(trip.serviceDate).getDay();
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        weeklyTrips.weekend++;
+      } else {
+        weeklyTrips.weekday++;
+      }
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        monthlyTrips,
+        seasonalTrips,
+        weeklyTrips,
+        totalTrips: Object.values(monthlyTrips).reduce((sum, count) => sum + count, 0)
+      }
+    });
+    
+  } catch (error) {
+    console.error('Yearly stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get yearly statistics',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/auto-scheduler/clear-yearly-schedule
+ * Clear yearly schedule for date range
+ */
+router.post('/clear-yearly-schedule', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.body;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Start date and end date are required'
+      });
+    }
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    const Trip = require('../models/Trip');
+    const result = await Trip.deleteMany({
+      serviceDate: { $gte: start, $lte: end },
+      status: 'scheduled'
+    });
+    
+    res.json({
+      success: true,
+      message: `Cleared ${result.deletedCount} scheduled trips`,
+      data: {
+        deletedCount: result.deletedCount,
+        dateRange: {
+          start: start.toISOString().split('T')[0],
+          end: end.toISOString().split('T')[0]
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Clear yearly schedule error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to clear yearly schedule',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/auto-scheduler/generate-yearly-report
+ * Generate yearly scheduling report
+ */
+router.post('/generate-yearly-report', async (req, res) => {
+  try {
+    const { startDate, endDate, includeAnalytics, includeSeasonalData, includeMonthlyBreakdown } = req.body;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Start date and end date are required'
+      });
+    }
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    const Trip = require('../models/Trip');
+    const Route = require('../models/Route');
+    const Bus = require('../models/Bus');
+    
+    // Get trip data
+    const trips = await Trip.find({
+      serviceDate: { $gte: start, $lte: end },
+      status: 'scheduled'
+    }).populate('routeId busId').lean();
+    
+    // Generate report
+    const report = {
+      period: {
+        start: start.toISOString().split('T')[0],
+        end: end.toISOString().split('T')[0],
+        days: Math.ceil((end - start) / (1000 * 60 * 60 * 24))
+      },
+      summary: {
+        totalTrips: trips.length,
+        totalRoutes: new Set(trips.map(t => t.routeId?._id?.toString())).size,
+        totalBuses: new Set(trips.map(t => t.busId?._id?.toString())).size,
+        averageTripsPerDay: Math.round(trips.length / Math.ceil((end - start) / (1000 * 60 * 60 * 24)))
+      }
+    };
+    
+    if (includeMonthlyBreakdown) {
+      report.monthlyBreakdown = {};
+      for (let month = start.getMonth(); month <= end.getMonth(); month++) {
+        const monthStart = new Date(start.getFullYear(), month, 1);
+        const monthEnd = new Date(start.getFullYear(), month + 1, 0);
+        
+        const monthTrips = trips.filter(trip => 
+          trip.serviceDate >= monthStart && trip.serviceDate <= monthEnd
+        );
+        
+        const monthName = monthStart.toLocaleString('default', { month: 'long' });
+        report.monthlyBreakdown[monthName] = monthTrips.length;
+      }
+    }
+    
+    if (includeSeasonalData) {
+      report.seasonalData = {
+        spring: 0, summer: 0, autumn: 0, winter: 0
+      };
+      
+      trips.forEach(trip => {
+        const month = new Date(trip.serviceDate).getMonth();
+        if (month >= 2 && month <= 4) report.seasonalData.spring++;
+        else if (month >= 5 && month <= 7) report.seasonalData.summer++;
+        else if (month >= 8 && month <= 10) report.seasonalData.autumn++;
+        else report.seasonalData.winter++;
+      });
+    }
+    
+    if (includeAnalytics) {
+      report.analytics = {
+        weekdayTrips: trips.filter(trip => {
+          const day = new Date(trip.serviceDate).getDay();
+          return day >= 1 && day <= 5;
+        }).length,
+        weekendTrips: trips.filter(trip => {
+          const day = new Date(trip.serviceDate).getDay();
+          return day === 0 || day === 6;
+        }).length,
+        peakHours: ['06:00-08:00', '18:00-20:00'],
+        averageFare: Math.round(trips.reduce((sum, trip) => sum + (trip.fare || 0), 0) / trips.length)
+      };
+    }
+    
+    res.json({
+      success: true,
+      data: report
+    });
+    
+  } catch (error) {
+    console.error('Generate yearly report error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate yearly report',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
 
