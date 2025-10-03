@@ -70,26 +70,24 @@ const Auth = ({ initialMode = 'login' }) => {
     setEmailMessage('Checking email...');
 
     try {
-      console.log('📡 Making API call to /api/auth/check-email');
-      const response = await fetch('/api/auth/check-email', {
+      console.log('📡 Making API call to /api/auth/check-email via apiFetch');
+      const res = await apiFetch('/api/auth/check-email', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email })
       });
 
-      console.log('📡 Response status:', response.status);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (!res.ok) {
+        throw new Error(res.message || `HTTP error! status: ${res.status}`);
       }
 
-      const data = await response.json();
+      const data = res.data || {};
       console.log('📦 Response data:', data);
 
-      if (data.success) {
-        if (data.exists) {
+      const success = data.success ?? true;
+      const exists = data.exists ?? data.data?.exists ?? false;
+
+      if (success) {
+        if (exists) {
           console.log('❌ Email exists');
           setEmailStatus('exists');
           setEmailMessage('❌ Email already exists');

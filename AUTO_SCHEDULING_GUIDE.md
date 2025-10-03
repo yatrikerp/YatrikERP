@@ -216,3 +216,4 @@ http://localhost:5173/admin/mass-scheduling
 
 Your system is now ready for automatic whole-day trip scheduling! 🎉
 
+

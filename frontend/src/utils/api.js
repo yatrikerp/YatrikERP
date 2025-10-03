@@ -11,8 +11,9 @@ const REQUEST_TIMEOUT = 30000; // 30 seconds for dashboard endpoints
 let warnedBase = false;
 
 export async function apiFetch(path, options = {}) {
-  const base = process.env.REACT_APP_API_URL || '';
-  if (!process.env.REACT_APP_API_URL && !warnedBase) {
+  const envBase = (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE_URL)) || process.env.REACT_APP_API_URL;
+  const base = (envBase || '').replace(/\/$/, '');
+  if (!envBase && !warnedBase) {
     // Helpful dev hint if env not configured
     try { console.warn('[apiFetch] REACT_APP_API_URL not set; using relative URLs with Vite proxy'); } catch {}
     warnedBase = true;
@@ -68,7 +69,8 @@ export async function apiFetch(path, options = {}) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
     
-    const res = await fetch(base + path, { 
+    const fullUrl = (base ? base : '') + path;
+    const res = await fetch(fullUrl, { 
       ...options, 
       headers,
       signal: controller.signal

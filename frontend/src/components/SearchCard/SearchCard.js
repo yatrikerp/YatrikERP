@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { apiFetch } from '../../utils/api';
 import { useNavigate } from 'react-router-dom';
 import { Bus, Link, MapPin, Calendar, Search, Clock, Navigation } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -38,10 +39,10 @@ const SearchCard = ({ onSearchResults, showResults = false }) => {
 
   const loadCities = async () => {
     try {
-      const response = await fetch('/api/routes/cities');
-      if (response.ok) {
-        const data = await response.json();
-        setCities(data.data.cities || []);
+      const res = await apiFetch('/api/routes/cities');
+      if (res.ok) {
+        const data = res.data || {};
+        setCities(data.data?.cities || data.cities || []);
       }
     } catch (error) {
       console.error('Failed to load cities:', error);
@@ -70,11 +71,13 @@ const SearchCard = ({ onSearchResults, showResults = false }) => {
     setIsLoadingSuggestions(prev => ({ ...prev, [field]: true }));
 
     try {
-      const response = await fetch(`/api/search/autocomplete?q=${encodeURIComponent(query)}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setSuggestions(prev => ({ ...prev, [field]: data.data.suggestions }));
+      const res = await apiFetch(`/api/search/autocomplete?q=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const data = res.data || {};
+        const success = data.success ?? true;
+        const suggestionsList = data.data?.suggestions || data.suggestions || [];
+        if (success) {
+          setSuggestions(prev => ({ ...prev, [field]: suggestionsList }));
           setShowSuggestions(prev => ({ ...prev, [field]: true }));
           setSelectedIndex(prev => ({ ...prev, [field]: -1 }));
         }

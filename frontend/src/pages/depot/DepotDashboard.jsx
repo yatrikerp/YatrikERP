@@ -332,39 +332,17 @@ const DepotDashboard = () => {
     }
   };
 
-  const fetchDepotData = async () => {
-    try {
-      const response = await depotApiService.getDepotInfo();
-      // Handle different response structures
-      let depotData = {};
-      if (response.success && response.data) {
-        depotData = response.data;
-      } else if (response.data) {
-        depotData = response.data;
-      }
-      setDepotData(depotData);
-    } catch (error) {
-      console.error('Error fetching depot data:', error);
-      setDepotData({});
-    }
-  };
+  // Removed unused fetchDepotData (merged into optimized fetchAllData)
 
-  // Main data fetching function
+  // Main data fetching function (optimized for faster first paint)
   const fetchAllData = useCallback(async () => {
     try {
       setLoading(true);
-      
-      // Fetch core dashboard + depot info first for KPIs
-      const [dashboardRes, depotInfoRes] = await Promise.all([
-        reportsApiService.getDashboardData(),
-        depotApiService.getDepotInfo()
-      ]);
 
-      const dashboardPayload = (dashboardRes?.data ?? dashboardRes) || {};
+      // 1) Fetch minimal/core data first for immediate render
+      const depotInfoRes = await depotApiService.getDepotInfo();
       const depotInfoPayload = (depotInfoRes?.data ?? depotInfoRes) || {};
-      setDashboardData(dashboardPayload);
       setDepotData(depotInfoPayload);
-      // Reflect depot header info immediately
       if (depotInfoPayload && (depotInfoPayload.name || depotInfoPayload.depotName)) {
         setDepotInfo({
           name: depotInfoPayload.name || depotInfoPayload.depotName || 'Yatrik Depot',
@@ -373,41 +351,57 @@ const DepotDashboard = () => {
         });
       }
 
-      // Fire-and-forget loading of section data
-      await Promise.all([
-        fetchFleetData(),
-        fetchRoutesData(),
-        fetchTripsData(),
-        fetchBookingsData(),
-        fetchStaffData(),
-        fetchSchedulesData()
-      ]);
-
-      // Prefer backend KPIs when available
-      const stats = dashboardPayload?.stats || {};
-      setDepotStats({
-        totalBuses: Number(stats.totalBuses) || fleetData.length || 0,
-        activeTrips: Number(stats.activeTrips) || (tripsData.filter(trip => trip.status === 'running').length) || 0,
-        todayRevenue: Number(stats.todayRevenue) || 0,
-        totalRoutes: Number(stats.totalRoutes) || routesData.length || 0,
-        todayBookings: Number(stats.todayBookings) || 0,
-        totalBookings: Number(stats.totalBookings) || bookingsData.length || 0
-      });
-
-      setSystemHealth({
-        database: 'online',
-        api: 'online',
-        frontend: 'online'
-      });
-
-      // Update last updated time
-      setLastUpdated(new Date().toLocaleTimeString());
-    
+      // 2) End loading state early so UI paints quickly
       setLoading(false);
-      console.log('Dashboard data loaded successfully');
+
+      // 3) Defer heavier dashboard stats + section data to idle time
+      const scheduleIdle = (cb) => {
+        if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+          window.requestIdleCallback(cb, { timeout: 2000 });
+        } else {
+          setTimeout(cb, 0);
+        }
+      };
+
+      scheduleIdle(async () => {
+        try {
+          const dashboardRes = await reportsApiService.getDashboardData();
+          const dashboardPayload = (dashboardRes?.data ?? dashboardRes) || {};
+          setDashboardData(dashboardPayload);
+
+          // Kick off non-critical section fetches without blocking UI
+          Promise.all([
+            fetchFleetData(),
+            fetchRoutesData(),
+            fetchTripsData(),
+            fetchBookingsData(),
+            fetchStaffData(),
+            fetchSchedulesData()
+          ]).catch(() => {});
+
+          const stats = dashboardPayload?.stats || {};
+          setDepotStats({
+            totalBuses: Number(stats.totalBuses) || fleetData.length || 0,
+            activeTrips: Number(stats.activeTrips) || (tripsData.filter(trip => trip.status === 'running').length) || 0,
+            todayRevenue: Number(stats.todayRevenue) || 0,
+            totalRoutes: Number(stats.totalRoutes) || routesData.length || 0,
+            todayBookings: Number(stats.todayBookings) || 0,
+            totalBookings: Number(stats.totalBookings) || bookingsData.length || 0
+          });
+
+          setSystemHealth({
+            database: 'online',
+            api: 'online',
+            frontend: 'online'
+          });
+
+          setLastUpdated(new Date().toLocaleTimeString());
+        } catch (err) {
+          console.error('Deferred dashboard load failed:', err);
+        }
+      });
     } catch (error) {
-      console.error('Error fetching all data:', error);
-      // Set default values even if API fails
+      console.error('Error fetching minimal data:', error);
       setDepotStats({
         totalBuses: 6,
         activeTrips: 3,
@@ -418,25 +412,27 @@ const DepotDashboard = () => {
       });
       setLoading(false);
     }
-  }, []); // Remove dependencies to prevent infinite re-renders
+  }, [bookingsData.length, fleetData.length, routesData.length, tripsData]);
 
   useEffect(() => {
     fetchAllData();
-  }, []); // Remove fetchAllData dependency to prevent infinite re-renders
+  }, [fetchAllData]);
 
-  // Socket connection for real-time updates
+  // Socket connection for real-time updates (deferred)
   useEffect(() => {
-    const newSocket = io(process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000', {
-      auth: {
-        token: localStorage.getItem('depotToken') || localStorage.getItem('token'),
-        userType: 'depot_manager'
-      }
-    });
+    let createdSocket = null;
+    const startSocket = () => {
+      const s = io(process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000', {
+        auth: {
+          token: localStorage.getItem('depotToken') || localStorage.getItem('token'),
+          userType: 'depot_manager'
+        }
+      });
+      createdSocket = s;
+      setSocket(s);
 
-    setSocket(newSocket);
-
-    // Listen for trip updates from admin
-    newSocket.on('tripUpdated', (data) => {
+      // Listen for trip updates from admin
+      s.on('tripUpdated', (data) => {
       console.log('Trip updated from admin:', data);
       
       // Update trips data
@@ -463,7 +459,7 @@ const DepotDashboard = () => {
     });
 
     // Listen for new trip assignments
-    newSocket.on('tripAssigned', (data) => {
+      s.on('tripAssigned', (data) => {
       console.log('New trip assigned:', data);
       
       // Add new trip to trips data
@@ -485,7 +481,7 @@ const DepotDashboard = () => {
     });
 
     // Listen for general messages
-    newSocket.on('message', (data) => {
+      s.on('message', (data) => {
       console.log('New message received:', data);
       
       const notification = {
@@ -503,7 +499,7 @@ const DepotDashboard = () => {
     });
 
     // Listen for system alerts
-    newSocket.on('systemAlert', (data) => {
+      s.on('systemAlert', (data) => {
       console.log('System alert received:', data);
       
       const notification = {
@@ -519,10 +515,18 @@ const DepotDashboard = () => {
       setNotifications(prev => [notification, ...prev]);
       setUnreadCount(prev => prev + 1);
     });
+    };
+
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      window.requestIdleCallback(() => startSocket(), { timeout: 3000 });
+    } else {
+      const t = setTimeout(() => startSocket(), 500);
+      return () => clearTimeout(t);
+    }
 
     // Cleanup on unmount
     return () => {
-      newSocket.close();
+      try { createdSocket?.close(); } catch (_) {}
     };
   }, []);
 
@@ -808,12 +812,7 @@ const DepotDashboard = () => {
                     <span className="notification-badge">{unreadCount}</span>
                   )}
                 </button>
-              <button className="logout-btn" onClick={handleLogout}>
-                <svg className="logout-icon" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
-                </svg>
-                  <span>Logout</span>
-              </button>
+              {/* Logout moved to top header actions */}
               </div>
             </div>
           </div>
@@ -830,6 +829,12 @@ const DepotDashboard = () => {
                     <p className="welcome-text">Welcome back! Here's what's happening with your depot today.</p>
                   </div>
                   <div className="quick-actions-grid">
+                    <button className="quick-action red" onClick={handleLogout} aria-label="Logout" data-testid="header-logout">
+                      <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
+                      </svg>
+                      <span className="qa-title">Logout</span>
+                    </button>
                     <button className="quick-action blue">
                       <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z" />
@@ -853,6 +858,12 @@ const DepotDashboard = () => {
                         <path fillRule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
                       <span className="qa-title">System Status</span>
+                    </button>
+                    <button className="quick-action red" onClick={handleLogout} aria-label="Logout" data-testid="header-logout">
+                      <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
+                      </svg>
+                      <span className="qa-title">Logout</span>
                     </button>
                   </div>
                 </div>
@@ -1200,7 +1211,7 @@ const DepotDashboard = () => {
                     Help & Support
                   </div>
                   <div className="dropdown-divider"></div>
-                  <div className="dropdown-item logout-item" onClick={handleLogout}>
+                  <div className="dropdown-item logout-item" onClick={handleLogout} aria-label="Logout" data-testid="sidebar-logout">
                     <svg className="dropdown-icon" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
                     </svg>

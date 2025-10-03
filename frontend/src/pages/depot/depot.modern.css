@@ -229,10 +229,12 @@ html, body, #root {
   background: #ffffff;
   border-right: 1px solid #e5e7eb;
   box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08);
-  z-index: 1001;
-  overflow: hidden; /* No scrollbar */
+  z-index: 1100;
+  overflow: hidden; /* contain header/footer; nav will scroll */
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 
@@ -360,11 +362,13 @@ html, body, #root {
 
 .sidebar-nav {
   flex: 1;
-  padding: 16px 0;
-  overflow: hidden;
+  padding: 12px 0;
+  overflow-y: auto; /* allow scrolling for long menus */
+  overflow-x: hidden;
   width: 100%;
   display: flex;
   flex-direction: column;
+  padding-bottom: 72px; /* keep footer fully visible */
 }
 
 /* No scrollbar needed - perfect fit */
@@ -376,25 +380,24 @@ html, body, #root {
   width: 100%;
   display: flex;
   flex-direction: column;
-  flex: 1;
-  justify-content: space-between;
+  gap: 4px; /* tighter stacking without big gaps */
 }
 
 .nav-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 20px;
+  padding: 10px 16px;
   cursor: pointer;
   transition: all 0.2s ease;
   font-size: 14px;
   color: #6b7280;
   position: relative;
-  margin: 1px 8px;
+  margin: 2px 12px;
   border-radius: 8px;
   font-weight: 500;
   border: 1px solid transparent;
-  height: 44px;
+  height: 42px;
   white-space: nowrap;
 }
 
@@ -429,16 +432,20 @@ html, body, #root {
 }
 
 .sidebar-footer {
-  padding: 16px 24px;
+  position: sticky;
+  bottom: 0;
+  padding: 10px 12px;
   border-top: 1px solid #e5e7eb;
   background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
-  height: 80px;
+  height: 60px;
   width: 100%;
-  gap: 12px;
+  gap: 10px;
+  z-index: 2;
+  box-shadow: 0 -6px 16px rgba(0, 0, 0, 0.06);
 }
 
 .footer-actions {
@@ -925,6 +932,54 @@ table tr:hover {
 .logout-icon {
   width: 18px;
   height: 18px;
+}
+
+/* Make the sidebar footer logout button highly visible */
+.sidebar-footer .logout-btn {
+  display: none !important; /* Move logout away from footer */
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #ef4444;
+  color: #ffffff;
+  border: 1px solid rgba(239, 68, 68, 0.9);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  min-width: 160px;
+  justify-content: center;
+  box-shadow: 0 10px 20px rgba(239, 68, 68, 0.28);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.sidebar-footer .logout-btn:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(220, 38, 38, 0.38);
+}
+
+.sidebar-footer .logout-btn:active {
+  transform: translateY(-1px);
+}
+
+.sidebar-footer .logout-btn .logout-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* Better logout variant */
+.sidebar-footer .logout-btn.better {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border-color: #dc2626;
+  box-shadow: 0 12px 26px rgba(220, 38, 38, 0.35);
+}
+
+.sidebar-footer .logout-btn.better:hover {
+  background: linear-gradient(135deg, #f05252, #b91c1c);
+  border-color: #b91c1c;
 }
 
 /* Main Content */
@@ -1625,6 +1680,20 @@ table tr:hover {
 }
 .quick-action.orange { 
   background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+}
+
+/* New: explicit red quick action used for Logout */
+.quick-action.red {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #ffffff;
+  border: 1px solid rgba(220, 38, 38, 0.9);
+}
+
+.quick-action.red:hover {
+  background: linear-gradient(135deg, #f05252 0%, #b91c1c 100%);
+  border-color: #b91c1c;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(220, 38, 38, 0.3);
 }
 
 .quick-action:hover {

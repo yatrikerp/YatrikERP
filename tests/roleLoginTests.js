@@ -11,7 +11,7 @@ const DELAY_BETWEEN_TESTS = 3000; // 3 seconds
 // Role credentials
 const ROLES = {
     ADMIN: { email: 'admin@yatrik.com', password: 'admin123' },
-    DEPOT: { email: 'depot-plk@yatrik.com', password: 'Akhil@123' },
+    DEPOT: { email: 'alp-depot@yatrik.com', password: 'ALP@2024' },
     CONDUCTOR: { email: 'joel@gmail.com', password: 'Yatrik123' },
     DRIVER: { email: 'rejith@gmail.com', password: 'Akhil@123' },
     PASSENGER: { email: 'lijithmk2026@mca.ajce.in', password: 'Akhil@123' }
@@ -94,7 +94,7 @@ async function takeScreenshot(driver, filename) {
 /**
  * Detect dashboard after login using multiple fallback selectors
  */
-async function detectDashboard(driver) {
+async function detectDashboard(driver, roleName = '') {
     const dashboardSelectors = [
         '[data-testid="dashboard"]',
         '.dashboard-container',
@@ -149,6 +149,27 @@ async function detectDashboard(driver) {
         // Continue
     }
 
+    // Role-specific URL detection
+    try {
+        const url = await driver.getCurrentUrl();
+        if (roleName === 'CONDUCTOR' && url.includes('/conductor')) {
+            console.log('✅ Dashboard detected via /conductor URL');
+            return true;
+        }
+        if (roleName === 'DRIVER' && url.includes('/driver')) {
+            console.log('✅ Dashboard detected via /driver URL');
+            return true;
+        }
+        if (roleName === 'PASSENGER' && (url.includes('/passenger') || url.includes('/pax'))) {
+            console.log('✅ Dashboard detected via /passenger URL');
+            return true;
+        }
+        if (roleName === 'DEPOT' && url.includes('/depot')) {
+            console.log('✅ Dashboard detected via /depot URL');
+            return true;
+        }
+    } catch (_) {}
+
     // Check if we're on a different page (not login page)
     const currentUrl = await driver.getCurrentUrl();
     if (!currentUrl.includes('/login')) {
@@ -165,6 +186,8 @@ async function detectDashboard(driver) {
 async function performLogout(driver) {
     const logoutSelectors = [
         '[data-testid="logout-btn"]',
+        '[data-testid="sidebar-logout"]',
+        '[data-testid="header-logout"]',
         'button[aria-label="Logout"]',
         'a[title="Logout"]',
         'button:contains("Logout")',
@@ -197,12 +220,17 @@ async function performLogout(driver) {
         return true;
     }
 
-    // Try text-based selectors
+    // Try text-based selectors (ensure visibility and scroll sidebar if needed)
     try {
+        try {
+            await driver.executeScript("document.querySelector('aside')?.scrollTo(0, 10000)");
+            await driver.executeScript('window.scrollTo(0, document.body.scrollHeight)');
+        } catch (_) {}
         const buttons = await driver.findElements(By.css('button, a'));
         for (const button of buttons) {
             const text = await button.getText();
             if (text.toLowerCase().includes('logout') || text.toLowerCase().includes('sign out')) {
+                try { await driver.executeScript('arguments[0].scrollIntoView({block:"center"})', button); } catch(_) {}
                 await button.click();
                 console.log('✅ Logout clicked via text content');
                 return true;
@@ -265,9 +293,25 @@ async function testRoleLoginLogout(driver, roleName, credentials) {
         
         // Step 5: Wait for dashboard detection
         console.log('⏳ Waiting for dashboard...');
-        const dashboardDetected = await detectDashboard(driver);
-        
-        if (!dashboardDetected) {
+        const dashboardDetected = await detectDashboard(driver, roleName);
+        // Extra wait for conductor specific header if not yet detected
+        if (!dashboardDetected && roleName === 'CONDUCTOR') {
+            try {
+                const header = await waitForElement(driver, 'h1, h2, .logo-text h1', 4000);
+                if (header) {
+                    const text = (await header.getText()).toLowerCase();
+                    if (text.includes('conductor') && text.includes('dashboard')) {
+                        console.log('✅ Conductor dashboard detected via header text');
+                    } else {
+                        throw new Error('Conductor header not matched');
+                    }
+                } else {
+                    throw new Error('Conductor header not found');
+                }
+            } catch (e) {
+                throw new Error('Dashboard not detected after login');
+            }
+        } else if (!dashboardDetected) {
             throw new Error('Dashboard not detected after login');
         }
         
@@ -349,6 +393,10 @@ async function runTests() {
             if (roleName !== 'PASSENGER') {
                 console.log(`⏳ Waiting ${DELAY_BETWEEN_TESTS/1000}s before next test...`);
                 await sleep(DELAY_BETWEEN_TESTS);
+                try {
+                    await driver.manage().deleteAllCookies();
+                    await driver.get(BASE_URL);
+                } catch (_) {}
             }
         }
         

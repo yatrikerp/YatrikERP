@@ -1,23 +1,84 @@
 {
   "stats": {
-    "suites": 0,
-    "tests": 0,
+    "suites": 1,
+    "tests": 1,
     "passes": 0,
     "pending": 0,
-    "failures": 0,
-    "start": "2025-09-28T05:30:24.045Z",
-    "end": "2025-09-28T05:30:24.046Z",
-    "duration": 1,
-    "testsRegistered": 0,
-    "passPercent": null,
-    "pendingPercent": null,
+    "failures": 1,
+    "start": "2025-10-03T10:42:58.705Z",
+    "end": "2025-10-03T10:44:59.790Z",
+    "duration": 121085,
+    "testsRegistered": 1,
+    "passPercent": 0,
+    "pendingPercent": 0,
     "other": 0,
     "hasOther": false,
     "skipped": 0,
     "hasSkipped": false
   },
   "results": [
-    false
+    {
+      "uuid": "371cca37-9913-44cb-8ac7-398f6bce1700",
+      "title": "",
+      "fullFile": "D:\\YATRIK ERP\\tests\\e2e\\roleLogin.spec.js",
+      "file": "\\tests\\e2e\\roleLogin.spec.js",
+      "beforeHooks": [],
+      "afterHooks": [],
+      "tests": [],
+      "suites": [
+        {
+          "uuid": "622b73da-d8f6-4c78-8dd1-7a6098ac450f",
+          "title": "Yatrik ERP - Role Login/Logout",
+          "fullFile": "D:\\YATRIK ERP\\tests\\e2e\\roleLogin.spec.js",
+          "file": "\\tests\\e2e\\roleLogin.spec.js",
+          "beforeHooks": [],
+          "afterHooks": [],
+          "tests": [
+            {
+              "title": "runs the standalone role login/logout suite",
+              "fullTitle": "Yatrik ERP - Role Login/Logout runs the standalone role login/logout suite",
+              "timedOut": true,
+              "duration": 121067,
+              "state": "failed",
+              "speed": null,
+              "pass": false,
+              "fail": true,
+              "pending": false,
+              "context": null,
+              "code": "await runTests();",
+              "err": {
+                "message": "Error: Timeout of 120000ms exceeded. For async tests and hooks, ensure \"done()\" is called; if returning a Promise, ensure it resolves. (D:\\YATRIK ERP\\tests\\e2e\\roleLogin.spec.js)",
+                "estack": "Error: Timeout of 120000ms exceeded. For async tests and hooks, ensure \"done()\" is called; if returning a Promise, ensure it resolves. (D:\\YATRIK ERP\\tests\\e2e\\roleLogin.spec.js)\n    at listOnTimeout (node:internal/timers:588:17)\n    at process.processTimers (node:internal/timers:523:7)",
+                "diff": null
+              },
+              "uuid": "0c7fe45c-741b-4748-9323-999d3d7e8430",
+              "parentUUID": "622b73da-d8f6-4c78-8dd1-7a6098ac450f",
+              "isHook": false,
+              "skipped": false
+            }
+          ],
+          "suites": [],
+          "passes": [],
+          "failures": [
+            "0c7fe45c-741b-4748-9323-999d3d7e8430"
+          ],
+          "pending": [],
+          "skipped": [],
+          "duration": 121067,
+          "root": false,
+          "rootEmpty": false,
+          "_timeout": 120000
+        }
+      ],
+      "passes": [],
+      "failures": [],
+      "pending": [],
+      "skipped": [],
+      "duration": 0,
+      "root": true,
+      "rootEmpty": true,
+      "_timeout": 300000
+    }
   ],
   "meta": {
     "mocha": {

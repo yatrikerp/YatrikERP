@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { apiFetch } from '../../utils/api';
 import { useNavigate } from 'react-router-dom';
 import { Bus, MapPin, Calendar, Search, Clock, Navigation, ArrowRight } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -34,10 +35,11 @@ const MobileSearchCard = ({ onSearchResults, showResults = false }) => {
 
   const loadCities = async () => {
     try {
-      const response = await fetch('/api/routes/cities');
-      if (response.ok) {
-        const data = await response.json();
-        setCities(data.data.cities || []);
+      const res = await apiFetch('/api/routes/cities');
+      if (res.ok) {
+        const data = res.data || {};
+        const citiesList = data.data?.cities || data.cities || [];
+        setCities(Array.isArray(citiesList) ? citiesList : []);
       }
     } catch (error) {
       console.error('Failed to load cities:', error);
@@ -160,13 +162,11 @@ const MobileSearchCard = ({ onSearchResults, showResults = false }) => {
         searchParams.append('returnDate', formData.returnDate);
       }
 
-      const response = await fetch(`/api/routes/search?${searchParams}`);
-      
-      if (!response.ok) {
-        throw new Error('Search failed');
+      const res = await apiFetch(`/api/routes/search?${searchParams}`);
+      if (!res.ok) {
+        throw new Error(res.message || 'Search failed');
       }
-
-      const data = await response.json();
+      const data = res.data;
       
       if (onSearchResults) {
         onSearchResults(data);

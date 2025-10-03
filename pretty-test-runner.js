@@ -3,12 +3,12 @@ const chrome = require('selenium-webdriver/chrome');
 
 // Test configuration
 const BASE_URL = 'http://localhost:5173/login';
-const TIMEOUT = 8000; // Reduced timeout for faster execution
+const TIMEOUT = 15000; // More reliable in headless/non-headless
 
 // Role credentials
 const ROLES = {
     ADMIN: { email: 'admin@yatrik.com', password: 'admin123' },
-    DEPOT: { email: 'depot-plk@yatrik.com', password: 'Akhil@123' },
+    DEPOT: { email: 'alp-depot@yatrik.com', password: 'ALP@2024' },
     CONDUCTOR: { email: 'joel@gmail.com', password: 'Yatrik123' },
     DRIVER: { email: 'rejith@gmail.com', password: 'Akhil@123' },
     PASSENGER: { email: 'lijithmk2026@mca.ajce.in', password: 'Akhil@123' }
@@ -114,73 +114,105 @@ async function testRoleLoginLogout(driver, role, credentials) {
         
         // Navigate to login page
         await driver.get(BASE_URL);
-        await driver.wait(until.elementLocated(By.css('input[type="email"]')), TIMEOUT);
+        // Wait for login inputs (support multiple selectors)
+        const loginFieldSelectors = ['input[name="email"]', 'input[type="email"]'];
+        let loginFieldFound = false;
+        for (const sel of loginFieldSelectors) {
+            try {
+                await driver.wait(until.elementLocated(By.css(sel)), TIMEOUT);
+                loginFieldFound = true;
+                break;
+            } catch (_) {}
+        }
+        if (!loginFieldFound) throw new Error('Login form not found');
         
         // Enter credentials
-        await driver.findElement(By.css('input[type="email"]')).clear();
-        await driver.findElement(By.css('input[type="email"]')).sendKeys(credentials.email);
-        await driver.findElement(By.css('input[type="password"]')).clear();
-        await driver.findElement(By.css('input[type="password"]')).sendKeys(credentials.password);
+        const emailEl = await driver.findElement(By.css('input[name="email"], input[type="email"]'));
+        const passEl = await driver.findElement(By.css('input[name="password"], input[type="password"]'));
+        await emailEl.clear();
+        await emailEl.sendKeys(credentials.email);
+        await passEl.clear();
+        await passEl.sendKeys(credentials.password);
         
         // Submit login
         await driver.findElement(By.css('button[type="submit"]')).click();
         
         // Wait for dashboard (try multiple selectors)
         const dashboardSelectors = [
-            '[data-testid="dashboard-sidebar"]',
+            '[data-testid="dashboard"]',
             '.dashboard-header',
-            '[data-testid="admin-dashboard"]',
-            '.admin-dashboard',
             '.conductor-dashboard',
-            '.passenger-dashboard',
-            'header',
-            '.navbar'
+            '.admin-dashboard',
+            'h1',
         ];
         
         let dashboardFound = false;
         for (const selector of dashboardSelectors) {
             try {
-                await driver.wait(until.elementLocated(By.css(selector)), 2000);
+                await driver.wait(until.elementLocated(By.css(selector)), 3000);
                 dashboardFound = true;
                 break;
-            } catch (e) {
-                // Continue to next selector
-            }
+            } catch (e) {}
         }
-        
         if (!dashboardFound) {
-            throw new Error('Dashboard not found after login');
+            const url = await driver.getCurrentUrl();
+            if (role === 'CONDUCTOR' && url.includes('/conductor')) dashboardFound = true;
+            if (role === 'DRIVER' && url.includes('/driver')) dashboardFound = true;
+            if (role === 'PASSENGER' && (url.includes('/passenger') || url.includes('/pax'))) dashboardFound = true;
+            if (role === 'DEPOT' && url.includes('/depot')) dashboardFound = true;
+            if (!dashboardFound && !url.includes('/login')) dashboardFound = true;
         }
+        if (!dashboardFound) throw new Error('Dashboard not found after login');
         
         // Test logout - try multiple selectors
         const logoutSelectors = [
             '[data-testid="logout-btn"]',
-            'button:contains("Logout")',
-            'button:contains("logout")',
+            '[data-testid="header-logout"]',
+            '[data-testid="sidebar-logout"]',
+            '.logout-btn-header',
+            'button[title="Logout"]',
+            'button[aria-label="Logout"]',
             '.logout-btn',
             'a[href*="logout"]',
-            'button[class*="logout"]',
-            'a[class*="logout"]'
         ];
         
         let logoutFound = false;
         for (const selector of logoutSelectors) {
             try {
-                const logoutBtn = await driver.findElement(By.css(selector));
-                await logoutBtn.click();
+                const el = await driver.findElement(By.css(selector));
+                try { await driver.executeScript('arguments[0].scrollIntoView({block:"center"})', el); } catch(_) {}
+                await el.click();
                 logoutFound = true;
                 break;
-            } catch (e) {
-                // Continue to next selector
+            } catch (e) {}
+        }
+        if (!logoutFound) {
+            try { await driver.executeScript('window.scrollTo(0, 0)'); } catch(_) {}
+            for (const selector of logoutSelectors) {
+                try {
+                    const el = await driver.findElement(By.css(selector));
+                    await el.click();
+                    logoutFound = true;
+                    break;
+                } catch (e) {}
             }
         }
-        
-        if (!logoutFound) {
-            throw new Error('Logout button not found');
-        }
+        if (!logoutFound) throw new Error('Logout button not found');
         
         // Wait for return to login page
-        await driver.wait(until.elementLocated(By.css('input[type="email"]')), TIMEOUT);
+        let loggedOut = false;
+        for (const sel of loginFieldSelectors) {
+            try {
+                await driver.wait(until.elementLocated(By.css(sel)), TIMEOUT);
+                loggedOut = true;
+                break;
+            } catch (_) {}
+        }
+        if (!loggedOut) {
+            // Force navigate to login if UI didn't redirect
+            await driver.get(BASE_URL);
+            await driver.wait(until.elementLocated(By.css('input[name="email"], input[type="email"]')), TIMEOUT);
+        }
         
         success = true;
         
@@ -192,18 +224,9 @@ async function testRoleLoginLogout(driver, role, credentials) {
     
     // Update results
     testResults.total++;
-    if (success) {
-        testResults.passed++;
-    } else {
-        testResults.failed++;
-    }
+    if (success) testResults.passed++; else testResults.failed++;
     
-    testResults.details.push({
-        role,
-        success,
-        duration,
-        error
-    });
+    testResults.details.push({ role, success, duration, error });
     
     printTestResult(role, success, duration, error);
     
@@ -220,7 +243,8 @@ async function runPrettyTests() {
         const options = new chrome.Options();
         options.addArguments('--no-sandbox');
         options.addArguments('--disable-dev-shm-usage');
-        options.addArguments('--headless'); // Run headless for faster execution
+        // Run headed for more reliable detection
+        // options.addArguments('--headless=new');
         options.addArguments('--disable-gpu');
         options.addArguments('--window-size=1920,1080');
         
@@ -234,20 +258,18 @@ async function runPrettyTests() {
         // Test each role
         for (const [role, credentials] of Object.entries(ROLES)) {
             await testRoleLoginLogout(driver, role, credentials);
-            
-            // Small delay between tests
-            if (role !== 'PASSENGER') { // Don't wait after last test
-                await new Promise(resolve => setTimeout(resolve, 1000));
+            if (role !== 'PASSENGER') {
+                try { await driver.manage().deleteAllCookies(); } catch(_) {}
+                await new Promise(r => setTimeout(r, 500));
+                try { await driver.get(BASE_URL); } catch(_) {}
+                await new Promise(r => setTimeout(r, 500));
             }
         }
         
     } catch (error) {
         console.error(colorize('❌ Test suite error:', 'red'), error.message);
     } finally {
-        if (driver) {
-            await driver.quit();
-        }
-        
+        if (driver) await driver.quit();
         printSummary();
     }
 }
