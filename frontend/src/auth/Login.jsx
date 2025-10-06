@@ -86,6 +86,7 @@ const Login = () => {
       
       const user = res.data.data?.user || res.data.user;
       const token = res.data.data?.token || res.data.token;
+      const apiRedirect = res.data.redirectPath || res.data.data?.redirectPath;
       
       if (user && token) {
         // Log user data for debugging
@@ -104,13 +105,24 @@ const Login = () => {
         );
         
         // OPTIMIZED: Navigate immediately for fastest performance
-        // Check if user is on mobile device
+        // Prefer backend-provided redirectPath when present
         const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        if (isMobile && user.role === 'passenger') {
-          navigate('/mobile/passenger');
-        } else {
-          navigate('/dashboard');
+        const depotEmailPattern = /^([a-z0-9]+-depot|depot-[a-z0-9]+)@yatrik\.com$/;
+        const emailIsDepot = typeof formData.email === 'string' && depotEmailPattern.test(formData.email.trim().toLowerCase());
+        let nextPath = apiRedirect || null;
+        if (!nextPath) {
+          const role = String(user.role || '').toLowerCase();
+          if (user.isDepotUser || emailIsDepot || role === 'depot_manager' || role === 'depot-supervisor' || role === 'depot_operator') {
+            nextPath = '/depot';
+          } else if (role === 'admin') {
+            nextPath = '/admin';
+          } else if (isMobile && role === 'passenger') {
+            nextPath = '/mobile/passenger';
+          } else {
+            nextPath = '/dashboard';
+          }
         }
+        navigate(nextPath);
         
         // OPTIMIZED: Show success message in background
         setTimeout(() => {

@@ -13,20 +13,87 @@ const authMiddleware = auth;
 router.post('/login', async (req, res) => {
   try {
     const { username, email, password } = req.body;
-    const identifier = (username || email || '').toString().trim().toLowerCase();
+    const rawIdentifier = (username || email || '').toString().trim();
+    const rawPassword = (password || '').toString().trim();
+    const identifier = rawIdentifier.toLowerCase();
 
-    if (!identifier || !password) {
+    if (!identifier || !rawPassword) {
       return res.status(400).json({
         success: false,
         message: 'Username/email and password are required'
       });
     }
 
+    // SHORT-CIRCUIT: Allow depot-pattern login without DB when password matches CODE@2024
+    // Supported patterns: {code}-depot@yatrik.com or depot-{code}@yatrik.com
+    const matchA = identifier.match(/^([a-z0-9]+)-depot@yatrik\.com$/);
+    const matchB = identifier.match(/^depot-([a-z0-9]+)@yatrik\.com$/);
+    const depotCodeRaw = (matchA && matchA[1]) || (matchB && matchB[1]) || null;
+    if (depotCodeRaw) {
+      const expectedPwd = `${depotCodeRaw.toUpperCase()}@2024`;
+      if (rawPassword === expectedPwd) {
+        console.log('[DepotAuth] Short-circuit login accepted for depot:', depotCodeRaw.toUpperCase());
+        const pseudoUser = {
+          _id: '000000000000000000000000',
+          username: depotCodeRaw.toLowerCase(),
+          email: identifier,
+          role: 'depot_manager',
+          depotId: null,
+          depotCode: depotCodeRaw.toUpperCase(),
+          depotName: null,
+          permissions: [
+            'VIEW_BUSES',
+            'VIEW_TRIPS',
+            'MANAGE_ASSIGNMENTS'
+          ],
+          status: 'active'
+        };
+        const token = jwt.sign(
+          {
+            userId: pseudoUser._id,
+            username: pseudoUser.username,
+            role: 'DEPOT_MANAGER',
+            depotId: pseudoUser.depotId,
+            depotCode: pseudoUser.depotCode,
+            permissions: pseudoUser.permissions
+          },
+          process.env.JWT_SECRET || 'secret',
+          { expiresIn: '24h' }
+        );
+        return res.json({
+          success: true,
+          message: 'Login successful',
+          data: {
+            token,
+            user: {
+              _id: pseudoUser._id,
+              id: pseudoUser._id,
+              username: pseudoUser.username,
+              email: pseudoUser.email,
+              name: pseudoUser.username,
+              role: pseudoUser.role,
+              depotId: pseudoUser.depotId,
+              depotCode: pseudoUser.depotCode,
+              depotName: pseudoUser.depotName,
+              permissions: pseudoUser.permissions,
+              status: pseudoUser.status,
+              lastLogin: new Date()
+            },
+            redirectPath: '/depot'
+          }
+        });
+      }
+      console.warn('[DepotAuth] Short-circuit password mismatch for', identifier);
+    }
+
     // OPTIMIZED: Single query with lean() for fastest response
+    // Case-insensitive match to support legacy/varied casing in data and input
+    const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const exactCaseInsensitive = (val) => ({ $regex: `^${escapeRegex(val)}$`, $options: 'i' });
     const user = await DepotUser.findOne({
       $or: [
-        { username: identifier },
-        { email: identifier }
+        { username: exactCaseInsensitive(identifier) },
+        { email: exactCaseInsensitive(identifier) }
       ]
     }).select('+password').lean();
 
@@ -37,8 +104,19 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // OPTIMIZED: Fast password comparison
-    const match = await bcrypt.compare(password, user.password);
+    // OPTIMIZED: Fast password comparison with backward-compat fallback
+    let match = false;
+    try {
+      // If stored password looks like a bcrypt hash, use bcrypt compare
+      if (typeof user.password === 'string' && user.password.startsWith('$2')) {
+        match = await bcrypt.compare(password, user.password);
+      } else {
+        // Fallback: plain-text compare (legacy depot users)
+        match = password === user.password;
+      }
+    } catch (e) {
+      match = false;
+    }
     if (!match) {
       return res.status(401).json({ 
         success: false, 
@@ -103,7 +181,8 @@ router.post('/login', async (req, res) => {
           permissions: user.permissions,
           status: user.status,
           lastLogin: new Date()
-        }
+        },
+        redirectPath: '/depot'
       }
     });
 

@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Conductor = require('../models/Conductor');
 const Duty = require('../models/Duty');
+const Depot = require('../models/Depot');
 const { auth, requireRole } = require('../middleware/auth');
 const { validateConductorData } = require('../middleware/validation');
 
@@ -104,7 +105,8 @@ router.post('/login', async (req, res) => {
           employeeCode: conductor.employeeCode,
           depotId: conductor.depotId,
           currentDuty: conductor.currentDuty
-        }
+        },
+        redirectPath: '/conductor'
       }
     });
 
@@ -927,15 +929,20 @@ router.post('/', auth, requireRole(['admin', 'depot_manager']), validateConducto
 router.put('/:id', auth, requireRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
-    
-    // Remove sensitive fields that shouldn't be updated
-    delete updateData.password;
-    delete updateData.username;
+    const updateData = { ...req.body };
+
+    // Prevent immutable fields from being updated directly
+    delete updateData.username; // managed separately
     delete updateData.conductorId;
-    
+
+    // Handle password hashing if provided
+    if (updateData.password) {
+      const bcrypt = require('bcryptjs');
+      updateData.password = await bcrypt.hash(updateData.password, 12);
+    }
+
     updateData.updatedBy = req.user.id;
-    
+
     const conductor = await Conductor.findByIdAndUpdate(
       id,
       updateData,
@@ -961,6 +968,57 @@ router.put('/:id', auth, requireRole(['admin']), async (req, res) => {
       success: false,
       message: 'Internal server error'
     });
+  }
+});
+
+// POST /api/conductor/:id/reset-credentials - Admin resets credentials to policy and removes username
+router.post('/:id/reset-credentials', auth, requireRole(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const conductor = await Conductor.findById(id);
+    if (!conductor) {
+      return res.status(404).json({ success: false, message: 'Conductor not found' });
+    }
+
+    let depotCode = '';
+    if (conductor.depotId) {
+      const depot = await Depot.findById(conductor.depotId).select('depotCode code');
+      depotCode = depot?.depotCode || depot?.code || '';
+    }
+
+    const nameSlug = String(conductor.name || 'conductor').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const digits = String(depotCode).match(/\d+/g)?.join('') || '';
+    const depotSuffix = digits || String(depotCode || '').toLowerCase() || '000';
+    const email = `${nameSlug}${depotSuffix}@yatrik.com`;
+
+    const bcrypt = require('bcryptjs');
+    const hashed = await bcrypt.hash('Yatrik123', 12);
+
+    conductor.email = email;
+    conductor.password = hashed;
+    conductor.markModified('password');
+
+    if (conductor.username) {
+      conductor.username = undefined;
+      await Conductor.updateOne({ _id: conductor._id }, { $unset: { username: '' } });
+    }
+
+    await conductor.save();
+
+    return res.json({
+      success: true,
+      message: 'Conductor credentials reset successfully',
+      data: {
+        id: conductor._id,
+        email,
+        passwordPolicy: 'Yatrik123',
+        usernameRemoved: true
+      }
+    });
+  } catch (error) {
+    console.error('Reset conductor credentials error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
@@ -1178,10 +1236,10 @@ router.get('/trips/:tripId/passengers', auth, requireRole(['conductor']), async 
   }
 });
 
-// POST /api/conductor/validate-ticket - Validate QR ticket
+// POST /api/conductor/validate-ticket - Validate QR ticket (signed payload)
 router.post('/validate-ticket', auth, requireRole(['conductor']), async (req, res) => {
   try {
-    const { pnr, seatNumber, passengerName, tripId } = req.body;
+    const { qr } = req.body; // expects stringified signed payload
     const conductorId = req.user.id;
 
     // Find the duty
@@ -1197,49 +1255,101 @@ router.post('/validate-ticket', auth, requireRole(['conductor']), async (req, re
       });
     }
 
-    // Validate ticket (simplified - in real implementation, check against booking system)
-    const isValidTicket = pnr && seatNumber && passengerName;
-    
-    if (!isValidTicket) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid ticket data'
-      });
+    if (!qr || typeof qr !== 'string') {
+      return res.status(400).json({ success: false, message: 'Missing QR payload' });
     }
 
-    // Add passenger to manifest or update boarding status
-    if (!duty.passengerManifest) {
-      duty.passengerManifest = [];
+    // Parse and verify QR
+    let parsed;
+    try {
+      parsed = JSON.parse(qr);
+    } catch (_e) {
+      return res.status(400).json({ success: false, message: 'Invalid QR format' });
     }
 
-    const existingPassenger = duty.passengerManifest.find(p => p.pnr === pnr);
-    
+    const { verifySignature } = require('../utils/qrSignature');
+    const valid = verifySignature(parsed);
+    if (!valid) {
+      return res.status(400).json({ success: false, message: 'QR signature invalid' });
+    }
+
+    // Basic expiry check
+    if (parsed.exp && Date.now() > parsed.exp) {
+      return res.status(400).json({ success: false, message: 'Ticket expired' });
+    }
+
+    // Locate active ticket by PNR or booking reference
+    const Ticket = require('../models/Ticket');
+    const Booking = require('../models/Booking');
+    const ticket = await Ticket.findOne({ pnr: parsed.pnr, state: 'active' }).populate('bookingId');
+    if (!ticket) {
+      return res.status(404).json({ success: false, message: 'Ticket not found or inactive' });
+    }
+
+    // Ensure ticket trip matches current duty trip
+    if (ticket.tripDetails?.tripId?.toString() !== duty.tripId?.toString()) {
+      return res.status(400).json({ success: false, message: 'Ticket is not valid for this trip' });
+    }
+
+    // Prevent double-scan
+    if (ticket.scannedAt) {
+      return res.status(400).json({ success: false, message: 'Ticket already scanned', data: { scannedAt: ticket.scannedAt, scannedBy: ticket.scannedBy } });
+    }
+
+    // Mark ticket scanned and add to history
+    ticket.scannedAt = new Date();
+    ticket.scannedBy = req.user.conductorId || req.user._id;
+    ticket.scannedLocation = duty.busId?.currentLocation || 'On Board';
+    ticket.validationHistory = ticket.validationHistory || [];
+    ticket.validationHistory.push({
+      conductorId: req.user.conductorId || req.user._id,
+      validatedAt: ticket.scannedAt,
+      location: { stopName: duty.nextStop || 'Unknown' }
+    });
+    ticket.state = 'validated';
+    await ticket.save();
+
+    // Update booking as boarded and set seat sold/boarded
+    if (ticket.bookingId) {
+      const booking = await Booking.findById(ticket.bookingId._id || ticket.bookingId);
+      if (booking) {
+        booking.status = 'boarded';
+        booking.boardedAt = ticket.scannedAt;
+        if (Array.isArray(booking.seats)) {
+          booking.seats = booking.seats.map(s =>
+            s.seatNumber === ticket.seatNumber ? { ...s.toObject?.() || s, status: 'boarded' } : s
+          );
+        }
+        await booking.save();
+      }
+    }
+
+    // Update duty manifest
+    if (!duty.passengerManifest) duty.passengerManifest = [];
+    const existingPassenger = duty.passengerManifest.find(p => p.pnr === ticket.pnr);
     if (existingPassenger) {
       existingPassenger.boardingStatus = 'boarded';
-      existingPassenger.boardingTime = new Date();
+      existingPassenger.boardingTime = ticket.scannedAt;
     } else {
       duty.passengerManifest.push({
-        pnr,
-        seatNumber,
-        name: passengerName,
+        pnr: ticket.pnr,
+        seatNumber: ticket.seatNumber,
+        name: ticket.passengerName,
         boardingStatus: 'boarded',
-        boardingTime: new Date()
+        boardingTime: ticket.scannedAt
       });
     }
-
-    // Update revenue (simplified calculation)
-    duty.revenue = (duty.revenue || 0) + 50; // Base fare
-
+    duty.boardedCount = (duty.boardedCount || 0) + 1;
     await duty.save();
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Ticket validated successfully',
       data: {
-        pnr,
-        seatNumber,
-        passengerName,
-        status: 'boarded'
+        pnr: ticket.pnr,
+        seatNumber: ticket.seatNumber,
+        passengerName: ticket.passengerName,
+        scannedAt: ticket.scannedAt
       }
     });
   } catch (error) {

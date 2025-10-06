@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import QRCode from 'qrcode.react';
 import { apiFetch } from '../../utils/api';
-import { Download, ArrowLeft, CheckCircle, Clock, MapPin, User, CreditCard, Bus } from 'lucide-react';
+import { Download, ArrowLeft, CheckCircle, Clock, MapPin, Bus, Navigation, Wifi, WifiOff, Share2, Mail } from 'lucide-react';
 
 const PassengerTicket = () => {
   const { pnr: pnrParam } = useParams();
@@ -12,6 +12,23 @@ const PassengerTicket = () => {
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Live tracking state
+  const [liveTracking, setLiveTracking] = useState({
+    isActive: false,
+    busLocation: null,
+    eta: null,
+    lastUpdate: null,
+    connectionStatus: 'disconnected'
+  });
+
+  // Email sharing state
+  const [emailShare, setEmailShare] = useState({
+    isOpen: false,
+    recipientEmail: '',
+    message: '',
+    isLoading: false
+  });
 
   useEffect(() => {
     async function loadTicket() {
@@ -43,27 +60,29 @@ const PassengerTicket = () => {
             passengerPhone: bookingData.customer?.phone || '',
             passengerAge: bookingData.customer?.age || '',
             passengerGender: bookingData.customer?.gender || '',
-            from: bookingData.journey?.from || 'Origin',
-            to: bookingData.journey?.to || 'Destination',
+            from: bookingData.journey?.from || bookingData.trip?.routeId?.startingPoint?.city || 'Kochi',
+            to: bookingData.journey?.to || bookingData.trip?.routeId?.endingPoint?.city || 'Thiruvananthapuram',
+            routeName: bookingData.trip?.routeId?.routeName || `${bookingData.journey?.from || 'Kochi'} to ${bookingData.journey?.to || 'Thiruvananthapuram'}`,
             departureDate: bookingData.journey?.departureDate || new Date().toISOString().split('T')[0],
             departureTime: bookingData.journey?.departureTime || '08:00',
             arrivalTime: bookingData.journey?.arrivalTime || '14:00',
             seatNumbers: bookingData.seats?.map(s => s.seatNumber).join(', ') || 'U1',
-            amount: bookingData.pricing?.totalAmount || 450,
-            boardingPoint: bookingData.journey?.boardingPoint || 'Central Bus Stand',
-            droppingPoint: bookingData.journey?.droppingPoint || 'Central Bus Stand',
-            busNumber: bookingData.bus?.busNumber || 'KL-07-AB-1234',
-            busType: bookingData.bus?.busType || 'AC Sleeper',
+            amount: bookingData.pricing?.totalAmount || bookingData.pricing?.total || 450,
+            boardingPoint: bookingData.journey?.boardingPoint || bookingData.trip?.routeId?.startingPoint?.location || 'Central Bus Stand',
+            droppingPoint: bookingData.journey?.droppingPoint || bookingData.trip?.routeId?.endingPoint?.location || 'Central Bus Stand',
+            busNumber: bookingData.bus?.busNumber || bookingData.trip?.busId?.busNumber || 'KL-07-AB-1234',
+            busType: bookingData.bus?.busType || bookingData.trip?.busId?.busType || 'AC Sleeper',
             qrData: JSON.stringify({
               pnr: pnr,
               bookingId: bookingData.bookingId,
               passengerName: bookingData.customer?.name || 'Guest Passenger',
-              from: bookingData.journey?.from || 'Origin',
-              to: bookingData.journey?.to || 'Destination',
+              from: bookingData.journey?.from || bookingData.trip?.routeId?.startingPoint?.city || 'Kochi',
+              to: bookingData.journey?.to || bookingData.trip?.routeId?.endingPoint?.city || 'Thiruvananthapuram',
+              routeName: bookingData.trip?.routeId?.routeName || `${bookingData.journey?.from || 'Kochi'} to ${bookingData.journey?.to || 'Thiruvananthapuram'}`,
               departureDate: bookingData.journey?.departureDate || new Date().toISOString().split('T')[0],
               departureTime: bookingData.journey?.departureTime || '08:00',
               seatNumbers: bookingData.seats?.map(s => s.seatNumber).join(', ') || 'U1',
-              amount: bookingData.pricing?.totalAmount || 450
+              amount: bookingData.pricing?.totalAmount || bookingData.pricing?.total || 450
             })
           };
           setTicket(ticket);
@@ -73,27 +92,29 @@ const PassengerTicket = () => {
             pnr: pnr,
             bookingId: `BK${Date.now().toString().slice(-8)}`,
             status: 'confirmed',
-            passengerName: 'Guest Passenger',
+            passengerName: 'Rito Tensy',
             from: 'Kochi',
             to: 'Thiruvananthapuram',
+            routeName: 'Kochi to Thiruvananthapuram',
             departureDate: new Date().toISOString().split('T')[0],
             departureTime: '08:00',
             arrivalTime: '14:00',
-            seatNumbers: 'U1, U2',
+            seatNumbers: 'U1',
             amount: 450,
-            boardingPoint: 'Kochi Central Bus Stand',
-            droppingPoint: 'Thiruvananthapuram Central Bus Stand',
+            boardingPoint: 'KSRTC Bus Station',
+            droppingPoint: 'Central Bus Station',
             busNumber: 'KL-07-AB-1234',
             busType: 'AC Sleeper',
             qrData: JSON.stringify({
               pnr: pnr,
               bookingId: `BK${Date.now().toString().slice(-8)}`,
-              passengerName: 'Guest Passenger',
+              passengerName: 'Rito Tensy',
               from: 'Kochi',
               to: 'Thiruvananthapuram',
+              routeName: 'Kochi to Thiruvananthapuram',
               departureDate: new Date().toISOString().split('T')[0],
               departureTime: '08:00',
-              seatNumbers: 'U1, U2',
+              seatNumbers: 'U1',
               amount: 450
             })
           };
@@ -109,6 +130,123 @@ const PassengerTicket = () => {
 
     loadTicket();
   }, [pnr]);
+
+  // Live tracking functions
+  const startLiveTracking = async () => {
+    if (!ticket?.busNumber) return;
+    
+    setLiveTracking(prev => ({ ...prev, isActive: true, connectionStatus: 'connecting' }));
+    
+    try {
+      // Fetch initial bus location
+      const response = await apiFetch(`/api/tracking/bus/${ticket.busNumber}`);
+      if (response.ok) {
+        setLiveTracking(prev => ({
+          ...prev,
+          busLocation: response.data.location,
+          eta: response.data.eta,
+          lastUpdate: new Date(),
+          connectionStatus: 'connected'
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch bus location:', error);
+      setLiveTracking(prev => ({ ...prev, connectionStatus: 'error' }));
+    }
+  };
+
+  const stopLiveTracking = () => {
+    setLiveTracking(prev => ({ ...prev, isActive: false, connectionStatus: 'disconnected' }));
+  };
+
+  // Auto-refresh tracking data every 30 seconds
+  useEffect(() => {
+    if (!liveTracking.isActive) return;
+
+    const interval = setInterval(async () => {
+      if (!ticket?.busNumber) return;
+      
+      try {
+        const response = await apiFetch(`/api/tracking/bus/${ticket.busNumber}`);
+        if (response.ok) {
+          setLiveTracking(prev => ({
+            ...prev,
+            busLocation: response.data.location,
+            eta: response.data.eta,
+            lastUpdate: new Date(),
+            connectionStatus: 'connected'
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to update bus location:', error);
+        setLiveTracking(prev => ({ ...prev, connectionStatus: 'error' }));
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [liveTracking.isActive, ticket?.busNumber]);
+
+  // Email sharing functions
+  const openEmailShare = () => {
+    setEmailShare(prev => ({
+      ...prev,
+      isOpen: true,
+      message: `Hi! I'm currently on bus ${ticket?.busNumber} and wanted to share my live location with you. You can track my journey in real-time.`
+    }));
+  };
+
+  const closeEmailShare = () => {
+    setEmailShare(prev => ({
+      ...prev,
+      isOpen: false,
+      recipientEmail: '',
+      message: '',
+      isLoading: false
+    }));
+  };
+
+  const sendTrackingEmail = async () => {
+    if (!emailShare.recipientEmail || !liveTracking.busLocation) return;
+
+    setEmailShare(prev => ({ ...prev, isLoading: true }));
+
+    try {
+      const trackingData = {
+        recipientEmail: emailShare.recipientEmail,
+        passengerName: ticket?.passengerName || 'Passenger',
+        busNumber: ticket?.busNumber,
+        busType: ticket?.busType,
+        route: `${ticket?.from} → ${ticket?.to}`,
+        currentLocation: liveTracking.busLocation.address || liveTracking.busLocation.landmark,
+        coordinates: liveTracking.busLocation.coordinates,
+        eta: liveTracking.eta,
+        tripProgress: liveTracking.trip?.progress || 0,
+        message: emailShare.message,
+        trackingUrl: `${window.location.origin}/passenger/ticket/${ticket?.pnr}`,
+        mapUrl: `https://www.google.com/maps?q=${liveTracking.busLocation.coordinates?.lat},${liveTracking.busLocation.coordinates?.lng}`
+      };
+
+      const response = await apiFetch('/api/tracking/share-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(trackingData)
+      });
+
+      if (response.ok) {
+        alert('Live tracking location shared successfully!');
+        closeEmailShare();
+      } else {
+        alert('Failed to send tracking email. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error sending tracking email:', error);
+      alert('Failed to send tracking email. Please check your connection.');
+    } finally {
+      setEmailShare(prev => ({ ...prev, isLoading: false }));
+    }
+  };
 
   const downloadTicket = () => {
     // Create a simple text-based ticket for download
@@ -251,12 +389,15 @@ Please present this ticket at boarding.
                   </div>
                 </div>
                 <div className="text-center mt-3">
-                  <span className="text-sm text-gray-600">{new Date(ticket.departureDate).toLocaleDateString('en-IN', { 
+                  <div className="text-sm text-gray-600">{new Date(ticket.departureDate).toLocaleDateString('en-IN', { 
                     weekday: 'short', 
                     day: 'numeric', 
                     month: 'short',
                     year: 'numeric'
-                  })}</span>
+                  })}</div>
+                  {ticket.routeName && (
+                    <div className="text-xs text-gray-500 mt-1">{ticket.routeName}</div>
+                  )}
                 </div>
               </div>
 
@@ -350,6 +491,124 @@ Please present this ticket at boarding.
                 Download Ticket
               </button>
             </div>
+
+            {/* Live Bus Tracking Card */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <Navigation className="w-5 h-5 text-blue-600" />
+                  Live Bus Tracking
+                </h3>
+                <div className="flex items-center gap-2">
+                  {liveTracking.connectionStatus === 'connected' && <Wifi className="w-4 h-4 text-green-600" />}
+                  {liveTracking.connectionStatus === 'error' && <WifiOff className="w-4 h-4 text-red-600" />}
+                  {liveTracking.connectionStatus === 'connecting' && (
+                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                  )}
+                </div>
+              </div>
+
+              {liveTracking.isActive ? (
+                <div className="space-y-4">
+                  {liveTracking.busLocation ? (
+                    <div className="bg-blue-50 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-blue-900">Current Location</span>
+                        <span className="text-xs text-blue-600">
+                          {liveTracking.lastUpdate ? 
+                            `Updated ${Math.floor((new Date() - liveTracking.lastUpdate) / 1000)}s ago` : 
+                            'Just now'
+                          }
+                        </span>
+                      </div>
+                      <div className="text-sm text-blue-800 mb-3">
+                        {liveTracking.busLocation.address || 'Near ' + liveTracking.busLocation.landmark || 'On Route'}
+                      </div>
+                      
+                      {/* Google Maps Integration */}
+                      <div className="mb-3">
+                        <iframe
+                          src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dgsWcQ&q=${liveTracking.busLocation.coordinates?.lat},${liveTracking.busLocation.coordinates?.lng}&zoom=15`}
+                          width="100%"
+                          height="150"
+                          style={{ border: 0, borderRadius: '8px' }}
+                          allowFullScreen=""
+                          loading="lazy"
+                          referrerPolicy="no-referrer-when-downgrade"
+                          title="Bus Location Map"
+                        ></iframe>
+                      </div>
+                      
+                      {liveTracking.eta && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-blue-600" />
+                          <span className="text-sm text-blue-700">
+                            ETA: {liveTracking.eta.minutes} minutes ({liveTracking.eta.arrivalTime})
+                          </span>
+                        </div>
+                      )}
+                      
+                      {liveTracking.trip && (
+                        <div className="mt-3 pt-3 border-t border-blue-200">
+                          <div className="text-xs text-blue-600 mb-1">Trip Progress</div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 bg-blue-200 rounded-full h-2">
+                              <div 
+                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${liveTracking.trip.progress}%` }}
+                              ></div>
+                            </div>
+                            <span className="text-xs text-blue-700 font-medium">{liveTracking.trip.progress}%</span>
+                          </div>
+                          <div className="text-xs text-blue-600 mt-1">
+                            {liveTracking.trip.from} → {liveTracking.trip.to}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                      <p className="text-sm text-gray-600">Fetching bus location...</p>
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={openEmailShare}
+                      className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Mail className="w-4 h-4" />
+                      Share Location
+                    </button>
+                    <button 
+                      onClick={stopLiveTracking}
+                      className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
+                    >
+                      Stop Tracking
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <div className="mb-4">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <Bus className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">Track your bus in real-time</p>
+                    <p className="text-xs text-gray-500">Get live location updates and ETA</p>
+                  </div>
+                  
+                  <button 
+                    onClick={startLiveTracking}
+                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Navigation className="w-4 h-4" />
+                    Start Live Tracking
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Boarding Points Card */}
@@ -400,6 +659,93 @@ Please present this ticket at boarding.
           </button>
         </div>
       </div>
+
+      {/* Email Sharing Modal */}
+      {emailShare.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Share2 className="w-5 h-5 text-blue-600" />
+                Share Live Location
+              </h3>
+              <button 
+                onClick={closeEmailShare}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Recipient Email
+                </label>
+                <input
+                  type="email"
+                  value={emailShare.recipientEmail}
+                  onChange={(e) => setEmailShare(prev => ({ ...prev, recipientEmail: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter email address"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Message (Optional)
+                </label>
+                <textarea
+                  value={emailShare.message}
+                  onChange={(e) => setEmailShare(prev => ({ ...prev, message: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows={3}
+                  placeholder="Add a personal message..."
+                />
+              </div>
+
+              {liveTracking.busLocation && (
+                <div className="bg-blue-50 rounded-lg p-3">
+                  <div className="text-sm text-blue-800">
+                    <strong>Current Location:</strong> {liveTracking.busLocation.address || liveTracking.busLocation.landmark}
+                  </div>
+                  {liveTracking.eta && (
+                    <div className="text-sm text-blue-700 mt-1">
+                      <strong>ETA:</strong> {liveTracking.eta.minutes} minutes
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={closeEmailShare}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={sendTrackingEmail}
+                  disabled={!emailShare.recipientEmail || emailShare.isLoading}
+                  className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors flex items-center justify-center gap-2"
+                >
+                  {emailShare.isLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-4 h-4" />
+                      Send Location
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

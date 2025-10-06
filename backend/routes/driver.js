@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Driver = require('../models/Driver');
 const Duty = require('../models/Duty');
+const Depot = require('../models/Depot');
 const { auth, requireRole } = require('../middleware/auth');
 const { validateDriverData } = require('../middleware/validation');
 
@@ -137,7 +138,8 @@ router.post('/login', async (req, res) => {
           depotId: driver.depotId,
           currentDuty: driver.currentDuty,
           drivingLicense: driver.drivingLicense
-        }
+        },
+        redirectPath: '/driver'
       }
     });
 
@@ -999,15 +1001,20 @@ router.post('/', auth, requireRole(['admin', 'depot_manager']), validateDriverDa
 router.put('/:id', auth, requireRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
-    
-    // Remove sensitive fields that shouldn't be updated
-    delete updateData.password;
-    delete updateData.username;
+    const updateData = { ...req.body };
+
+    // Prevent immutable fields from being updated directly
+    delete updateData.username; // managed separately
     delete updateData.driverId;
-    
+
+    // Handle password hashing if provided
+    if (updateData.password) {
+      const bcrypt = require('bcryptjs');
+      updateData.password = await bcrypt.hash(updateData.password, 12);
+    }
+
     updateData.updatedBy = req.user.id;
-    
+
     const driver = await Driver.findByIdAndUpdate(
       id,
       updateData,
@@ -1033,6 +1040,63 @@ router.put('/:id', auth, requireRole(['admin']), async (req, res) => {
       success: false,
       message: 'Internal server error'
     });
+  }
+});
+
+// POST /api/driver/:id/reset-credentials - Admin resets credentials to policy and removes username
+router.post('/:id/reset-credentials', auth, requireRole(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const driver = await Driver.findById(id);
+    if (!driver) {
+      return res.status(404).json({ success: false, message: 'Driver not found' });
+    }
+
+    // Fetch depot code/number
+    let depotCode = '';
+    if (driver.depotId) {
+      const depot = await Depot.findById(driver.depotId).select('depotCode code');
+      depotCode = depot?.depotCode || depot?.code || '';
+    }
+
+    // Build email: {name}{depot-number}@yatrik.com
+    const nameSlug = String(driver.name || 'driver').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const digits = String(depotCode).match(/\d+/g)?.join('') || '';
+    const depotSuffix = digits || String(depotCode || '').toLowerCase() || '000';
+    const email = `${nameSlug}${depotSuffix}@yatrik.com`;
+
+    // Hash default password
+    const bcrypt = require('bcryptjs');
+    const hashed = await bcrypt.hash('Yatrik123', 12);
+
+    // Update fields
+    driver.email = email;
+    driver.password = hashed;
+    driver.markModified('password');
+
+    // Remove username field
+    if (driver.username) {
+      driver.username = undefined;
+      // Ensure unset in DB
+      await Driver.updateOne({ _id: driver._id }, { $unset: { username: '' } });
+    }
+
+    await driver.save();
+
+    return res.json({
+      success: true,
+      message: 'Driver credentials reset successfully',
+      data: {
+        id: driver._id,
+        email,
+        passwordPolicy: 'Yatrik123',
+        usernameRemoved: true
+      }
+    });
+  } catch (error) {
+    console.error('Reset driver credentials error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 

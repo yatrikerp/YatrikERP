@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../../context/AuthContext';
+// import { useAuth } from '../../../context/AuthContext';
 import { tripApiService } from '../../../services/depotApiService';
 import io from 'socket.io-client';
 import './ManagementPages.css';
@@ -8,16 +8,12 @@ import {
   Search, 
   Eye, 
   Edit, 
-  Trash2, 
   Calendar,
   Clock, 
-  MapPin,
   Bus,
-  CheckCircle,
   AlertCircle,
   X,
   Play,
-  Pause,
   Square
 } from 'lucide-react';
 
@@ -26,6 +22,7 @@ const TripManagement = () => {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -396,9 +393,7 @@ const TripManagement = () => {
                     <div className="action-buttons">
                       <button
                         className="action-btn view"
-                        onClick={() => {
-                          setSelectedTrip(trip);
-                        }}
+                        onClick={() => { setSelectedTrip(trip); setShowViewModal(true); }}
                       >
                         <Eye size={16} />
                         View
@@ -553,6 +548,38 @@ const TripManagement = () => {
                     Schedule Trip
                   </button>
               </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Trip Modal */}
+      {showViewModal && selectedTrip && (
+        <div className="modal-overlay" onClick={() => setShowViewModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Trip Details</h2>
+              <button className="modal-close" onClick={() => setShowViewModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group"><label>Trip Number</label><div>{selectedTrip.tripNumber}</div></div>
+              <div className="form-group"><label>Route</label><div>{selectedTrip.routeId?.routeName} ({selectedTrip.routeId?.routeNumber})</div></div>
+              <div className="form-group"><label>Bus</label><div>{selectedTrip.busId?.busNumber}</div></div>
+              <div className="form-row">
+                <div className="form-group"><label>Driver</label><div>{selectedTrip.driverId?.name}</div></div>
+                <div className="form-group"><label>Conductor</label><div>{selectedTrip.conductorId?.name}</div></div>
+              </div>
+              <div className="form-row">
+                <div className="form-group"><label>Date</label><div>{new Date(selectedTrip.serviceDate).toLocaleDateString()}</div></div>
+                <div className="form-group"><label>Time</label><div>{selectedTrip.startTime} - {selectedTrip.endTime}</div></div>
+              </div>
+              <div className="form-group"><label>Status</label><div>{selectedTrip.status}</div></div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setShowViewModal(false)}>Close</button>
+              <button className="btn btn-primary" onClick={() => { setShowViewModal(false); setShowEditModal(true); }}>Edit</button>
+            </div>
           </div>
         </div>
       )}

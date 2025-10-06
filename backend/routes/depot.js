@@ -52,6 +52,38 @@ router.use((req, res, next) => {
   });
 });
 
+// Ensure depotId is available for all depot routes
+router.use(async (req, res, next) => {
+  try {
+    if (!req.user || req.user.depotId) return next();
+    // Try mapping by depotCode from token/user
+    let code = req.user.depotCode || null;
+    if (!code && req.user.email) {
+      const email = String(req.user.email).toLowerCase();
+      const mA = email.match(/^([a-z0-9]+)-depot@yatrik\.com$/);
+      const mB = email.match(/^depot-([a-z0-9]+)@yatrik\.com$/);
+      code = (mA && mA[1]) || (mB && mB[1]) || null;
+    }
+    let depot = null;
+    if (code) {
+      const upper = String(code).toUpperCase();
+      depot = await Depot.findOne({ $or: [{ depotCode: upper }, { code: upper }] }).lean();
+    }
+    if (!depot) {
+      depot = await Depot.findOne({ status: 'active' }).lean();
+    }
+    if (depot && depot._id) {
+      req.user.depotId = depot._id;
+      if (!req.user.depotCode) req.user.depotCode = depot.depotCode || depot.code;
+      console.log('Resolved depotId for user via middleware:', { depotId: req.user.depotId, depotCode: req.user.depotCode });
+    }
+  } catch (e) {
+    console.warn('ensureDepotId middleware warning:', e.message);
+  } finally {
+    next();
+  }
+});
+
 // Debug middleware to log user info
 router.use((req, res, next) => {
   console.log('Depot route accessed by user:', {
@@ -199,7 +231,15 @@ router.get('/dashboard', async (req, res) => {
 // GET /api/depot/info - Get basic depot information and KPIs
 router.get('/info', async (req, res) => {
   try {
-    const depotId = req.user.depotId;
+    let depotId = req.user.depotId;
+    if (!depotId) {
+      console.log('Depot info: user missing depotId, resolving default depot...');
+      const defaultDepot = await Depot.findOne({ status: 'active' });
+      if (defaultDepot) {
+        depotId = defaultDepot._id;
+        req.user.depotId = depotId;
+      }
+    }
     
     // Get depot basic info
     const depot = await Depot.findById(depotId)

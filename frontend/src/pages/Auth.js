@@ -171,6 +171,8 @@ const Auth = ({ initialMode = 'login' }) => {
       // Check for pending booking from popular routes
       const pendingBooking = localStorage.getItem('pendingBooking');
       const returnUrl = searchParams.get('return');
+      const nextUrl = searchParams.get('next');
+      const authRedirectPath = sessionStorage.getItem('authRedirectPath');
       
       // If passenger with pending booking, redirect to booking choice
       if (pendingBooking && (user.role || 'passenger').toUpperCase() === 'PASSENGER') {
@@ -181,6 +183,7 @@ const Auth = ({ initialMode = 'login' }) => {
             replace: true,
             state: { bookingContext }
           });
+          sessionStorage.removeItem('authRedirectPath');
           return;
         } catch (e) {
           console.error('Error parsing pending booking:', e);
@@ -192,9 +195,27 @@ const Auth = ({ initialMode = 'login' }) => {
       if (returnUrl) {
         console.log('[Auth] Using return URL:', returnUrl);
         navigate(returnUrl, { replace: true });
+        sessionStorage.removeItem('authRedirectPath');
+        return;
+      }
+
+      // If there's an explicit next URL (from protected admin pages)
+      if (nextUrl) {
+        console.log('[Auth] Using next URL:', nextUrl);
+        navigate(nextUrl, { replace: true });
+        sessionStorage.removeItem('authRedirectPath');
         return;
       }
       
+      // If backend provided a redirect path, use it
+      if (authRedirectPath) {
+        console.log('[Auth] Using backend redirect path:', authRedirectPath);
+        navigate(authRedirectPath, { replace: true });
+        sessionStorage.removeItem('authRedirectPath');
+        return;
+      }
+      
+      // Fallback to role-based routing
       const role = (user.role || 'passenger').toUpperCase();
       const dest = role === 'ADMIN' ? '/admin' : 
                    role === 'CONDUCTOR' ? '/conductor' : 
@@ -283,17 +304,41 @@ const Auth = ({ initialMode = 'login' }) => {
     toast.success('Signing in...', { duration: 1000 });
     
     try {
-      const email = loginForm.email.trim().toLowerCase();
+      const identifierRaw = loginForm.email.trim();
+      const email = identifierRaw.toLowerCase();
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
       // Accept both patterns: code-depot@yatrik.com or depot-code@yatrik.com
       const isDepotEmail = /^([a-z0-9]+-depot|depot-[a-z0-9]+)@yatrik\.com$/i.test(email);
-      const url = isDepotEmail ? '/api/depot-auth/login' : '/api/auth/login';
-      const body = isDepotEmail
-        ? { email: email, password: loginForm.password }
-        : { email, password: loginForm.password };
 
-      console.log('[Auth] Login attempt:', { email, isDepotEmail, url, body });
+      // Decide endpoint and body based on identifier
+      let url = '/api/auth/login';
+      let body = { email, password: loginForm.password };
+      let roleHint = 'user';
 
-      const res = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
+      if (isDepotEmail) {
+        url = '/api/depot-auth/login';
+        body = { email, password: loginForm.password };
+        roleHint = 'depot_manager';
+      } else if (!isEmail) {
+        // Username-based login → try driver first, then conductor on 401
+        url = '/api/driver/login';
+        body = { username: identifierRaw, password: loginForm.password };
+        roleHint = 'driver';
+      }
+
+      console.log('[Auth] Login attempt:', { identifierRaw, email, isEmail, isDepotEmail, url, body, roleHint });
+
+      let res = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
+
+      // If username-based and driver failed with 401, try conductor
+      if (!res.ok && !isEmail && url === '/api/driver/login' && (res.status === 401 || res.status === 404)) {
+        console.warn('[Auth] Driver login failed, attempting conductor login...');
+        url = '/api/conductor/login';
+        body = { username: identifierRaw, password: loginForm.password };
+        roleHint = 'conductor';
+        res = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
+      }
+
       console.log('[Auth] Login response:', res);
       
       if (!res.ok) { 
@@ -302,12 +347,51 @@ const Auth = ({ initialMode = 'login' }) => {
         return; 
       }
 
-      // Support both generic and depot-auth response shapes
-      const user = res.data?.user || res.data?.data?.user;
-      const token = res.data?.token || res.data?.data?.token;
-      console.log('[Auth] Extracted user and token:', { user, token });
+      // Normalize responses across roles
+      let user = res.data?.user || res.data?.data?.user;
+      let token = res.data?.token || res.data?.data?.token;
+      let redirectPath = res.data?.redirectPath || res.data?.data?.redirectPath;
+
+      // Driver shape: { data: { token, driver: { ... } } }
+      if (!user && res.data?.data?.driver) {
+        const d = res.data.data.driver;
+        user = {
+          _id: d.id || d._id,
+          name: d.name,
+          email: d.email || '',
+          role: 'driver',
+          depotId: d.depotId,
+          currentDuty: d.currentDuty
+        };
+        token = res.data.data.token;
+      }
+
+      // Conductor shape: { data: { token, conductor: { ... } } }
+      if (!user && res.data?.data?.conductor) {
+        const c = res.data.data.conductor;
+        user = {
+          _id: c.id || c._id,
+          name: c.name,
+          email: c.email || '',
+          role: 'conductor',
+          depotId: c.depotId,
+          currentDuty: c.currentDuty
+        };
+        token = res.data.data.token;
+      }
+
+      // If still missing role, use hint
+      if (user && !user.role && roleHint !== 'user') {
+        user.role = roleHint;
+      }
+
+      console.log('[Auth] Extracted user and token:', { user, token, redirectPath });
       
       if (user && token) {
+        // Store redirect path if provided by backend
+        if (redirectPath) {
+          sessionStorage.setItem('authRedirectPath', redirectPath);
+        }
         // Immediate login without waiting for profile fetch
         await fetchProfileAndLogin(user, token);
       } else {
@@ -330,7 +414,14 @@ const Auth = ({ initialMode = 'login' }) => {
     try {
       const payload = { name: signupForm.name, email: signupForm.email, phone: '+91' + signupForm.phone, password: signupForm.password, role: 'passenger' };
       const res = await apiFetch('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) });
-      if (!res.ok) { toast.error(res.message || 'Registration failed'); return; }
+      if (!res.ok) {
+        const msg = res.message || res.data?.message;
+        const firstError = Array.isArray(res.data?.errors) && res.data.errors.length > 0 ? (res.data.errors[0]?.msg || res.data.errors[0]?.message) : undefined;
+        const details = res.data?.details || res.data?.error;
+        const finalMsg = msg || firstError || details || 'Registration failed';
+        toast.error(finalMsg);
+        return;
+      }
       const user = res.data.data?.user || res.data.user;
       const token = res.data.data?.token || res.data.token;
       if (user && token) {

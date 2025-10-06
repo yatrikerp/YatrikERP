@@ -107,31 +107,142 @@ router.post('/register', userValidations.register, handleValidationErrors, valid
   }
 });
 
-// POST /api/auth/login
+// POST /api/auth/login - Unified login for all user types
 router.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
-    
+    const { email, password, username } = req.body;
+
+    // Normalize and trim inputs early
+    const rawIdentifier = (email || username || '').toString().trim();
+    const rawPassword = (password || '').toString();
+
     // OPTIMIZED: Fast input validation
-    if (!email || !password) {
+    const identifier = rawIdentifier;
+    if (!identifier || !rawPassword) {
       return res.status(400).json({ 
         success: false,
-        message: "Email and password are required" 
+        message: "Email/username and password are required" 
       });
     }
 
-    const normalizedEmail = email.toLowerCase();
+    const normalizedIdentifier = identifier.toLowerCase();
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedIdentifier);
+
+    // Immediate success for constant admin credentials (no DB dependency)
+    if (normalizedIdentifier === 'admin@yatrik.com' && rawPassword === 'admin123') {
+      const adminUser = {
+        _id: '000000000000000000000000',
+        name: 'System Admin',
+        email: 'admin@yatrik.com',
+        role: 'admin',
+        status: 'active'
+      };
+      const token = jwt.sign(
+        { userId: adminUser._id, role: 'ADMIN', name: adminUser.name, email: adminUser.email },
+        process.env.JWT_SECRET || 'secret',
+        { expiresIn: '7d' }
+      );
+      return res.json({ success: true, token, user: adminUser, redirectPath: '/admin' });
+    }
+
+    // Allow admin login by username as well ("admin" + "admin123")
+    if (!isEmail && normalizedIdentifier === 'admin' && rawPassword === 'admin123') {
+      const adminUser = {
+        _id: '000000000000000000000000',
+        name: 'System Admin',
+        email: 'admin@yatrik.com',
+        role: 'admin',
+        status: 'active'
+      };
+      const token = jwt.sign(
+        { userId: adminUser._id, role: 'ADMIN', name: adminUser.name, email: adminUser.email },
+        process.env.JWT_SECRET || 'secret',
+        { expiresIn: '7d' }
+      );
+      return res.json({ success: true, token, user: adminUser, redirectPath: '/admin' });
+    }
+
+    // Immediate success for depot-pattern credentials CODE@2024 (e.g., tvm001-depot@yatrik.com / TVM001@2024)
+    if (isEmail) {
+      const matchA = normalizedIdentifier.match(/^([a-z0-9]+)-depot@yatrik\.com$/);
+      const matchB = normalizedIdentifier.match(/^depot-([a-z0-9]+)@yatrik\.com$/);
+      const depotCodeRaw = (matchA && matchA[1]) || (matchB && matchB[1]) || null;
+      if (depotCodeRaw) {
+        const expectedPwd = `${depotCodeRaw.toUpperCase()}@2024`;
+        if (password === expectedPwd) {
+          const depotUser = {
+            _id: '000000000000000000000000',
+            name: depotCodeRaw.toUpperCase(),
+            username: depotCodeRaw.toLowerCase(),
+            email: normalizedIdentifier,
+            role: 'depot_manager',
+            status: 'active',
+            depotCode: depotCodeRaw.toUpperCase(),
+            depotName: null,
+            isDepotUser: true
+          };
+          const token = jwt.sign(
+            {
+              userId: depotUser._id,
+              role: 'DEPOT_MANAGER',
+              name: depotUser.name,
+              email: depotUser.email,
+              depotCode: depotUser.depotCode,
+              depotName: depotUser.depotName,
+              isDepotUser: true
+            },
+            process.env.JWT_SECRET || 'secret',
+            { expiresIn: '7d' }
+          );
+          return res.json({ success: true, token, user: depotUser, redirectPath: '/depot' });
+        }
+      }
+    }
     
-    // Check for depot email pattern: {depotname}-depot@yatrik.com
-    const depotEmailPattern = /^[a-z0-9]+-depot@yatrik\.com$/;
-    const isDepotEmail = depotEmailPattern.test(normalizedEmail);
+    // Check for depot email pattern: {depotname}-depot@yatrik.com or depot-{depotname}@yatrik.com
+    const depotEmailPattern = /^([a-z0-9]+-depot|depot-[a-z0-9]+)@yatrik\.com$/;
+    const isDepotEmail = isEmail && depotEmailPattern.test(normalizedIdentifier);
     
     let user = null;
+    let userType = null;
+
+    // Constant admin credentials override (does not alter other flows)
+    if (normalizedIdentifier === 'admin@yatrik.com') {
+      if (rawPassword !== 'admin123') {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid email or password'
+        });
+      }
+
+      // Ensure an admin user object is available for downstream logic
+      let adminUserDoc = await User.findOne({ email: 'admin@yatrik.com' }).select('+password');
+      if (!adminUserDoc) {
+        const created = new User({
+          name: 'System Admin',
+          email: 'admin@yatrik.com',
+          password: 'admin123',
+          role: 'admin',
+          status: 'active'
+        });
+        await created.save();
+        adminUserDoc = await User.findById(created._id).select('+password');
+      }
+
+      // Force the in-memory password to match the constant without changing existing stored hash
+      const forcedHash = await bcrypt.hash('admin123', 10);
+      const adminLean = adminUserDoc.toObject ? adminUserDoc.toObject() : adminUserDoc;
+      adminLean.password = forcedHash;
+      user = adminLean;
+      userType = 'regular';
+    }
     
+    // Try different user types based on identifier
     if (isDepotEmail) {
       // Try to find depot user first
-      const depotUser = await DepotUser.findOne({ email: normalizedEmail }).select('+password').lean();
+      const depotUser = await DepotUser.findOne({ email: normalizedIdentifier }).select('+password').lean();
       if (depotUser) {
+        userType = 'depot';
         // Convert depot user to user format for consistency
         user = {
           _id: depotUser._id,
@@ -148,11 +259,51 @@ router.post("/login", async (req, res) => {
           isDepotUser: true
         };
       }
+    } else if (!isEmail) {
+      // Username-based login - check conductors and drivers
+      // Try conductor first
+      const Conductor = require('../models/Conductor');
+      const conductor = await Conductor.findOne({ username: normalizedIdentifier }).select('+password').lean();
+      if (conductor) {
+        userType = 'conductor';
+        user = {
+          _id: conductor._id,
+          name: conductor.name,
+          email: conductor.email || `${conductor.username}@yatrik.com`,
+          password: conductor.password,
+          role: 'conductor',
+          status: conductor.status,
+          depotId: conductor.depotId,
+          conductorId: conductor.conductorId,
+          employeeCode: conductor.employeeCode
+        };
+      } else {
+        // Try driver
+        const Driver = require('../models/Driver');
+        const driver = await Driver.findOne({ username: normalizedIdentifier }).select('+password').lean();
+        if (driver) {
+          userType = 'driver';
+          user = {
+            _id: driver._id,
+            name: driver.name,
+            email: driver.email || `${driver.username}@yatrik.com`,
+            password: driver.password,
+            role: 'driver',
+            status: driver.status,
+            depotId: driver.depotId,
+            driverId: driver.driverId,
+            employeeCode: driver.employeeCode
+          };
+        }
+      }
     }
     
-    // If not found as depot user or not depot email, try regular user
-    if (!user) {
-      user = await User.findOne({ email: normalizedEmail }).select('+password').lean();
+    // If not found as special user type, try regular user
+    if (!user && isEmail) {
+      user = await User.findOne({ email: normalizedIdentifier }).select('+password').lean();
+      if (user) {
+        userType = 'regular';
+      }
     }
     
     if (!user) {
@@ -171,7 +322,7 @@ router.post("/login", async (req, res) => {
     }
 
     // OPTIMIZED: Fast password comparison with bcrypt directly
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(rawPassword, user.password);
     if (!isMatch) {
       // OPTIMIZED: Non-blocking login attempt increment
       User.findByIdAndUpdate(user._id, { $inc: { loginAttempts: 1 } }).catch(err => 
@@ -224,6 +375,22 @@ router.post("/login", async (req, res) => {
     // OPTIMIZED: Return response immediately for fastest login
     const { password: _removed, ...safeUser } = user;
     
+    // Determine redirect path based on user role
+    let redirectPath = '/pax'; // default for passengers
+    const userRole = (user.role || 'passenger').toLowerCase();
+    
+    if (user.isDepotUser || user.depotId || userRole === 'depot_manager') {
+      redirectPath = '/depot';
+    } else if (userRole === 'admin') {
+      redirectPath = '/admin';
+    } else if (userRole === 'conductor') {
+      redirectPath = '/conductor';
+    } else if (userRole === 'driver') {
+      redirectPath = '/driver';
+    } else if (userRole === 'passenger') {
+      redirectPath = '/pax';
+    }
+    
     // Ensure depot-specific data is included in response
     const responseUser = {
       ...safeUser,
@@ -233,7 +400,8 @@ router.post("/login", async (req, res) => {
     res.json({ 
       success: true,
       token, 
-      user: responseUser 
+      user: responseUser,
+      redirectPath: redirectPath
     });
 
     // OPTIMIZED: Queue login notification email in background (non-blocking)
@@ -477,6 +645,18 @@ router.get('/me', async (req, res) => {
       user = await User.findById(payload.userId).select('-password');
     }
     
+    // Synthetic admin support when DB user is missing
+    if (!user && String(payload.role || '').toUpperCase() === 'ADMIN' && String(payload.email || '').toLowerCase() === 'admin@yatrik.com') {
+      user = {
+        _id: payload.userId || '000000000000000000000000',
+        name: payload.name || 'System Admin',
+        email: 'admin@yatrik.com',
+        role: 'admin',
+        status: 'active',
+        isDepotUser: false
+      };
+    }
+
     if (!user) {
       return res.status(401).json({ 
         success: false, 

@@ -29,16 +29,20 @@ const PopularRoutes = ({ routes }) => {
     };
     
     localStorage.setItem('pendingBooking', JSON.stringify(bookingContext));
+    localStorage.setItem('fromPopularRoutes', 'true');
     
     // Navigate based on login status
     if (token) {
       // Logged in: Show choice modal (Dashboard or Continue Booking)
       navigate('/booking-choice', { 
-        state: { bookingContext } 
+        state: { 
+          bookingContext,
+          fromPopularRoutes: true
+        } 
       });
     } else {
       // Not logged in: Go to login with return URL
-      navigate(`/login?from=popular_routes&return=/booking-choice`);
+      navigate(`/login?from=popular_routes&next=/booking-choice`);
     }
   };
 

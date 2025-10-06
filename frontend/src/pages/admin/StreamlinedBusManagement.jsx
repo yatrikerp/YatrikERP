@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import EnhancedBusTypeManager from '../../components/Admin/EnhancedBusTypeManager.jsx';
 import FarePolicyManager from '../../components/Admin/FarePolicyManager.jsx';
+import BulkTripScheduler from '../../components/Admin/BulkTripScheduler.jsx';
 import { toast } from 'react-hot-toast';
 import { apiFetch, clearApiCache } from '../../utils/api';
 
@@ -34,6 +35,9 @@ const StreamlinedBusManagement = () => {
   
   // Fare Policy Management
   const [showFarePolicyManager, setShowFarePolicyManager] = useState(false);
+  
+  // Bulk Trip Scheduler
+  const [showBulkTripScheduler, setShowBulkTripScheduler] = useState(false);
   
   // Bulk operations
   const [selectedBuses, setSelectedBuses] = useState([]);
@@ -769,7 +773,7 @@ const StreamlinedBusManagement = () => {
             </div>
           )}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
           <button onClick={() => setShowSingleAddModal(true)} className="p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center space-x-3"><div className="p-2 bg-blue-100 rounded-lg"><Plus className="w-5 h-5 text-blue-600" /></div><div className="text-left"><h4 className="font-semibold text-blue-900">Add Single Bus</h4><p className="text-sm text-blue-700">Add one bus with detailed specifications</p></div></button>
           <button onClick={() => setShowBulkAddModal(true)} className="p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center space-x-3"><div className="p-2 bg-green-100 rounded-lg"><Upload className="w-5 h-5 text-green-600" /></div><div className="text-left"><h4 className="font-semibold text-green-900">Bulk Add Buses</h4><p className="text-sm text-green-700">Add multiple buses at once (up to 100)</p></div></button>
           <button onClick={handleExport} className="p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors flex items-center space-x-3"><div className="p-2 bg-purple-100 rounded-lg"><Download className="w-5 h-5 text-purple-600" /></div><div className="text-left"><h4 className="font-semibold text-purple-900">Export Data</h4><p className="text-sm text-purple-700">Export bus data for external use</p></div></button>
@@ -807,6 +811,24 @@ const StreamlinedBusManagement = () => {
             <div className="text-left">
               <h4 className="font-semibold text-green-900">Fare Policy</h4>
               <p className="text-sm text-green-700">Set pricing rules & rates</p>
+            </div>
+          </button>
+          
+          {/* Bulk Trip Scheduler Button - NEW */}
+          <button 
+            onClick={() => {
+              console.log('🚀 Bulk Trip Scheduler button clicked!');
+              setShowBulkTripScheduler(true);
+            }} 
+            className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg hover:from-purple-100 hover:to-pink-100 transition-all duration-200 border-2 border-purple-200 hover:border-purple-300 shadow-sm hover:shadow-lg flex items-center space-x-3 relative"
+          >
+            <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+              HOT
+            </div>
+            <div className="p-2 bg-gradient-to-br from-purple-100 to-pink-100 rounded-lg"><Bus className="w-5 h-5 text-purple-600" /></div>
+            <div className="text-left">
+              <h4 className="font-semibold text-purple-900">Bulk Trip Scheduler</h4>
+              <p className="text-sm text-purple-700">Generate 6000+ trips automatically</p>
             </div>
           </button>
         </div>
@@ -940,6 +962,19 @@ const StreamlinedBusManagement = () => {
           console.log('Fare policies saved:', farePolicies);
           setShowFarePolicyManager(false);
           toast.success('Fare policies updated successfully!');
+        }}
+      />
+      
+      {/* Bulk Trip Scheduler Modal */}
+      <BulkTripScheduler 
+        isOpen={showBulkTripScheduler}
+        onClose={() => setShowBulkTripScheduler(false)}
+        onSuccess={(data) => {
+          console.log('Bulk trips generated successfully:', data);
+          setShowBulkTripScheduler(false);
+          toast.success(`Successfully generated ${data.totalGenerated} trips!`);
+          // Refresh bus data to show updated assignments
+          fetchData();
         }}
       />
     </div>

@@ -1,0 +1,4271 @@
+[
+  {
+    "_id": "68e23e518b11eac3d85dcba6",
+    "depotCode": "ALP",
+    "depotName": "ALAPPUZHA",
+    "category": "main",
+    "location": {
+      "address": "ALAPPUZHA Bus Station",
+      "city": "ALAPPUZHA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2251518",
+      "email": "alp-depot@yatrik.com",
+      "manager": {
+        "name": "ALAPPUZHA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:45:53.467Z",
+    "updatedAt": "2025-10-05T09:45:53.467Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e528b11eac3d85dcbae",
+    "depotCode": "ALY",
+    "depotName": "ALUVA",
+    "category": "main",
+    "location": {
+      "address": "ALUVA Bus Station",
+      "city": "ALUVA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2624007",
+      "email": "aly-depot@yatrik.com",
+      "manager": {
+        "name": "ALUVA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:45:54.125Z",
+    "updatedAt": "2025-10-05T09:45:54.125Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e528b11eac3d85dcbb2",
+    "depotCode": "ATL",
+    "depotName": "ATTINGAL",
+    "category": "main",
+    "location": {
+      "address": "ATTINGAL Bus Station",
+      "city": "ATTINGAL",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2622394",
+      "email": "atl-depot@yatrik.com",
+      "manager": {
+        "name": "ATTINGAL Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:45:54.721Z",
+    "updatedAt": "2025-10-05T09:45:54.721Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e538b11eac3d85dcbb6",
+    "depotCode": "CHR",
+    "depotName": "CHANGANASSERY",
+    "category": "main",
+    "location": {
+      "address": "CHANGANASSERY Bus Station",
+      "city": "CHANGANASSERY",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2421824",
+      "email": "chr-depot@yatrik.com",
+      "manager": {
+        "name": "CHANGANASSERY Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:45:55.287Z",
+    "updatedAt": "2025-10-05T09:45:55.287Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e538b11eac3d85dcbba",
+    "depotCode": "CGR",
+    "depotName": "CHENGANNUR",
+    "category": "main",
+    "location": {
+      "address": "CHENGANNUR Bus Station",
+      "city": "CHENGANNUR",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2452213",
+      "email": "cgr-depot@yatrik.com",
+      "manager": {
+        "name": "CHENGANNUR Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:45:55.890Z",
+    "updatedAt": "2025-10-05T09:45:55.890Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e548b11eac3d85dcbbe",
+    "depotCode": "CTL",
+    "depotName": "CHERTHALA",
+    "category": "main",
+    "location": {
+      "address": "CHERTHALA Bus Station",
+      "city": "CHERTHALA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2813052",
+      "email": "ctl-depot@yatrik.com",
+      "manager": {
+        "name": "CHERTHALA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:45:56.471Z",
+    "updatedAt": "2025-10-05T09:45:56.471Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e558b11eac3d85dcbc2",
+    "depotCode": "EKM",
+    "depotName": "ERNAKULAM",
+    "category": "main",
+    "location": {
+      "address": "ERNAKULAM Bus Station",
+      "city": "ERNAKULAM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2360531",
+      "email": "ekm-depot@yatrik.com",
+      "manager": {
+        "name": "ERNAKULAM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:45:57.366Z",
+    "updatedAt": "2025-10-05T09:45:57.366Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e558b11eac3d85dcbc6",
+    "depotCode": "KNR",
+    "depotName": "KANNUR",
+    "category": "main",
+    "location": {
+      "address": "KANNUR Bus Station",
+      "city": "KANNUR",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2705960",
+      "email": "knr-depot@yatrik.com",
+      "manager": {
+        "name": "KANNUR Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:45:57.977Z",
+    "updatedAt": "2025-10-05T09:45:57.977Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e568b11eac3d85dcbca",
+    "depotCode": "KGD",
+    "depotName": "KASERGOD",
+    "category": "main",
+    "location": {
+      "address": "KASERGOD Bus Station",
+      "city": "KASERGOD",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "4225677",
+      "email": "kgd-depot@yatrik.com",
+      "manager": {
+        "name": "KASERGOD Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:45:58.585Z",
+    "updatedAt": "2025-10-05T09:45:58.585Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e578b11eac3d85dcbce",
+    "depotCode": "KYM",
+    "depotName": "KAYAMKULAM",
+    "category": "main",
+    "location": {
+      "address": "KAYAMKULAM Bus Station",
+      "city": "KAYAMKULAM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2445249",
+      "email": "kym-depot@yatrik.com",
+      "manager": {
+        "name": "KAYAMKULAM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:45:59.433Z",
+    "updatedAt": "2025-10-05T09:45:59.433Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e588b11eac3d85dcbd2",
+    "depotCode": "KLM",
+    "depotName": "KOLLAM",
+    "category": "main",
+    "location": {
+      "address": "KOLLAM Bus Station",
+      "city": "KOLLAM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2751053",
+      "email": "klm-depot@yatrik.com",
+      "manager": {
+        "name": "KOLLAM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:00.086Z",
+    "updatedAt": "2025-10-05T09:46:00.086Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e588b11eac3d85dcbd6",
+    "depotCode": "KTR",
+    "depotName": "KOTTARAKKARA",
+    "category": "main",
+    "location": {
+      "address": "KOTTARAKKARA Bus Station",
+      "city": "KOTTARAKKARA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2452812",
+      "email": "ktr-depot@yatrik.com",
+      "manager": {
+        "name": "KOTTARAKKARA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:00.642Z",
+    "updatedAt": "2025-10-05T09:46:00.642Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e598b11eac3d85dcbda",
+    "depotCode": "KTM",
+    "depotName": "KOTTAYAM",
+    "category": "main",
+    "location": {
+      "address": "KOTTAYAM Bus Station",
+      "city": "KOTTAYAM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2562935",
+      "email": "ktm-depot@yatrik.com",
+      "manager": {
+        "name": "KOTTAYAM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:01.542Z",
+    "updatedAt": "2025-10-05T09:46:01.542Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e5a8b11eac3d85dcbde",
+    "depotCode": "KKD",
+    "depotName": "KOZHIKKODE",
+    "category": "main",
+    "location": {
+      "address": "KOZHIKKODE Bus Station",
+      "city": "KOZHIKKODE",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2390350",
+      "email": "kkd-depot@yatrik.com",
+      "manager": {
+        "name": "KOZHIKKODE Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:02.125Z",
+    "updatedAt": "2025-10-05T09:46:02.125Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e5a8b11eac3d85dcbe2",
+    "depotCode": "MVP",
+    "depotName": "MOOVATTUPUZHA",
+    "category": "main",
+    "location": {
+      "address": "MOOVATTUPUZHA Bus Station",
+      "city": "MOOVATTUPUZHA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2832626",
+      "email": "mvp-depot@yatrik.com",
+      "manager": {
+        "name": "MOOVATTUPUZHA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:02.687Z",
+    "updatedAt": "2025-10-05T09:46:02.687Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e5b8b11eac3d85dcbe6",
+    "depotCode": "NDD",
+    "depotName": "NEDUMANGAD",
+    "category": "main",
+    "location": {
+      "address": "NEDUMANGAD Bus Station",
+      "city": "NEDUMANGAD",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2802396",
+      "email": "ndd-depot@yatrik.com",
+      "manager": {
+        "name": "NEDUMANGAD Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:03.669Z",
+    "updatedAt": "2025-10-05T09:46:03.669Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e5c8b11eac3d85dcbea",
+    "depotCode": "NTA",
+    "depotName": "NEYYATINKARA",
+    "category": "main",
+    "location": {
+      "address": "NEYYATINKARA Bus Station",
+      "city": "NEYYATINKARA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2222225",
+      "email": "nta-depot@yatrik.com",
+      "manager": {
+        "name": "NEYYATINKARA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:04.221Z",
+    "updatedAt": "2025-10-05T09:46:04.221Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e5c8b11eac3d85dcbee",
+    "depotCode": "PLA",
+    "depotName": "PALA",
+    "category": "main",
+    "location": {
+      "address": "PALA Bus Station",
+      "city": "PALA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2212711",
+      "email": "pla-depot@yatrik.com",
+      "manager": {
+        "name": "PALA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:04.839Z",
+    "updatedAt": "2025-10-05T09:46:04.839Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e5d8b11eac3d85dcbf2",
+    "depotCode": "PLK",
+    "depotName": "PALAKKAD",
+    "category": "main",
+    "location": {
+      "address": "PALAKKAD Bus Station",
+      "city": "PALAKKAD",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2527298",
+      "email": "plk-depot@yatrik.com",
+      "manager": {
+        "name": "PALAKKAD Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:05.703Z",
+    "updatedAt": "2025-10-05T09:46:05.703Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e628b11eac3d85dcbf6",
+    "depotCode": "PPD",
+    "depotName": "PAPPANAMCODE",
+    "category": "main",
+    "location": {
+      "address": "PAPPANAMCODE Bus Station",
+      "city": "PAPPANAMCODE",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2491609",
+      "email": "ppd-depot@yatrik.com",
+      "manager": {
+        "name": "PAPPANAMCODE Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:10.622Z",
+    "updatedAt": "2025-10-05T09:46:10.622Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e6c8b11eac3d85dcbfa",
+    "depotCode": "PTA",
+    "depotName": "PATHANAMTHITTA",
+    "category": "main",
+    "location": {
+      "address": "PATHANAMTHITTA Bus Station",
+      "city": "PATHANAMTHITTA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2229213",
+      "email": "pta-depot@yatrik.com",
+      "manager": {
+        "name": "PATHANAMTHITTA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:20.455Z",
+    "updatedAt": "2025-10-05T09:46:20.455Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e6d8b11eac3d85dcbfe",
+    "depotCode": "PBR",
+    "depotName": "PERUMBAVOOR",
+    "category": "main",
+    "location": {
+      "address": "PERUMBAVOOR Bus Station",
+      "city": "PERUMBAVOOR",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2523411",
+      "email": "pbr-depot@yatrik.com",
+      "manager": {
+        "name": "PERUMBAVOOR Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:21.821Z",
+    "updatedAt": "2025-10-05T09:46:21.821Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e6e8b11eac3d85dcc02",
+    "depotCode": "SBY",
+    "depotName": "SULTHAN BATHERY",
+    "category": "main",
+    "location": {
+      "address": "SULTHAN BATHERY Bus Station",
+      "city": "SULTHAN BATHERY",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "6224217",
+      "email": "sby-depot@yatrik.com",
+      "manager": {
+        "name": "SULTHAN BATHERY Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:22.724Z",
+    "updatedAt": "2025-10-05T09:46:22.724Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e6f8b11eac3d85dcc06",
+    "depotCode": "TVL",
+    "depotName": "THIRUVALLA",
+    "category": "main",
+    "location": {
+      "address": "THIRUVALLA Bus Station",
+      "city": "THIRUVALLA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2601345",
+      "email": "tvl-depot@yatrik.com",
+      "manager": {
+        "name": "THIRUVALLA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:23.661Z",
+    "updatedAt": "2025-10-05T09:46:23.661Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e718b11eac3d85dcc0a",
+    "depotCode": "TSR",
+    "depotName": "THRISSUR",
+    "category": "main",
+    "location": {
+      "address": "THRISSUR Bus Station",
+      "city": "THRISSUR",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2421842",
+      "email": "tsr-depot@yatrik.com",
+      "manager": {
+        "name": "THRISSUR Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:25.207Z",
+    "updatedAt": "2025-10-05T09:46:25.207Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e728b11eac3d85dcc0e",
+    "depotCode": "TVM",
+    "depotName": "TVM CENTRAL",
+    "category": "main",
+    "location": {
+      "address": "TVM CENTRAL Bus Station",
+      "city": "TVM CENTRAL",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2323979",
+      "email": "tvm-depot@yatrik.com",
+      "manager": {
+        "name": "TVM CENTRAL Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:26.043Z",
+    "updatedAt": "2025-10-05T09:46:26.043Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e738b11eac3d85dcc12",
+    "depotCode": "CTY",
+    "depotName": "TVM CITY",
+    "category": "main",
+    "location": {
+      "address": "TVM CITY Bus Station",
+      "city": "TVM CITY",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2461013",
+      "email": "cty-depot@yatrik.com",
+      "manager": {
+        "name": "TVM CITY Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:27.651Z",
+    "updatedAt": "2025-10-05T09:46:27.651Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e758b11eac3d85dcc16",
+    "depotCode": "VZM",
+    "depotName": "VIZHINJAM",
+    "category": "main",
+    "location": {
+      "address": "VIZHINJAM Bus Station",
+      "city": "VIZHINJAM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2480365",
+      "email": "vzm-depot@yatrik.com",
+      "manager": {
+        "name": "VIZHINJAM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 50,
+      "availableBuses": 40,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Fuel_Station",
+      "Maintenance_Bay",
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:29.912Z",
+    "updatedAt": "2025-10-05T09:46:29.912Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e778b11eac3d85dcc1a",
+    "depotCode": "ADR",
+    "depotName": "ADOOR",
+    "category": "sub",
+    "location": {
+      "address": "ADOOR Bus Station",
+      "city": "ADOOR",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "4224767",
+      "email": "adr-subdepot@yatrik.com",
+      "manager": {
+        "name": "ADOOR Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:31.015Z",
+    "updatedAt": "2025-10-05T09:46:31.015Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e788b11eac3d85dcc1e",
+    "depotCode": "ANK",
+    "depotName": "ANKAMALI",
+    "category": "sub",
+    "location": {
+      "address": "ANKAMALI Bus Station",
+      "city": "ANKAMALI",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2622920",
+      "email": "ank-subdepot@yatrik.com",
+      "manager": {
+        "name": "ANKAMALI Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:32.037Z",
+    "updatedAt": "2025-10-05T09:46:32.037Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e798b11eac3d85dcc22",
+    "depotCode": "CDM",
+    "depotName": "CHADAYAMANGALAM",
+    "category": "sub",
+    "location": {
+      "address": "CHADAYAMANGALAM Bus Station",
+      "city": "CHADAYAMANGALAM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2476200",
+      "email": "cdm-subdepot@yatrik.com",
+      "manager": {
+        "name": "CHADAYAMANGALAM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:33.536Z",
+    "updatedAt": "2025-10-05T09:46:33.536Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e7a8b11eac3d85dcc26",
+    "depotCode": "CLD",
+    "depotName": "CHALAKKUDY",
+    "category": "sub",
+    "location": {
+      "address": "CHALAKKUDY Bus Station",
+      "city": "CHALAKKUDY",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2701638",
+      "email": "cld-subdepot@yatrik.com",
+      "manager": {
+        "name": "CHALAKKUDY Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:34.700Z",
+    "updatedAt": "2025-10-05T09:46:34.700Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e7c8b11eac3d85dcc2a",
+    "depotCode": "CHT",
+    "depotName": "CHATHANNUR",
+    "category": "sub",
+    "location": {
+      "address": "CHATHANNUR Bus Station",
+      "city": "CHATHANNUR",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2592900",
+      "email": "cht-subdepot@yatrik.com",
+      "manager": {
+        "name": "CHATHANNUR Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:36.990Z",
+    "updatedAt": "2025-10-05T09:46:36.990Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e7d8b11eac3d85dcc2e",
+    "depotCode": "CTR",
+    "depotName": "CHITTOOR",
+    "category": "sub",
+    "location": {
+      "address": "CHITTOOR Bus Station",
+      "city": "CHITTOOR",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "3227488",
+      "email": "ctr-subdepot@yatrik.com",
+      "manager": {
+        "name": "CHITTOOR Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:37.807Z",
+    "updatedAt": "2025-10-05T09:46:37.807Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e7f8b11eac3d85dcc32",
+    "depotCode": "ETP",
+    "depotName": "ERATTUPETTAH",
+    "category": "sub",
+    "location": {
+      "address": "ERATTUPETTAH Bus Station",
+      "city": "ERATTUPETTAH",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2272230",
+      "email": "etp-subdepot@yatrik.com",
+      "manager": {
+        "name": "ERATTUPETTAH Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:39.010Z",
+    "updatedAt": "2025-10-05T09:46:39.010Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e7f8b11eac3d85dcc36",
+    "depotCode": "GVR",
+    "depotName": "GURUVAYOOR",
+    "category": "sub",
+    "location": {
+      "address": "GURUVAYOOR Bus Station",
+      "city": "GURUVAYOOR",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2556210",
+      "email": "gvr-subdepot@yatrik.com",
+      "manager": {
+        "name": "GURUVAYOOR Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:39.953Z",
+    "updatedAt": "2025-10-05T09:46:39.953Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e818b11eac3d85dcc3a",
+    "depotCode": "HPD",
+    "depotName": "HARIPPAD",
+    "category": "sub",
+    "location": {
+      "address": "HARIPPAD Bus Station",
+      "city": "HARIPPAD",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2412820",
+      "email": "hpd-subdepot@yatrik.com",
+      "manager": {
+        "name": "HARIPPAD Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:41.472Z",
+    "updatedAt": "2025-10-05T09:46:41.472Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e828b11eac3d85dcc3e",
+    "depotCode": "KPT",
+    "depotName": "KALPETTA",
+    "category": "sub",
+    "location": {
+      "address": "KALPETTA Bus Station",
+      "city": "KALPETTA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "6203040",
+      "email": "kpt-subdepot@yatrik.com",
+      "manager": {
+        "name": "KALPETTA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:42.604Z",
+    "updatedAt": "2025-10-05T09:46:42.604Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e858b11eac3d85dcc42",
+    "depotCode": "KHD",
+    "depotName": "KANHANGAD",
+    "category": "sub",
+    "location": {
+      "address": "KANHANGAD Bus Station",
+      "city": "KANHANGAD",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "22107055",
+      "email": "khd-subdepot@yatrik.com",
+      "manager": {
+        "name": "KANHANGAD Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:45.100Z",
+    "updatedAt": "2025-10-05T09:46:45.100Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e868b11eac3d85dcc46",
+    "depotCode": "KPM",
+    "depotName": "KANIYAPURAM",
+    "category": "sub",
+    "location": {
+      "address": "KANIYAPURAM Bus Station",
+      "city": "KANIYAPURAM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2752533",
+      "email": "kpm-subdepot@yatrik.com",
+      "manager": {
+        "name": "KANIYAPURAM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:46.552Z",
+    "updatedAt": "2025-10-05T09:46:46.552Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e878b11eac3d85dcc4a",
+    "depotCode": "KNP",
+    "depotName": "KARUNAGAPPALLY",
+    "category": "sub",
+    "location": {
+      "address": "KARUNAGAPPALLY Bus Station",
+      "city": "KARUNAGAPPALLY",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2620466",
+      "email": "knp-subdepot@yatrik.com",
+      "manager": {
+        "name": "KARUNAGAPPALLY Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:47.955Z",
+    "updatedAt": "2025-10-05T09:46:47.955Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e898b11eac3d85dcc4e",
+    "depotCode": "KTD",
+    "depotName": "KATTAKKADA",
+    "category": "sub",
+    "location": {
+      "address": "KATTAKKADA Bus Station",
+      "city": "KATTAKKADA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2290381",
+      "email": "ktd-subdepot@yatrik.com",
+      "manager": {
+        "name": "KATTAKKADA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:50.008Z",
+    "updatedAt": "2025-10-05T09:46:50.008Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e8d8b11eac3d85dcc52",
+    "depotCode": "KTP",
+    "depotName": "KATTAPPANA",
+    "category": "sub",
+    "location": {
+      "address": "KATTAPPANA Bus Station",
+      "city": "KATTAPPANA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "8252333",
+      "email": "ktp-subdepot@yatrik.com",
+      "manager": {
+        "name": "KATTAPPANA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:53.319Z",
+    "updatedAt": "2025-10-05T09:46:53.319Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e8f8b11eac3d85dcc56",
+    "depotCode": "KMR",
+    "depotName": "KILIMANOOR",
+    "category": "sub",
+    "location": {
+      "address": "KILIMANOOR Bus Station",
+      "city": "KILIMANOOR",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2672617",
+      "email": "kmr-subdepot@yatrik.com",
+      "manager": {
+        "name": "KILIMANOOR Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:55.541Z",
+    "updatedAt": "2025-10-05T09:46:55.541Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e918b11eac3d85dcc5a",
+    "depotCode": "KDR",
+    "depotName": "KODUNGALLOOR",
+    "category": "sub",
+    "location": {
+      "address": "KODUNGALLOOR Bus Station",
+      "city": "KODUNGALLOOR",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2803155",
+      "email": "kdr-subdepot@yatrik.com",
+      "manager": {
+        "name": "KODUNGALLOOR Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:46:57.123Z",
+    "updatedAt": "2025-10-05T09:46:57.123Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e958b11eac3d85dcc5e",
+    "depotCode": "KMG",
+    "depotName": "KOTHAMANGALAM",
+    "category": "sub",
+    "location": {
+      "address": "KOTHAMANGALAM Bus Station",
+      "city": "KOTHAMANGALAM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2862202",
+      "email": "kmg-subdepot@yatrik.com",
+      "manager": {
+        "name": "KOTHAMANGALAM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:01.154Z",
+    "updatedAt": "2025-10-05T09:47:01.154Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e988b11eac3d85dcc62",
+    "depotCode": "KMY",
+    "depotName": "KUMALY",
+    "category": "sub",
+    "location": {
+      "address": "KUMALY Bus Station",
+      "city": "KUMALY",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "9224242",
+      "email": "kmy-subdepot@yatrik.com",
+      "manager": {
+        "name": "KUMALY Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:04.039Z",
+    "updatedAt": "2025-10-05T09:47:04.039Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e988b11eac3d85dcc66",
+    "depotCode": "MLA",
+    "depotName": "MALA",
+    "category": "sub",
+    "location": {
+      "address": "MALA Bus Station",
+      "city": "MALA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2890438",
+      "email": "mla-subdepot@yatrik.com",
+      "manager": {
+        "name": "MALA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:04.945Z",
+    "updatedAt": "2025-10-05T09:47:04.945Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e9a8b11eac3d85dcc6a",
+    "depotCode": "MLP",
+    "depotName": "MALAPPURAM",
+    "category": "sub",
+    "location": {
+      "address": "MALAPPURAM Bus Station",
+      "city": "MALAPPURAM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2736240",
+      "email": "mlp-subdepot@yatrik.com",
+      "manager": {
+        "name": "MALAPPURAM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:06.115Z",
+    "updatedAt": "2025-10-05T09:47:06.115Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e9a8b11eac3d85dcc6e",
+    "depotCode": "MND",
+    "depotName": "MANANTHAVADY",
+    "category": "sub",
+    "location": {
+      "address": "MANANTHAVADY Bus Station",
+      "city": "MANANTHAVADY",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "5240240",
+      "email": "mnd-subdepot@yatrik.com",
+      "manager": {
+        "name": "MANANTHAVADY Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:06.990Z",
+    "updatedAt": "2025-10-05T09:47:06.990Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e9c8b11eac3d85dcc72",
+    "depotCode": "MVK",
+    "depotName": "MAVELIKKARA",
+    "category": "sub",
+    "location": {
+      "address": "MAVELIKKARA Bus Station",
+      "city": "MAVELIKKARA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2302282",
+      "email": "mvk-subdepot@yatrik.com",
+      "manager": {
+        "name": "MAVELIKKARA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:08.077Z",
+    "updatedAt": "2025-10-05T09:47:08.077Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e9c8b11eac3d85dcc76",
+    "depotCode": "NBR",
+    "depotName": "NILAMBOOR",
+    "category": "sub",
+    "location": {
+      "address": "NILAMBOOR Bus Station",
+      "city": "NILAMBOOR",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "223919",
+      "email": "nbr-subdepot@yatrik.com",
+      "manager": {
+        "name": "NILAMBOOR Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:09.000Z",
+    "updatedAt": "2025-10-05T09:47:09.000Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e9e8b11eac3d85dcc7a",
+    "depotCode": "NPR",
+    "depotName": "NORTH PARAVOOR",
+    "category": "sub",
+    "location": {
+      "address": "NORTH PARAVOOR Bus Station",
+      "city": "NORTH PARAVOOR",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2444439",
+      "email": "npr-subdepot@yatrik.com",
+      "manager": {
+        "name": "NORTH PARAVOOR Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:10.221Z",
+    "updatedAt": "2025-10-05T09:47:10.221Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23e9f8b11eac3d85dcc7e",
+    "depotCode": "PSL",
+    "depotName": "PARASSALA",
+    "category": "sub",
+    "location": {
+      "address": "PARASSALA Bus Station",
+      "city": "PARASSALA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2202058",
+      "email": "psl-subdepot@yatrik.com",
+      "manager": {
+        "name": "PARASSALA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:11.205Z",
+    "updatedAt": "2025-10-05T09:47:11.205Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23ea08b11eac3d85dcc82",
+    "depotCode": "PPM",
+    "depotName": "PATHANAPURAM",
+    "category": "sub",
+    "location": {
+      "address": "PATHANAPURAM Bus Station",
+      "city": "PATHANAPURAM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2353769",
+      "email": "ppm-subdepot@yatrik.com",
+      "manager": {
+        "name": "PATHANAPURAM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:12.136Z",
+    "updatedAt": "2025-10-05T09:47:12.136Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23ea08b11eac3d85dcc86",
+    "depotCode": "PNR",
+    "depotName": "PAYYANNUR",
+    "category": "sub",
+    "location": {
+      "address": "PAYYANNUR Bus Station",
+      "city": "PAYYANNUR",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "5203699",
+      "email": "pnr-subdepot@yatrik.com",
+      "manager": {
+        "name": "PAYYANNUR Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:12.971Z",
+    "updatedAt": "2025-10-05T09:47:12.971Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23ea18b11eac3d85dcc8a",
+    "depotCode": "PMN",
+    "depotName": "PERINTHALMANNA",
+    "category": "sub",
+    "location": {
+      "address": "PERINTHALMANNA Bus Station",
+      "city": "PERINTHALMANNA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "3227422",
+      "email": "pmn-subdepot@yatrik.com",
+      "manager": {
+        "name": "PERINTHALMANNA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:13.792Z",
+    "updatedAt": "2025-10-05T09:47:13.792Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23ea28b11eac3d85dcc8e",
+    "depotCode": "PRK",
+    "depotName": "PEROORKKADA",
+    "category": "sub",
+    "location": {
+      "address": "PEROORKKADA Bus Station",
+      "city": "PEROORKKADA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2437572",
+      "email": "prk-subdepot@yatrik.com",
+      "manager": {
+        "name": "PEROORKKADA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:14.759Z",
+    "updatedAt": "2025-10-05T09:47:14.759Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23ea48b11eac3d85dcc92",
+    "depotCode": "PVM",
+    "depotName": "PIRAVOM",
+    "category": "sub",
+    "location": {
+      "address": "PIRAVOM Bus Station",
+      "city": "PIRAVOM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2265533",
+      "email": "pvm-subdepot@yatrik.com",
+      "manager": {
+        "name": "PIRAVOM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:16.285Z",
+    "updatedAt": "2025-10-05T09:47:16.285Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23ea58b11eac3d85dcc96",
+    "depotCode": "PNK",
+    "depotName": "PONKUNNAM",
+    "category": "sub",
+    "location": {
+      "address": "PONKUNNAM Bus Station",
+      "city": "PONKUNNAM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "8221333",
+      "email": "pnk-subdepot@yatrik.com",
+      "manager": {
+        "name": "PONKUNNAM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:17.203Z",
+    "updatedAt": "2025-10-05T09:47:17.203Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23ea88b11eac3d85dcc9a",
+    "depotCode": "PNI",
+    "depotName": "PONNANI",
+    "category": "sub",
+    "location": {
+      "address": "PONNANI Bus Station",
+      "city": "PONNANI",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2666396",
+      "email": "pni-subdepot@yatrik.com",
+      "manager": {
+        "name": "PONNANI Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:20.654Z",
+    "updatedAt": "2025-10-05T09:47:20.654Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23ea98b11eac3d85dcc9e",
+    "depotCode": "PVR",
+    "depotName": "POOVAR",
+    "category": "sub",
+    "location": {
+      "address": "POOVAR Bus Station",
+      "city": "POOVAR",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2210047",
+      "email": "pvr-subdepot@yatrik.com",
+      "manager": {
+        "name": "POOVAR Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:21.221Z",
+    "updatedAt": "2025-10-05T09:47:21.221Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23ea98b11eac3d85dcca2",
+    "depotCode": "PLR",
+    "depotName": "PUNALUR",
+    "category": "sub",
+    "location": {
+      "address": "PUNALUR Bus Station",
+      "city": "PUNALUR",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2222636",
+      "email": "plr-subdepot@yatrik.com",
+      "manager": {
+        "name": "PUNALUR Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:21.791Z",
+    "updatedAt": "2025-10-05T09:47:21.791Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eaa8b11eac3d85dcca6",
+    "depotCode": "TLY",
+    "depotName": "THALASSERY",
+    "category": "sub",
+    "location": {
+      "address": "THALASSERY Bus Station",
+      "city": "THALASSERY",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2343333",
+      "email": "tly-subdepot@yatrik.com",
+      "manager": {
+        "name": "THALASSERY Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:22.650Z",
+    "updatedAt": "2025-10-05T09:47:22.650Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eab8b11eac3d85dccaa",
+    "depotCode": "TSY",
+    "depotName": "THAMARASSERY",
+    "category": "sub",
+    "location": {
+      "address": "THAMARASSERY Bus Station",
+      "city": "THAMARASSERY",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2224217",
+      "email": "tsy-subdepot@yatrik.com",
+      "manager": {
+        "name": "THAMARASSERY Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:23.233Z",
+    "updatedAt": "2025-10-05T09:47:23.233Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eab8b11eac3d85dccae",
+    "depotCode": "TDP",
+    "depotName": "THODUPUZHA",
+    "category": "sub",
+    "location": {
+      "address": "THODUPUZHA Bus Station",
+      "city": "THODUPUZHA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2222388",
+      "email": "tdp-subdepot@yatrik.com",
+      "manager": {
+        "name": "THODUPUZHA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:23.802Z",
+    "updatedAt": "2025-10-05T09:47:23.802Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eac8b11eac3d85dccb2",
+    "depotCode": "TPM",
+    "depotName": "THOTTILPALAM",
+    "category": "sub",
+    "location": {
+      "address": "THOTTILPALAM Bus Station",
+      "city": "THOTTILPALAM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2565944",
+      "email": "tpm-subdepot@yatrik.com",
+      "manager": {
+        "name": "THOTTILPALAM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:24.632Z",
+    "updatedAt": "2025-10-05T09:47:24.632Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23ead8b11eac3d85dccb6",
+    "depotCode": "VKM",
+    "depotName": "VAIKOM",
+    "category": "sub",
+    "location": {
+      "address": "VAIKOM Bus Station",
+      "city": "VAIKOM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "9231210",
+      "email": "vkm-subdepot@yatrik.com",
+      "manager": {
+        "name": "VAIKOM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:25.227Z",
+    "updatedAt": "2025-10-05T09:47:25.227Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23ead8b11eac3d85dccba",
+    "depotCode": "VND",
+    "depotName": "VELLANAD",
+    "category": "sub",
+    "location": {
+      "address": "VELLANAD Bus Station",
+      "city": "VELLANAD",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2882986",
+      "email": "vnd-subdepot@yatrik.com",
+      "manager": {
+        "name": "VELLANAD Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:25.783Z",
+    "updatedAt": "2025-10-05T09:47:25.783Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eae8b11eac3d85dccbe",
+    "depotCode": "VRD",
+    "depotName": "VELLARADA",
+    "category": "sub",
+    "location": {
+      "address": "VELLARADA Bus Station",
+      "city": "VELLARADA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2242029",
+      "email": "vrd-subdepot@yatrik.com",
+      "manager": {
+        "name": "VELLARADA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:26.702Z",
+    "updatedAt": "2025-10-05T09:47:26.702Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eaf8b11eac3d85dccc2",
+    "depotCode": "VJD",
+    "depotName": "VENJARAMOODU",
+    "category": "sub",
+    "location": {
+      "address": "VENJARAMOODU Bus Station",
+      "city": "VENJARAMOODU",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2874242",
+      "email": "vjd-subdepot@yatrik.com",
+      "manager": {
+        "name": "VENJARAMOODU Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:27.253Z",
+    "updatedAt": "2025-10-05T09:47:27.253Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eaf8b11eac3d85dccc6",
+    "depotCode": "VKB",
+    "depotName": "VIKASBHAVAN",
+    "category": "sub",
+    "location": {
+      "address": "VIKASBHAVAN Bus Station",
+      "city": "VIKASBHAVAN",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2307890",
+      "email": "vkb-subdepot@yatrik.com",
+      "manager": {
+        "name": "VIKASBHAVAN Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:27.818Z",
+    "updatedAt": "2025-10-05T09:47:27.818Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eb08b11eac3d85dccca",
+    "depotCode": "VTR",
+    "depotName": "VITHURA",
+    "category": "sub",
+    "location": {
+      "address": "VITHURA Bus Station",
+      "city": "VITHURA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2858686",
+      "email": "vtr-subdepot@yatrik.com",
+      "manager": {
+        "name": "VITHURA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 30,
+      "availableBuses": 25,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot",
+      "Admin_Office"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:28.374Z",
+    "updatedAt": "2025-10-05T09:47:28.374Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eb08b11eac3d85dccce",
+    "depotCode": "ARD",
+    "depotName": "ARYANAD",
+    "category": "operating",
+    "location": {
+      "address": "ARYANAD Bus Station",
+      "city": "ARYANAD",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2853900",
+      "email": "ard-opcenter@yatrik.com",
+      "manager": {
+        "name": "ARYANAD Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:28.954Z",
+    "updatedAt": "2025-10-05T09:47:28.954Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eb18b11eac3d85dccd2",
+    "depotCode": "ARK",
+    "depotName": "ARYANKAVU",
+    "category": "operating",
+    "location": {
+      "address": "ARYANKAVU Bus Station",
+      "city": "ARYANKAVU",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2211300",
+      "email": "ark-opcenter@yatrik.com",
+      "manager": {
+        "name": "ARYANKAVU Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:29.555Z",
+    "updatedAt": "2025-10-05T09:47:29.555Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eb28b11eac3d85dccd6",
+    "depotCode": "EDT",
+    "depotName": "EDATHUVA",
+    "category": "operating",
+    "location": {
+      "address": "EDATHUVA Bus Station",
+      "city": "EDATHUVA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2215400",
+      "email": "edt-opcenter@yatrik.com",
+      "manager": {
+        "name": "EDATHUVA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:30.185Z",
+    "updatedAt": "2025-10-05T09:47:30.185Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eb38b11eac3d85dccda",
+    "depotCode": "EMY",
+    "depotName": "ERUMELY",
+    "category": "operating",
+    "location": {
+      "address": "ERUMELY Bus Station",
+      "city": "ERUMELY",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "8212345",
+      "email": "emy-opcenter@yatrik.com",
+      "manager": {
+        "name": "ERUMELY Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:31.063Z",
+    "updatedAt": "2025-10-05T09:47:31.063Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eb38b11eac3d85dccde",
+    "depotCode": "IJK",
+    "depotName": "IRINJALAKKUDA",
+    "category": "operating",
+    "location": {
+      "address": "IRINJALAKKUDA Bus Station",
+      "city": "IRINJALAKKUDA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2823990",
+      "email": "ijk-opcenter@yatrik.com",
+      "manager": {
+        "name": "IRINJALAKKUDA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:31.670Z",
+    "updatedAt": "2025-10-05T09:47:31.670Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eb48b11eac3d85dcce2",
+    "depotCode": "KNI",
+    "depotName": "KONNI",
+    "category": "operating",
+    "location": {
+      "address": "KONNI Bus Station",
+      "city": "KONNI",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "0000000000",
+      "email": "kni-opcenter@yatrik.com",
+      "manager": {
+        "name": "KONNI Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:32.247Z",
+    "updatedAt": "2025-10-05T09:47:32.247Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eb48b11eac3d85dcce6",
+    "depotCode": "KKM",
+    "depotName": "KOOOTHATTUKULAM",
+    "category": "operating",
+    "location": {
+      "address": "KOOOTHATTUKULAM Bus Station",
+      "city": "KOOOTHATTUKULAM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "0000000000",
+      "email": "kkm-opcenter@yatrik.com",
+      "manager": {
+        "name": "KOOOTHATTUKULAM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:32.918Z",
+    "updatedAt": "2025-10-05T09:47:32.918Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eb58b11eac3d85dccea",
+    "depotCode": "KLP",
+    "depotName": "KULATHUPUZHA",
+    "category": "operating",
+    "location": {
+      "address": "KULATHUPUZHA Bus Station",
+      "city": "KULATHUPUZHA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2318777",
+      "email": "klp-opcenter@yatrik.com",
+      "manager": {
+        "name": "KULATHUPUZHA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:33.476Z",
+    "updatedAt": "2025-10-05T09:47:33.476Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eb68b11eac3d85dccee",
+    "depotCode": "MPY",
+    "depotName": "MALLAPPALLY",
+    "category": "operating",
+    "location": {
+      "address": "MALLAPPALLY Bus Station",
+      "city": "MALLAPPALLY",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2785080",
+      "email": "mpy-opcenter@yatrik.com",
+      "manager": {
+        "name": "MALLAPPALLY Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:34.089Z",
+    "updatedAt": "2025-10-05T09:47:34.089Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eb68b11eac3d85dccf2",
+    "depotCode": "MKD",
+    "depotName": "MANNARGHAT",
+    "category": "operating",
+    "location": {
+      "address": "MANNARGHAT Bus Station",
+      "city": "MANNARGHAT",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "4225150",
+      "email": "mkd-opcenter@yatrik.com",
+      "manager": {
+        "name": "MANNARGHAT Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:34.650Z",
+    "updatedAt": "2025-10-05T09:47:34.650Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eb78b11eac3d85dccf6",
+    "depotCode": "MLT",
+    "depotName": "MOOLAMATTOM",
+    "category": "operating",
+    "location": {
+      "address": "MOOLAMATTOM Bus Station",
+      "city": "MOOLAMATTOM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2252045",
+      "email": "mlt-opcenter@yatrik.com",
+      "manager": {
+        "name": "MOOLAMATTOM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:35.534Z",
+    "updatedAt": "2025-10-05T09:47:35.534Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eb88b11eac3d85dccfa",
+    "depotCode": "MNR",
+    "depotName": "MUNNAR",
+    "category": "operating",
+    "location": {
+      "address": "MUNNAR Bus Station",
+      "city": "MUNNAR",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "5230201",
+      "email": "mnr-opcenter@yatrik.com",
+      "manager": {
+        "name": "MUNNAR Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:36.108Z",
+    "updatedAt": "2025-10-05T09:47:36.108Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eb88b11eac3d85dccfe",
+    "depotCode": "PLD",
+    "depotName": "PALODE",
+    "category": "operating",
+    "location": {
+      "address": "PALODE Bus Station",
+      "city": "PALODE",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2840259",
+      "email": "pld-opcenter@yatrik.com",
+      "manager": {
+        "name": "PALODE Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:36.753Z",
+    "updatedAt": "2025-10-05T09:47:36.753Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eb98b11eac3d85dcd02",
+    "depotCode": "PDM",
+    "depotName": "PANDALAM",
+    "category": "operating",
+    "location": {
+      "address": "PANDALAM Bus Station",
+      "city": "PANDALAM",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "4255800",
+      "email": "pdm-opcenter@yatrik.com",
+      "manager": {
+        "name": "PANDALAM Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:37.570Z",
+    "updatedAt": "2025-10-05T09:47:37.570Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eba8b11eac3d85dcd06",
+    "depotCode": "PDK",
+    "depotName": "PUTHUKKADU",
+    "category": "operating",
+    "location": {
+      "address": "PUTHUKKADU Bus Station",
+      "city": "PUTHUKKADU",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2751648",
+      "email": "pdk-opcenter@yatrik.com",
+      "manager": {
+        "name": "PUTHUKKADU Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:38.166Z",
+    "updatedAt": "2025-10-05T09:47:38.166Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23eba8b11eac3d85dcd0a",
+    "depotCode": "RNY",
+    "depotName": "RANNI",
+    "category": "operating",
+    "location": {
+      "address": "RANNI Bus Station",
+      "city": "RANNI",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "0000000000",
+      "email": "rny-opcenter@yatrik.com",
+      "manager": {
+        "name": "RANNI Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:38.771Z",
+    "updatedAt": "2025-10-05T09:47:38.771Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23ebb8b11eac3d85dcd0e",
+    "depotCode": "TDY",
+    "depotName": "THIRUVAMBADY",
+    "category": "operating",
+    "location": {
+      "address": "THIRUVAMBADY Bus Station",
+      "city": "THIRUVAMBADY",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2254500",
+      "email": "tdy-opcenter@yatrik.com",
+      "manager": {
+        "name": "THIRUVAMBADY Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:39.333Z",
+    "updatedAt": "2025-10-05T09:47:39.333Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23ebb8b11eac3d85dcd12",
+    "depotCode": "VKA",
+    "depotName": "VADAKARA",
+    "category": "operating",
+    "location": {
+      "address": "VADAKARA Bus Station",
+      "city": "VADAKARA",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2523377",
+      "email": "vka-opcenter@yatrik.com",
+      "manager": {
+        "name": "VADAKARA Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:39.921Z",
+    "updatedAt": "2025-10-05T09:47:39.921Z",
+    "__v": 0
+  },
+  {
+    "_id": "68e23ebc8b11eac3d85dcd16",
+    "depotCode": "VDK",
+    "depotName": "VADAKKANCHERY",
+    "category": "operating",
+    "location": {
+      "address": "VADAKKANCHERY Bus Station",
+      "city": "VADAKKANCHERY",
+      "state": "Kerala",
+      "pincode": "680000"
+    },
+    "contact": {
+      "phone": "2255001",
+      "email": "vdk-opcenter@yatrik.com",
+      "manager": {
+        "name": "VADAKKANCHERY Manager"
+      }
+    },
+    "capacity": {
+      "totalBuses": 15,
+      "availableBuses": 12,
+      "maintenanceBuses": 0
+    },
+    "operatingHours": {
+      "openTime": "06:00",
+      "closeTime": "22:00",
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ]
+    },
+    "facilities": [
+      "Parking_Lot"
+    ],
+    "status": "active",
+    "createdBy": "68e171f62d0c9b0a906ae101",
+    "isActive": true,
+    "createdAt": "2025-10-05T09:47:40.518Z",
+    "updatedAt": "2025-10-05T09:47:40.518Z",
+    "__v": 0
+  }
+]

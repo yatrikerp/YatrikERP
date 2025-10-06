@@ -72,6 +72,14 @@ const OAuthCallback = () => {
             } else {
               dest = getDefaultRoute(role, currentIsMobile || shouldUseMobile);
             }
+
+            // If user has a pending booking from popular routes, force booking-choice
+            try {
+              const pending = localStorage.getItem('pendingBooking');
+              if (pending && role === 'PASSENGER') {
+                dest = '/booking-choice';
+              }
+            } catch (_) {}
             
             // Debug logging for mobile redirect
             console.log('🔍 OAuth Callback Redirect Debug:');

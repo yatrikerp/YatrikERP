@@ -11,11 +11,13 @@ const REQUEST_TIMEOUT = 30000; // 30 seconds for dashboard endpoints
 let warnedBase = false;
 
 export async function apiFetch(path, options = {}) {
+  // Use direct backend URL in development to bypass proxy issues
+  const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const envBase = (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE_URL)) || process.env.REACT_APP_API_URL;
-  const base = (envBase || '').replace(/\/$/, '');
+  const base = (envBase || (isDevelopment ? 'http://localhost:5000' : '')).replace(/\/$/, '');
   if (!envBase && !warnedBase) {
     // Helpful dev hint if env not configured
-    try { console.warn('[apiFetch] REACT_APP_API_URL not set; using relative URLs with Vite proxy'); } catch {}
+    try { console.warn('[apiFetch] REACT_APP_API_URL not set; using direct backend URL in development'); } catch {}
     warnedBase = true;
   }
   // Prefer depotToken when present (depot panel), fallback to regular token
@@ -47,6 +49,9 @@ export async function apiFetch(path, options = {}) {
     if (path.includes('/admin/trips')) {
       return 60000; // 60 seconds for trips
     }
+    if (path.includes('/admin/all-drivers') || path.includes('/admin/all-conductors') || path.includes('/admin/drivers') || path.includes('/admin/conductors')) {
+      return 45000; // 45 seconds for driver/conductor lists (can be very large)
+    }
     if (path.includes('/admin/buses') || path.includes('/admin/routes') || path.includes('/admin/depots')) {
       return 40000; // 40 seconds for large lists
     }
@@ -54,9 +59,9 @@ export async function apiFetch(path, options = {}) {
       return 30000; // 30 seconds for dashboard endpoints
     }
     if (path.includes('/admin/') || path.includes('/depot/')) {
-      return 20000; // 20 seconds for admin/depot endpoints
+      return 25000; // 25 seconds for admin/depot endpoints
     }
-    if (path.includes('/auto-scheduler/')) {
+    if (path.includes('/auto-scheduler/') || path.includes('/bulk-scheduler/')) {
       return 90000; // 90 seconds for mass scheduling endpoints
     }
     return 10000; // 10 seconds for other endpoints

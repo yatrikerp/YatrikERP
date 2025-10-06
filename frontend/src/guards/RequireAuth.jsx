@@ -24,7 +24,10 @@ export default function RequireAuth({ children, roles }) {
       allowedRoles,
       userId: user._id,
       userName: user.name,
-      userEmail: user.email
+      userEmail: user.email,
+      userIsDepotUser: user.isDepotUser,
+      userDepotId: user.depotId,
+      currentPath: window.location.pathname
     });
     
     // Check for exact match or variations

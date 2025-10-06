@@ -6,6 +6,7 @@ import { apiFetch } from '../../utils/api';
 // SimpleMapRouteCreator removed; using RouteMapEditor (Google Maps) instead
 import RouteMapEditor from '../../components/RouteMapEditor';
 import ConductorPricingDashboard from '../../components/ConductorPricingDashboard';
+import BulkTripScheduler from '../../components/Admin/BulkTripScheduler.jsx';
 
 const StreamlinedRouteManagement = () => {
   const [routes, setRoutes] = useState([]);
@@ -39,6 +40,9 @@ const StreamlinedRouteManagement = () => {
   const [showRouteMapEditor, setShowRouteMapEditor] = useState(false);
   const [showStopsModal, setShowStopsModal] = useState(false);
   const [showConductorPricing, setShowConductorPricing] = useState(false);
+  
+  // Bulk Trip Scheduler
+  const [showBulkTripScheduler, setShowBulkTripScheduler] = useState(false);
   const [routeForm, setRouteForm] = useState({
     routeNumber: '',
     routeName: '',
@@ -5687,7 +5691,7 @@ const StreamlinedRouteManagement = () => {
         </div>
         
         {!isQuickActionsMinimized && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 w-full">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 w-full">
 
           <button
             onClick={() => setShowKeralaAutoModal(true)}
@@ -5751,6 +5755,26 @@ const StreamlinedRouteManagement = () => {
             <div className="text-left">
               <h4 className="text-sm font-medium text-purple-900">Export Routes</h4>
               <p className="text-xs text-purple-700">Export route data for external use</p>
+            </div>
+          </button>
+          
+          {/* Bulk Trip Scheduler Button - NEW */}
+          <button
+            onClick={() => {
+              console.log('🚀 Bulk Trip Scheduler button clicked from Routes!');
+              setShowBulkTripScheduler(true);
+            }}
+            className="p-2 bg-gradient-to-br from-pink-50 to-rose-50 rounded-md hover:from-pink-100 hover:to-rose-100 transition-all duration-200 border-2 border-pink-200 hover:border-pink-300 shadow-sm hover:shadow-md flex items-center space-x-2 relative"
+          >
+            <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+              HOT
+            </div>
+            <div className="p-1 bg-gradient-to-br from-pink-100 to-rose-100 rounded-md">
+              <span className="w-4 h-4 text-pink-600">🚀</span>
+            </div>
+            <div className="text-left">
+              <h4 className="text-sm font-medium text-pink-900">Bulk Trip Scheduler</h4>
+              <p className="text-xs text-pink-700">Generate 6000+ trips automatically</p>
             </div>
           </button>
         </div>
@@ -5854,6 +5878,19 @@ const StreamlinedRouteManagement = () => {
       <StopsModal />
       <ConductorPricingModal />
       <RouteDetailsModal />
+      
+      {/* Bulk Trip Scheduler Modal */}
+      <BulkTripScheduler 
+        isOpen={showBulkTripScheduler}
+        onClose={() => setShowBulkTripScheduler(false)}
+        onSuccess={(data) => {
+          console.log('Bulk trips generated successfully from Routes:', data);
+          setShowBulkTripScheduler(false);
+          toast.success(`Successfully generated ${data.totalGenerated} trips!`);
+          // Refresh route data to show updated assignments
+          fetchData();
+        }}
+      />
     </div>
   );
 };

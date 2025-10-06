@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { apiFetch } from '../../utils/api';
+import BulkTripScheduler from '../../components/Admin/BulkTripScheduler.jsx';
 
 const StreamlinedTripManagement = () => {
   const [trips, setTrips] = useState([]);
@@ -80,6 +81,9 @@ const StreamlinedTripManagement = () => {
   
   // Bulk operations
   const [selectedTrips, setSelectedTrips] = useState([]);
+  
+  // Bulk Trip Scheduler
+  const [showBulkTripScheduler, setShowBulkTripScheduler] = useState(false);
   
   // Trip form data
   const [tripForm, setTripForm] = useState({
@@ -1942,7 +1946,7 @@ const StreamlinedTripManagement = () => {
         </div>
         
         {/* All Quick Actions in One Line - Balanced Size */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-8 gap-3">
           <button
             onClick={() => setShowSingleAddModal(true)}
             className="p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex flex-col items-center space-y-2"
@@ -2168,6 +2172,26 @@ const StreamlinedTripManagement = () => {
             <div className="text-center">
               <h4 className="text-sm font-semibold text-red-900">Clear All</h4>
               <p className="text-xs text-red-700">Delete all trips</p>
+            </div>
+          </button>
+          
+          {/* Bulk Trip Scheduler Button - NEW */}
+          <button
+            onClick={() => {
+              console.log('🚀 Bulk Trip Scheduler button clicked from Trip Management!');
+              setShowBulkTripScheduler(true);
+            }}
+            className="p-3 bg-gradient-to-br from-pink-50 to-rose-50 rounded-lg hover:from-pink-100 hover:to-rose-100 transition-all duration-200 border-2 border-pink-200 hover:border-pink-300 shadow-sm hover:shadow-md flex flex-col items-center space-y-2 relative"
+          >
+            <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+              HOT
+            </div>
+            <div className="p-2 bg-gradient-to-br from-pink-100 to-rose-100 rounded-lg">
+              <Zap className="w-5 h-5 text-pink-600" />
+            </div>
+            <div className="text-center">
+              <h4 className="text-sm font-semibold text-pink-900">Bulk Scheduler</h4>
+              <p className="text-xs text-pink-700">Generate 6000+ trips</p>
             </div>
           </button>
         </div>
@@ -2539,6 +2563,19 @@ const StreamlinedTripManagement = () => {
           </div>
         </div>
       )}
+      
+      {/* Bulk Trip Scheduler Modal */}
+      <BulkTripScheduler 
+        isOpen={showBulkTripScheduler}
+        onClose={() => setShowBulkTripScheduler(false)}
+        onSuccess={(data) => {
+          console.log('Bulk trips generated successfully from Trip Management:', data);
+          setShowBulkTripScheduler(false);
+          toast.success(`Successfully generated ${data.totalGenerated} trips!`);
+          // Refresh trip data to show the new trips
+          fetchData();
+        }}
+      />
     </div>
   );
 };

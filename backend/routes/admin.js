@@ -16,8 +16,14 @@ const AIAnalyticsService = require('../services/aiAnalytics');
 const NotificationService = require('../services/notificationService');
 const { auth, requireRole } = require('../middleware/auth');
 
+// Import optimized bus API
+const optimizedBusAPI = require('./optimized-bus-api');
+
 // Helper function to create role-based auth middleware
 const authRole = (roles) => [auth, requireRole(roles)];
+
+// Mount optimized bus API routes
+router.use('/buses-optimized', optimizedBusAPI);
 
 // Admin authentication middleware - allow both admin and depot users
 const adminAuth = authRole(['admin', 'ADMIN', 'Admin', 'depot_manager', 'depot_supervisor', 'depot_operator', 'MANAGER', 'SUPERVISOR', 'OPERATOR']);

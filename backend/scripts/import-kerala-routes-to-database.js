@@ -5,8 +5,8 @@ const FarePolicy = require('../models/FarePolicy');
 const FareCalculationService = require('../services/fareCalculationService');
 require('dotenv').config();
 
-// Kerala Routes Data
-const keralaRoutesData = {
+// Kerala Routes Data (base, manually curated + programmatic expansion)
+const baseKeralaRoutesData = {
   'THRISSUR': [
     { from: 'Thrissur', to: 'Guruvayur', distance: 29, duration: 45, type: 'intercity' },
     { from: 'Thrissur', to: 'Kochi', distance: 74, duration: 120, type: 'intercity' },
@@ -83,8 +83,187 @@ const keralaRoutesData = {
     { from: 'Ernakulam', to: 'Alappuzha', distance: 85, duration: 150, type: 'intercity' },
     { from: 'Ernakulam', to: 'Munnar', distance: 130, duration: 240, type: 'hill_station' },
     { from: 'Ernakulam', to: 'Kochi Airport', distance: 25, duration: 45, type: 'airport' }
+  ],
+  // Added remaining Kerala districts to reach all-district coverage
+  'THIRUVANANTHAPURAM': [
+    { from: 'Thiruvananthapuram', to: 'Kollam', distance: 65, duration: 120, type: 'intercity' },
+    { from: 'Thiruvananthapuram', to: 'Kottayam', distance: 150, duration: 240, type: 'intercity' },
+    { from: 'Thiruvananthapuram', to: 'Alappuzha', distance: 150, duration: 240, type: 'intercity' },
+    { from: 'Thiruvananthapuram', to: 'Kochi', distance: 200, duration: 300, type: 'intercity' },
+    { from: 'Thiruvananthapuram', to: 'Kanyakumari', distance: 90, duration: 150, type: 'interstate' }
+  ],
+  'IDUKKI': [
+    { from: 'Idukki', to: 'Munnar', distance: 35, duration: 75, type: 'hill_station' },
+    { from: 'Idukki', to: 'Kottayam', distance: 114, duration: 210, type: 'hill_station' },
+    { from: 'Idukki', to: 'Ernakulam', distance: 130, duration: 240, type: 'hill_station' },
+    { from: 'Idukki', to: 'Thodupuzha', distance: 50, duration: 90, type: 'intercity' },
+    { from: 'Idukki', to: 'Kumily', distance: 90, duration: 180, type: 'hill_station' }
+  ],
+  'MALAPPURAM': [
+    { from: 'Malappuram', to: 'Kozhikode', distance: 50, duration: 90, type: 'intercity' },
+    { from: 'Malappuram', to: 'Thrissur', distance: 110, duration: 195, type: 'intercity' },
+    { from: 'Malappuram', to: 'Palakkad', distance: 110, duration: 195, type: 'intercity' },
+    { from: 'Malappuram', to: 'Kottakkal', distance: 12, duration: 25, type: 'intercity' },
+    { from: 'Malappuram', to: 'Manjeri', distance: 12, duration: 25, type: 'intercity' }
+  ],
+  'WAYANAD': [
+    { from: 'Kalpetta', to: 'Sulthan Bathery', distance: 24, duration: 45, type: 'intercity' },
+    { from: 'Kalpetta', to: 'Mananthavady', distance: 33, duration: 60, type: 'intercity' },
+    { from: 'Kalpetta', to: 'Kozhikode', distance: 73, duration: 135, type: 'intercity' },
+    { from: 'Sulthan Bathery', to: 'Mysuru', distance: 120, duration: 210, type: 'interstate' },
+    { from: 'Mananthavady', to: 'Kannur', distance: 105, duration: 180, type: 'intercity' }
+  ],
+  'KASARAGOD': [
+    { from: 'Kasaragod', to: 'Kannur', distance: 90, duration: 150, type: 'intercity' },
+    { from: 'Kasaragod', to: 'Mangalore', distance: 60, duration: 105, type: 'interstate' },
+    { from: 'Kasaragod', to: 'Payyanur', distance: 50, duration: 90, type: 'intercity' },
+    { from: 'Kasaragod', to: 'Kanhangad', distance: 30, duration: 55, type: 'intercity' },
+    { from: 'Kasaragod', to: 'Bekal', distance: 14, duration: 30, type: 'tourist' }
   ]
 };
+
+// Full inter-district coverage for Kerala + outside-Kerala mappings per district
+const allKeralaDistricts = [
+  'THIRUVANANTHAPURAM',
+  'KOLLAM',
+  'PATHANAMTHITTA',
+  'ALAPPUZHA',
+  'KOTTAYAM',
+  'IDUKKI',
+  'ERNAKULAM',
+  'THRISSUR',
+  'PALAKKAD',
+  'MALAPPURAM',
+  'KOZHIKKODE',
+  'WAYANAD',
+  'KANNUR',
+  'KASARAGOD'
+];
+
+// Outside-Kerala city mappings per district (from user spec)
+const outsideKeralaByDistrict = {
+  THIRUVANANTHAPURAM: [
+    'Nagercoil – Tamil Nadu', 'Kanyakumari – Tamil Nadu', 'Tirunelveli – Tamil Nadu',
+    'Madurai – Tamil Nadu', 'Trichy – Tamil Nadu', 'Chennai – Tamil Nadu',
+    'Pondicherry – Puducherry UT', 'Bengaluru – Karnataka'
+  ],
+  KOLLAM: [
+    'Tirunelveli – Tamil Nadu', 'Madurai – Tamil Nadu', 'Dindigul – Tamil Nadu',
+    'Chennai – Tamil Nadu', 'Hosur – Tamil Nadu', 'Bengaluru – Karnataka'
+  ],
+  PATHANAMTHITTA: [
+    'Madurai – Tamil Nadu', 'Dindigul – Tamil Nadu', 'Trichy – Tamil Nadu',
+    'Salem – Tamil Nadu', 'Coimbatore – Tamil Nadu', 'Bengaluru – Karnataka'
+  ],
+  ALAPPUZHA: [
+    'Madurai – Tamil Nadu', 'Trichy – Tamil Nadu', 'Chennai – Tamil Nadu',
+    'Hosur – Tamil Nadu', 'Bengaluru – Karnataka'
+  ],
+  KOTTAYAM: [
+    'Madurai – Tamil Nadu', 'Dindigul – Tamil Nadu', 'Trichy – Tamil Nadu',
+    'Coimbatore – Tamil Nadu', 'Erode – Tamil Nadu', 'Bengaluru – Karnataka'
+  ],
+  IDUKKI: [
+    'Theni – Tamil Nadu', 'Madurai – Tamil Nadu', 'Dindigul – Tamil Nadu',
+    'Kodaikanal – Tamil Nadu', 'Coimbatore – Tamil Nadu', 'Pollachi – Tamil Nadu', 'Palani – Tamil Nadu'
+  ],
+  ERNAKULAM: [
+    'Coimbatore – Tamil Nadu', 'Salem – Tamil Nadu', 'Erode – Tamil Nadu',
+    'Tirupur – Tamil Nadu', 'Hosur – Tamil Nadu', 'Bengaluru – Karnataka', 'Mysuru – Karnataka', 'Chennai – Tamil Nadu'
+  ],
+  THRISSUR: [
+    'Coimbatore – Tamil Nadu', 'Salem – Tamil Nadu', 'Erode – Tamil Nadu',
+    'Hosur – Tamil Nadu', 'Bengaluru – Karnataka', 'Mysuru – Karnataka'
+  ],
+  PALAKKAD: [
+    'Coimbatore – Tamil Nadu', 'Tirupur – Tamil Nadu', 'Erode – Tamil Nadu',
+    'Salem – Tamil Nadu', 'Krishnagiri – Tamil Nadu', 'Hosur – Tamil Nadu',
+    'Bengaluru – Karnataka', 'Mysuru – Karnataka'
+  ],
+  MALAPPURAM: [
+    'Coimbatore – Tamil Nadu', 'Ooty – Tamil Nadu', 'Salem – Tamil Nadu',
+    'Hosur – Tamil Nadu', 'Bengaluru – Karnataka', 'Mysuru – Karnataka'
+  ],
+  KOZHIKKODE: [
+    'Mysuru – Karnataka', 'Bengaluru – Karnataka', 'Mangalore – Karnataka',
+    'Coimbatore – Tamil Nadu', 'Ooty – Tamil Nadu'
+  ],
+  WAYANAD: [
+    'Mysuru – Karnataka', 'Bengaluru – Karnataka', 'Mangalore – Karnataka',
+    'Coorg – Karnataka', 'Ooty – Tamil Nadu'
+  ],
+  KANNUR: [
+    'Mangalore – Karnataka', 'Udupi – Karnataka', 'Karwar – Karnataka',
+    'Goa – Goa UT', 'Hubballi – Karnataka', 'Bengaluru – Karnataka'
+  ],
+  KASARAGOD: [
+    'Mangalore – Karnataka', 'Udupi – Karnataka', 'Kundapura – Karnataka',
+    'Karwar – Karnataka', 'Goa – Goa UT', 'Hubballi – Karnataka', 'Belagavi – Karnataka', 'Mumbai – Maharashtra'
+  ]
+};
+
+function estimateDistanceKm(from, to) {
+  // Rough heuristic: spread distances 60–600km
+  const i = allKeralaDistricts.indexOf(from);
+  const j = allKeralaDistricts.indexOf(to);
+  if (i >= 0 && j >= 0) {
+    const d = Math.abs(i - j) + 1;
+    return Math.min(600, 60 + d * 40);
+  }
+  // For outside, default 150–700 range based on string length
+  const seed = (String(from).length + String(to).length) % 10;
+  return 150 + seed * 50;
+}
+
+function estimateDurationMin(distanceKm) {
+  const avgSpeed = 40; // km/h
+  return Math.round((distanceKm / avgSpeed) * 60);
+}
+
+function parseOutsideCityLabel(label) {
+  // Example: "Coimbatore – Tamil Nadu" -> { city: 'Coimbatore', state: 'Tamil Nadu' }
+  const parts = String(label).split('–').map(s => s.trim());
+  return { city: parts[0] || label, state: parts[1] || '' };
+}
+
+function buildFullKeralaRoutesData() {
+  // Start with manual base
+  const map = JSON.parse(JSON.stringify(baseKeralaRoutesData));
+
+  // Ensure all districts exist in map
+  for (const dist of allKeralaDistricts) {
+    if (!map[dist]) map[dist] = [];
+  }
+
+  // Add inter-district pairs for all districts
+  for (const from of allKeralaDistricts) {
+    for (const to of allKeralaDistricts) {
+      if (to === from) continue;
+      const distance = estimateDistanceKm(from, to);
+      const duration = estimateDurationMin(distance);
+      const fromCity = from.replace(/_/g, ' ').toLowerCase() === 'kozhikkode' ? 'Kozhikode' : from.replace(/_/g, ' ').toLowerCase() === 'thiruvananthapuram' ? 'Thiruvananthapuram' : from.split(' ')[0].charAt(0) + from.split(' ')[0].slice(1).toLowerCase();
+      const toCity = to.replace(/_/g, ' ').toLowerCase() === 'kozhikkode' ? 'Kozhikode' : to.replace(/_/g, ' ').toLowerCase() === 'thiruvananthapuram' ? 'Thiruvananthapuram' : to.split(' ')[0].charAt(0) + to.split(' ')[0].slice(1).toLowerCase();
+      map[from].push({ from: fromCity, to: toCity, distance, duration, type: 'intercity' });
+    }
+  }
+
+  // Add outside-Kerala mappings
+  for (const [dist, labels] of Object.entries(outsideKeralaByDistrict)) {
+    const fromCity = dist.replace(/_/g, ' ').toLowerCase() === 'thiruvananthapuram' ? 'Thiruvananthapuram' : dist.split(' ')[0].charAt(0) + dist.split(' ')[0].slice(1).toLowerCase();
+    if (!map[dist]) map[dist] = [];
+    for (const label of labels) {
+      const { city, state } = parseOutsideCityLabel(label);
+      const distance = estimateDistanceKm(fromCity, city);
+      const duration = estimateDurationMin(distance);
+      const type = state.includes('Karnataka') ? 'interstate' : state.includes('Tamil Nadu') ? 'interstate' : 'interstate';
+      map[dist].push({ from: fromCity, to: city, distance, duration, type });
+    }
+  }
+
+  return map;
+}
+
+const keralaRoutesData = buildFullKeralaRoutesData();
 
 // Bus type mapping (using correct enum values)
 const mapRouteTypeToBusType = (routeType) => {

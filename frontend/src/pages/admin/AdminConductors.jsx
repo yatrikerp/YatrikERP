@@ -29,6 +29,7 @@ import BulkAssignmentModal from '../../components/Admin/BulkAssignmentModal';
 
 const AdminConductors = () => {
   const [conductors, setConductors] = useState([]);
+  const [viewMode, setViewMode] = useState('cards'); // 'cards' | 'table'
   const [depots, setDepots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -118,6 +119,16 @@ const AdminConductors = () => {
         setConductors(conductorsData.data?.conductors || []);
       } else {
         console.error('Conductors response not ok:', conductorsResponse.status);
+        if (conductorsResponse.status === 401) {
+          console.warn('Unauthorized for conductors - clearing session and redirecting to login');
+          try {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+          } catch {}
+          const next = encodeURIComponent(window.location.pathname + window.location.search);
+          window.location.replace(`/login?next=${next}`);
+          return;
+        }
         const errorText = await conductorsResponse.text();
         console.error('Conductors error response:', errorText);
       }
@@ -135,6 +146,16 @@ const AdminConductors = () => {
         }
       } else {
         console.error('Depots response not ok:', depotsResponse.status);
+        if (depotsResponse.status === 401) {
+          console.warn('Unauthorized for depots - clearing session and redirecting to login');
+          try {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+          } catch {}
+          const next = encodeURIComponent(window.location.pathname + window.location.search);
+          window.location.replace(`/login?next=${next}`);
+          return;
+        }
         const errorText = await depotsResponse.text();
         console.error('Depots error response:', errorText);
       }
@@ -310,6 +331,18 @@ const AdminConductors = () => {
     return depot ? (depot.depotCode || depot.code) : 'N/A';
   };
 
+  // Auto-generate display credentials (not persisted)
+  const generateAutoEmail = (fullName, depotId) => {
+    const nameSlug = String(fullName || 'conductor').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const code = getDepotCode(depotId) || '';
+    const digits = String(code).match(/\d+/g)?.join('') || '';
+    const depotSuffix = digits || String(code || '').toLowerCase();
+    const fallback = '000';
+    const suffix = depotSuffix || fallback;
+    return `${nameSlug}${suffix}@yatrik.com`;
+  };
+  const AUTO_PASSWORD = 'Yatrik123';
+
   const exportConductors = () => {
     const csvContent = [
       ['Name', 'Email', 'Phone', 'Employee ID', 'Depot', 'Joining Date', 'Status', 'Source'].join(','),
@@ -385,6 +418,20 @@ const AdminConductors = () => {
           <p className="text-gray-600">Manage conductors and their depot assignments</p>
         </div>
         <div className="flex items-center space-x-3">
+          <div className="hidden md:flex items-center rounded-lg overflow-hidden border border-gray-300">
+            <button
+              onClick={() => setViewMode('cards')}
+              className={`px-3 py-2 text-sm ${viewMode === 'cards' ? 'bg-gray-200 text-gray-900' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+            >
+              Cards
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-2 text-sm ${viewMode === 'table' ? 'bg-gray-200 text-gray-900' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+            >
+              Table
+            </button>
+          </div>
           <button
             onClick={exportConductors}
             className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
@@ -497,7 +544,66 @@ const AdminConductors = () => {
         </div>
       </div>
 
+      {/* Conductors Cards */}
+      {viewMode === 'cards' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredConductors.map((conductor) => (
+            <div key={conductor._id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition cursor-pointer" onClick={() => openViewConductor(conductor)}>
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+                    {conductor.name?.charAt(0)?.toUpperCase() || 'C'}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-900">{conductor.name}</div>
+                    <div className="text-xs text-gray-500">ID: {conductor._id.slice(-8)}</div>
+                  </div>
+                </div>
+                <div>
+                  {getStatusBadge(conductor.status)}
+                </div>
+              </div>
+              <div className="mt-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500">Username:</span>
+                  <span className="font-mono text-gray-900">{conductor.username || '—'}</span>
+                  {conductor.username && (
+                    <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(conductor.username); }} className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50">Copy</button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-gray-500">Depot:</span>
+                  <span className="text-gray-900">{getDepotName(conductor.depotId)} ({getDepotCode(conductor.depotId)})</span>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <Mail className="w-4 h-4 text-gray-400" />
+                  <span>{conductor.email || '—'}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <Phone className="w-4 h-4 text-gray-400" />
+                  <span>{conductor.phone || '—'}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-gray-500">Auto email:</span>
+                  <span className="font-mono text-gray-900">{generateAutoEmail(conductor.name, conductor.depotId)}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-gray-500">Auto password:</span>
+                  <span className="font-mono text-gray-900">{AUTO_PASSWORD}</span>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center gap-2">
+                <button onClick={(e) => { e.stopPropagation(); openViewConductor(conductor); }} className="text-blue-600 hover:text-blue-800 px-3 py-1 border border-blue-200 rounded">View</button>
+                <button onClick={(e) => { e.stopPropagation(); openEditConductor(conductor); }} className="text-green-600 hover:text-green-800 px-3 py-1 border border-green-200 rounded">Edit</button>
+                <button onClick={(e) => { e.stopPropagation(); openDeleteModal(conductor); }} className="text-red-600 hover:text-red-800 px-3 py-1 border border-red-200 rounded">Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Conductors Table */}
+      {viewMode === 'table' && (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -508,6 +614,9 @@ const AdminConductors = () => {
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Employee ID
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Username
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Depot Assignment
@@ -525,7 +634,7 @@ const AdminConductors = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredConductors.map((conductor) => (
-                <tr key={conductor._id} className="hover:bg-gray-50 transition-colors">
+                <tr key={conductor._id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => openViewConductor(conductor)}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full flex items-center justify-center">
@@ -538,6 +647,21 @@ const AdminConductors = () => {
                         <div className="text-sm text-gray-500">ID: {conductor._id.slice(-8)}</div>
                       </div>
                     </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-mono text-gray-900 select-all">{conductor.username || '—'}</span>
+                      {conductor.username && (
+                        <button
+                          onClick={() => navigator.clipboard.writeText(conductor.username)}
+                          title="Copy username"
+                          className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
+                        >
+                          Copy
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-gray-500 mt-1">Default pwd: conductor123 (if seeded)</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
@@ -585,21 +709,21 @@ const AdminConductors = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2">
                       <button
-                        onClick={() => openViewConductor(conductor)}
+                        onClick={(e) => { e.stopPropagation(); openViewConductor(conductor); }}
                         className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
                         title="View Details"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => openEditConductor(conductor)}
+                        onClick={(e) => { e.stopPropagation(); openEditConductor(conductor); }}
                         className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors"
                         title="Edit Conductor"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => openDeleteModal(conductor)}
+                        onClick={(e) => { e.stopPropagation(); openDeleteModal(conductor); }}
                         className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
                         title="Delete Conductor"
                       >
@@ -638,6 +762,7 @@ const AdminConductors = () => {
           </div>
         )}
       </div>
+      )}
 
       {/* Create/Edit Conductor Modal */}
       {(showCreateModal || editingConductor) && (
@@ -676,6 +801,17 @@ const AdminConductors = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Enter email address"
                   />
+                  <div className="mt-1 text-xs text-gray-600 flex items-center gap-2">
+                    <span>Suggested:</span>
+                    <span className="font-mono">{generateAutoEmail(conductorForm.name || editingConductor?.name, conductorForm.depotId || editingConductor?.depotId)}</span>
+                    <button
+                      type="button"
+                      onClick={() => setConductorForm(prev => ({ ...prev, email: generateAutoEmail(prev.name || editingConductor?.name, prev.depotId || editingConductor?.depotId) }))}
+                      className="px-2 py-0.5 border border-gray-300 rounded hover:bg-gray-50"
+                    >
+                      Use
+                    </button>
+                  </div>
                 </div>
                 
                 <div>
@@ -750,19 +886,63 @@ const AdminConductors = () => {
                   />
                 </div>
                 
-                {!editingConductor && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Password *</label>
-                    <input
-                      type="password"
-                      required
-                      value={conductorForm.password}
-                      onChange={(e) => setConductorForm(prev => ({ ...prev, password: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Enter password"
-                    />
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Password {editingConductor ? '(optional)' : '*'}</label>
+                  <input
+                    type="password"
+                    value={conductorForm.password}
+                    onChange={(e) => setConductorForm(prev => ({ ...prev, password: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder={editingConductor ? 'Leave blank to keep current' : 'Enter password'}
+                  />
+                </div>
+
+  {/* View Conductor Modal (Credentials & Details) */}
+  {viewingConductor && (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setViewingConductor(null)}>
+      <div className="bg-white rounded-xl shadow-xl max-w-xl w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+              {viewingConductor.name?.charAt(0)?.toUpperCase() || 'C'}
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">{viewingConductor.name}</h3>
+              <p className="text-sm text-gray-500">ID: {String(viewingConductor._id).slice(-8)}</p>
+            </div>
+          </div>
+          <button onClick={() => setViewingConductor(null)} className="px-3 py-1 rounded border border-gray-300 hover:bg-gray-50">Close</button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <h4 className="text-sm font-semibold text-gray-700 mb-2">Login Credentials</h4>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500">Username:</span>
+              <span className="font-mono text-gray-900">{viewingConductor.username || '—'}</span>
+              {viewingConductor.username && (
+                <button onClick={() => navigator.clipboard.writeText(viewingConductor.username)} className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50">Copy</button>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-gray-500">Auto email:</span>
+              <span className="font-mono text-gray-900">{generateAutoEmail(viewingConductor.name, viewingConductor.depotId)}</span>
+              <button onClick={() => navigator.clipboard.writeText(generateAutoEmail(viewingConductor.name, viewingConductor.depotId))} className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50">Copy</button>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Auto password: <span className="font-mono">{AUTO_PASSWORD}</span></p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div className="flex items-center gap-2"><Mail className="w-4 h-4 text-gray-400" /><span>{viewingConductor.email || '—'}</span></div>
+            <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-gray-400" /><span>{viewingConductor.phone || '—'}</span></div>
+            <div className="flex items-center gap-2"><Building2 className="w-4 h-4 text-gray-400" /><span>{getDepotName(viewingConductor.depotId)} ({getDepotCode(viewingConductor.depotId)})</span></div>
+            <div>{getStatusBadge(viewingConductor.status)}</div>
+          </div>
+        </div>
+        <div className="p-6 border-t border-gray-200 flex items-center justify-end gap-2">
+          <button onClick={() => setViewingConductor(null)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Close</button>
+        </div>
+      </div>
+    </div>
+  )}
               </div>
               
               <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">

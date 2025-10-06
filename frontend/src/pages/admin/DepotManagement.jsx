@@ -36,7 +36,7 @@ const DepotManagement = () => {
 
   // UI State
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedType, setSelectedType] = useState('all');
+  const [selectedType, setSelectedType] = useState('main');
   const [showInactive, setShowInactive] = useState(false);
   const [expandedDepots, setExpandedDepots] = useState(new Set());
   const [viewMode, setViewMode] = useState('cards'); // cards or list
@@ -132,7 +132,7 @@ const DepotManagement = () => {
     }
   };
 
-  const fetchDepots = async (category = 'all') => {
+  const fetchDepots = async (category = 'main') => {
     try {
       setLoading(true);
       const queryParams = new URLSearchParams();

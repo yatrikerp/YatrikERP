@@ -67,8 +67,7 @@ const QRScanner = ({ onScan, onClose }) => {
         const data = JSON.parse(result.data);
         onScan(data);
       } catch (e) {
-        // If not JSON, pass raw data
-        onScan({ raw: result.data });
+        onScan(result.data);
       }
     }
   };

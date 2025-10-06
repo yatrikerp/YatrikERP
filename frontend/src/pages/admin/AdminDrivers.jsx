@@ -30,6 +30,7 @@ import BulkAssignmentModal from '../../components/Admin/BulkAssignmentModal';
 
 const AdminDrivers = () => {
   const [drivers, setDrivers] = useState([]);
+  const [viewMode, setViewMode] = useState('cards'); // 'cards' | 'table'
   const [depots, setDepots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -127,6 +128,16 @@ const AdminDrivers = () => {
         }
       } else {
         console.error('Drivers response not ok:', driversResponse.status);
+        if (driversResponse.status === 401) {
+          console.warn('Unauthorized for drivers - clearing session and redirecting to login');
+          try {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+          } catch {}
+          const next = encodeURIComponent(window.location.pathname + window.location.search);
+          window.location.replace(`/login?next=${next}`);
+          return;
+        }
         const errorText = await driversResponse.text();
         console.error('Drivers error response:', errorText);
       }
@@ -144,6 +155,16 @@ const AdminDrivers = () => {
         }
       } else {
         console.error('Depots response not ok:', depotsResponse.status);
+        if (depotsResponse.status === 401) {
+          console.warn('Unauthorized for depots - clearing session and redirecting to login');
+          try {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+          } catch {}
+          const next = encodeURIComponent(window.location.pathname + window.location.search);
+          window.location.replace(`/login?next=${next}`);
+          return;
+        }
         const errorText = await depotsResponse.text();
         console.error('Depots error response:', errorText);
       }
@@ -325,6 +346,18 @@ const AdminDrivers = () => {
     return depot ? (depot.depotCode || depot.code) : 'N/A';
   };
 
+  // Auto-generate display credentials (not persisted)
+  const generateAutoEmail = (fullName, depotId) => {
+    const nameSlug = String(fullName || 'driver').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const code = getDepotCode(depotId) || '';
+    const digits = String(code).match(/\d+/g)?.join('') || '';
+    const depotSuffix = digits || String(code || '').toLowerCase();
+    const fallback = '000';
+    const suffix = depotSuffix || fallback;
+    return `${nameSlug}${suffix}@yatrik.com`;
+  };
+  const AUTO_PASSWORD = 'Yatrik123';
+
   const isLicenseExpired = (expiryDate) => {
     if (!expiryDate) return false;
     return new Date(expiryDate) < new Date();
@@ -424,6 +457,20 @@ const AdminDrivers = () => {
           <p className="text-gray-600">Manage drivers and their depot assignments</p>
         </div>
         <div className="flex items-center space-x-3">
+          <div className="hidden md:flex items-center rounded-lg overflow-hidden border border-gray-300">
+            <button
+              onClick={() => setViewMode('cards')}
+              className={`px-3 py-2 text-sm ${viewMode === 'cards' ? 'bg-gray-200 text-gray-900' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+            >
+              Cards
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-2 text-sm ${viewMode === 'table' ? 'bg-gray-200 text-gray-900' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+            >
+              Table
+            </button>
+          </div>
           <button
             onClick={exportDrivers}
             className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
@@ -536,7 +583,66 @@ const AdminDrivers = () => {
         </div>
       </div>
 
+      {/* Drivers Cards */}
+      {viewMode === 'cards' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredDrivers.map((driver) => (
+            <div key={driver._id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition cursor-pointer" onClick={() => openViewDriver(driver)}>
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+                    {driver.name?.charAt(0)?.toUpperCase() || 'D'}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-900">{driver.name}</div>
+                    <div className="text-xs text-gray-500">ID: {driver._id.slice(-8)}</div>
+                  </div>
+                </div>
+                <div>
+                  {getStatusBadge(driver.status)}
+                </div>
+              </div>
+              <div className="mt-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500">Username:</span>
+                  <span className="font-mono text-gray-900">{driver.username || '—'}</span>
+                  {driver.username && (
+                    <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(driver.username); }} className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50">Copy</button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-gray-500">Depot:</span>
+                  <span className="text-gray-900">{getDepotName(driver.depotId)} ({getDepotCode(driver.depotId)})</span>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <Mail className="w-4 h-4 text-gray-400" />
+                  <span>{driver.email || '—'}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <Phone className="w-4 h-4 text-gray-400" />
+                  <span>{driver.phone || '—'}</span>
+                </div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-gray-500">Auto email:</span>
+                <span className="font-mono text-gray-900">{generateAutoEmail(driver.name, driver.depotId)}</span>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-gray-500">Auto password:</span>
+                <span className="font-mono text-gray-900">{AUTO_PASSWORD}</span>
+              </div>
+              </div>
+              <div className="mt-3 flex items-center gap-2">
+                <button onClick={(e) => { e.stopPropagation(); openViewDriver(driver); }} className="text-blue-600 hover:text-blue-800 px-3 py-1 border border-blue-200 rounded">View</button>
+                <button onClick={(e) => { e.stopPropagation(); openEditDriver(driver); }} className="text-green-600 hover:text-green-800 px-3 py-1 border border-green-200 rounded">Edit</button>
+                <button onClick={(e) => { e.stopPropagation(); openDeleteModal(driver); }} className="text-red-600 hover:text-red-800 px-3 py-1 border border-red-200 rounded">Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Drivers Table */}
+      {viewMode === 'table' && (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -547,6 +653,9 @@ const AdminDrivers = () => {
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Employee ID
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Username
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Depot Assignment
@@ -571,7 +680,7 @@ const AdminDrivers = () => {
                 const LicenseIcon = licenseStatus.icon;
                 
                 return (
-                  <tr key={driver._id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={driver._id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => openViewDriver(driver)}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-blue-600 rounded-full flex items-center justify-center">
@@ -584,6 +693,21 @@ const AdminDrivers = () => {
                           <div className="text-sm text-gray-500">ID: {driver._id.slice(-8)}</div>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-mono text-gray-900 select-all">{driver.username || '—'}</span>
+                        {driver.username && (
+                          <button
+                            onClick={() => navigator.clipboard.writeText(driver.username)}
+                            title="Copy username"
+                            className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
+                          >
+                            Copy
+                          </button>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-gray-500 mt-1">Default pwd: driver123 (if seeded)</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
@@ -641,21 +765,21 @@ const AdminDrivers = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex items-center space-x-2">
                         <button
-                          onClick={() => openViewDriver(driver)}
+                          onClick={(e) => { e.stopPropagation(); openViewDriver(driver); }}
                           className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
                           title="View Details"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => openEditDriver(driver)}
+                          onClick={(e) => { e.stopPropagation(); openEditDriver(driver); }}
                           className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors"
                           title="Edit Driver"
                         >
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => openDeleteModal(driver)}
+                          onClick={(e) => { e.stopPropagation(); openDeleteModal(driver); }}
                           className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
                           title="Delete Driver"
                         >
@@ -695,6 +819,7 @@ const AdminDrivers = () => {
           </div>
         )}
       </div>
+      )}
 
       {/* Create/Edit Driver Modal */}
       {(showCreateModal || editingDriver) && (
@@ -733,6 +858,17 @@ const AdminDrivers = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Enter email address"
                   />
+                  <div className="mt-1 text-xs text-gray-600 flex items-center gap-2">
+                    <span>Suggested:</span>
+                    <span className="font-mono">{generateAutoEmail(driverForm.name || editingDriver?.name, driverForm.depotId || editingDriver?.depotId)}</span>
+                    <button
+                      type="button"
+                      onClick={() => setDriverForm(prev => ({ ...prev, email: generateAutoEmail(prev.name || editingDriver?.name, prev.depotId || editingDriver?.depotId) }))}
+                      className="px-2 py-0.5 border border-gray-300 rounded hover:bg-gray-50"
+                    >
+                      Use
+                    </button>
+                  </div>
                 </div>
                 
                 <div>
@@ -830,19 +966,63 @@ const AdminDrivers = () => {
                   />
                 </div>
                 
-                {!editingDriver && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Password *</label>
-                    <input
-                      type="password"
-                      required
-                      value={driverForm.password}
-                      onChange={(e) => setDriverForm(prev => ({ ...prev, password: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Enter password"
-                    />
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Password {editingDriver ? '(optional)' : '*'}</label>
+                  <input
+                    type="password"
+                    value={driverForm.password}
+                    onChange={(e) => setDriverForm(prev => ({ ...prev, password: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder={editingDriver ? 'Leave blank to keep current' : 'Enter password'}
+                  />
+                </div>
+
+  {/* View Driver Modal (Credentials & Details) */}
+  {viewingDriver && (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setViewingDriver(null)}>
+      <div className="bg-white rounded-xl shadow-xl max-w-xl w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+              {viewingDriver.name?.charAt(0)?.toUpperCase() || 'D'}
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">{viewingDriver.name}</h3>
+              <p className="text-sm text-gray-500">ID: {String(viewingDriver._id).slice(-8)}</p>
+            </div>
+          </div>
+          <button onClick={() => setViewingDriver(null)} className="px-3 py-1 rounded border border-gray-300 hover:bg-gray-50">Close</button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <h4 className="text-sm font-semibold text-gray-700 mb-2">Login Credentials</h4>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500">Username:</span>
+              <span className="font-mono text-gray-900">{viewingDriver.username || '—'}</span>
+              {viewingDriver.username && (
+                <button onClick={() => navigator.clipboard.writeText(viewingDriver.username)} className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50">Copy</button>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-gray-500">Auto email:</span>
+              <span className="font-mono text-gray-900">{generateAutoEmail(viewingDriver.name, viewingDriver.depotId)}</span>
+              <button onClick={() => navigator.clipboard.writeText(generateAutoEmail(viewingDriver.name, viewingDriver.depotId))} className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50">Copy</button>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Auto password: <span className="font-mono">{AUTO_PASSWORD}</span></p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div className="flex items-center gap-2"><Mail className="w-4 h-4 text-gray-400" /><span>{viewingDriver.email || '—'}</span></div>
+            <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-gray-400" /><span>{viewingDriver.phone || '—'}</span></div>
+            <div className="flex items-center gap-2"><Building2 className="w-4 h-4 text-gray-400" /><span>{getDepotName(viewingDriver.depotId)} ({getDepotCode(viewingDriver.depotId)})</span></div>
+            <div>{getStatusBadge(viewingDriver.status)}</div>
+          </div>
+        </div>
+        <div className="p-6 border-t border-gray-200 flex items-center justify-end gap-2">
+          <button onClick={() => setViewingDriver(null)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Close</button>
+        </div>
+      </div>
+    </div>
+  )}
               </div>
               
               <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">

@@ -365,36 +365,50 @@ const DepotDashboard = () => {
 
       scheduleIdle(async () => {
         try {
+          // 3a) Fetch dashboard summary payload
           const dashboardRes = await reportsApiService.getDashboardData();
           const dashboardPayload = (dashboardRes?.data ?? dashboardRes) || {};
           setDashboardData(dashboardPayload);
 
-          // Kick off non-critical section fetches without blocking UI
-          Promise.all([
-            fetchFleetData(),
-            fetchRoutesData(),
-            fetchTripsData(),
-            fetchBookingsData(),
+          // 3b) Fetch live sections in parallel and compute stats from actual data
+          const [busesRes, routesRes, tripsRes, bookingsRes] = await Promise.all([
+            fleetApiService.getBuses().catch(() => ({})),
+            routeApiService.getRoutes().catch(() => ({})),
+            tripApiService.getTrips().catch(() => ({})),
+            bookingApiService.getBookings().catch(() => ({}))
+          ]);
+
+          // Normalize arrays
+          const buses = Array.isArray(busesRes?.data) ? busesRes.data : (busesRes?.data?.buses || busesRes?.buses || busesRes || []);
+          const routes = Array.isArray(routesRes?.data) ? routesRes.data : (routesRes?.data?.routes || routesRes?.routes || routesRes || []);
+          const trips = Array.isArray(tripsRes?.data) ? tripsRes.data : (tripsRes?.data?.trips || tripsRes?.trips || tripsRes || []);
+          const bookings = Array.isArray(bookingsRes?.data) ? bookingsRes.data : (bookingsRes?.data?.bookings || bookingsRes?.bookings || bookingsRes || []);
+
+          // Update section states
+          setFleetData(Array.isArray(buses) ? buses : []);
+          setRoutesData(Array.isArray(routes) ? routes : []);
+          setTripsData(Array.isArray(trips) ? trips : []);
+          setBookingsData(Array.isArray(bookings) ? bookings : []);
+
+          // Compute live stats with fallback to dashboard payload
+          const stats = dashboardPayload?.stats || {};
+          const runningTrips = (Array.isArray(trips) ? trips : []).filter(t => t.status === 'running').length;
+          setDepotStats({
+            totalBuses: Number(stats.totalBuses) || (Array.isArray(buses) ? buses.length : 0),
+            activeTrips: Number(stats.activeTrips) || runningTrips || 0,
+            todayRevenue: Number(stats.todayRevenue) || Number(dashboardPayload?.todayRevenue) || 0,
+            totalRoutes: Number(stats.totalRoutes) || (Array.isArray(routes) ? routes.length : 0),
+            todayBookings: Number(stats.todayBookings) || (Array.isArray(bookings) ? bookings.filter(b => b.createdAt && new Date(b.createdAt).toDateString() === new Date().toDateString()).length : 0),
+            totalBookings: Number(stats.totalBookings) || (Array.isArray(bookings) ? bookings.length : 0)
+          });
+
+          // Also kick off remaining auxiliary fetches (non-critical)
+          Promise.allSettled([
             fetchStaffData(),
             fetchSchedulesData()
-          ]).catch(() => {});
+          ]);
 
-          const stats = dashboardPayload?.stats || {};
-          setDepotStats({
-            totalBuses: Number(stats.totalBuses) || fleetData.length || 0,
-            activeTrips: Number(stats.activeTrips) || (tripsData.filter(trip => trip.status === 'running').length) || 0,
-            todayRevenue: Number(stats.todayRevenue) || 0,
-            totalRoutes: Number(stats.totalRoutes) || routesData.length || 0,
-            todayBookings: Number(stats.todayBookings) || 0,
-            totalBookings: Number(stats.totalBookings) || bookingsData.length || 0
-          });
-
-          setSystemHealth({
-            database: 'online',
-            api: 'online',
-            frontend: 'online'
-          });
-
+          setSystemHealth({ database: 'online', api: 'online', frontend: 'online' });
           setLastUpdated(new Date().toLocaleTimeString());
         } catch (err) {
           console.error('Deferred dashboard load failed:', err);

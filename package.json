@@ -4,6 +4,9 @@
   "description": "YATRIK ERP - Complete Bus Management System",
   "main": "index.js",
   "scripts": {
+    "admin:depots:ensure": "cd backend && node scripts/ensure-depot-credentials.js ensure Yatrik123",
+    "admin:depots:reset": "cd backend && node scripts/ensure-depot-credentials.js reset Yatrik123",
+    "generate-trips": "node backend/scripts/generate-daily-trip-schedules.js",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd backend && npm run dev",
     "client": "cd frontend && npm start",

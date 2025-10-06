@@ -32,6 +32,7 @@ const RouteManagement = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   
   // Selection and editing
   const [selectedRoute, setSelectedRoute] = useState(null);
@@ -70,6 +71,8 @@ const RouteManagement = () => {
   // Real-time updates
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [connectionStatus] = useState('connected');
+  // View mode
+  const [oneColumn, setOneColumn] = useState(true);
 
   useEffect(() => {
     fetchRoutes();
@@ -440,6 +443,27 @@ const RouteManagement = () => {
     }
   }, [selectedRoute, routes]);
 
+  const handleViewRoute = useCallback((route) => {
+    setSelectedRoute(route);
+    setShowViewModal(true);
+  }, []);
+
+  const handleMaintenance = useCallback((route) => {
+    try {
+      setSelectedRoute(route);
+      // Optimistically mark as maintenance and stamp last maintenance date
+      const updated = routes.map(r =>
+        (r._id || r.routeId) === (route._id || route.routeId)
+          ? { ...r, status: 'maintenance', lastMaintenance: new Date().toISOString().slice(0, 10) }
+          : r
+      );
+      setRoutes(updated);
+      console.log('Maintenance flagged for:', route.routeName);
+    } catch (e) {
+      console.warn('Failed to flag maintenance:', e);
+    }
+  }, [routes]);
+
   const handleDeleteRoute = useCallback(async () => {
     try {
       setLoading(true);
@@ -520,8 +544,11 @@ const RouteManagement = () => {
     );
   }
 
+  // Enable compact layout by default for higher information density
+  const isCompact = true;
+
   return (
-    <div className="route-management modern-ui">
+    <div className={`route-management modern-ui ${isCompact ? 'compact' : ''}`}>
       {/* Enhanced Page Header */}
       <div className="page-header enhanced">
         <div className="header-content">
@@ -742,7 +769,28 @@ const RouteManagement = () => {
         </div>
       </div>
 
-      {/* Enhanced Routes Table */}
+      {/* View mode selector */}
+      <div className="view-mode-selector-bar">
+        <div className="view-mode-selector">
+          <button
+            className={`view-mode-btn ${oneColumn ? 'active' : ''}`}
+            onClick={() => setOneColumn(true)}
+            title="Single column cards"
+          >
+            One column
+          </button>
+          <button
+            className={`view-mode-btn ${!oneColumn ? 'active' : ''}`}
+            onClick={() => setOneColumn(false)}
+            title="Table view"
+          >
+            Table
+          </button>
+        </div>
+      </div>
+
+      {/* Enhanced Routes Table or One-Column Cards */}
+      {!oneColumn ? (
       <div className="routes-table-container enhanced">
         <div className="table-header">
           <div className="table-title">
@@ -1051,6 +1099,110 @@ const RouteManagement = () => {
           </table>
         </div>
       </div>
+      ) : (
+      <div className="routes-cards-container">
+        <div className="cards-list">
+          {filteredRoutes.length > 0 ? filteredRoutes.map((route, index) => (
+            <div key={route._id || index} className="route-card">
+              <div className="route-card__header">
+                <div className="route-card__title">
+                  <span className="route-card__number">{route.routeNumber}</span>
+                  <span className="route-card__name">{route.routeName}</span>
+                </div>
+                <span className={`status-badge ${route.status || 'inactive'}`}>
+                  {route.status?.toUpperCase() || 'INACTIVE'}
+                </span>
+              </div>
+              <div className="route-card__meta">
+                <div className="meta-item"><strong>Type:</strong> {route.routeType || route.busType || 'N/A'}</div>
+                <div className="meta-item"><strong>Capacity:</strong> {route.capacity || 'N/A'}</div>
+                <div className="meta-item"><strong>Route:</strong> {route.startingPoint} → {route.endingPoint}</div>
+                <div className="meta-item"><strong>Last Maintenance:</strong> {route.lastMaintenance || 'N/A'}</div>
+              </div>
+              <div className="route-card__crew">
+                <div><span className="label">Driver:</span> {route.driver || 'Assign'}</div>
+                <div><span className="label">Conductor:</span> {route.conductor || 'Assign'}</div>
+              </div>
+              <div className="route-card__actions">
+                <button 
+                  className="action-btn view"
+                  onClick={() => handleViewRoute(route)}
+                >
+                  VIEW
+                </button>
+                <button 
+                  className="action-btn edit"
+                  onClick={() => {
+                    setSelectedRoute(route);
+                    setShowEditModal(true);
+                  }}
+                >
+                  EDIT
+                </button>
+                <button 
+                  className="action-btn maintenance"
+                  onClick={() => handleMaintenance(route)}
+                >
+                  MAINTENANCE
+                </button>
+                <button className="action-btn more" title="More Options"><MoreVertical size={16} /></button>
+              </div>
+            </div>
+          )) : (
+            <div className="empty-state">
+              <Route size={48} />
+              <h3>No routes found</h3>
+              <p>No routes match your search criteria</p>
+              <button 
+                className="clear-filters-btn"
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('all');
+                  setDistanceFilter('all');
+                }}
+              >
+                Clear Filters
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      )}
+
+      {/* View Route Modal */}
+      {showViewModal && selectedRoute && (
+        <div className="modal-overlay" onClick={() => setShowViewModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Route Details</h2>
+              <button className="modal-close" onClick={() => setShowViewModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group"><label>Route Number</label><div>{selectedRoute.routeNumber}</div></div>
+              <div className="form-group"><label>Route Name</label><div>{selectedRoute.routeName}</div></div>
+              <div className="form-row">
+                <div className="form-group"><label>Starting Point</label><div>{selectedRoute.startingPoint}</div></div>
+                <div className="form-group"><label>Ending Point</label><div>{selectedRoute.endingPoint}</div></div>
+              </div>
+              <div className="form-row">
+                <div className="form-group"><label>Distance</label><div>{selectedRoute.totalDistance || 'N/A'}</div></div>
+                <div className="form-group"><label>Estimated Duration</label><div>{selectedRoute.estimatedDuration || 'N/A'}</div></div>
+              </div>
+              <div className="form-row">
+                <div className="form-group"><label>Capacity</label><div>{selectedRoute.capacity || 'N/A'}</div></div>
+                <div className="form-group"><label>Status</label><div>{selectedRoute.status || 'N/A'}</div></div>
+              </div>
+              <div className="form-group"><label>Last Maintenance</label><div>{selectedRoute.lastMaintenance || 'N/A'}</div></div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setShowViewModal(false)}>Close</button>
+              <button className="btn btn-primary" onClick={() => { setShowViewModal(false); setShowEditModal(true); }}>Edit</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Route Modal */}
       {showAddModal && (

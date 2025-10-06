@@ -10,6 +10,7 @@ const { queueEmail } = require('../services/emailQueue');
 const Razorpay = require('razorpay');
 const QRCode = require('qrcode');
 const Ticket = require('../models/Ticket');
+const { attachSignature } = require('../utils/qrSignature');
 
 // Initialize Razorpay (use test credentials for development)
 const razorpay = new Razorpay({
@@ -393,7 +394,19 @@ router.post('/mock', auth, async (req, res) => {
 
     const pnr = 'YTK' + Math.random().toString(36).slice(2, 7).toUpperCase();
     const seatNumber = booking.seatNo;
-    const payload = `YATRIK|PNR:${pnr}|Trip:${booking.tripId?._id || booking.tripId}|Seat:${seatNumber}`;
+    const basePayload = {
+      ver: 1,
+      typ: 'YATRIK_TICKET',
+      pnr,
+      bookingId: (booking._id || '').toString(),
+      tripId: (booking.tripId?._id || booking.tripId || '').toString(),
+      seatNumber: seatNumber || '',
+      passengerName: booking.passengerDetails?.name || 'Passenger',
+      issuedAt: Date.now(),
+      exp: Date.now() + 24 * 60 * 60 * 1000
+    };
+    const signedPayload = attachSignature(basePayload);
+    const payload = JSON.stringify(signedPayload);
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     const ticketNumber = `TKT${Date.now()}${Math.random().toString(36).substr(2,5).toUpperCase()}`;

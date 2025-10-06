@@ -23,10 +23,45 @@ const PaxTicket = () => {
 
       try {
         setLoading(true);
-        // For now, we'll create a mock ticket since we don't have a ticket API endpoint yet
-        // In a real implementation, you would fetch from /api/tickets/{pnr}
-        const mockTicket = {
-          pnr: pnr,
+        // Try backend ticket-by-PNR; fallback to booking PNR endpoint
+        try {
+          const resp = await apiFetch(`/api/booking/pnr/${encodeURIComponent(pnr)}`);
+          if (resp?.success && resp?.data) {
+            const b = resp.data;
+            const qrPayload = {
+              ver: 1,
+              typ: 'YATRIK_TICKET',
+              pnr: b.pnr || b.bookingId,
+              bookingId: b.bookingId,
+              seatNumbers: Array.isArray(b.seats) ? b.seats.map(s => s.seatNumber).join(', ') : (b.seatNumbers || ''),
+              passengerName: b.customer?.name || 'Passenger',
+              from: b.journey?.from,
+              to: b.journey?.to,
+              departureDate: b.journey?.departureDate,
+              departureTime: b.journey?.departureTime
+            };
+            setTicket({
+              pnr: b.pnr || b.bookingId,
+              bookingId: b.bookingId,
+              status: b.status,
+              passengerName: b.customer?.name || 'Passenger',
+              from: b.journey?.from,
+              to: b.journey?.to,
+              departureDate: b.journey?.departureDate,
+              departureTime: b.journey?.departureTime,
+              arrivalTime: b.journey?.arrivalTime,
+              seatNumbers: Array.isArray(b.seats) ? b.seats.map(s => s.seatNumber).join(', ') : '',
+              amount: b.pricing?.total || b.pricing?.totalAmount,
+              // Note: this is unsigned QR shown to passenger; conductor app verifies signed QR from issued Ticket
+              qrData: JSON.stringify(qrPayload)
+            });
+            return;
+          }
+        } catch (_) {}
+
+        // Fallback mock
+        setTicket({
+          pnr,
           bookingId: `BK${Date.now().toString().slice(-8)}`,
           status: 'confirmed',
           passengerName: 'Guest Passenger',
@@ -37,20 +72,8 @@ const PaxTicket = () => {
           arrivalTime: '12:00',
           seatNumbers: 'U1B, U2B',
           amount: 500,
-          qrData: JSON.stringify({
-            pnr: pnr,
-            bookingId: `BK${Date.now().toString().slice(-8)}`,
-            passengerName: 'Guest Passenger',
-            from: 'Mumbai',
-            to: 'Pune',
-            departureDate: new Date().toISOString().split('T')[0],
-            departureTime: '08:00',
-            seatNumbers: 'U1B, U2B',
-            amount: 500
-          })
-        };
-        
-        setTicket(mockTicket);
+          qrData: JSON.stringify({ pnr })
+        });
       } catch (err) {
         console.error('Error loading ticket:', err);
         setError('Failed to load ticket details');

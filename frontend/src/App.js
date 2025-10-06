@@ -34,6 +34,7 @@ import RedBusTicket from './pages/RedBusTicket';
 import ConductorDashboard from './pages/conductor/ConductorDashboard.jsx';
 import DriverDashboard from './pages/driver/DriverDashboard.jsx';
 import DepotDashboard from './pages/depot/DepotDashboard';
+import DepotLogin from './pages/DepotLogin';
 // import DepotTripsPage from './pages/depot/Trips';
 
 
@@ -215,6 +216,7 @@ function App() {
           {/* Use unified Auth page for both login and signup */}
           <Route path="/login" element={<Auth initialMode="login" />} />
           <Route path="/signup" element={<Auth initialMode="signup" />} />
+          <Route path="/depot-login" element={<DepotLogin />} />
           <Route path="/oauth/callback" element={<OAuthCallback />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 

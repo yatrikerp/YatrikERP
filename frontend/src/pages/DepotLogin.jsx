@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { apiFetch } from '../utils/api';
 import { Building2, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 const DepotLogin = () => {
@@ -37,11 +38,8 @@ const DepotLogin = () => {
 
     try {
       // OPTIMIZED: Use apiFetch for better error handling and performance
-      const response = await fetch('/api/depot-auth/login', {
+      const response = await apiFetch('/api/depot-auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           username: formData.email, // Support both username and email
           email: formData.email,
@@ -49,27 +47,31 @@ const DepotLogin = () => {
         })
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        // OPTIMIZED: Immediate UI response - don't await login
-        login(data.data.user, data.data.token, true).catch(err => 
-          console.error('Background login processing failed:', err)
-        );
+      if (response.ok && response.data.success) {
+        // Store depot info first
+        if (response.data.data.depot) {
+          localStorage.setItem('depotInfo', JSON.stringify(response.data.data.depot));
+        }
         
-        // OPTIMIZED: Navigate immediately for instant response
-        navigate('/depot/dashboard');
+        // Get redirect path from backend or use default
+        const redirectPath = response.data.data.redirectPath || '/depot/dashboard';
         
-        // OPTIMIZED: Store depot info in background if available
-        if (data.depot) {
-          localStorage.setItem('depotInfo', JSON.stringify(data.depot));
+        // Login and navigate after login completes
+        try {
+          await login(response.data.data.user, response.data.data.token, true);
+          console.log('[DepotLogin] Login successful, navigating to:', redirectPath);
+          navigate(redirectPath);
+        } catch (err) {
+          console.error('[DepotLogin] Login failed:', err);
+          setError('Login processing failed. Please try again.');
+          setLoading(false);
         }
       } else {
-        setError(data.message || 'Login failed');
+        setError(response.data?.message || response.message || 'Login failed');
         setLoading(false);
       }
     } catch (err) {
-      console.error('Login error:', err);
+      console.error('[DepotLogin] Login error:', err);
       setError('Network error. Please try again.');
       setLoading(false);
     }

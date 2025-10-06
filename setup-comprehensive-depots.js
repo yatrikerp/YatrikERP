@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const mongoose = require('./backend/node_modules/mongoose');
 require('dotenv').config();
 
 // Import models
@@ -191,7 +191,8 @@ async function createDepotAndUser(depotInfo, depotType) {
         ['Parking_Lot', 'Admin_Office'] : 
         ['Parking_Lot'],
       status: 'active',
-      isActive: true
+      isActive: true,
+      createdBy: new mongoose.Types.ObjectId('68a14f559891fce2ae3c7f65')
     });
 
     const savedDepot = await depot.save();

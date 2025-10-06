@@ -46,6 +46,13 @@ const ticketSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  // Scan status (fast lookup for latest scan)
+  scannedAt: Date,
+  scannedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  scannedLocation: String,
   // Validation tracking
   validationHistory: [{
     conductorId: {

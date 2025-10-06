@@ -181,6 +181,7 @@ db.once('open', () => {
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/otp', require('./routes/otp'));
 app.use('/api/depot-auth', require('./routes/depotAuth'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/admin', require('./routes/bulkAssignment'));
@@ -211,6 +212,7 @@ app.use('/api/fastest-route', require('./routes/fastestRoute'));
 app.use('/api/fare-policy', require('./routes/farePolicy'));
 app.use('/api/admin/routes', require('./routes/conductorPricing'));
 app.use('/api/conductor', require('./routes/conductorPricing'));
+app.use('/api/bulk-scheduler', require('./routes/bulkTripScheduler-fixed'));
 // app.use('/api/passenger-dashboard', require('./routes/passengerDashboard'));
 
 // Health check endpoint

@@ -105,12 +105,41 @@ const auth = async (req, res, next) => {
     }
 
     if (!user) {
-      console.error('User not found for ID:', payload.userId);
-      return res.status(401).json({ 
-        success: false, 
-        error: 'User not found. Please log in again.',
-        code: 'USER_NOT_FOUND'
-      });
+      // Fallback: accept depot short-circuit tokens without DB record
+      const payloadRole = String(payload.role || '').toUpperCase();
+      const depotLike = payload.isDepotUser === true || !!payload.depotCode || ['DEPOT_MANAGER','DEPOT_SUPERVISOR','DEPOT_OPERATOR'].includes(payloadRole);
+      if (depotLike) {
+        user = {
+          _id: payload.userId || '000000000000000000000000',
+          name: payload.name || payload.username || 'Depot User',
+          email: payload.email || `${payload.username || 'depot'}@yatrik.com`,
+          role: (payload.role || 'depot_manager').toString().toLowerCase(),
+          status: 'active',
+          depotId: payload.depotId || null,
+          username: payload.username || null,
+          depotCode: payload.depotCode || null,
+          depotName: payload.depotName || null,
+          permissions: Array.isArray(payload.permissions) ? payload.permissions : []
+        };
+      } else if ((payload.role || '').toString().toUpperCase() === 'ADMIN' && (payload.email || '').toLowerCase() === 'admin@yatrik.com') {
+        // Synthetic admin support: accept token even if DB has no user
+        user = {
+          _id: payload.userId || '000000000000000000000000',
+          name: payload.name || 'System Admin',
+          email: 'admin@yatrik.com',
+          role: 'admin',
+          status: 'active',
+          depotId: null,
+          lastLogin: new Date()
+        };
+      } else {
+        console.error('User not found for ID:', payload.userId);
+        return res.status(401).json({ 
+          success: false, 
+          error: 'User not found. Please log in again.',
+          code: 'USER_NOT_FOUND'
+        });
+      }
     }
     
     if (user.status !== 'active') {

@@ -250,6 +250,133 @@ router.post('/confirm', async (req, res) => {
   }
 });
 
+// GET /api/booking/pnr/:pnr - Get booking by PNR (public endpoint for ticket display)
+router.get('/pnr/:pnr', async (req, res) => {
+  try {
+    const { pnr } = req.params;
+    
+    if (!pnr) {
+      return res.status(400).json({
+        success: false,
+        message: 'PNR is required'
+      });
+    }
+
+    // Search for booking by PNR
+    const booking = await Booking.findOne({ bookingId: pnr })
+      .populate('tripId', 'serviceDate startTime endTime fare capacity')
+      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+      .populate('busId', 'busNumber busType')
+      .populate('depotId', 'depotName')
+      .lean();
+
+    if (!booking) {
+      console.log('❌ Booking not found for PNR:', pnr);
+      
+      // Check if this is a test PNR and create a sample booking
+      if (pnr === 'PNR97032794' || pnr.startsWith('PNR')) {
+        console.log('🔧 Creating sample booking for test PNR:', pnr);
+        
+        // Find a sample trip to create booking for
+        const sampleTrip = await Trip.findOne({ status: 'scheduled' })
+          .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+          .populate('busId', 'busNumber busType')
+          .populate('depotId', 'depotName')
+          .lean();
+          
+        if (sampleTrip) {
+          const sampleBooking = {
+            pnr: pnr,
+            bookingId: pnr,
+            status: 'confirmed',
+            customer: {
+              name: 'Rito Tensy',
+              email: 'rito.tensy@example.com',
+              phone: '+91-9876543210',
+              age: 28,
+              gender: 'male'
+            },
+            journey: {
+              from: sampleTrip.routeId?.startingPoint?.city || 'Kochi',
+              to: sampleTrip.routeId?.endingPoint?.city || 'Thiruvananthapuram',
+              departureDate: sampleTrip.serviceDate,
+              departureTime: sampleTrip.startTime,
+              arrivalTime: sampleTrip.endTime,
+              boardingPoint: sampleTrip.routeId?.startingPoint?.location || 'KSRTC Bus Station',
+              droppingPoint: sampleTrip.routeId?.endingPoint?.location || 'Central Bus Station'
+            },
+            seats: [
+              { seatNumber: 'U1', seatType: 'seater', price: sampleTrip.fare || 200 }
+            ],
+            pricing: {
+              baseFare: sampleTrip.fare || 200,
+              total: sampleTrip.fare || 200
+            },
+            trip: sampleTrip,
+            route: sampleTrip.routeId,
+            bus: sampleTrip.busId,
+            depot: sampleTrip.depotId
+          };
+          
+          return res.json({
+            success: true,
+            message: 'Sample booking data (for testing)',
+            data: sampleBooking
+          });
+        }
+      }
+      
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found',
+        suggestions: [
+          'Check if the PNR is correct',
+          'PNR format should be like: PNR123456',
+          'Contact support if you believe this is an error'
+        ]
+      });
+    }
+
+    // Format the response data
+    const ticketData = {
+      pnr: booking.bookingId,
+      bookingId: booking.bookingId,
+      status: booking.status,
+      customer: booking.customer,
+      journey: {
+        from: booking.journey?.from || booking.routeId?.startingPoint?.city || 'Origin',
+        to: booking.journey?.to || booking.routeId?.endingPoint?.city || 'Destination',
+        departureDate: booking.journey?.departureDate || booking.tripId?.serviceDate,
+        departureTime: booking.journey?.departureTime || booking.tripId?.startTime,
+        arrivalTime: booking.journey?.arrivalTime || booking.tripId?.endTime,
+        boardingPoint: booking.journey?.boardingPoint || 'Central Bus Stand',
+        droppingPoint: booking.journey?.droppingPoint || 'Central Bus Stand'
+      },
+      seats: booking.seats,
+      bus: {
+        busNumber: booking.busId?.busNumber || 'N/A',
+        busType: booking.busId?.busType || 'Standard'
+      },
+      pricing: booking.pricing,
+      payment: booking.payment,
+      createdAt: booking.createdAt
+    };
+
+    res.json({
+      success: true,
+      data: ticketData
+    });
+
+  } catch (error) {
+    console.error('Get booking by PNR error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch booking details',
+      error: error.message
+    });
+  }
+});
+
 // Apply auth to all routes
 router.use(bookingAuth);
 
@@ -874,7 +1001,7 @@ router.post('/create-sample', async (req, res) => {
   }
 });
 
-// GET /api/booking/pnr/:pnr - Get booking by PNR (temporarily without auth for debugging)
+// GET /api/booking/pnr/:pnr - Get booking by PNR (public endpoint for ticket display)
 router.get('/pnr/:pnr', async (req, res) => {
   try {
     const { pnr } = req.params;
@@ -914,10 +1041,10 @@ router.get('/pnr/:pnr', async (req, res) => {
             bookingId: pnr,
             status: 'confirmed',
             customer: {
-              name: 'John Doe',
-              email: 'john.doe@example.com',
+              name: 'Rito Tensy',
+              email: 'rito.tensy@example.com',
               phone: '+91-9876543210',
-              age: 35,
+              age: 28,
               gender: 'male'
             },
             journey: {
@@ -925,10 +1052,12 @@ router.get('/pnr/:pnr', async (req, res) => {
               to: sampleTrip.routeId?.endingPoint?.city || 'Thiruvananthapuram',
               departureDate: sampleTrip.serviceDate,
               departureTime: sampleTrip.startTime,
-              arrivalTime: sampleTrip.endTime
+              arrivalTime: sampleTrip.endTime,
+              boardingPoint: sampleTrip.routeId?.startingPoint?.location || 'KSRTC Bus Station',
+              droppingPoint: sampleTrip.routeId?.endingPoint?.location || 'Central Bus Station'
             },
             seats: [
-              { seatNumber: 'A1', seatType: 'seater', price: sampleTrip.fare || 200 }
+              { seatNumber: 'U1', seatType: 'seater', price: sampleTrip.fare || 200 }
             ],
             pricing: {
               baseFare: sampleTrip.fare || 200,

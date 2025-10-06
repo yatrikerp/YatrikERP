@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import './conductor.modern.css';
+import QRScanner from '../../components/QRScanner';
 import { 
   MapPin, 
   CheckCircle, 
@@ -137,19 +138,37 @@ const ConductorDashboard = () => {
   const startQRScan = useCallback(() => {
     setIsScanning(true);
     setScanResult(null);
-    // Simulate QR scan
-    setTimeout(() => {
-      const mockResult = {
-        success: Math.random() > 0.2, // 80% success rate
-        pnr: 'PNR' + Math.random().toString().substr(2, 8),
-        passenger: 'Sample Passenger',
-        seat: 'A' + Math.floor(Math.random() * 5 + 1)
-      };
-      setScanResult(mockResult);
+  }, []);
+
+  const handleScanData = useCallback(async (raw) => {
+    try {
+      // Accept either stringified JSON or already parsed object
+      const qrObject = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const payload = JSON.stringify(qrObject);
+      const res = await fetch('/api/conductor/validate-ticket', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qr: payload })
+      });
+      const json = await res.json();
+      const ok = json?.success;
+      const result = ok ? {
+        success: true,
+        pnr: json.data?.pnr,
+        passenger: json.data?.passengerName,
+        seat: json.data?.seatNumber
+      } : { success: false };
+      setScanResult(result);
       setIsScanning(false);
-      setScanHistory(prev => [mockResult, ...prev.slice(0, 9)]);
-      playSound(mockResult.success ? 'success' : 'error');
-    }, 2000);
+      setScanHistory(prev => [result, ...prev.slice(0, 9)]);
+      playSound(ok ? 'success' : 'error');
+    } catch (e) {
+      const fail = { success: false };
+      setScanResult(fail);
+      setIsScanning(false);
+      setScanHistory(prev => [fail, ...prev.slice(0, 9)]);
+      playSound('error');
+    }
   }, [playSound]);
 
   const refreshDashboard = useCallback(async () => {
@@ -754,25 +773,24 @@ const ConductorDashboard = () => {
               <div className="scan-area">
                 <div className={`scan-camera ${isScanning ? 'scanning' : ''}`}>
                   <Camera size={48} />
-                  {isScanning ? (
-                    <div className="scanning-overlay">
-                      <div className="scan-line"></div>
-                      <p>Scanning...</p>
-                    </div>
-                  ) : (
-                    <p>Tap to start scanning</p>
-                  )}
+                  {!isScanning && <p>Tap to start scanning</p>}
                 </div>
                 
                 <button 
                   className={`scan-btn ${isScanning ? 'scanning' : ''}`}
                   onClick={startQRScan}
-                  disabled={isScanning}
                 >
                   {isScanning ? 'Scanning...' : 'Start QR Scan'}
                 </button>
               </div>
               
+              {isScanning && (
+                <QRScanner 
+                  onScan={handleScanData}
+                  onClose={() => setIsScanning(false)}
+                />
+              )}
+
               {scanResult && (
                 <div className={`scan-result ${scanResult.success ? 'success' : 'error'}`}>
                   <div className="result-icon">

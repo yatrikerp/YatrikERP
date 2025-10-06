@@ -15,7 +15,8 @@
  */
 
 require('dotenv').config();
-const mongoose = require('mongoose');
+// Load mongoose from backend's node_modules to avoid duplicate install at root
+const mongoose = require('./backend/node_modules/mongoose');
 const Trip = require('./backend/models/Trip');
 const Route = require('./backend/models/Route');
 const Bus = require('./backend/models/Bus');
