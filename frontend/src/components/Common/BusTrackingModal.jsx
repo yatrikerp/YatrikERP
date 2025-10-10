@@ -133,7 +133,8 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
   const fetchRunningTrips = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/tracking/running-trips');
+      // Try the correct backend URL first
+      const response = await fetch('http://localhost:5000/api/tracking/running-trips');
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.data?.trips) {

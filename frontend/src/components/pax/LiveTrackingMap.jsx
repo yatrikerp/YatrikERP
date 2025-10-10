@@ -36,12 +36,13 @@ const LiveTrackingMap = ({ trackingData, onTrackBus }) => {
       return;
     }
 
+    // Read API key from both Vite and CRA environments so either setup works
     const viteKey = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GOOGLE_MAPS_API_KEY) || '';
     const craKey = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_GOOGLE_MAPS_API_KEY) || '';
     const apiKey = viteKey || craKey;
 
-    if (!apiKey) {
-      toast.error('Google Maps API key is required');
+    if (!apiKey || apiKey === 'YOUR_GOOGLE_MAPS_API_KEY_HERE') {
+      console.log('Google Maps API key not configured. Using fallback interface.');
       setMapLoadError(true);
       return;
     }
@@ -53,7 +54,7 @@ const LiveTrackingMap = ({ trackingData, onTrackBus }) => {
     }
 
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry`;
     script.async = true;
     script.defer = true;
     script.onload = () => {

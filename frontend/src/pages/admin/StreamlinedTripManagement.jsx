@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 // import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Calendar, Plus, Download, Search, Filter, 
+  Calendar, Plus, Download, Search,
   Edit, Trash2, Eye, CheckCircle,
   RefreshCw, Users, Clock,
   X, DollarSign, Bus, Play, Sparkles,
@@ -291,13 +291,13 @@ const StreamlinedTripManagement = () => {
       }
 
       // Normalize trips
-      const normalizedTrips = (tripsRaw || []).map(t => ({
+      let normalizedTrips = (tripsRaw || []).map(t => ({
         ...t,
+        _id: t._id || t.id,
         serviceDate: t.serviceDate ? t.serviceDate.split('T')[0] : '',
         fare: Number(t.fare) || 0,
         capacity: Number(t.capacity) || 0
       }));
-      setTrips(normalizedTrips);
       const pagination = payload.pagination || payload.meta || {};
       // Show total from API response, or filtered count if no pagination info
       setTotal(pagination.total || normalizedTrips.length);
@@ -363,6 +363,35 @@ const StreamlinedTripManagement = () => {
       setDrivers(normalizedDrivers);
       setConductors(normalizedConductors);
       setDepots(normalizedDepots);
+
+      // Merge existing assignments (duties) into trips so driver/conductor show up
+      try {
+        const today = new Date().toISOString().slice(0,10);
+        const dateToUse = dateFilter || today;
+        const dutiesRes = await apiFetch(`/api/admin/trip-assignments?date=${encodeURIComponent(dateToUse)}`, { suppressError: true });
+        const dutyList = dutiesRes?.data?.data || dutiesRes?.data || dutiesRes?.assignments || [];
+        if (Array.isArray(dutyList) && dutyList.length) {
+          const byTrip = new Map();
+          dutyList.forEach(d => {
+            const id = d.tripId && (d.tripId._id || d.tripId);
+            if (id) byTrip.set(id, d);
+          });
+          normalizedTrips = normalizedTrips.map(t => {
+            const d = byTrip.get(t._id);
+            if (!d) return t;
+            return {
+              ...t,
+              driverId: d.driverId ? { _id: d.driverId._id || d.driverId, name: d.driverId.name } : t.driverId,
+              conductorId: d.conductorId ? { _id: d.conductorId._id || d.conductorId, name: d.conductorId.name } : t.conductorId
+            };
+          });
+        }
+      } catch (e) {
+        // Non-fatal; just continue without merging
+        console.warn('Assignments merge skipped:', e?.message || e);
+      }
+
+      setTrips(normalizedTrips);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Failed to fetch trip management data');
@@ -402,32 +431,20 @@ const StreamlinedTripManagement = () => {
         mk('completed')
       ]);
 
-      // Calculate live running trips (scheduled trips that should be running)
-      const now = new Date();
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      // Estimate how many scheduled trips should be running based on time
-      const estimatedRunningFromScheduled = Math.min(Math.floor(totalScheduled * 0.3), totalScheduled); // Assume 30% of scheduled trips should be running
-      const liveRunning = totalRunning + estimatedRunningFromScheduled;
-      const liveScheduled = totalScheduled - estimatedRunningFromScheduled;
-
+      // Use actual trip counts from database
       setStatsCounts({ 
         total: totalAll, 
-        scheduled: Math.max(0, liveScheduled), 
-        running: Math.max(0, liveRunning), 
+        scheduled: totalScheduled, 
+        running: totalRunning, 
         completed: totalCompleted 
       });
       setTotal(totalAll);
       
-      console.log('📊 Live trip stats updated:', {
+      console.log('📊 Trip stats updated:', {
         total: totalAll,
-        scheduled: liveScheduled,
-        running: liveRunning,
-        completed: totalCompleted,
-        originalScheduled: totalScheduled,
-        originalRunning: totalRunning,
-        estimatedRunningFromScheduled: estimatedRunningFromScheduled
+        scheduled: totalScheduled,
+        running: totalRunning,
+        completed: totalCompleted
       });
       
     } catch (e) {
@@ -1957,6 +1974,129 @@ const StreamlinedTripManagement = () => {
             <div className="text-center">
               <h4 className="text-sm font-semibold text-blue-900">Add Trip</h4>
               <p className="text-xs text-blue-700">Single trip</p>
+            </div>
+          </button>
+
+          {/* New: Mega Generate 6000+ Trips */}
+          <button
+            onClick={async () => {
+              try {
+                setLoading(true);
+                // Collect depotIds from state if available
+                const depotIds = (depots || []).map(d => d._id || d.id).filter(Boolean);
+                // Generate for next 30 days (tweakable)
+                const days = 30;
+                let totalCreated = 0;
+                for (let i = 0; i < days; i++) {
+                  const d = new Date();
+                  d.setDate(d.getDate() + i);
+                  const dateStr = d.toISOString().slice(0, 10);
+                  const res = await apiFetch('/api/auto-scheduler/mass-schedule', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                      date: dateStr,
+                      depotIds,
+                      maxTripsPerRoute: 5,
+                      timeGap: 30,
+                      autoAssignCrew: true,
+                      autoAssignBuses: true,
+                      generateReports: false
+                    }),
+                    suppressError: true
+                  });
+                  const created = res?.data?.tripsCreated || res?.tripsCreated || 0;
+                  totalCreated += created;
+                }
+                await fetchData();
+                const msg = totalCreated >= 6000 ? `Generated ${totalCreated} trips (30 days)` : `Generated ${totalCreated} trips`;
+                toast.success(msg);
+              } catch (e) {
+                console.error(e);
+                toast.error('Mega generation failed');
+              } finally {
+                setLoading(false);
+              }
+            }}
+            className="p-3 bg-pink-50 rounded-lg hover:bg-pink-100 transition-colors flex flex-col items-center space-y-2"
+          >
+            <div className="p-2 bg-pink-100 rounded-lg">
+              <Sparkles className="w-5 h-5 text-pink-600" />
+            </div>
+            <div className="text-center">
+              <h4 className="text-sm font-semibold text-pink-900">Mega Generate 6000+</h4>
+              <p className="text-xs text-pink-700">Multi‑day auto schedule</p>
+            </div>
+          </button>
+
+          {/* New: Assign All Trips (Crew) */}
+          <button
+            onClick={async () => {
+              try {
+                setLoading(true);
+                // Iterate locally and call assign-trip per trip (limited to current page)
+                const today = new Date().toISOString().slice(0,10);
+                const dateToUse = dateFilter || today;
+                // Fetch all scheduled trips for the date to cover beyond current page
+                const params = new URLSearchParams();
+                params.set('status', 'scheduled');
+                params.set('limit', '5000');
+                if (dateFilter) params.set('serviceDate', dateFilter);
+                const allRes = await apiFetch('/api/admin/trips?' + params.toString(), { suppressError: true });
+                const payload = allRes?.data?.data || allRes?.data || {};
+                const allTripsRaw = payload.trips || payload.data || (Array.isArray(payload) ? payload : trips);
+                const sched = (allTripsRaw || []).filter(t => (t.status === 'scheduled') && (!dateFilter || t.serviceDate === dateFilter));
+                let okCount = 0, skipCount = 0, errCount = 0;
+                for (const t of sched) {
+                  try {
+                    // resolve IDs whether objects or raw ids
+                    const routeId = (t.routeId && (t.routeId._id || t.routeId)) || '';
+                    // pick a bus: prefer trip bus, else any active bus from same depot as route/trip, else first bus
+                    let busId = (t.busId && (t.busId._id || t.busId)) || '';
+                    if (!busId) {
+                      let depotId = (t.depotId && (t.depotId._id || t.depotId)) || null;
+                      if (!depotId) {
+                        const routeObj = routes.find(r => (r._id || r.id) === routeId);
+                        depotId = (routeObj && (routeObj.depot || routeObj.depotId)) || null;
+                        depotId = depotId && (depotId._id || depotId.id || depotId);
+                      }
+                      const candidateBus = depotId ? buses.find(b => (b.depotId && ((b.depotId._id||b.depotId.id||b.depotId) === depotId))) : buses[0];
+                      busId = candidateBus ? (candidateBus._id || candidateBus.id) : '';
+                    }
+                    // choose a driver: prefer existing driver, else any driver (optionally same depot)
+                    let driverId = (t.driverId && (t.driverId._id || t.driverId)) || '';
+                    if (!driverId) driverId = (drivers[0]?._id || drivers[0]?.id || '');
+                    // choose a conductor similarly
+                    let conductorId = (t.conductorId && (t.conductorId._id || t.conductorId)) || '';
+                    if (!conductorId) conductorId = (conductors[0]?._id || conductors[0]?.id || '');
+                    const scheduledDate = t.serviceDate || dateToUse;
+                    const scheduledTime = t.startTime || '08:00';
+                    if (!routeId || !busId || !driverId) { skipCount++; continue; }
+                    const r = await apiFetch('/api/admin/assign-trip', {
+                      method: 'POST',
+                      body: JSON.stringify({ driverId, conductorId, routeId, busId, tripId: t._id, scheduledDate, scheduledTime })
+                    });
+                    if (r?.ok || r?.success) okCount++; else errCount++;
+                  } catch {
+                    errCount++;
+                  }
+                }
+                toast.success(`Crew assignment complete: ${okCount} ok, ${skipCount} skipped, ${errCount} failed`);
+                await fetchData();
+              } catch (e) {
+                console.error(e);
+                toast.error('Failed to auto-assign');
+              } finally {
+                setLoading(false);
+              }
+            }}
+            className="p-3 bg-rose-50 rounded-lg hover:bg-rose-100 transition-colors flex flex-col items-center space-y-2"
+          >
+            <div className="p-2 bg-rose-100 rounded-lg">
+              <Users className="w-5 h-5 text-rose-600" />
+            </div>
+            <div className="text-center">
+              <h4 className="text-sm font-semibold text-rose-900">Assign All Trips</h4>
+              <p className="text-xs text-rose-700">Auto-assign crew</p>
             </div>
           </button>
           

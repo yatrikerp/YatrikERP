@@ -108,7 +108,12 @@ const Login = () => {
         // Prefer backend-provided redirectPath when present
         const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         const depotEmailPattern = /^([a-z0-9]+-depot|depot-[a-z0-9]+)@yatrik\.com$/;
-        const emailIsDepot = typeof formData.email === 'string' && depotEmailPattern.test(formData.email.trim().toLowerCase());
+        const driverEmailPattern = /^driver\d+@([a-z0-9]+)-depot\.com$/;
+        const conductorEmailPattern = /^conductor\d+@([a-z0-9]+)-depot\.com$/;
+        const emailLower = typeof formData.email === 'string' ? formData.email.trim().toLowerCase() : '';
+        const emailIsDepot = emailLower && depotEmailPattern.test(emailLower);
+        const emailIsDriver = emailLower && driverEmailPattern.test(emailLower);
+        const emailIsConductor = emailLower && conductorEmailPattern.test(emailLower);
         let nextPath = apiRedirect || null;
         if (!nextPath) {
           const role = String(user.role || '').toLowerCase();
@@ -116,6 +121,10 @@ const Login = () => {
             nextPath = '/depot';
           } else if (role === 'admin') {
             nextPath = '/admin';
+          } else if (role === 'driver' || emailIsDriver) {
+            nextPath = '/driver';
+          } else if (role === 'conductor' || emailIsConductor) {
+            nextPath = '/conductor';
           } else if (isMobile && role === 'passenger') {
             nextPath = '/mobile/passenger';
           } else {

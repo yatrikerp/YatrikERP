@@ -331,15 +331,20 @@ const AdminConductors = () => {
     return depot ? (depot.depotCode || depot.code) : 'N/A';
   };
 
-  // Auto-generate display credentials (not persisted)
-  const generateAutoEmail = (fullName, depotId) => {
-    const nameSlug = String(fullName || 'conductor').toLowerCase().replace(/[^a-z0-9]+/g, '');
-    const code = getDepotCode(depotId) || '';
-    const digits = String(code).match(/\d+/g)?.join('') || '';
-    const depotSuffix = digits || String(code || '').toLowerCase();
-    const fallback = '000';
-    const suffix = depotSuffix || fallback;
-    return `${nameSlug}${suffix}@yatrik.com`;
+  // Generate standardized conductor login email per pattern: conductor{seq}@{depotcode}-depot.com
+  const generateConductorEmail = (conductorLike, depotId) => {
+    const depotCode = (getDepotCode(depotId) || '').toString().toLowerCase();
+    const depotSlug = depotCode ? `${depotCode}-depot.com` : 'unknown-depot.com';
+    const source = conductorLike || {};
+    const username = String(source.username || '').trim();
+    const employeeCode = String(source.employeeCode || source.employeeId || '').trim();
+    const conductorId = String(source.conductorId || '').trim();
+    const fromUsername = (username.match(/(\d{1,4})$/) || [])[1];
+    const fromEmp = (employeeCode.match(/(\d{1,4})$/) || [])[1];
+    const fromCnd = (conductorId.match(/(\d{1,4})$/) || [])[1];
+    let seq = fromUsername || fromEmp || fromCnd || '001';
+    seq = seq.padStart(3, '0');
+    return `conductor${seq}@${depotSlug}`;
   };
   const AUTO_PASSWORD = 'Yatrik123';
 
@@ -584,12 +589,14 @@ const AdminConductors = () => {
                   <span>{conductor.phone || '—'}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-gray-500">Auto email:</span>
-                  <span className="font-mono text-gray-900">{generateAutoEmail(conductor.name, conductor.depotId)}</span>
+                  <span className="text-gray-500">Login email:</span>
+                  <span className="font-mono text-gray-900">{generateConductorEmail(conductor, conductor.depotId)}</span>
+                  <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(generateConductorEmail(conductor, conductor.depotId)); }} className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50">Copy</button>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-gray-500">Auto password:</span>
+                  <span className="text-gray-500">Password:</span>
                   <span className="font-mono text-gray-900">{AUTO_PASSWORD}</span>
+                  <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(AUTO_PASSWORD); }} className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50">Copy</button>
                 </div>
               </div>
               <div className="mt-3 flex items-center gap-2">
@@ -802,11 +809,11 @@ const AdminConductors = () => {
                     placeholder="Enter email address"
                   />
                   <div className="mt-1 text-xs text-gray-600 flex items-center gap-2">
-                    <span>Suggested:</span>
-                    <span className="font-mono">{generateAutoEmail(conductorForm.name || editingConductor?.name, conductorForm.depotId || editingConductor?.depotId)}</span>
+                    <span>Suggested login:</span>
+                    <span className="font-mono">{generateConductorEmail({ name: conductorForm.name, depotId: conductorForm.depotId, username: editingConductor?.username, employeeCode: conductorForm.employeeId }, conductorForm.depotId || editingConductor?.depotId)}</span>
                     <button
                       type="button"
-                      onClick={() => setConductorForm(prev => ({ ...prev, email: generateAutoEmail(prev.name || editingConductor?.name, prev.depotId || editingConductor?.depotId) }))}
+                      onClick={() => setConductorForm(prev => ({ ...prev, email: generateConductorEmail({ name: prev.name, depotId: prev.depotId, username: editingConductor?.username, employeeCode: prev.employeeId }, prev.depotId || editingConductor?.depotId) }))}
                       className="px-2 py-0.5 border border-gray-300 rounded hover:bg-gray-50"
                     >
                       Use
@@ -924,11 +931,11 @@ const AdminConductors = () => {
               )}
             </div>
             <div className="flex items-center gap-2 mt-2">
-              <span className="text-gray-500">Auto email:</span>
-              <span className="font-mono text-gray-900">{generateAutoEmail(viewingConductor.name, viewingConductor.depotId)}</span>
-              <button onClick={() => navigator.clipboard.writeText(generateAutoEmail(viewingConductor.name, viewingConductor.depotId))} className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50">Copy</button>
+              <span className="text-gray-500">Login email:</span>
+              <span className="font-mono text-gray-900">{generateConductorEmail(viewingConductor, viewingConductor.depotId)}</span>
+              <button onClick={() => navigator.clipboard.writeText(generateConductorEmail(viewingConductor, viewingConductor.depotId))} className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50">Copy</button>
             </div>
-            <p className="text-xs text-gray-500 mt-1">Auto password: <span className="font-mono">{AUTO_PASSWORD}</span></p>
+            <p className="text-xs text-gray-500 mt-1">Password: <span className="font-mono">{AUTO_PASSWORD}</span></p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div className="flex items-center gap-2"><Mail className="w-4 h-4 text-gray-400" /><span>{viewingConductor.email || '—'}</span></div>

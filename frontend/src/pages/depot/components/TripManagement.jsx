@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 // import { useAuth } from '../../../context/AuthContext';
 import { tripApiService } from '../../../services/depotApiService';
 import io from 'socket.io-client';
+import { apiFetch } from '../../../utils/api';
 import './ManagementPages.css';
 import { 
   Plus, 
@@ -14,7 +15,8 @@ import {
   AlertCircle,
   X,
   Play,
-  Square
+  Square,
+  Users
 } from 'lucide-react';
 
 const TripManagement = () => {
@@ -22,11 +24,13 @@ const TripManagement = () => {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [autoAssigning, setAutoAssigning] = useState(false);
   const [newTrip, setNewTrip] = useState({
     routeId: '',
     busId: '',
@@ -41,6 +45,11 @@ const TripManagement = () => {
   useEffect(() => {
     fetchTrips();
   }, []);
+
+  // Crew lists (fetched from admin endpoints)
+  const [drivers, setDrivers] = useState([]);
+  const [conductors, setConductors] = useState([]);
+  const [assignForm, setAssignForm] = useState({ driverId: '', conductorId: '' });
 
   // Real-time updates for trip assignments
   useEffect(() => {
@@ -75,10 +84,36 @@ const TripManagement = () => {
     };
   }, []);
 
+  // Load drivers and conductors from admin pages' APIs
+  useEffect(() => {
+    const loadCrew = async () => {
+      try {
+        const [driversRes, conductorsRes] = await Promise.all([
+          apiFetch('/api/admin/all-drivers', { suppressError: true }),
+          apiFetch('/api/admin/conductors', { suppressError: true })
+        ]);
+        const driversRaw = driversRes?.data?.data?.drivers || driversRes?.data?.drivers || driversRes?.drivers || [];
+        const conductorsRaw = conductorsRes?.data?.data?.conductors || conductorsRes?.data?.conductors || conductorsRes?.conductors || [];
+        const normalizedDrivers = (driversRaw || []).map(d => ({ _id: d._id || d.id, name: d.name || d.fullName || d.employeeName || 'Driver' }));
+        const normalizedConductors = (conductorsRaw || []).map(c => ({ _id: c._id || c.id, name: c.name || c.fullName || c.employeeName || 'Conductor' }));
+        setDrivers(normalizedDrivers);
+        setConductors(normalizedConductors);
+      } catch (err) {
+        console.error('Failed to load crew lists', err);
+      }
+    };
+    loadCrew();
+  }, []);
+
   const fetchTrips = async () => {
     try {
       setLoading(true);
-      const response = await tripApiService.getTrips();
+      // Explicitly request both running and scheduled trips
+      const params = {
+        status: 'running,scheduled',
+        limit: 100
+      };
+      const response = await tripApiService.getTrips(params);
       console.log('Trip Management - API response:', response);
       
       // Handle different response structures
@@ -224,6 +259,93 @@ const TripManagement = () => {
     setTrips(updatedTrips);
   };
 
+  // Utility: time overlap
+  const isOverlapping = (aStart, aEnd, bStart, bEnd) => {
+    if (!aStart || !aEnd || !bStart || !bEnd) return false;
+    const toM = (t) => {
+      const [h, m] = String(t).split(':').map(Number);
+      return (h || 0) * 60 + (m || 0);
+    };
+    const as = toM(aStart), ae = toM(aEnd), bs = toM(bStart), be = toM(bEnd);
+    return Math.max(as, bs) < Math.min(ae, be);
+  };
+
+  // Auto-assign drivers and conductors to all scheduled trips
+  const autoAssignCrew = async () => {
+    try {
+      setAutoAssigning(true);
+      // Build current commitments for drivers/conductors
+      const driverBusy = new Map();
+      const conductorBusy = new Map();
+
+      trips.forEach(t => {
+        const dId = t.driverId && (t.driverId._id || t.driverId.id);
+        const cId = t.conductorId && (t.conductorId._id || t.conductorId.id);
+        if (dId) {
+          const arr = driverBusy.get(dId) || [];
+          arr.push({ date: t.serviceDate, start: t.startTime, end: t.endTime });
+          driverBusy.set(dId, arr);
+        }
+        if (cId) {
+          const arr = conductorBusy.get(cId) || [];
+          arr.push({ date: t.serviceDate, start: t.startTime, end: t.endTime });
+          conductorBusy.set(cId, arr);
+        }
+      });
+
+      // round-robin handled via pickShift index
+
+      const nextAvailable = (list, busyMap, trip) => {
+        if (list.length === 0) return null;
+        for (let i = 0; i < list.length; i++) {
+          const idx = (i + (trip.pickShift || 0)) % list.length;
+          const item = list[idx];
+          const id = item._id || item.id;
+          const commitments = busyMap.get(id) || [];
+          const clash = commitments.some(x => x.date === trip.serviceDate && isOverlapping(x.start, x.end, trip.startTime, trip.endTime));
+          if (!clash) {
+            return item;
+          }
+        }
+        return null;
+      };
+
+      const updated = trips.map((t, i) => {
+        if (t.status !== 'scheduled') return t;
+
+        // Round-robin shift
+        const pickShift = i;
+        const tripRef = { serviceDate: t.serviceDate, startTime: t.startTime, endTime: t.endTime, pickShift };
+
+        const driver = nextAvailable(drivers, driverBusy, tripRef);
+        const conductor = nextAvailable(conductors, conductorBusy, tripRef);
+
+        if (driver) {
+          const dId = driver._id || driver.id;
+          const arr = driverBusy.get(dId) || [];
+          arr.push({ date: t.serviceDate, start: t.startTime, end: t.endTime });
+          driverBusy.set(dId, arr);
+        }
+        if (conductor) {
+          const cId = conductor._id || conductor.id;
+          const arr = conductorBusy.get(cId) || [];
+          arr.push({ date: t.serviceDate, start: t.startTime, end: t.endTime });
+          conductorBusy.set(cId, arr);
+        }
+
+        return {
+          ...t,
+          driverId: driver ? { _id: driver._id || driver.id, name: driver.name } : t.driverId,
+          conductorId: conductor ? { _id: conductor._id || conductor.id, name: conductor.name } : t.conductorId
+        };
+      });
+
+      setTrips(updated);
+    } finally {
+      setAutoAssigning(false);
+    }
+  };
+
   const filteredTrips = trips.filter(trip => {
     const matchesSearch = trip.tripNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          trip.routeId?.routeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -232,6 +354,33 @@ const TripManagement = () => {
     const matchesStatus = statusFilter === 'all' || trip.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const openAssignCrew = (trip) => {
+    setSelectedTrip(trip);
+    setAssignForm({
+      driverId: trip.driverId?._id || '',
+      conductorId: trip.conductorId?._id || ''
+    });
+    setShowAssignModal(true);
+  };
+
+  const handleAssignCrew = async () => {
+    try {
+      const { driverId, conductorId } = assignForm;
+      const dObj = drivers.find(d => d._id === driverId) || null;
+      const cObj = conductors.find(c => c._id === conductorId) || null;
+      setTrips(prev => prev.map(t => t._id === selectedTrip._id ? {
+        ...t,
+        driverId: dObj ? { _id: dObj._id, name: dObj.name } : t.driverId,
+        conductorId: cObj ? { _id: cObj._id, name: cObj.name } : t.conductorId,
+        status: t.status === 'scheduled' ? 'scheduled' : t.status
+      } : t));
+      setShowAssignModal(false);
+      setSelectedTrip(null);
+    } catch (e) {
+      console.error('Assign crew error', e);
+    }
+  };
 
   if (loading) {
     return (
@@ -253,10 +402,16 @@ const TripManagement = () => {
             <h1>Trip Management</h1>
             <p>Manage scheduled trips, trip status, and trip operations</p>
               </div>
-          <button className="add-trip-btn" onClick={() => setShowAddModal(true)}>
+          <div className="header-actions">
+            <button className="add-trip-btn" onClick={() => setShowAddModal(true)}>
             <Plus size={20} />
             Schedule New Trip
-              </button>
+            </button>
+            <button className="add-trip-btn" onClick={autoAssignCrew} disabled={autoAssigning || drivers.length===0 || conductors.length===0}>
+              <Users size={18} />
+              {autoAssigning ? 'Assigning...' : 'Auto Assign Crew'}
+            </button>
+          </div>
             </div>
       </div>
 
@@ -319,6 +474,15 @@ const TripManagement = () => {
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
         </select>
+        <button
+          onClick={autoAssignCrew}
+          disabled={autoAssigning || drivers.length===0 || conductors.length===0}
+          className="add-trip-btn"
+          style={{ marginLeft: 12 }}
+        >
+          <Users size={16} style={{ marginRight: 6 }} />
+          {autoAssigning ? 'Assigning…' : 'Auto Assign Crew'}
+        </button>
       </div>
           </div>
 
@@ -397,6 +561,13 @@ const TripManagement = () => {
                       >
                         <Eye size={16} />
                         View
+                      </button>
+                      <button
+                        className="action-btn edit"
+                        onClick={() => openAssignCrew(trip)}
+                      >
+                        <Users size={16} />
+                        Assign Crew
                       </button>
                       <button
                         className="action-btn edit"
@@ -713,6 +884,49 @@ const TripManagement = () => {
               <button className="btn btn-danger" onClick={handleDeleteTrip}>
                 Delete Trip
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Crew Modal */}
+      {showAssignModal && selectedTrip && (
+        <div className="modal-overlay" onClick={() => setShowAssignModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Assign Crew to {selectedTrip.tripNumber}</h2>
+              <button className="modal-close" onClick={() => setShowAssignModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Driver</label>
+                  <select
+                    value={assignForm.driverId}
+                    onChange={(e) => setAssignForm({ ...assignForm, driverId: e.target.value })}
+                  >
+                    <option value="">Select Driver</option>
+                    {drivers.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Conductor</label>
+                  <select
+                    value={assignForm.conductorId}
+                    onChange={(e) => setAssignForm({ ...assignForm, conductorId: e.target.value })}
+                  >
+                    <option value="">Select Conductor</option>
+                    {conductors.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="info-note">Selected crew will be notified and the conductor will get scanning access for this trip.</div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setShowAssignModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleAssignCrew}>Assign</button>
             </div>
           </div>
         </div>

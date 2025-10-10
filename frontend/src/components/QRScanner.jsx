@@ -13,14 +13,41 @@ const QRScanner = ({ onScan, onClose }) => {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    if (mode === 'camera' && videoRef.current && !scannerRef.current) {
-      initializeScanner();
-    }
+    let cancelled = false;
+    const boot = async () => {
+      if (mode === 'camera' && videoRef.current) {
+        // Ensure any existing scanner is stopped before starting new
+        if (scannerRef.current) {
+          try { await scannerRef.current.stop(); } catch {}
+          try { scannerRef.current.destroy(); } catch {}
+          scannerRef.current = null;
+        }
+        if (!cancelled) {
+          await initializeScanner();
+        }
+      }
+    };
+    boot();
+
+    const onVisibility = async () => {
+      if (document.hidden) {
+        try { await scannerRef.current?.stop(); } catch {}
+      } else if (mode === 'camera' && videoRef.current && !scannerRef.current) {
+        await initializeScanner();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibility);
       if (scannerRef.current) {
-        scannerRef.current.destroy();
+        try { scannerRef.current.stop(); } catch {}
+        try { scannerRef.current.destroy(); } catch {}
         scannerRef.current = null;
+      }
+      if (videoRef.current) {
+        try { videoRef.current.srcObject = null; } catch {}
       }
     };
   }, [mode]);
@@ -29,25 +56,59 @@ const QRScanner = ({ onScan, onClose }) => {
     try {
       setScanning(true);
       setError(null);
+      // Preflight: ensure camera exists and request permission explicitly
+      const hasCamera = await QrScanner.hasCamera();
+      if (!hasCamera) {
+        throw new Error('No camera found on this device');
+      }
+
+      // Request permission to surface the browser prompt
+      try {
+        const preflight = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false
+        });
+        // Immediately stop preflight stream to release camera for QrScanner
+        preflight.getTracks().forEach(t => t.stop());
+      } catch (permErr) {
+        console.error('Camera permission error:', permErr);
+        throw new Error('Camera permission denied. Please allow camera access and try again.');
+      }
+
+      // Choose the best camera (prefer back/environment)
+      let preferredCamera = undefined;
+      try {
+        const cameras = await QrScanner.listCameras(true);
+        const backCam = cameras.find(c => /back|rear|environment/i.test(`${c.label} ${c.id}`));
+        preferredCamera = backCam?.id || cameras?.[0]?.id;
+      } catch (e) {
+        // ignore; QrScanner will choose default
+      }
 
       const scanner = new QrScanner(
         videoRef.current,
         result => handleScanResult(result),
         {
           onDecodeError: error => {
-            console.error('Decode error:', error);
+            // benign decode errors during scanning; keep silent
           },
           highlightScanRegion: true,
           highlightCodeOutline: true,
-          maxScansPerSecond: 5
+          maxScansPerSecond: 5,
+          preferredCamera
         }
       );
 
+      // Start only once; guard rapid restarts causing play() interruption
       await scanner.start();
       scannerRef.current = scanner;
     } catch (err) {
       console.error('Scanner initialization error:', err);
-      setError('Failed to access camera. Please check permissions.');
+      setError(
+        typeof err?.message === 'string' && err.message
+          ? err.message
+          : 'Failed to access camera. Please check permissions.'
+      );
       setScanning(false);
     }
   };

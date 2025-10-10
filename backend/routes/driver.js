@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -315,7 +316,20 @@ router.get('/duties', auth, async (req, res) => {
 router.get('/duties/current', auth, async (req, res) => {
   try {
     // Ensure we have the correct driver ID
+    if (!req.user) {
+      return res.json({ success: true, data: null, message: 'Not authenticated' });
+    }
     const driverId = req.user.driverId || req.user._id;
+
+    // If no driver id resolved (e.g., synthetic token without DB row), return no duty gracefully
+    if (!driverId) {
+      return res.json({ success: true, data: null, message: 'No current duty assigned' });
+    }
+
+    // If driverId is not a valid ObjectId, avoid casting errors and return gracefully
+    if (!mongoose.Types.ObjectId.isValid(driverId)) {
+      return res.json({ success: true, data: null, message: 'No current duty assigned' });
+    }
     
     const duty = await Duty.findOne({
       driverId: driverId,

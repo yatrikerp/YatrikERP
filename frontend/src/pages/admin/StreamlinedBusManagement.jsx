@@ -14,11 +14,12 @@ import { apiFetch, clearApiCache } from '../../utils/api';
 const StreamlinedBusManagement = () => {
   const [buses, setBuses] = useState([]);
   const [depots, setDepots] = useState([]);
-  const [drivers, setDrivers] = useState([]);
+  const [/* drivers */, setDrivers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [depotFilter, setDepotFilter] = useState('all');
+  const [tripStatusFilter, setTripStatusFilter] = useState('all');
   const [analytics, setAnalytics] = useState({ totalBuses: 0, activeBuses: 0, maintenanceBuses: 0, unassigned: 0 });
   
   // Form states
@@ -477,6 +478,45 @@ const StreamlinedBusManagement = () => {
     return depot?.depotName || 'Unassigned';
   };
 
+  // Trip status dictionary and derivation
+  const tripStatusMap = {
+    running: { key: 'running', label: '🟢 Running' },
+    waiting_departure: { key: 'waiting_departure', label: '🟡 Waiting for Departure' },
+    en_route_on_time: { key: 'en_route_on_time', label: '🔵 En Route (On Time)' },
+    delayed: { key: 'delayed', label: '🟠 Delayed' },
+    at_depot: { key: 'at_depot', label: '🟣 At Depot' },
+    maintenance: { key: 'maintenance', label: '⚙️ Under Maintenance' },
+    completed: { key: 'completed', label: '🔴 Trip Completed' },
+    out_of_service: { key: 'out_of_service', label: '⚫ Out of Service' },
+    standby: { key: 'standby', label: '🧭 On Standby (Next Trip)' },
+    scheduled: { key: 'scheduled', label: '🕓 Scheduled (Not Started)' },
+    breakdown: { key: 'breakdown', label: '🚧 Breakdown / Halted' },
+    live_tracking: { key: 'live_tracking', label: '🚍 Live Tracking Enabled' },
+    idle: { key: 'idle', label: '💤 Idle (No Active Trip)' },
+    repair_done: { key: 'repair_done', label: '🧰 Repair Completed' }
+  };
+
+  const getTripStatusKey = (bus) => {
+    const rawStatus = (bus?.status || '').toLowerCase();
+    const trip = bus?.currentTrip || bus?.trip || null;
+    const tripStatus = (trip?.status || '').toLowerCase();
+    const onTime = trip?.isOnTime === true || trip?.delayMinutes === 0;
+    const delayed = typeof trip?.delayMinutes === 'number' && trip.delayMinutes > 5;
+
+    if (rawStatus === 'maintenance') return 'maintenance';
+    if (rawStatus === 'retired' || rawStatus === 'suspended') return 'out_of_service';
+    if (trip?.breakdown === true) return 'breakdown';
+    if (['running', 'active', 'started', 'in-progress'].includes(tripStatus)) return delayed ? 'delayed' : (onTime ? 'en_route_on_time' : 'running');
+    if (['scheduled'].includes(tripStatus)) return 'scheduled';
+    if (['assigned', 'ready'].includes(tripStatus) || rawStatus === 'assigned') return 'waiting_departure';
+    if (['completed', 'finished'].includes(tripStatus)) return 'completed';
+    if (rawStatus === 'active' && !trip) return 'idle';
+    if (rawStatus === 'active' && !['scheduled','assigned','running','active'].includes(tripStatus)) return 'at_depot';
+    return 'standby';
+  };
+
+  const getTripStatusLabel = (bus) => tripStatusMap[getTripStatusKey(bus)]?.label || '—';
+
   const BusCard = ({ bus }) => (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -526,8 +566,24 @@ const StreamlinedBusManagement = () => {
           <p className="font-medium text-gray-900">{getDepotName(bus)}</p>
         </div>
         <div>
-          <p className="text-sm text-gray-500">Driver</p>
-          <p className="font-medium text-gray-900">{bus.assignedDriver ? (drivers.find(d => d._id === bus.assignedDriver)?.name || 'Unknown') : 'Unassigned'}</p>
+          <p className="text-sm text-gray-500">Trip Status</p>
+          <p className={`font-medium ${(() => {
+            const k = getTripStatusKey(bus);
+            return k === 'running' ? 'text-green-700' :
+                   k === 'waiting_departure' ? 'text-yellow-700' :
+                   k === 'en_route_on_time' ? 'text-blue-700' :
+                   k === 'delayed' ? 'text-orange-700' :
+                   k === 'at_depot' ? 'text-purple-700' :
+                   k === 'maintenance' ? 'text-gray-700' :
+                   k === 'completed' ? 'text-red-700' :
+                   k === 'out_of_service' ? 'text-black' :
+                   k === 'standby' ? 'text-emerald-700' :
+                   k === 'scheduled' ? 'text-sky-700' :
+                   k === 'breakdown' ? 'text-rose-700' :
+                   k === 'live_tracking' ? 'text-indigo-700' :
+                   k === 'idle' ? 'text-slate-700' :
+                   k === 'repair_done' ? 'text-teal-700' : 'text-gray-800';
+          })()}`}>{getTripStatusLabel(bus)}</p>
         </div>
       </div>
 
@@ -720,7 +776,17 @@ const StreamlinedBusManagement = () => {
                          (bus.registrationNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || bus.status === statusFilter || (statusFilter === 'active' && bus.status === 'assigned');
     const matchesDepot = depotFilter === 'all' || bus.depotId === depotFilter;
-    return matchesSearch && matchesStatus && matchesDepot;
+    const matchesTripStatus = tripStatusFilter === 'all' || getTripStatusKey(bus) === tripStatusFilter;
+    return matchesSearch && matchesStatus && matchesDepot && matchesTripStatus;
+  });
+
+  // Arrange order: Assigned -> Active -> Maintenance -> Retired -> others; then by bus number
+  const statusOrder = { assigned: 0, active: 1, maintenance: 2, retired: 3, suspended: 4 };
+  const sortedBuses = [...filteredBuses].sort((a, b) => {
+    const sa = statusOrder[a.status] ?? 9;
+    const sb = statusOrder[b.status] ?? 9;
+    if (sa !== sb) return sa - sb;
+    return (a.busNumber || '').localeCompare(b.busNumber || '');
   });
 
   return (
@@ -855,6 +921,15 @@ const StreamlinedBusManagement = () => {
             </select>
           </div>
           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Trip Status</label>
+            <select value={tripStatusFilter} onChange={(e) => setTripStatusFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+              <option value="all">All Trip Status</option>
+              {Object.values(tripStatusMap).map(s => (
+                <option key={s.key} value={s.key}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Depot</label>
             <select value={depotFilter} onChange={(e) => setDepotFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
               <option value="all">All Depots</option>
@@ -908,7 +983,7 @@ const StreamlinedBusManagement = () => {
 
       {/* Bus Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {filteredBuses.map(bus => (<BusCard key={bus._id} bus={bus} />))}
+        {sortedBuses.map(bus => (<BusCard key={bus._id} bus={bus} />))}
       </div>
 
       {filteredBuses.length === 0 && (

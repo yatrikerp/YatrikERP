@@ -104,6 +104,39 @@ const auth = async (req, res, next) => {
       }
     }
 
+    // Fallback: accept conductor tokens even if DB record is missing (for pattern-logins)
+    if (!user) {
+      const payloadRole = String(payload.role || '').toUpperCase();
+      if (payloadRole === 'CONDUCTOR' && (payload.isConductor || payload.conductorId || payload.conductorNumber)) {
+        user = {
+          _id: payload.userId || payload.conductorId || `conductor_${payload.conductorNumber || '000'}`,
+          name: payload.name || `Conductor ${payload.conductorNumber || ''}`.trim(),
+          email: payload.email || '',
+          role: 'conductor',
+          status: 'active',
+          depotId: payload.depotId,
+          lastLogin: new Date()
+        };
+      }
+    }
+
+    // Fallback: accept driver tokens even if DB record is missing (for pattern-logins)
+    if (!user) {
+      const payloadRole = String(payload.role || '').toUpperCase();
+      if (payloadRole === 'DRIVER' && (payload.isDriver || payload.driverId || payload.driverNumber)) {
+        user = {
+          _id: payload.userId || payload.driverId || `driver_${payload.driverNumber || '000'}`,
+          name: payload.name || `Driver ${payload.driverNumber || ''}`.trim(),
+          email: payload.email || '',
+          role: 'driver',
+          status: 'active',
+          depotId: payload.depotId,
+          lastLogin: new Date(),
+          driverId: payload.driverId
+        };
+      }
+    }
+
     if (!user) {
       // Fallback: accept depot short-circuit tokens without DB record
       const payloadRole = String(payload.role || '').toUpperCase();

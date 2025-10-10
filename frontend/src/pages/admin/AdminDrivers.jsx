@@ -346,15 +346,32 @@ const AdminDrivers = () => {
     return depot ? (depot.depotCode || depot.code) : 'N/A';
   };
 
-  // Auto-generate display credentials (not persisted)
+  // Auto-generate display credentials (deterministic suggestion, not persisted)
   const generateAutoEmail = (fullName, depotId) => {
-    const nameSlug = String(fullName || 'driver').toLowerCase().replace(/[^a-z0-9]+/g, '');
-    const code = getDepotCode(depotId) || '';
-    const digits = String(code).match(/\d+/g)?.join('') || '';
-    const depotSuffix = digits || String(code || '').toLowerCase();
-    const fallback = '000';
-    const suffix = depotSuffix || fallback;
-    return `${nameSlug}${suffix}@yatrik.com`;
+    const depot = depots.find(d => d._id === depotId);
+    if (!depot) return 'driver001@unknown-depot.com';
+
+    const depotName = (depot.depotName || depot.name || 'unknown')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+
+    // Prefer a number from employeeId if provided
+    const rawEmpId = (driverForm?.employeeId || editingDriver?.staffDetails?.employeeId || '').toString();
+    const fromEmpDigits = rawEmpId.match(/\d+/g)?.join('');
+
+    let seq = '001';
+    if (fromEmpDigits) {
+      seq = String(parseInt(fromEmpDigits, 10)).padStart(3, '0');
+    } else {
+      // Fallback: count existing drivers for this depot and suggest next number
+      const countInDepot = drivers.filter(d => {
+        const id = typeof d.depotId === 'object' && d.depotId ? d.depotId._id : d.depotId;
+        return id === depotId;
+      }).length;
+      seq = String(Math.max(1, countInDepot + 1)).padStart(3, '0');
+    }
+
+    return `driver${seq}@${depotName}-depot.com`;
   };
   const AUTO_PASSWORD = 'Yatrik123';
 
@@ -622,10 +639,7 @@ const AdminDrivers = () => {
                   <Phone className="w-4 h-4 text-gray-400" />
                   <span>{driver.phone || '—'}</span>
                 </div>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-gray-500">Auto email:</span>
-                <span className="font-mono text-gray-900">{generateAutoEmail(driver.name, driver.depotId)}</span>
-              </div>
+              {/* Auto email removed to avoid showing two emails; only display saved email above */}
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-gray-500">Auto password:</span>
                 <span className="font-mono text-gray-900">{AUTO_PASSWORD}</span>

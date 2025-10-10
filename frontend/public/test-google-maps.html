@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Maps Test - YATRIK ERP</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .map-container {
+            height: 400px;
+            width: 100%;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗺️ Google Maps Integration Test</h1>
+            <p>Testing the enhanced bus tracking system with realistic movement</p>
+        </div>
+
+        <div class="test-section">
+            <h3>🔑 API Key Status</h3>
+            <div id="api-status" class="status info">Checking API key...</div>
+            <button onclick="checkApiKey()">Check API Key</button>
+        </div>
+
+        <div class="test-section">
+            <h3>🗺️ Google Maps Test</h3>
+            <div id="map-status" class="status info">Loading map...</div>
+            <div id="map" class="map-container"></div>
+            <button onclick="loadMap()">Load Google Map</button>
+            <button onclick="addBusMarker()">Add Bus Marker</button>
+            <button onclick="startSimulation()">Start Bus Movement</button>
+        </div>
+
+        <div class="test-section">
+            <h3>🚌 Bus Tracking Simulation</h3>
+            <div id="simulation-status" class="status info">Ready to start simulation</div>
+            <div id="bus-info">
+                <p><strong>Current Location:</strong> <span id="current-location">Thrissur Central</span></p>
+                <p><strong>Speed:</strong> <span id="current-speed">30 km/h</span></p>
+                <p><strong>Next Stop:</strong> <span id="next-stop">Thrissur East</span></p>
+                <p><strong>ETA:</strong> <span id="eta">10:30 AM</span></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let map;
+        let busMarker;
+        let simulationInterval;
+        let currentPosition = { lat: 10.8505, lng: 76.2711 };
+        
+        // Test API key (replace with your actual key)
+        const API_KEY = 'AIzaSyBFw0Qbyq9zTFTd-tUY6dO8QJ7X8Y9Z0A0';
+        
+        // Route waypoints for realistic movement
+        const routeWaypoints = [
+            { lat: 10.8505, lng: 76.2711, name: 'Thrissur Central' },
+            { lat: 10.8505, lng: 76.2800, name: 'Thrissur East' },
+            { lat: 10.8600, lng: 76.2800, name: 'Thrissur North' },
+            { lat: 10.8600, lng: 76.2711, name: 'Thrissur West' }
+        ];
+        
+        let currentWaypointIndex = 0;
+
+        function checkApiKey() {
+            const statusDiv = document.getElementById('api-status');
+            if (API_KEY && API_KEY !== 'YOUR_GOOGLE_MAPS_API_KEY_HERE' && API_KEY.length > 10) {
+                statusDiv.className = 'status success';
+                statusDiv.textContent = `✅ API Key configured: ${API_KEY.substring(0, 10)}...`;
+            } else {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = '❌ API Key not configured properly';
+            }
+        }
+
+        function loadMap() {
+            const statusDiv = document.getElementById('map-status');
+            
+            if (!window.google) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = '❌ Google Maps API not loaded';
+                return;
+            }
+
+            try {
+                map = new google.maps.Map(document.getElementById('map'), {
+                    center: currentPosition,
+                    zoom: 15,
+                    mapTypeId: 'roadmap'
+                });
+
+                statusDiv.className = 'status success';
+                statusDiv.textContent = '✅ Google Map loaded successfully';
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = `❌ Error loading map: ${error.message}`;
+            }
+        }
+
+        function addBusMarker() {
+            if (!map) {
+                alert('Please load the map first');
+                return;
+            }
+
+            const busIcon = {
+                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                    <svg width="70" height="70" viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <style>
+                                .pulse-ring { animation: pulse-ring 2s infinite; }
+                                .bus-body { animation: bus-blink 1.5s infinite; }
+                                @keyframes pulse-ring {
+                                    0% { transform: scale(0.8); opacity: 1; }
+                                    100% { transform: scale(1.4); opacity: 0; }
+                                }
+                                @keyframes bus-blink {
+                                    0%, 100% { opacity: 1; }
+                                    50% { opacity: 0.7; }
+                                }
+                            </style>
+                        </defs>
+                        <circle cx="35" cy="35" r="30" fill="#FF5722" opacity="0.1" class="pulse-ring"/>
+                        <circle cx="35" cy="35" r="25" fill="#FF5722" opacity="0.2" class="pulse-ring" style="animation-delay: 0.5s"/>
+                        <circle cx="35" cy="35" r="20" fill="#FF5722" opacity="0.3" class="pulse-ring" style="animation-delay: 1s"/>
+                        <circle cx="35" cy="35" r="18" fill="#FF5722" stroke="#FFFFFF" stroke-width="4"/>
+                        <rect x="22" y="28" width="26" height="14" rx="3" fill="#FFFFFF" class="bus-body"/>
+                        <rect x="25" y="30" width="8" height="6" fill="#FF5722" opacity="0.8"/>
+                        <rect x="35" y="30" width="8" height="6" fill="#FF5722" opacity="0.8"/>
+                        <circle cx="28" cy="42" r="2.5" fill="#333333"/>
+                        <circle cx="42" cy="42" r="2.5" fill="#333333"/>
+                        <circle cx="35" cy="20" r="8" fill="#4CAF50" stroke="#FFFFFF" stroke-width="2"/>
+                        <text x="35" y="25" text-anchor="middle" fill="white" font-size="10" font-weight="bold">30</text>
+                        <circle cx="50" cy="20" r="6" fill="#4CAF50" stroke="#FFFFFF" stroke-width="2"/>
+                        <text x="50" y="24" text-anchor="middle" fill="white" font-size="8" font-weight="bold">LIVE</text>
+                    </svg>
+                `),
+                scaledSize: new google.maps.Size(70, 70),
+                anchor: new google.maps.Point(35, 35)
+            };
+
+            busMarker = new google.maps.Marker({
+                position: currentPosition,
+                map: map,
+                icon: busIcon,
+                title: '🚌 Live Bus - Thrissur Central',
+                animation: google.maps.Animation.BOUNCE
+            });
+
+            // Add info window
+            const infoWindow = new google.maps.InfoWindow({
+                content: `
+                    <div style="padding: 16px; font-family: Arial, sans-serif; min-width: 280px;">
+                        <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                            <div style="width: 10px; height: 10px; background: #4CAF50; border-radius: 50%; margin-right: 10px;"></div>
+                            <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #1976D2;">🚌 Bus KL-08-1234</h3>
+                        </div>
+                        <div style="border-left: 3px solid #4CAF50; padding-left: 12px; margin-bottom: 12px;">
+                            <p style="margin: 4px 0; font-size: 14px; color: #333; font-weight: 500;">📍 Thrissur Central</p>
+                            <p style="margin: 4px 0; font-size: 13px; color: #666;">Next Stop: <span style="color: #1976D2; font-weight: 600;">Thrissur East</span></p>
+                            <p style="margin: 4px 0; font-size: 13px; color: #666;">ETA: <span style="color: #FF5722; font-weight: 600;">10:30 AM</span></p>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+                            <div style="background: #f8f9fa; padding: 8px; border-radius: 6px; text-align: center;">
+                                <p style="margin: 0; font-size: 12px; color: #666;">Speed</p>
+                                <p style="margin: 0; font-size: 16px; color: #4CAF50; font-weight: 600;">30 km/h</p>
+                            </div>
+                            <div style="background: #f8f9fa; padding: 8px; border-radius: 6px; text-align: center;">
+                                <p style="margin: 0; font-size: 12px; color: #666;">Status</p>
+                                <p style="margin: 0; font-size: 16px; color: #1976D2; font-weight: 600;">LIVE</p>
+                            </div>
+                        </div>
+                        <div style="background: #e3f2fd; padding: 10px; border-radius: 6px; margin-bottom: 8px;">
+                            <p style="margin: 0; font-size: 13px; color: #1976D2; font-weight: 500;">🛣️ Route: Thrissur City Route</p>
+                        </div>
+                        <p style="margin: 0; font-size: 11px; color: #999; text-align: center;">Last updated: ${new Date().toLocaleTimeString()}</p>
+                    </div>
+                `
+            });
+
+            busMarker.addListener('click', () => {
+                infoWindow.open(map, busMarker);
+            });
+
+            document.getElementById('map-status').textContent = '✅ Bus marker added successfully';
+        }
+
+        function startSimulation() {
+            if (!busMarker) {
+                alert('Please add bus marker first');
+                return;
+            }
+
+            const statusDiv = document.getElementById('simulation-status');
+            statusDiv.className = 'status success';
+            statusDiv.textContent = '🚌 Bus movement simulation started';
+
+            simulationInterval = setInterval(() => {
+                // Move to next waypoint
+                const nextIndex = (currentWaypointIndex + 1) % routeWaypoints.length;
+                const nextWaypoint = routeWaypoints[nextIndex];
+                
+                // Calculate movement (10% progress each update)
+                const progress = 0.1;
+                const newLat = currentPosition.lat + (nextWaypoint.lat - currentPosition.lat) * progress;
+                const newLng = currentPosition.lng + (nextWaypoint.lng - currentPosition.lng) * progress;
+                
+                currentPosition = { lat: newLat, lng: newLng };
+                
+                // Update marker position
+                busMarker.setPosition(currentPosition);
+                
+                // Update info display
+                document.getElementById('current-location').textContent = nextWaypoint.name;
+                document.getElementById('current-speed').textContent = `${Math.floor(Math.random() * 20) + 25} km/h`;
+                document.getElementById('next-stop').textContent = routeWaypoints[(nextIndex + 1) % routeWaypoints.length].name;
+                document.getElementById('eta').textContent = new Date(Date.now() + 300000).toLocaleTimeString();
+                
+                // If we're close to the waypoint, move to next one
+                const distance = Math.sqrt(
+                    Math.pow(nextWaypoint.lat - currentPosition.lat, 2) + 
+                    Math.pow(nextWaypoint.lng - currentPosition.lng, 2)
+                );
+                
+                if (distance < 0.001) {
+                    currentWaypointIndex = nextIndex;
+                }
+                
+            }, 2000); // Update every 2 seconds
+        }
+
+        // Load Google Maps API
+        function loadGoogleMapsAPI() {
+            const script = document.createElement('script');
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${API_KEY}&libraries=places,geometry`;
+            script.async = true;
+            script.defer = true;
+            script.onload = () => {
+                console.log('✅ Google Maps API loaded successfully');
+                checkApiKey();
+            };
+            script.onerror = () => {
+                console.error('❌ Failed to load Google Maps API');
+                document.getElementById('api-status').className = 'status error';
+                document.getElementById('api-status').textContent = '❌ Failed to load Google Maps API';
+            };
+            document.head.appendChild(script);
+        }
+
+        // Initialize when page loads
+        window.onload = () => {
+            loadGoogleMapsAPI();
+        };
+    </script>
+</body>
+</html>
+
+

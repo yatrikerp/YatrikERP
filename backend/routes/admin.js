@@ -240,7 +240,7 @@ router.get('/dashboard', async (req, res) => {
       safeCount(Bus),
       safeCount(Bus, { status: 'active' }),
       safeCount(Bus, { status: 'maintenance' }),
-      safeCount(Bus, { status: 'on_route' }),
+      safeCount(Bus, { status: 'assigned' }),
       
       // Driver/Conductor metrics
       safeCount(Driver),
@@ -631,7 +631,54 @@ router.post('/users', async (req, res) => {
     await user.save();
     const userObj = user.toObject();
 
-    
+    // If role is driver, also create a Driver record
+    if (role === 'driver') {
+      try {
+        const Driver = require('../models/Driver');
+        const Depot = require('../models/Depot');
+        
+        // Get depot info for email generation
+        const depot = await Depot.findById(depotId);
+        const depotName = depot ? (depot.depotName || depot.name || 'unknown').toLowerCase().replace(/[^a-z0-9]/g, '') : 'unknown';
+        
+        // Generate driver number (3 digits)
+        const existingDrivers = await Driver.countDocuments({ depotId });
+        const driverNumber = String(existingDrivers + 1).padStart(3, '0');
+        
+        // Generate driver email in the format: driver{number}@{depotname}-depot.com
+        const driverEmail = `driver${driverNumber}@${depotName}-depot.com`;
+        
+        // Generate driver-specific data
+        const driverData = {
+          driverId: `DRV${driverNumber}`,
+          name: name,
+          email: driverEmail, // Use the generated email format
+          phone: phone,
+          depotId: depotId,
+          employeeCode: `EMP${driverNumber}`,
+          username: `driver${driverNumber}`,
+          password: password || 'Yatrik123',
+          drivingLicense: {
+            licenseNumber: `DL${driverNumber}${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+            licenseType: 'LMV',
+            issueDate: new Date(),
+            expiryDate: new Date(Date.now() + 5 * 365 * 24 * 60 * 60 * 1000), // 5 years from now
+            issuingAuthority: 'RTO',
+            status: 'valid'
+          },
+          status: status || 'active',
+          createdBy: req.user?._id || req.user?.id
+        };
+        
+        const driver = new Driver(driverData);
+        await driver.save();
+        
+        console.log(`✅ Driver record created: ${driverEmail} with password: ${driverData.password}`);
+      } catch (driverError) {
+        console.error('Error creating driver record:', driverError);
+        // Don't fail the user creation if driver record creation fails
+      }
+    }
 
     res.status(201).json({
       message: 'User created successfully',
@@ -7161,25 +7208,71 @@ router.post('/trips/sample', authRole(['admin', 'manager']), async (req, res) =>
 // POST /api/admin/assign-trip - Assign trip to driver
 router.post('/assign-trip', auth, requireRole(['admin', 'depot_manager']), async (req, res) => {
   try {
-    const { driverId, routeId, busId, tripId, scheduledDate, scheduledTime } = req.body;
-    const assignedBy = req.user.id;
-    const depotId = req.user.depotId; // For depot managers
+    console.log('🚌 POST /api/admin/assign-trip - Request received');
+    console.log('📦 Request body:', req.body);
+    
+    const { driverId, routeId, busId, tripId, scheduledDate, scheduledTime, conductorId } = req.body;
+    const assignedBy = req.user?.id || req.user?._id;
+    const depotId = req.user?.depotId; // For depot managers
 
     // Validate required fields
     if (!driverId || !routeId || !busId) {
+      console.log('❌ Missing required fields');
       return res.status(400).json({
         success: false,
         message: 'Driver, route, and bus are required'
       });
     }
+    if (!scheduledDate || !scheduledTime) {
+      console.log('❌ Missing schedule information');
+      return res.status(400).json({ success: false, message: 'scheduledDate and scheduledTime are required' });
+    }
+
+    // Defensive lookups to avoid 500s
+    const Route = require('../models/Route');
+    const Bus = require('../models/Bus');
+    const Trip = require('../models/Trip');
+    const Duty = require('../models/Duty');
+    
+    console.log('🔍 Looking up route:', routeId);
+    const route = await Route.findById(routeId).lean();
+    if (!route) {
+      console.log('❌ Route not found');
+      return res.status(400).json({ success: false, message: 'Invalid routeId' });
+    }
+    
+    console.log('🔍 Looking up bus:', busId);
+    const bus = await Bus.findById(busId).lean();
+    if (!bus) {
+      console.log('❌ Bus not found');
+      return res.status(400).json({ success: false, message: 'Invalid busId' });
+    }
+    
+    if (tripId) {
+      console.log('🔍 Looking up trip:', tripId);
+      const trip = await Trip.findById(tripId).lean();
+      if (!trip) {
+        console.log('❌ Trip not found');
+        return res.status(400).json({ success: false, message: 'Invalid tripId' });
+      }
+    }
 
     // Check if driver exists and is available
     const Driver = require('../models/Driver');
+    console.log('🔍 Looking up driver:', driverId);
     const driver = await Driver.findById(driverId);
-    if (!driver || driver.status !== 'active') {
+    if (!driver) {
+      console.log('❌ Driver not found');
       return res.status(400).json({
         success: false,
-        message: 'Driver not found or not available'
+        message: 'Driver not found'
+      });
+    }
+    if (driver.status !== 'active') {
+      console.log('❌ Driver not active, status:', driver.status);
+      return res.status(400).json({
+        success: false,
+        message: 'Driver not available'
       });
     }
 
@@ -7198,6 +7291,28 @@ router.post('/assign-trip', auth, requireRole(['admin', 'depot_manager']), async
         success: false,
         message: 'Driver already has a duty assigned for this date'
       });
+    }
+
+    // Optional: validate conductor if provided
+    let conductor = null;
+    if (conductorId) {
+      const Conductor = require('../models/Conductor');
+      conductor = await Conductor.findById(conductorId);
+      if (!conductor || conductor.status !== 'active') {
+        return res.status(400).json({ success: false, message: 'Conductor not found or not available' });
+      }
+      // Ensure conductor is not already assigned on same date
+      const existingConductorDuty = await Duty.findOne({
+        conductorId,
+        date: {
+          $gte: new Date(scheduledDate).setHours(0, 0, 0, 0),
+          $lt: new Date(scheduledDate).setHours(23, 59, 59, 999)
+        },
+        status: { $in: ['assigned', 'active'] }
+      });
+      if (existingConductorDuty) {
+        return res.status(400).json({ success: false, message: 'Conductor already has a duty assigned for this date' });
+      }
     }
 
     // Create new duty assignment
@@ -7219,6 +7334,10 @@ router.post('/assign-trip', auth, requireRole(['admin', 'depot_manager']), async
       }
     });
 
+    if (conductorId) {
+      newDuty.conductorId = conductorId;
+    }
+
     await newDuty.save();
 
     // Create notification for driver
@@ -7234,6 +7353,19 @@ router.post('/assign-trip', auth, requireRole(['admin', 'depot_manager']), async
       createdAt: new Date()
     });
 
+    if (conductorId) {
+      await Notification.create({
+        recipientId: conductorId,
+        recipientType: 'conductor',
+        type: 'trip_assigned',
+        title: 'New Trip Assigned',
+        message: `You have been assigned a new trip scheduled for ${scheduledDate} at ${scheduledTime}`,
+        relatedDuty: newDuty._id,
+        isRead: false,
+        createdAt: new Date()
+      });
+    }
+
     // Populate the duty for response
     const populatedDuty = await Duty.findById(newDuty._id)
       .populate('driverId', 'name employeeCode phone')
@@ -7247,10 +7379,13 @@ router.post('/assign-trip', auth, requireRole(['admin', 'depot_manager']), async
       data: populatedDuty
     });
   } catch (error) {
-    console.error('Error assigning trip:', error);
+    console.error('❌ Error assigning trip:', error);
+    console.error('❌ Error stack:', error.stack);
+    console.error('❌ Error message:', error.message);
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error while assigning trip',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -7421,6 +7556,7 @@ router.get('/trip-assignments', auth, requireRole(['admin', 'depot_manager']), a
 
     const assignments = await Duty.find(query)
       .populate('driverId', 'name employeeCode phone status')
+      .populate('conductorId', 'name employeeCode phone status')
       .populate('routeId', 'routeName origin destination distance')
       .populate('busId', 'busNumber registrationNumber totalSeats')
       .populate('tripId', 'tripNumber scheduledDeparture scheduledArrival')

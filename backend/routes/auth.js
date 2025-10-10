@@ -162,6 +162,168 @@ router.post("/login", async (req, res) => {
       return res.json({ success: true, token, user: adminUser, redirectPath: '/admin' });
     }
 
+    // Check for driver email format: driver{number}@{depotname}-depot.com
+    if (isEmail) {
+      const driverMatch = normalizedIdentifier.match(/^driver(\d+)@([a-z0-9]+)-depot\.com$/);
+      if (driverMatch) {
+        const [, driverNumber, depotName] = driverMatch;
+        const expectedPwd = 'Yatrik123';
+        
+        if (rawPassword === expectedPwd) {
+          // Find the actual driver in database
+          const driver = await Driver.findOne({ 
+            email: normalizedIdentifier,
+            status: 'active'
+          }).populate('depotId', 'depotName depotCode');
+          
+          if (driver) {
+            const token = jwt.sign(
+              {
+                driverId: driver._id,
+                userId: driver._id,
+                role: 'DRIVER',
+                name: driver.name,
+                email: driver.email,
+                depotId: driver.depotId?._id,
+                depotCode: driver.depotId?.depotCode,
+                depotName: driver.depotId?.depotName,
+                driverNumber: driverNumber,
+                isDriver: true
+              },
+              process.env.JWT_SECRET || 'secret',
+              { expiresIn: '12h' }
+            );
+            
+            // Update last login
+            driver.lastLogin = new Date();
+            await driver.save();
+            
+            return res.json({ 
+              success: true, 
+              token, 
+              user: {
+                _id: driver._id,
+                name: driver.name,
+                email: driver.email,
+                role: 'driver',
+                depotId: driver.depotId?._id,
+                depotCode: driver.depotId?.depotCode,
+                depotName: driver.depotId?.depotName,
+                driverNumber: driverNumber,
+                isDriver: true
+              }, 
+              redirectPath: '/driver' 
+            });
+          } else {
+            return res.status(401).json({
+              success: false,
+              message: 'Driver account not found or inactive'
+            });
+          }
+        }
+      }
+
+      // Check for conductor email format: conductor{number}@{depotname}-depot.com
+      const conductorMatch = normalizedIdentifier.match(/^conductor(\d+)@([a-z0-9]+)-depot\.com$/);
+      if (conductorMatch) {
+        const [, conductorNumber, depotName] = conductorMatch;
+        const expectedPwd = 'Yatrik123';
+
+        if (rawPassword === expectedPwd) {
+          // Find the actual conductor in database
+          let conductor = await Conductor.findOne({
+            email: normalizedIdentifier,
+            status: 'active'
+          }).populate('depotId', 'depotName depotCode');
+
+          // Fallback: try by username if email is not stored
+          if (!conductor) {
+            const derivedUsername = `conductor${conductorNumber}`;
+            conductor = await Conductor.findOne({
+              username: derivedUsername,
+              status: 'active'
+            }).populate('depotId', 'depotName depotCode');
+          }
+
+          if (conductor) {
+            const token = jwt.sign(
+              {
+                conductorId: conductor._id,
+                userId: conductor._id,
+                role: 'CONDUCTOR',
+                name: conductor.name,
+                email: conductor.email,
+                depotId: conductor.depotId?._id,
+                depotCode: conductor.depotId?.depotCode,
+                depotName: conductor.depotId?.depotName,
+                conductorNumber: conductorNumber,
+                isConductor: true
+              },
+              process.env.JWT_SECRET || 'secret',
+              { expiresIn: '12h' }
+            );
+
+            // Update last login
+            conductor.lastLogin = new Date();
+            await conductor.save();
+
+            return res.json({
+              success: true,
+              token,
+              user: {
+                _id: conductor._id,
+                name: conductor.name,
+                email: conductor.email,
+                role: 'conductor',
+                depotId: conductor.depotId?._id,
+                depotCode: conductor.depotId?.depotCode,
+                depotName: conductor.depotId?.depotName,
+                conductorNumber: conductorNumber,
+                isConductor: true
+              },
+              redirectPath: '/conductor'
+            });
+          } else {
+            // Synthetic success for pattern-based login without DB record
+            const syntheticUser = {
+              _id: `synthetic_conductor_${conductorNumber}`,
+              name: `Conductor ${conductorNumber}`,
+              email: normalizedIdentifier,
+              role: 'conductor',
+              status: 'active',
+              depotId: null,
+              depotCode: depotName?.toUpperCase(),
+              depotName: depotName?.toUpperCase(),
+              conductorNumber: conductorNumber,
+              isConductor: true
+            };
+
+            const token = jwt.sign(
+              {
+                userId: syntheticUser._id,
+                role: 'CONDUCTOR',
+                name: syntheticUser.name,
+                email: syntheticUser.email,
+                conductorNumber: conductorNumber,
+                depotCode: syntheticUser.depotCode,
+                depotName: syntheticUser.depotName,
+                isConductor: true
+              },
+              process.env.JWT_SECRET || 'secret',
+              { expiresIn: '12h' }
+            );
+
+            return res.json({
+              success: true,
+              token,
+              user: syntheticUser,
+              redirectPath: '/conductor'
+            });
+          }
+        }
+      }
+    }
+
     // Immediate success for depot-pattern credentials CODE@2024 (e.g., tvm001-depot@yatrik.com / TVM001@2024)
     if (isEmail) {
       const matchA = normalizedIdentifier.match(/^([a-z0-9]+)-depot@yatrik\.com$/);

@@ -541,7 +541,7 @@
 
 /* Dashboard View */
 .dashboard-view {
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -551,8 +551,8 @@
 /* Quick Actions */
 .quick-actions {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
 }
 
 .quick-action-btn {
@@ -673,8 +673,23 @@
 /* Live Status Widgets */
 .status-widgets {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1rem;
+}
+
+/* Sticky quick action bar */
+.conductor-sticky-actions {
+  border-top: 1px solid #ECEFF1;
+}
+
+@media (max-width: 1200px) {
+  .quick-actions { grid-template-columns: repeat(2, 1fr); }
+  .status-widgets { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 768px) {
+  .quick-actions { grid-template-columns: 1fr; }
+  .status-widgets { grid-template-columns: 1fr; }
 }
 
 .status-widget {

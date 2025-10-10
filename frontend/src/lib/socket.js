@@ -8,7 +8,7 @@ export const connectSocket = (token) => {
     socket.disconnect();
   }
 
-  socket = io(process.env.REACT_APP_BACKEND_URL || window.location.origin, {
+  socket = io(process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000', {
     auth: {
       token
     },

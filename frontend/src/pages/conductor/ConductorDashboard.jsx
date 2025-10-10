@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import './conductor.modern.css';
 import QRScanner from '../../components/QRScanner';
+import { apiFetch } from '../../utils/api';
 import { 
   MapPin, 
   CheckCircle, 
@@ -24,8 +25,8 @@ import {
   WifiOff,
   Volume2,
   VolumeX,
-  Monitor,
-  Smartphone,
+  // Monitor,
+  // Smartphone,
   Menu,
   X,
   Clock,
@@ -37,26 +38,31 @@ import {
 const ConductorDashboard = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const location = useLocation();
   
   // Core State Management - Updated v2
   const [refreshInterval, setRefreshInterval] = useState(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [/* isRefreshing */, setIsRefreshing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [notifications] = useState(3);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [soundEnabled, setSoundEnabled] = useState(true);
   
   // Responsive View Mode State
-  const [viewMode, setViewMode] = useState('desktop'); // desktop, mobile
+  const [viewMode, setViewMode] = useState(() => {
+    const isMobileRoute = (location.pathname || '').startsWith('/mobile');
+    const isNarrow = typeof window !== 'undefined' && window.innerWidth < 768;
+    return (isMobileRoute || isNarrow) ? 'mobile' : 'desktop';
+  }); // desktop, mobile
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   // Duty Workflow State
   const [dutyStatus, setDutyStatus] = useState('assigned'); // not_assigned, assigned, active, completed
-  const [currentDuty, setCurrentDuty] = useState(null);
+  const [/* currentDuty */, setCurrentDuty] = useState(null);
   const [activeView, setActiveView] = useState('dashboard'); // dashboard, passengers, scanning
   
   // Trip Information
-  const [tripInfo, setTripInfo] = useState({
+  const [tripInfo/* , setTripInfo */] = useState({
     routeName: 'Kochi → Alappuzha',
     routeNumber: 'KL-07-CD-5678',
     depotName: 'Kochi Depot',
@@ -71,7 +77,7 @@ const ConductorDashboard = () => {
   });
   
   // Passenger Management
-  const [passengers, setPassengers] = useState([
+  const [passengers/* , setPassengers */] = useState([
     { id: 1, name: 'John Doe', seat: 'A1', boardingStop: 'Kochi Central', destination: 'Alappuzha', status: 'boarded', pnr: 'PNR123456' },
     { id: 2, name: 'Jane Smith', seat: 'A2', boardingStop: 'Edappally', destination: 'Alappuzha', status: 'boarded', pnr: 'PNR123457' },
     { id: 3, name: 'Bob Wilson', seat: 'B1', boardingStop: 'Cherthala', destination: 'Alappuzha', status: 'expected', pnr: 'PNR123458' },
@@ -89,11 +95,11 @@ const ConductorDashboard = () => {
   const [scanHistory, setScanHistory] = useState([]);
   
   // Vacant Seat Booking
-  const [showVacantBooking, setShowVacantBooking] = useState(false);
-  const [availableSeats, setAvailableSeats] = useState(['A3', 'A4', 'B2', 'B3', 'C1', 'C2']);
+  const [/* showVacantBooking */, /* setShowVacantBooking */] = useState(false);
+  const [/* availableSeats */, /* setAvailableSeats */] = useState(['A3', 'A4', 'B2', 'B3', 'C1', 'C2']);
   
   // Alerts and Notifications
-  const [alerts, setAlerts] = useState([
+  const [alerts/* , setAlerts */] = useState([
     { id: 1, type: 'warning', message: 'Invalid ticket scanned', time: '2 min ago' },
     { id: 2, type: 'error', message: 'Duplicate ticket detected', time: '5 min ago' },
     { id: 3, type: 'info', message: 'Passenger request: Seat change', time: '8 min ago' }
@@ -145,13 +151,12 @@ const ConductorDashboard = () => {
       // Accept either stringified JSON or already parsed object
       const qrObject = typeof raw === 'string' ? JSON.parse(raw) : raw;
       const payload = JSON.stringify(qrObject);
-      const res = await fetch('/api/conductor/validate-ticket', {
+      const res = await apiFetch('/api/conductor/validate-ticket', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ qr: payload })
       });
-      const json = await res.json();
-      const ok = json?.success;
+      const ok = res?.ok && (res.data?.success === true || res.data?.ok === true);
+      const json = res?.data || {};
       const result = ok ? {
         success: true,
         pnr: json.data?.pnr,
@@ -174,14 +179,39 @@ const ConductorDashboard = () => {
   const refreshDashboard = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      // Add refresh logic here
-      console.log('Refreshing dashboard data...');
+      // Fetch current duty for this logged-in conductor only
+      const res = await apiFetch('/api/conductor/duties/current');
+      if (res?.ok && res?.data?.data) {
+        const duty = res.data.data;
+        // Map duty response into UI trip info
+        const routeName = duty?.routeId?.name || '—';
+        const busNum = duty?.busId?.registrationNumber || duty?.busId?.busNumber || '—';
+        const depotName = duty?.depotId?.depotName || '—';
+        const progress = typeof duty?.progress === 'number' ? duty.progress : 0;
+
+        // update view states derived from duty
+        setDutyStatus(duty?.status === 'completed' ? 'completed' : duty?.status === 'started' || duty?.status === 'in-progress' ? 'active' : 'assigned');
+        setCurrentDuty({ id: duty?.dutyId, startTime: duty?.actualStartTime, route: routeName, bus: busNum });
+
+        // lightweight local update of tripInfo without changing setter signature
+        tripInfo.routeName = routeName;
+        tripInfo.routeNumber = duty?.tripId?.tripCode || '—';
+        tripInfo.depotName = depotName;
+        tripInfo.dutyId = duty?.dutyId || '—';
+        tripInfo.busNumber = busNum;
+        tripInfo.currentStop = duty?.updates?.[duty.updates.length - 1]?.message || '—';
+        tripInfo.nextStop = '—';
+        tripInfo.progress = progress;
+      } else {
+        // No duty assigned
+        setDutyStatus('not_assigned');
+      }
     } catch (error) {
       console.error('Error refreshing dashboard:', error);
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [tripInfo]);
 
   const handleLogout = useCallback(() => {
     logout();
@@ -201,6 +231,18 @@ const ConductorDashboard = () => {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // Force mobile layout when on /mobile/conductor route; auto-adapt on resize
+  useEffect(() => {
+    const isMobileRoute = (location.pathname || '').startsWith('/mobile');
+    if (isMobileRoute && viewMode !== 'mobile') setViewMode('mobile');
+    const onResize = () => {
+      const isNarrow = window.innerWidth < 768;
+      if (!isMobileRoute) setViewMode(isNarrow ? 'mobile' : 'desktop');
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [location.pathname, viewMode]);
 
   // Initialize dashboard
   useEffect(() => {
@@ -500,7 +542,7 @@ const ConductorDashboard = () => {
 
               <button 
                 className="quick-action-btn vacant-seats"
-                onClick={() => setShowVacantBooking(true)}
+                onClick={() => setActiveView('passengers')}
               >
                 <div className="action-icon">
                   <Plus size={24} />
@@ -826,6 +868,46 @@ const ConductorDashboard = () => {
             </div>
           </div>
         )}
+        
+        {/* New: Sticky Quick Action Bar (always visible) */}
+        <div
+          className="conductor-sticky-actions"
+          style={{
+            position: 'sticky',
+            bottom: 0,
+            zIndex: 10,
+            background: 'linear-gradient(180deg, rgba(255,255,255,0) 0%, #fff 20%)',
+            paddingTop: 16,
+            paddingBottom: 12
+          }}
+        >
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <button 
+              className={`quick-action-btn ${dutyStatus === 'active' ? 'end-duty' : 'start-duty'}`}
+              onClick={dutyStatus === 'active' ? endDuty : startDuty}
+              title={dutyStatus === 'active' ? 'End Duty' : 'Start Duty'}
+            >
+              {dutyStatus === 'active' ? <CheckCircle size={18} /> : <Play size={18} />}
+              <span style={{ marginLeft: 8 }}>{dutyStatus === 'active' ? 'End Duty' : 'Start Duty'}</span>
+            </button>
+            <button 
+              className="quick-action-btn scan-tickets"
+              onClick={() => setActiveView('scanning')}
+              title="Scan Tickets"
+            >
+              <QrCode size={18} />
+              <span style={{ marginLeft: 8 }}>Scan</span>
+            </button>
+            <button 
+              className="quick-action-btn passenger-list"
+              onClick={() => setActiveView('passengers')}
+              title="Passenger List"
+            >
+              <Users size={18} />
+              <span style={{ marginLeft: 8 }}>Passengers</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
