@@ -32,6 +32,33 @@ const LandingPage = () => {
           <span className="support-icon">✉️</span>
           <span className="support-text">support@yatrik.com</span>
         </div>
+        <div className="support-item">
+          <button 
+            onClick={() => navigate('/support')}
+            className="support-agent-link"
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,0.3)',
+              color: 'white',
+              padding: '0.5rem 1rem',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = 'rgba(255,255,255,0.1)';
+              e.target.style.borderColor = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = 'transparent';
+              e.target.style.borderColor = 'rgba(255,255,255,0.3)';
+            }}
+          >
+            👤 Support Agent Login
+          </button>
+        </div>
       </div>
 
       {/* Navigation Bar */}
@@ -45,6 +72,23 @@ const LandingPage = () => {
           <a href="#features" className="nav-link">Features</a>
           <a href="#pricing" className="nav-link">Pricing</a>
           <a href="#contact" className="nav-link">Contact</a>
+          {user && (user.role === 'admin' || user.role === 'support_agent') && (
+            <button 
+              onClick={() => navigate('/support')}
+              className="nav-link"
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                border: 'none',
+                padding: '0.5rem 1rem',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: '600'
+              }}
+            >
+              Support Dashboard
+            </button>
+          )}
         </div>
       </nav>
 

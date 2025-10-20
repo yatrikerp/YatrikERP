@@ -45,6 +45,12 @@ export default function RedirectDashboard() {
       if (role === 'admin' || role === 'administrator') {
         destination = '/admin';
         console.log('Redirecting admin user to:', destination);
+      } else if (role === 'support_agent' || role === 'support-agent' || role === 'supportagent') {
+        destination = '/support';
+        console.log('Redirecting support agent to:', destination);
+      } else if (role === 'data_collector' || role === 'data-collector' || role === 'datacollector') {
+        destination = '/data-collector';
+        console.log('Redirecting data collector to:', destination);
       } else if (role === 'depot_manager' || role === 'depot-manager' || role === 'depotmanager' || 
                  isDepotEmail || user.isDepotUser || user.depotId) {
         destination = '/depot';

@@ -74,7 +74,11 @@ export async function apiFetch(path, options = {}) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
     
-    const fullUrl = (base ? base : '') + path;
+    // Avoid double "/api" when base already ends with "/api" and path starts with "/api"
+    const normalizedPath = (base.endsWith('/api') && path.startsWith('/api/'))
+      ? path.replace(/^\/api/, '')
+      : path;
+    const fullUrl = (base ? base : '') + normalizedPath;
     const res = await fetch(fullUrl, { 
       ...options, 
       headers,

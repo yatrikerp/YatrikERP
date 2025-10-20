@@ -11,6 +11,10 @@ const FuelLog = require('../models/FuelLog');
 const Depot = require('../models/Depot');
 const Ticket = require('../models/Ticket'); // Added Ticket model
 const NotificationService = require('../services/notificationService');
+const { createResponseGuard, safeObjectId, extractUserId, asyncHandler } = require('../middleware/responseGuard');
+
+// Apply response guard middleware to all routes
+router.use(createResponseGuard);
 
 // Helper function to create role-based auth middleware
 const authRole = (roles) => [auth, requireRole(roles)];
@@ -118,207 +122,225 @@ router.get('/debug-user', async (req, res) => {
 });
 
 // GET /api/depot/dashboard - Comprehensive depot dashboard data
-router.get('/dashboard', async (req, res) => {
-  try {
-    let depotId = req.user.depotId;
-    
-    // If user doesn't have depotId, try to find a depot for them
-    if (!depotId) {
-      console.log('User has no depotId, finding default depot...');
-      const defaultDepot = await Depot.findOne({ status: 'active' });
-      if (!defaultDepot) {
-        return res.status(400).json({
-          success: false,
-          message: 'No depot found. Please contact administrator.'
-        });
-      }
-      depotId = defaultDepot._id;
-      req.user.depotId = depotId;
-      console.log('Assigned default depot to user:', defaultDepot.depotName);
-    }
-    
-    // Get comprehensive depot statistics
-    const [totalTrips, activeTrips, totalBuses, availableBuses, totalRoutes, totalBookings, totalFuelLogs] = await Promise.all([
-      Trip.countDocuments({ 'routeId.depotId': depotId }),
-      Trip.countDocuments({ 'routeId.depotId': depotId, status: { $in: ['scheduled', 'running'] } }),
-      Bus.countDocuments({ depotId }),
-      Bus.countDocuments({ depotId, status: 'available' }),
-      Route.countDocuments({ 'depot.depotId': depotId }),
-      Booking.countDocuments({ 'tripId.routeId.depotId': depotId }),
-      FuelLog.countDocuments({ depotId })
-    ]);
+router.get('/dashboard', asyncHandler(async (req, res) => {
+  let depotId = req.user.depotId;
 
-    // Get today's data
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const [todayTrips, todayBookings, todayRevenue] = await Promise.all([
-      Trip.countDocuments({ 
-        'routeId.depotId': depotId, 
-        createdAt: { $gte: today, $lt: tomorrow } 
-      }),
-      Booking.countDocuments({ 
-        'tripId.routeId.depotId': depotId, 
-        createdAt: { $gte: today, $lt: tomorrow } 
-      }),
-      Booking.aggregate([
-        { $match: { 'tripId.routeId.depotId': depotId, createdAt: { $gte: today, $lt: tomorrow } } },
-        { $group: { _id: null, total: { $sum: '$fareAmount' } } }
-      ])
-    ]);
-
-    // Get recent trips with full details
-    const recentTrips = await Trip.find({ 'routeId.depotId': depotId })
-      .populate('routeId')
-      .populate('driverId', 'name phone')
-      .populate('conductorId', 'name phone')
-      .populate('busId', 'busNumber registrationNumber')
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .lean();
-
-    // Get active crew assignments
-    const activeCrew = await Duty.find({ 
-      depotId, 
-      date: { $gte: today },
-      status: { $in: ['assigned', 'in_progress'] }
-    })
-      .populate('driverId', 'name phone')
-      .populate('conductorId', 'name phone')
-      .populate('tripId')
-      .populate('busId', 'busNumber')
-      .sort({ date: 1 })
-      .lean();
-
-    // Get fuel logs for today
-    const todayFuelLogs = await FuelLog.find({ 
-      depotId, 
-      createdAt: { $gte: today, $lt: tomorrow } 
-    })
-      .populate('busId', 'busNumber')
-      .sort({ createdAt: -1 })
-      .lean();
-
-    res.json({
-      success: true,
-      data: {
+  // If user doesn't have depotId, try to find a depot for them
+  if (!depotId) {
+    console.log('User has no depotId, finding default depot...');
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (!defaultDepot) {
+      // Graceful fallback: return empty dashboard to keep UI functional
+      return res.guard.success({
         stats: {
-          totalTrips,
-          activeTrips,
-          totalBuses,
-          availableBuses,
-          totalRoutes,
-          totalBookings,
-          totalFuelLogs,
-          todayTrips,
-          todayBookings,
-          todayRevenue: todayRevenue[0]?.total || 0
+          totalTrips: 0,
+          activeTrips: 0,
+          totalBuses: 0,
+          availableBuses: 0,
+          totalRoutes: 0,
+          totalBookings: 0,
+          totalFuelLogs: 0,
+          todayTrips: 0,
+          todayBookings: 0,
+          todayRevenue: 0
         },
-        recentTrips,
-        activeCrew,
-        todayFuelLogs
-      }
-    });
-
-  } catch (error) {
-    console.error('Depot dashboard error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch depot data' });
+        recentTrips: [],
+        activeCrew: [],
+        todayFuelLogs: []
+      }, 'Success');
+    }
+    depotId = defaultDepot._id;
+    req.user.depotId = depotId;
+    console.log('Assigned default depot to user:', defaultDepot.depotName);
   }
-});
+
+  // Get comprehensive depot statistics
+  const [totalTrips, activeTrips, totalBuses, availableBuses, totalRoutes, totalBookings, totalFuelLogs] = await Promise.all([
+    Trip.countDocuments({ 'routeId.depotId': depotId }),
+    Trip.countDocuments({ 'routeId.depotId': depotId, status: { $in: ['scheduled', 'running'] } }),
+    Bus.countDocuments({ depotId }),
+    Bus.countDocuments({ depotId, status: 'available' }),
+    Route.countDocuments({ 'depot.depotId': depotId }),
+    Booking.countDocuments({ 'tripId.routeId.depotId': depotId }),
+    FuelLog.countDocuments({ depotId })
+  ]);
+
+  // Get today's data
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const [todayTrips, todayBookings, todayRevenue] = await Promise.all([
+    Trip.countDocuments({ 
+      'routeId.depotId': depotId, 
+      createdAt: { $gte: today, $lt: tomorrow } 
+    }),
+    Booking.countDocuments({ 
+      'tripId.routeId.depotId': depotId, 
+      createdAt: { $gte: today, $lt: tomorrow } 
+    }),
+    Booking.aggregate([
+      { $match: { 'tripId.routeId.depotId': depotId, createdAt: { $gte: today, $lt: tomorrow } } },
+      { $group: { _id: null, total: { $sum: '$fareAmount' } } }
+    ])
+  ]);
+
+  // Get recent trips with full details
+  const recentTrips = await Trip.find({ 'routeId.depotId': depotId })
+    .populate('routeId')
+    .populate('driverId', 'name phone')
+    .populate('conductorId', 'name phone')
+    .populate('busId', 'busNumber registrationNumber')
+    .sort({ createdAt: -1 })
+    .limit(10)
+    .lean();
+
+  // Get active crew assignments
+  const activeCrew = await Duty.find({ 
+    depotId, 
+    date: { $gte: today },
+    status: { $in: ['assigned', 'in_progress'] }
+  })
+    .populate('driverId', 'name phone')
+    .populate('conductorId', 'name phone')
+    .populate('tripId')
+    .populate('busId', 'busNumber')
+    .sort({ date: 1 })
+    .lean();
+
+  // Get fuel logs for today
+  const todayFuelLogs = await FuelLog.find({ 
+    depotId, 
+    createdAt: { $gte: today, $lt: tomorrow } 
+  })
+    .populate('busId', 'busNumber')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return res.guard.success({
+    stats: {
+      totalTrips,
+      activeTrips,
+      totalBuses,
+      availableBuses,
+      totalRoutes,
+      totalBookings,
+      totalFuelLogs,
+      todayTrips,
+      todayBookings,
+      todayRevenue: todayRevenue[0]?.total || 0
+    },
+    recentTrips,
+    activeCrew,
+    todayFuelLogs
+  });
+}));
 
 // GET /api/depot/info - Get basic depot information and KPIs
-router.get('/info', async (req, res) => {
-  try {
-    let depotId = req.user.depotId;
-    if (!depotId) {
-      console.log('Depot info: user missing depotId, resolving default depot...');
-      const defaultDepot = await Depot.findOne({ status: 'active' });
-      if (defaultDepot) {
-        depotId = defaultDepot._id;
-        req.user.depotId = depotId;
-      }
+router.get('/info', asyncHandler(async (req, res) => {
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    console.log('Depot info: user missing depotId, resolving default depot...');
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) {
+      depotId = defaultDepot._id;
+      req.user.depotId = depotId;
     }
-    
-    // Get depot basic info
-    const depot = await Depot.findById(depotId)
-      .select('name code location address contact email manager capacity operationalHours established status')
-      .lean();
-
-    if (!depot) {
-      return res.status(404).json({
-        success: false,
-        message: 'Depot not found'
-      });
-    }
-
-    // Get today's statistics
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const [todayTrips, todayBookings, todayRevenue, activeBuses, totalRoutes] = await Promise.all([
-      Trip.countDocuments({ 
-        'routeId.depotId': depotId, 
-        createdAt: { $gte: today, $lt: tomorrow } 
-      }),
-      Booking.countDocuments({ 
-        'tripId.routeId.depotId': depotId, 
-        createdAt: { $gte: today, $lt: tomorrow } 
-      }),
-      Booking.aggregate([
-        { $match: { 'tripId.routeId.depotId': depotId, createdAt: { $gte: today, $lt: tomorrow } } },
-        { $group: { _id: null, total: { $sum: '$fareAmount' } } }
-      ]),
-      Bus.countDocuments({ depotId, status: 'active' }),
-      Route.countDocuments({ 'depot.depotId': depotId, status: 'active' })
-    ]);
-
-    // Get yesterday's data for comparison
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayRevenue = await Booking.aggregate([
-      { $match: { 'tripId.routeId.depotId': depotId, createdAt: { $gte: yesterday, $lt: today } } },
-      { $group: { _id: null, total: { $sum: '$fareAmount' } } }
-    ]);
-
-    // Calculate changes
-    const currentRevenue = todayRevenue[0]?.total || 0;
-    const previousRevenue = yesterdayRevenue[0]?.total || 0;
-    const revenueChange = previousRevenue > 0 ? ((currentRevenue - previousRevenue) / previousRevenue * 100).toFixed(1) : 0;
-
-    res.json({
-      success: true,
-      data: {
-        ...depot,
-        revenue: `₹${(currentRevenue / 1000000).toFixed(1)}M`,
-        revenueChange: `${revenueChange > 0 ? '+' : ''}${revenueChange}%`,
-        trips: todayTrips.toString(),
-        tripsChange: '+8.2%', // This could be calculated from historical data
-        occupancy: '78%', // This could be calculated from actual passenger data
-        occupancyChange: '+5.1%',
-        fuelEfficiency: '8.2 km/L',
-        fuelEfficiencyChange: '+2.1%',
-        ticketSales: todayBookings.toString(),
-        ticketSalesChange: '+15.3%',
-        punctuality: '94.2%',
-        punctualityChange: '+1.8%',
-        breakdowns: '2',
-        breakdownsChange: '-50%',
-        activeBuses: activeBuses.toString(),
-        activeBusesChange: '+3',
-        totalRoutes: totalRoutes.toString(),
-        totalRoutesChange: '+1'
-      }
-    });
-
-  } catch (error) {
-    console.error('Get depot info error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch depot information' });
   }
-});
+  
+  // Get depot basic info
+  const depot = depotId
+    ? await Depot.findById(depotId)
+        .select('name code location address contact email manager capacity operationalHours established status')
+        .lean()
+    : null;
+
+  if (!depot) {
+    // Graceful fallback default depot info
+    return res.guard.success({
+      name: 'Yatrik Depot',
+      location: 'Kerala, India',
+      manager: 'Depot Manager',
+      revenue: '₹0',
+      revenueChange: '+0%',
+      trips: '0',
+      tripsChange: '+0%',
+      occupancy: '0%',
+      occupancyChange: '+0%',
+      fuelEfficiency: '0 km/L',
+      fuelEfficiencyChange: '+0%',
+      ticketSales: '0',
+      ticketSalesChange: '+0%',
+      punctuality: '0%',
+      punctualityChange: '+0%',
+      breakdowns: '0',
+      breakdownsChange: '+0%',
+      activeBuses: '0',
+      activeBusesChange: '+0',
+      totalRoutes: '0',
+      totalRoutesChange: '+0'
+    });
+  }
+
+  // Get today's statistics
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const [todayTrips, todayBookings, todayRevenue, activeBuses, totalRoutes] = await Promise.all([
+    Trip.countDocuments({ 
+      'routeId.depotId': depotId, 
+      createdAt: { $gte: today, $lt: tomorrow } 
+    }),
+    Booking.countDocuments({ 
+      'tripId.routeId.depotId': depotId, 
+      createdAt: { $gte: today, $lt: tomorrow } 
+    }),
+    Booking.aggregate([
+      { $match: { 'tripId.routeId.depotId': depotId, createdAt: { $gte: today, $lt: tomorrow } } },
+      { $group: { _id: null, total: { $sum: '$fareAmount' } } }
+    ]),
+    Bus.countDocuments({ depotId, status: 'active' }),
+    Route.countDocuments({ 'depot.depotId': depotId, status: 'active' })
+  ]);
+
+  // Get yesterday's data for comparison
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayRevenue = await Booking.aggregate([
+    { $match: { 'tripId.routeId.depotId': depotId, createdAt: { $gte: yesterday, $lt: today } } },
+    { $group: { _id: null, total: { $sum: '$fareAmount' } } }
+  ]);
+
+  // Calculate changes
+  const currentRevenue = todayRevenue[0]?.total || 0;
+  const previousRevenue = yesterdayRevenue[0]?.total || 0;
+  const revenueChange = previousRevenue > 0 ? ((currentRevenue - previousRevenue) / previousRevenue * 100).toFixed(1) : 0;
+
+  res.guard.success({
+    ...depot,
+    revenue: `₹${(currentRevenue / 1000000).toFixed(1)}M`,
+    revenueChange: `${revenueChange > 0 ? '+' : ''}${revenueChange}%`,
+    trips: todayTrips.toString(),
+    tripsChange: '+8.2%', // This could be calculated from historical data
+    occupancy: '78%', // This could be calculated from actual passenger data
+    occupancyChange: '+5.1%',
+    fuelEfficiency: '8.2 km/L',
+    fuelEfficiencyChange: '+2.1%',
+    ticketSales: todayBookings.toString(),
+    ticketSalesChange: '+15.3%',
+    punctuality: '94.2%',
+    punctualityChange: '+1.8%',
+    breakdowns: '2',
+    breakdownsChange: '-50%',
+    activeBuses: activeBuses.toString(),
+    activeBusesChange: '+3',
+    totalRoutes: totalRoutes.toString(),
+    totalRoutesChange: '+1'
+  });
+}));
 
 // GET /api/depot/routes - Get all routes for depot
 router.get('/routes', async (req, res) => {

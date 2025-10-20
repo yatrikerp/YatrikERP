@@ -7,6 +7,10 @@ const User = require('../models/User');
 const Route = require('../models/Route');
 const Bus = require('../models/Bus');
 const Depot = require('../models/Depot');
+const { createResponseGuard, safeObjectId, extractUserId, asyncHandler } = require('../middleware/responseGuard');
+
+// Apply response guard middleware to all routes
+router.use(createResponseGuard);
 
 // Public endpoint: search trips for landing page and redbus results
 // Placed BEFORE auth middleware to allow unauthenticated access

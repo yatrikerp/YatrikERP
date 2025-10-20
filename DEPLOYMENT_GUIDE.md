@@ -1,614 +1,243 @@
-# 🚀 YATRIK ERP - Quick Deployment Guide
+# YATRIK ERP Deployment Guide for yatrikerp.live
 
-## Table of Contents
-1. [Pre-Deployment Setup](#pre-deployment-setup)
-2. [Environment Configuration](#environment-configuration)
-3. [Local Testing](#local-testing)
-4. [Production Deployment](#production-deployment)
-5. [Post-Deployment Verification](#post-deployment-verification)
+This guide will help you deploy your YATRIK ERP application to yatrikerp.live using Docker.
 
----
+## Prerequisites
 
-## Pre-Deployment Setup
+1. **Domain Setup**: Ensure yatrikerp.live is pointing to your server's IP address
+2. **Server Requirements**: 
+   - Ubuntu 20.04+ or CentOS 8+
+   - Docker and Docker Compose installed
+   - At least 2GB RAM and 20GB storage
+   - Ports 80, 443, and 5000 open
 
-### System Requirements
-- **Node.js:** 18.x or later
-- **npm:** 9.x or later
-- **MongoDB Atlas:** Account with cluster
-- **Git:** Version control
+## Quick Deployment
 
-### 1. Install Dependencies
+### 1. Prepare Your Server
 
 ```bash
-# Install all dependencies (root, backend, frontend)
-npm run install-all
+# Update system
+sudo apt update && sudo apt upgrade -y
+
+# Install Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+
+# Install Docker Compose
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# Logout and login again to apply docker group changes
 ```
 
-### 2. Verify Installation
+### 2. Upload Your Project
 
 ```bash
-# Check Node.js version
-node --version
+# Clone or upload your project to the server
+git clone <your-repo-url> /opt/yatrik-erp
+cd /opt/yatrik-erp
 
-# Check npm version
-npm --version
-
-# Check if all packages installed
-cd backend && npm list --depth=0
-cd ../frontend && npm list --depth=0
+# Or use SCP to upload files
+# scp -r ./YATRIK\ ERP/ user@your-server:/opt/yatrik-erp/
 ```
 
----
-
-## Environment Configuration
-
-### 1. Create Environment Files
+### 3. Configure Environment
 
 ```bash
-# Automated setup (recommended)
-npm run setup:env
+# Copy environment template
+cp env.example .env
 
-# OR manual setup
-copy env.production.template .env
-copy backend\env.production.template backend\.env
-copy frontend\env.production.template frontend\.env
+# Edit environment variables
+nano .env
 ```
 
-### 2. Configure MongoDB
+**Important Environment Variables to Set:**
 
-**Get MongoDB Atlas Connection String:**
-1. Login to [MongoDB Atlas](https://cloud.mongodb.com)
-2. Create/Select cluster
-3. Click "Connect" → "Connect your application"
-4. Copy connection string
-5. Replace `<password>` with your database password
-
-**Update backend/.env:**
 ```env
-MONGODB_URI=mongodb+srv://username:<password>@cluster.mongodb.net/yatrik-erp?retryWrites=true&w=majority
+NODE_ENV=production
+MONGODB_URI=mongodb://your-mongodb-connection-string
+JWT_SECRET=your_secure_jwt_secret_key
+RAZORPAY_KEY_ID=your_razorpay_key_id
+RAZORPAY_KEY_SECRET=your_razorpay_key_secret
+GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASS=your_email_app_password
 ```
 
-### 3. Configure JWT Secrets
-
-**Generate secure secrets:**
-```bash
-# On Windows (PowerShell)
-node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
-
-# On Linux/Mac
-openssl rand -hex 64
-```
-
-**Update backend/.env:**
-```env
-JWT_SECRET=<your-generated-secret-1>
-SESSION_SECRET=<your-generated-secret-2>
-```
-
-### 4. Configure Payment Gateway (Razorpay)
-
-1. Sign up at [Razorpay](https://razorpay.com)
-2. Get API Keys from Dashboard
-3. Update backend/.env:
-```env
-RAZORPAY_KEY_ID=rzp_test_xxxxxxxxxxxxx
-RAZORPAY_KEY_SECRET=xxxxxxxxxxxxxxxxxxxxx
-```
-
-### 5. Configure Email Service
-
-**For Gmail:**
-```env
-EMAIL_SERVICE=gmail
-EMAIL_USER=your-email@gmail.com
-EMAIL_PASSWORD=<app-specific-password>
-```
-
-**To get Gmail App Password:**
-1. Enable 2-Factor Authentication
-2. Go to Google Account → Security → App Passwords
-3. Generate password for "Mail"
-4. Use generated password in EMAIL_PASSWORD
-
-### 6. Configure Maps (Mapbox)
-
-1. Sign up at [Mapbox](https://mapbox.com)
-2. Get access token
-3. Update frontend/.env:
-```env
-REACT_APP_MAPBOX_TOKEN=pk.xxxxxxxxxxxxxxxxxxxxx
-```
-
-### 7. Configure OAuth (Optional)
-
-**Google OAuth:**
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create project → Enable Google+ API
-3. Create OAuth 2.0 credentials
-4. Add authorized redirect URI: `http://localhost:5000/api/auth/google/callback`
-5. Update backend/.env:
-```env
-GOOGLE_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxxx
-```
-
-### 8. Set Frontend URL
-
-**Update backend/.env:**
-```env
-FRONTEND_URL=http://localhost:5173
-```
-
-**Update frontend/.env:**
-```env
-REACT_APP_API_URL=http://localhost:5000
-```
-
----
-
-## Local Testing
-
-### 1. Start Development Servers
+### 4. Build and Deploy
 
 ```bash
-# Start both frontend and backend
-npm run dev
-```
-
-**OR start separately:**
-```bash
-# Terminal 1 - Backend
-npm run server
-
-# Terminal 2 - Frontend
-npm run client
-```
-
-### 2. Verify Services
-
-**Check Backend:**
-- Open: http://localhost:5000/api/health
-- Expected: `{"status":"OK","database":"connected"}`
-
-**Check Frontend:**
-- Open: http://localhost:5173
-- Expected: Landing page loads
-
-### 3. Test User Roles
-
-**Create Admin User:**
-```bash
-cd backend
-node scripts/create-admin.js
-```
-
-**Test Login:**
-1. Go to http://localhost:5173/login
-2. Login as admin
-3. Verify dashboard access
-
-### 4. Run Tests
-
-```bash
-# All tests
-npm test
-
-# Role-based tests
-npm run test:login
-
-# E2E tests
-npm run test:e2e
-```
-
----
-
-## Production Deployment
-
-### Option 1: Deploy to Railway (Recommended for Backend)
-
-#### 1. Install Railway CLI
-
-```bash
-npm install -g @railway/cli
-```
-
-#### 2. Login to Railway
-
-```bash
-railway login
-```
-
-#### 3. Deploy Backend
-
-```bash
-cd backend
-railway init
-railway up
-```
-
-#### 4. Set Environment Variables
-
-```bash
-# Set each variable
-railway variables set MONGODB_URI="your-mongodb-uri"
-railway variables set JWT_SECRET="your-jwt-secret"
-railway variables set SESSION_SECRET="your-session-secret"
-# ... add all other variables
-```
-
-#### 5. Get Deployment URL
-
-```bash
-railway domain
-# Note the URL (e.g., https://yatrik-backend.railway.app)
-```
-
----
-
-### Option 2: Deploy to Fly.io
-
-#### 1. Install Fly CLI
-
-```bash
-# Windows (PowerShell)
-powershell -Command "iwr https://fly.io/install.ps1 -useb | iex"
-
-# Mac/Linux
-curl -L https://fly.io/install.sh | sh
-```
-
-#### 2. Login and Deploy
-
-```bash
-cd backend
-fly auth login
-fly launch
-fly deploy
-```
-
-#### 3. Set Environment Variables
-
-```bash
-fly secrets set MONGODB_URI="your-mongodb-uri"
-fly secrets set JWT_SECRET="your-jwt-secret"
-# ... add all other secrets
-```
-
----
-
-### Option 3: Deploy with Docker
-
-#### 1. Install Docker
-
-Download from [Docker.com](https://www.docker.com/get-started)
-
-#### 2. Create docker-compose.yml
-
-```yaml
-version: '3.8'
-
-services:
-  backend:
-    build: ./backend
-    ports:
-      - "5000:5000"
-    environment:
-      - MONGODB_URI=${MONGODB_URI}
-      - JWT_SECRET=${JWT_SECRET}
-      - SESSION_SECRET=${SESSION_SECRET}
-    volumes:
-      - ./backend:/app
-    
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
-```
-
-#### 3. Deploy
-
-```bash
-# Build and start
+# Build and start the application
 docker-compose up -d --build
 
+# Check if containers are running
+docker-compose ps
+
 # View logs
-docker-compose logs -f
-
-# Stop
-docker-compose down
+docker-compose logs -f yatrik-erp
 ```
 
----
-
-### Frontend Deployment
-
-#### Option 1: Vercel (Recommended)
+### 5. SSL Certificate Setup (Optional but Recommended)
 
 ```bash
-cd frontend
+# Install Certbot for Let's Encrypt
+sudo apt install certbot python3-certbot-nginx -y
 
-# Install Vercel CLI
-npm i -g vercel
+# Get SSL certificate
+sudo certbot --nginx -d yatrikerp.live -d www.yatrikerp.live
 
-# Deploy
-vercel --prod
+# Auto-renewal
+sudo crontab -e
+# Add: 0 12 * * * /usr/bin/certbot renew --quiet
 ```
 
-#### Option 2: Netlify
+## Production Configuration
+
+### Database Setup
+
+**Option 1: External MongoDB (Recommended)**
+- Use MongoDB Atlas or another cloud MongoDB service
+- Update `MONGODB_URI` in your `.env` file
+
+**Option 2: Local MongoDB Container**
+- Uncomment the MongoDB service in `docker-compose.yml`
+- Set appropriate MongoDB credentials
+
+### Nginx Configuration
+
+The included `nginx.conf` provides:
+- Reverse proxy to your application
+- Rate limiting for API endpoints
+- Security headers
+- Gzip compression
+- Health checks
+
+### Monitoring and Logs
 
 ```bash
-cd frontend
+# View application logs
+docker-compose logs -f yatrik-erp
 
-# Build
-npm run build
+# View nginx logs
+docker-compose logs -f nginx
 
-# Install Netlify CLI
-npm i -g netlify-cli
-
-# Deploy
-netlify deploy --prod --dir=build
+# Monitor resource usage
+docker stats
 ```
 
-#### Option 3: Same Server as Backend
+### Backup Strategy
 
 ```bash
-cd frontend
-npm run build
-
-# Serve static files
-npx serve -s build -l 3000
-```
-
----
-
-## Post-Deployment Verification
-
-### 1. Health Checks
-
-```bash
-# Check backend health
-curl https://your-backend-url.com/api/health
-
-# Expected response:
-# {"status":"OK","database":"connected","api":"running"}
-```
-
-### 2. Test Critical Flows
-
-**✅ Authentication:**
-- [ ] User registration works
-- [ ] Login successful
-- [ ] JWT token generated
-- [ ] Role-based access working
-
-**✅ Booking Flow:**
-- [ ] Search trips
-- [ ] Select seats
-- [ ] Process payment
-- [ ] Generate ticket
-
-**✅ Real-time Features:**
-- [ ] GPS tracking updates
-- [ ] Socket connection stable
-- [ ] Notifications deliver
-
-**✅ Payment:**
-- [ ] Razorpay integration working
-- [ ] Payment success callback
-- [ ] Transaction recorded
-
-### 3. Monitor Logs
-
-**Railway:**
-```bash
-railway logs
-```
-
-**Fly.io:**
-```bash
-fly logs
-```
-
-**Docker:**
-```bash
-docker-compose logs -f backend
-docker-compose logs -f frontend
-```
-
-### 4. Performance Check
-
-**Test API Response Time:**
-```bash
-curl -w "@-" -o /dev/null -s https://your-api.com/api/health << 'EOF'
-    time_namelookup:  %{time_namelookup}\n
-    time_connect:  %{time_connect}\n
-    time_total:  %{time_total}\n
+# Create backup script
+cat > backup.sh << 'EOF'
+#!/bin/bash
+DATE=$(date +%Y%m%d_%H%M%S)
+mkdir -p /opt/backups
+docker-compose exec mongodb mongodump --out /data/backup_$DATE
+docker cp yatrik-mongodb:/data/backup_$DATE /opt/backups/
 EOF
+
+chmod +x backup.sh
 ```
 
-### 5. Security Verification
+## Domain Configuration
 
-- [ ] HTTPS enabled
-- [ ] CORS configured correctly
-- [ ] Rate limiting active
-- [ ] JWT validation working
-- [ ] Password encryption verified
+### DNS Settings
 
----
+Point your domain to your server:
+- A record: `yatrikerp.live` → `YOUR_SERVER_IP`
+- CNAME record: `www.yatrikerp.live` → `yatrikerp.live`
 
-## Environment Variables Checklist
+### Firewall Configuration
 
-### Backend (.env)
+```bash
+# UFW (Ubuntu)
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
 
-```env
-# Database
-✅ MONGODB_URI=
-
-# Authentication
-✅ JWT_SECRET=
-✅ SESSION_SECRET=
-
-# Server
-✅ PORT=5000
-✅ NODE_ENV=production
-✅ FRONTEND_URL=
-
-# Payment
-✅ RAZORPAY_KEY_ID=
-✅ RAZORPAY_KEY_SECRET=
-
-# Email
-✅ EMAIL_SERVICE=
-✅ EMAIL_USER=
-✅ EMAIL_PASSWORD=
-
-# OAuth (Optional)
-⬜ GOOGLE_CLIENT_ID=
-⬜ GOOGLE_CLIENT_SECRET=
-⬜ TWITTER_CONSUMER_KEY=
-⬜ TWITTER_CONSUMER_SECRET=
+# Or iptables
+sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
 ```
 
-### Frontend (.env)
+## Maintenance Commands
 
-```env
-# API
-✅ REACT_APP_API_URL=
+```bash
+# Update application
+git pull
+docker-compose down
+docker-compose up -d --build
 
-# Maps
-✅ REACT_APP_MAPBOX_TOKEN=
+# Restart services
+docker-compose restart
 
-# Payment
-✅ REACT_APP_RAZORPAY_KEY_ID=
+# Stop services
+docker-compose down
+
+# View resource usage
+docker system df
+docker system prune  # Clean up unused resources
 ```
-
----
 
 ## Troubleshooting
 
-### MongoDB Connection Failed
+### Common Issues
 
-**Error:** `MongooseServerSelectionError`
+1. **Application won't start**
+   ```bash
+   docker-compose logs yatrik-erp
+   ```
 
-**Solution:**
-1. Check MongoDB Atlas IP whitelist (allow 0.0.0.0/0)
-2. Verify connection string is correct
-3. Check database user credentials
-4. Ensure network access in MongoDB Atlas
+2. **Database connection issues**
+   - Check MongoDB URI in `.env`
+   - Ensure MongoDB is accessible from container
 
-### JWT Authentication Error
+3. **Frontend not loading**
+   - Check if frontend build completed successfully
+   - Verify nginx configuration
 
-**Error:** `JsonWebTokenError: invalid token`
+4. **SSL certificate issues**
+   ```bash
+   sudo certbot certificates
+   sudo certbot renew --dry-run
+   ```
 
-**Solution:**
-1. Ensure JWT_SECRET is same in all deployments
-2. Check token expiry (24h default)
-3. Clear browser cookies and login again
-
-### Payment Integration Not Working
-
-**Error:** Payment callback fails
-
-**Solution:**
-1. Use correct Razorpay keys (test vs live)
-2. Verify webhook URL in Razorpay dashboard
-3. Check CORS settings for payment domain
-4. Enable payment methods in Razorpay
-
-### Real-time Tracking Not Updating
-
-**Error:** Socket connection fails
-
-**Solution:**
-1. Check WebSocket support on hosting platform
-2. Verify FRONTEND_URL in backend .env
-3. Check CORS for Socket.IO
-4. Enable sticky sessions if using load balancer
-
-### Email Not Sending
-
-**Error:** Email delivery fails
-
-**Solution:**
-1. Check Gmail app password (not regular password)
-2. Enable "Less secure app access" (if using Gmail)
-3. Verify EMAIL_SERVICE configuration
-4. Check email queue processing
-
----
-
-## Quick Commands Reference
+### Health Checks
 
 ```bash
-# Development
-npm run dev                    # Start dev servers
-npm run server                 # Backend only
-npm run client                 # Frontend only
+# Check application health
+curl http://localhost:5000/api/health
 
-# Build
-npm run build                  # Build frontend
-npm run build:production       # Production build
-
-# Testing
-npm test                       # Run all tests
-npm run test:login             # Test authentication
-npm run health                 # Check API health
-
-# Deployment
-npm run deploy:docker          # Deploy with Docker
-npm run deploy:fly             # Deploy to Fly.io
-npm run deploy:backend         # Deploy backend to Railway
-npm run deploy:frontend        # Deploy frontend to Vercel
-
-# Setup
-npm run install-all            # Install dependencies
-npm run setup:env              # Setup env files
-npm run auto:setup             # Automated setup
+# Check nginx
+curl http://yatrikerp.live/health
 ```
 
----
+## Performance Optimization
 
-## Support & Resources
+1. **Enable Redis caching** (uncomment Redis service in docker-compose.yml)
+2. **Configure CDN** for static assets
+3. **Set up monitoring** with tools like Prometheus + Grafana
+4. **Implement log rotation** for log files
 
-### Documentation
-- 📄 Project Report: `PROJECT_DEPLOYMENT_REPORT.md`
-- 🚀 This Guide: `DEPLOYMENT_GUIDE.md`
-- 🔧 Environment Template: `env.production.template`
+## Security Considerations
 
-### External Resources
-- [MongoDB Atlas Docs](https://docs.atlas.mongodb.com)
-- [Railway Docs](https://docs.railway.app)
-- [Fly.io Docs](https://fly.io/docs)
-- [Vercel Docs](https://vercel.com/docs)
-- [Razorpay Docs](https://razorpay.com/docs)
+1. **Change default passwords** and secrets
+2. **Enable firewall** and configure properly
+3. **Regular security updates**
+4. **Monitor logs** for suspicious activity
+5. **Use HTTPS** in production
+6. **Implement proper backup** strategy
 
-### Get Help
-- Check error logs first
-- Review environment variables
-- Test locally before deployment
-- Verify third-party service status
+## Support
 
----
+For issues or questions:
+1. Check application logs: `docker-compose logs -f`
+2. Verify environment configuration
+3. Check server resources and connectivity
+4. Review nginx configuration
 
-## ✅ Deployment Complete!
-
-After successful deployment:
-1. ✅ Backend running and healthy
-2. ✅ Frontend accessible
-3. ✅ Database connected
-4. ✅ All environment variables set
-5. ✅ Payment integration working
-6. ✅ Email service active
-7. ✅ Real-time features operational
-8. ✅ All user roles functional
-
-**Your YATRIK ERP is now LIVE! 🎉**
-
-Access your deployed application and start managing bus operations!
-
----
-
-*Last Updated: October 1, 2025*
-
+Your YATRIK ERP application should now be accessible at https://yatrikerp.live!

@@ -53,6 +53,8 @@
     "selenium-webdriver": "^4.24.0"
   },
   "dependencies": {
-    "compression": "^1.8.1"
+    "compression": "^1.8.1",
+    "csv-parser": "^3.2.0",
+    "multer": "^2.0.2"
   }
 }

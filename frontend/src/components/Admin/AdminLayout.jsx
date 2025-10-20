@@ -27,7 +27,6 @@ import {
   Smartphone,
   Ticket,
   Zap,
-  Sparkles,
   Layers,
   TrendingUp
 } from 'lucide-react';
@@ -46,12 +45,6 @@ const AdminLayout = ({ children }) => {
       href: '/admin',
       icon: BarChart3,
       current: location.pathname === '/admin'
-    },
-    {
-      name: 'Mass Scheduling',
-      href: '/admin/mass-scheduling',
-      icon: Sparkles,
-      current: location.pathname === '/admin/mass-scheduling'
     },
     {
       name: 'Bus Management',
@@ -82,6 +75,18 @@ const AdminLayout = ({ children }) => {
       href: '/admin/bookings',
       icon: Ticket,
       current: location.pathname === '/admin/bookings'
+    },
+    {
+      name: 'Support Agents',
+      href: '/admin/support-agents',
+      icon: Users,
+      current: location.pathname === '/admin/support-agents' || location.pathname === '/support'
+    },
+    {
+      name: 'Data Collectors',
+      href: '/admin/data-collectors',
+      icon: Database,
+      current: location.pathname === '/admin/data-collectors' || location.pathname === '/data-collector'
     },
     {
       name: 'Depot Management',
@@ -134,10 +139,11 @@ const AdminLayout = ({ children }) => {
   ];
 
   const quickActions = [
-    { name: 'Mass Scheduling', href: '/admin/mass-scheduling', icon: Sparkles, color: 'bg-purple-500' },
     { name: 'Buses', href: '/admin/streamlined-buses', icon: Bus, color: 'bg-blue-500' },
     { name: 'Routes', href: '/admin/streamlined-routes', icon: Route, color: 'bg-green-500' },
-    { name: 'Trips', href: '/admin/streamlined-trips', icon: Calendar, color: 'bg-orange-500' }
+    { name: 'Trips', href: '/admin/streamlined-trips', icon: Calendar, color: 'bg-orange-500' },
+    { name: 'Support', href: '/admin/support-agents', icon: Users, color: 'bg-purple-500' },
+    { name: 'Data', href: '/admin/data-collectors', icon: Database, color: 'bg-indigo-500' }
   ];
 
   const systemMetrics = [

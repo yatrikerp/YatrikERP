@@ -33,6 +33,8 @@ import RedBusTicket from './pages/RedBusTicket';
 
 import ConductorDashboard from './pages/conductor/ConductorDashboard.jsx';
 import DriverDashboard from './pages/driver/DriverDashboard.jsx';
+import SupportAgentDashboard from './pages/support/SupportAgentDashboard.jsx';
+import DataCollectorDashboard from './pages/dataCollector/DataCollectorDashboard.jsx';
 import DepotDashboard from './pages/depot/DepotDashboard';
 import DepotLogin from './pages/DepotLogin';
 // import DepotTripsPage from './pages/depot/Trips';
@@ -73,7 +75,6 @@ import AdminRevenue from './pages/admin/AdminRevenue';
 import RedirectDashboard from './pages/RedirectDashboard';
 
 // New Streamlined Components
-import MassSchedulingDashboard from './pages/admin/MassSchedulingDashboard';
 import StreamlinedBusManagement from './pages/admin/StreamlinedBusManagement';
 import StreamlinedRouteManagement from './pages/admin/StreamlinedRouteManagement';
 import StreamlinedTripManagement from './pages/admin/StreamlinedTripManagement';
@@ -200,6 +201,16 @@ function App() {
             <DriverFlow />
           </RequireAuth>
         } />
+        <Route path="/support" element={
+          <RequireAuth roles={['support_agent']}>
+            <SupportAgentDashboard />
+          </RequireAuth>
+        } />
+        <Route path="/data-collector" element={
+          <RequireAuth roles={['data_collector']}>
+            <DataCollectorDashboard />
+          </RequireAuth>
+        } />
         <Route path="/mobile/bookings" element={
           <RequireAuth roles={['passenger']}>
             <BookingsPage />
@@ -310,6 +321,30 @@ function App() {
                 <DepotDashboard />
               </RequireAuth>
             } />
+
+          {/* Support Agent Routes */}
+          <Route path="/support" element={
+            <RequireAuth roles={['support_agent', 'admin']}>
+              <SupportAgentDashboard />
+            </RequireAuth>
+          } />
+          <Route path="/support/dashboard" element={
+            <RequireAuth roles={['support_agent', 'admin']}>
+              <SupportAgentDashboard />
+            </RequireAuth>
+          } />
+
+          {/* Data Collector Routes */}
+          <Route path="/data-collector" element={
+            <RequireAuth roles={['data_collector', 'admin']}>
+              <DataCollectorDashboard />
+            </RequireAuth>
+          } />
+          <Route path="/data-collector/dashboard" element={
+            <RequireAuth roles={['data_collector', 'admin']}>
+              <DataCollectorDashboard />
+            </RequireAuth>
+          } />
           <Route path="/depot/dashboard" element={
             <RequireAuth roles={['depot_manager']}>
                 <DepotDashboard />
@@ -639,13 +674,6 @@ function App() {
           } />
 
           {/* New Streamlined Management Routes */}
-          <Route path="/admin/mass-scheduling" element={
-            <RequireAuth roles={['admin']}>
-              <AdminLayout>
-                <MassSchedulingDashboard />
-              </AdminLayout>
-            </RequireAuth>
-          } />
 
           <Route path="/admin/streamlined-buses" element={
             <RequireAuth roles={['admin']}>
@@ -843,6 +871,24 @@ function App() {
             <RequireAuth roles={['admin']}>
               <AdminLayout>
                 <AdminRBAC />
+              </AdminLayout>
+            </RequireAuth>
+          } />
+
+          {/* Admin Support Agent Management */}
+          <Route path="/admin/support-agents" element={
+            <RequireAuth roles={['admin', 'support_agent']}>
+              <AdminLayout>
+                <SupportAgentDashboard />
+              </AdminLayout>
+            </RequireAuth>
+          } />
+
+          {/* Admin Data Collector Management */}
+          <Route path="/admin/data-collectors" element={
+            <RequireAuth roles={['admin', 'data_collector']}>
+              <AdminLayout>
+                <DataCollectorDashboard />
               </AdminLayout>
             </RequireAuth>
           } />

@@ -93,33 +93,143 @@ const FarePolicyManager = ({ isOpen, onClose, onSave }) => {
 
   const handleSavePolicy = async () => {
     try {
-      const policyData = {
-        ...formData,
-        distanceBrackets: formData.distanceBrackets.filter(b => b.fromKm !== '' && b.toKm !== '' && b.ratePerKm !== '')
+      console.log('💰 [Step 1] Form data:', formData);
+
+      // Validate required fields
+      if (!formData.busType) {
+        console.error('💰 Validation failed: No bus type');
+        toast.error('Please select a bus type');
+        return;
+      }
+      if (!formData.baseFarePerKm || formData.baseFarePerKm <= 0) {
+        console.error('💰 Validation failed: Invalid base fare per km:', formData.baseFarePerKm);
+        toast.error('Please enter a valid base fare per km');
+        return;
+      }
+      if (!formData.minimumFare || formData.minimumFare <= 0) {
+        console.error('💰 Validation failed: Invalid minimum fare:', formData.minimumFare);
+        toast.error('Please enter a valid minimum fare');
+        return;
+      }
+
+      console.log('💰 [Step 2] Validation passed, mapping bus type:', formData.busType);
+
+      // Map frontend bus type values to backend enum values
+      const busTypeMapping = {
+        'ordinary': 'City / Ordinary',
+        'lspf': 'Fast Passenger / LSFP',
+        'fast_passenger': 'Fast Passenger / LSFP',
+        'venad': 'City / Ordinary',
+        'super_fast': 'Super Fast Passenger',
+        'super_deluxe': 'Super Deluxe',
+        'deluxe_express': 'Super Express',
+        'ananthapuri_fast': 'Fast Passenger / LSFP',
+        'rajadhani': 'Luxury / Hi-tech & AC',
+        'minnal': 'Super Express',
+        'garuda_king_long': 'Garuda Maharaja / Garuda King / Multi-axle Premium',
+        'garuda_volvo': 'Luxury / Hi-tech & AC',
+        'garuda_scania': 'Garuda Maharaja / Garuda King / Multi-axle Premium',
+        'garuda_maharaja': 'Garuda Maharaja / Garuda King / Multi-axle Premium',
+        'low_floor_non_ac': 'Non A/C Low Floor',
+        'low_floor_ac': 'A/C Low Floor',
+        'jnnurm_city': 'City Fast',
+        // Additional KSRTC types
+        'city_ordinary': 'City / Ordinary',
+        'city_fast': 'City Fast',
+        'garuda_sanchari': 'Garuda Sanchari / Biaxle Premium'
       };
+
+      // Try to map, if not found, use the value as-is
+      let mappedBusType = busTypeMapping[formData.busType];
+      
+      // If no mapping found, check if the value is already a valid backend enum
+      if (!mappedBusType) {
+        const validBackendTypes = [
+          'City / Ordinary',
+          'City Fast',
+          'Fast Passenger / LSFP',
+          'Super Fast Passenger',
+          'Super Express',
+          'Super Deluxe',
+          'Luxury / Hi-tech & AC',
+          'Garuda Sanchari / Biaxle Premium',
+          'Garuda Maharaja / Garuda King / Multi-axle Premium',
+          'A/C Low Floor',
+          'Non A/C Low Floor'
+        ];
+        
+        if (validBackendTypes.includes(formData.busType)) {
+          mappedBusType = formData.busType;
+          console.log('💰 [Step 3] Bus type is already valid backend enum');
+        } else {
+          // Last resort - try to match partially
+          const lowerBusType = formData.busType.toLowerCase();
+          console.log('💰 [Step 3] Attempting partial match for:', lowerBusType);
+          if (lowerBusType.includes('garuda')) {
+            if (lowerBusType.includes('maharaja') || lowerBusType.includes('king') || lowerBusType.includes('scania')) {
+              mappedBusType = 'Garuda Maharaja / Garuda King / Multi-axle Premium';
+            } else if (lowerBusType.includes('volvo')) {
+              mappedBusType = 'Luxury / Hi-tech & AC';
+            } else {
+              mappedBusType = 'Garuda Sanchari / Biaxle Premium';
+            }
+          } else {
+            mappedBusType = formData.busType; // Use as-is and let backend validate
+          }
+        }
+      }
+
+      console.log('💰 [Step 4] Mapped bus type:', formData.busType, '→', mappedBusType);
+
+      // Generate policy name
+      const policyName = `${getBusTypeLabel(formData.busType)} - ${formData.routeType ? getRouteTypeLabel(formData.routeType) : 'General'}`;
+      console.log('💰 [Step 5] Generated policy name:', policyName);
+
+      const policyData = {
+        name: policyName,
+        busType: mappedBusType,
+        ratePerKm: formData.baseFarePerKm,
+        minimumFare: formData.minimumFare,
+        description: `Fare policy for ${getBusTypeLabel(formData.busType)} buses`,
+        peakHourMultiplier: formData.peakHourMultiplier || 1.0,
+        isActive: formData.isActive !== false
+      };
+
+      console.log('💰 [Step 6] Creating fare policy with data:', policyData);
 
       let response;
       if (editingPolicy) {
+        console.log('💰 [Step 7] Updating existing policy:', editingPolicy._id);
         response = await apiFetch(`/api/fare-policy/${editingPolicy._id}`, {
           method: 'PUT',
           body: JSON.stringify(policyData)
         });
       } else {
+        console.log('💰 [Step 7] Creating new policy via POST /api/fare-policy');
         response = await apiFetch('/api/fare-policy', {
           method: 'POST',
           body: JSON.stringify(policyData)
         });
       }
 
+      console.log('💰 [Step 8] Fare policy API response:', response);
+
       if (response.success) {
+        console.log('💰 [Step 9] Success! Policy created/updated');
         toast.success(editingPolicy ? 'Fare policy updated' : 'Fare policy created');
         setShowAddForm(false);
         setEditingPolicy(null);
         resetForm();
         fetchFarePolicies();
+      } else {
+        const errorMsg = response.error || response.message || 'Failed to save fare policy';
+        console.error('💰 [Step 9] Fare policy save failed:', errorMsg, response);
+        toast.error(`Failed: ${errorMsg}`);
       }
     } catch (error) {
-      toast.error('Failed to save fare policy');
+      console.error('💰 [ERROR] Exception caught:', error);
+      console.error('💰 [ERROR] Stack trace:', error.stack);
+      toast.error(`Error: ${error.message || 'Failed to save fare policy'}`);
     }
   };
 
@@ -229,11 +339,20 @@ const FarePolicyManager = ({ isOpen, onClose, onSave }) => {
   });
 
   const getBusTypeLabel = (busType) => {
-    return busTypes.find(bt => bt.value === busType)?.label || busType;
+    const found = busTypes.find(bt => bt.value === busType);
+    if (!found) {
+      console.warn(`Bus type not found for value: ${busType}`);
+      return busType || 'Unknown';
+    }
+    return found.label;
   };
 
   const getRouteTypeLabel = (routeType) => {
-    return routeTypes.find(rt => rt.value === routeType)?.label || routeType;
+    const found = routeTypes.find(rt => rt.value === routeType);
+    if (!found) {
+      return routeType || 'General';
+    }
+    return found.label;
   };
 
   if (!isOpen) return null;

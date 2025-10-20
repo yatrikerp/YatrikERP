@@ -206,54 +206,6 @@ const EnhancedBusTypeManager = ({ isOpen, onClose, onSave, onScheduleUpdate }) =
       }
     },
     {
-      id: 'fast_passenger',
-      name: 'Fast Passenger',
-      description: 'Limited stops, better speed, Non-AC comfortable seats',
-      capacity: { total: 45, sleeper: 0, seater: 45 },
-      amenities: ['charging'],
-      specifications: {
-        fuelType: 'diesel',
-        mileage: 10,
-        maxSpeed: 75,
-        length: 11,
-        width: 2.5,
-        height: 3.2
-      },
-      features: ['Fast service', 'Limited stops', 'Comfortable seats'],
-      priceCategory: 'standard',
-      isActive: true,
-      schedulingRules: {
-        maxDistance: 250,
-        preferredRoutes: ['intercity', 'district'],
-        timeSlots: ['morning', 'afternoon', 'evening'],
-        frequency: 'high'
-      }
-    },
-    {
-      id: 'venad',
-      name: 'Venad',
-      description: 'Ordinary long-distance service, south Kerala routes',
-      capacity: { total: 50, sleeper: 0, seater: 50 },
-      amenities: ['charging'],
-      specifications: {
-        fuelType: 'diesel',
-        mileage: 12,
-        maxSpeed: 60,
-        length: 11,
-        width: 2.5,
-        height: 3.2
-      },
-      features: ['South Kerala', 'Long distance', 'Ordinary service'],
-      priceCategory: 'budget',
-      isActive: true,
-      schedulingRules: {
-        maxDistance: 300,
-        preferredRoutes: ['long_distance', 'south_kerala'],
-        timeSlots: ['morning', 'afternoon'],
-        frequency: 'medium'
-      }
-    },
-    {
       id: 'rajadhani',
       name: 'Rajadhani',
       description: 'AC long-distance service with premium comfort',

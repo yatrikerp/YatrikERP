@@ -8,6 +8,10 @@ const Duty = require('../models/Duty');
 const Depot = require('../models/Depot');
 const { auth, requireRole } = require('../middleware/auth');
 const { validateDriverData } = require('../middleware/validation');
+const { createResponseGuard, safeObjectId, extractUserId, asyncHandler } = require('../middleware/responseGuard');
+
+// Apply response guard middleware to all routes
+router.use(createResponseGuard);
 
 // Driver Authentication Routes
 
@@ -313,54 +317,34 @@ router.get('/duties', auth, async (req, res) => {
 });
 
 // GET /api/driver/duties/current - Get current duty
-router.get('/duties/current', auth, async (req, res) => {
-  try {
-    // Ensure we have the correct driver ID
-    if (!req.user) {
-      return res.json({ success: true, data: null, message: 'Not authenticated' });
-    }
-    const driverId = req.user.driverId || req.user._id;
-
-    // If no driver id resolved (e.g., synthetic token without DB row), return no duty gracefully
-    if (!driverId) {
-      return res.json({ success: true, data: null, message: 'No current duty assigned' });
-    }
-
-    // If driverId is not a valid ObjectId, avoid casting errors and return gracefully
-    if (!mongoose.Types.ObjectId.isValid(driverId)) {
-      return res.json({ success: true, data: null, message: 'No current duty assigned' });
-    }
-    
-    const duty = await Duty.findOne({
-      driverId: driverId,
-      status: { $in: ['assigned', 'started', 'in-progress', 'on-break'] }
-    })
-    .populate('conductorId', 'name conductorId')
-    .populate('busId', 'busNumber registrationNumber')
-    .populate('tripId', 'tripCode')
-    .populate('routeId', 'name routeCode');
-
-    if (!duty) {
-      return res.json({
-        success: true,
-        data: null,
-        message: 'No current duty assigned'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: duty
-    });
-
-  } catch (error) {
-    console.error('Get current duty error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+router.get('/duties/current', auth, asyncHandler(async (req, res) => {
+  // Ensure we have the correct driver ID
+  if (!req.user) {
+    return res.guard.success(null, 'Not authenticated');
   }
-});
+  
+  let driverId;
+  try {
+    driverId = extractUserId(req, 'driver');
+  } catch (error) {
+    return res.guard.success(null, 'No current duty assigned');
+  }
+  
+  const duty = await Duty.findOne({
+    driverId: driverId,
+    status: { $in: ['assigned', 'started', 'in-progress', 'on-break'] }
+  })
+  .populate('conductorId', 'name conductorId')
+  .populate('busId', 'busNumber registrationNumber')
+  .populate('tripId', 'tripCode')
+  .populate('routeId', 'name routeCode');
+
+  if (!duty) {
+    return res.guard.success(null, 'No current duty assigned');
+  }
+
+  res.guard.success(duty);
+}));
 
 // POST /api/driver/duties/:dutyId/start - Start duty
 router.post('/duties/:dutyId/start', auth, async (req, res) => {

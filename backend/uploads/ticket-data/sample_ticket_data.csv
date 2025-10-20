@@ -1,0 +1,11 @@
+Date,Time,Route,Stop,Passenger_Name,Seat,Fare,Payment_Method
+2024-10-11,09:15,KOCHI-ALAPPUZHA,Kochi Central,John Doe,A1,250,Cash
+2024-10-11,09:18,KOCHI-ALAPPUZHA,Edappally,Jane Smith,A2,250,UPI
+2024-10-11,09:22,KOCHI-ALAPPUZHA,Cherthala,Bob Wilson,B1,250,Card
+2024-10-11,09:25,KOCHI-ALAPPUZHA,Kochi Central,Alice Johnson,B2,250,UPI
+2024-10-11,09:28,KOCHI-ALAPPUZHA,Edappally,Charlie Brown,C1,250,Cash
+2024-10-11,09:30,KOCHI-ALAPPUZHA,Cherthala,Diana Prince,C2,250,Card
+2024-10-11,09:32,KOCHI-ALAPPUZHA,Kochi Central,Eve Adams,C3,250,UPI
+2024-10-11,09:35,KOCHI-ALAPPUZHA,Edappally,Frank Miller,C4,250,Cash
+2024-10-11,09:38,KOCHI-ALAPPUZHA,Cherthala,Grace Lee,D1,250,UPI
+2024-10-11,09:40,KOCHI-ALAPPUZHA,Kochi Central,Henry Davis,D2,250,Card

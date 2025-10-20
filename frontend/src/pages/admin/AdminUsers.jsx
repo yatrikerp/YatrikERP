@@ -64,7 +64,7 @@ const AdminUsers = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token') || localStorage.getItem('depotToken');
-      const response = await fetch('/api/admin/users', {
+      const response = await fetch('/api/admin/users?limit=10000', {
         headers: {
           'Authorization': token ? `Bearer ${token}` : ''
         }
@@ -72,6 +72,11 @@ const AdminUsers = () => {
       
       if (response.ok) {
         const data = await response.json();
+        console.log('=== USER MANAGEMENT DATA ===');
+        console.log('Fetched users:', data.users?.length, 'users');
+        console.log('User roles:', [...new Set(data.users?.map(u => u.role))]);
+        console.log('Data sources:', data.sources);
+        console.log('Sample users:', data.users?.slice(0, 5));
         setUsers(data.users || []);
       } else {
         console.error('Failed to fetch users');
@@ -90,6 +95,8 @@ const AdminUsers = () => {
     }
 
     let filtered = [...users];
+    console.log('Initial users count:', filtered.length);
+    console.log('Available roles:', [...new Set(filtered.map(u => u.role))]);
 
     if (searchTerm) {
       filtered = filtered.filter(user =>
@@ -97,16 +104,22 @@ const AdminUsers = () => {
         user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.phone?.includes(searchTerm)
       );
+      console.log('After search filter:', filtered.length);
     }
 
     if (roleFilter !== 'all') {
+      console.log('Filtering by role:', roleFilter);
       filtered = filtered.filter(user => user.role === roleFilter);
+      console.log('After role filter:', filtered.length);
     }
 
     if (statusFilter !== 'all') {
+      console.log('Filtering by status:', statusFilter);
       filtered = filtered.filter(user => user.status === statusFilter);
+      console.log('After status filter:', filtered.length);
     }
 
+    console.log('Final filtered users:', filtered.length);
     setFilteredUsers(filtered);
   };
 
@@ -242,7 +255,9 @@ const AdminUsers = () => {
       passenger: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Passenger', icon: Users },
       driver: { color: 'bg-green-100 text-green-800 border-green-200', label: 'Driver', icon: Bus },
       conductor: { color: 'bg-purple-100 text-purple-800 border-purple-200', label: 'Conductor', icon: Route },
-      depot_manager: { color: 'bg-orange-100 text-orange-800 border-orange-200', label: 'Depot Manager', icon: Building2 }
+      depot_manager: { color: 'bg-orange-100 text-orange-800 border-orange-200', label: 'Depot Manager', icon: Building2 },
+      support_agent: { color: 'bg-yellow-100 text-yellow-800 border-yellow-200', label: 'Support Agent', icon: UserCheck },
+      data_collector: { color: 'bg-indigo-100 text-indigo-800 border-indigo-200', label: 'Data Collector', icon: UserCheck }
     };
 
     const config = roleConfig[role] || { color: 'bg-gray-100 text-gray-800 border-gray-200', label: role, icon: Users };
@@ -314,6 +329,16 @@ const AdminUsers = () => {
         <div className="text-center lg:text-left">
           <h1 className="text-3xl font-bold text-gray-900">Yatrik User Management</h1>
           <p className="text-gray-600">Manage all users and their roles in the system</p>
+          {users.length > 0 && (
+            <div className="mt-2 text-sm text-gray-500">
+              Showing {filteredUsers.length} of {users.length} users
+              {users.some(u => u.source) && (
+                <span className="ml-2">
+                  (Combined from User, Driver, and Conductor models)
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center space-x-3">
           <button
@@ -360,6 +385,8 @@ const AdminUsers = () => {
             <option value="driver">Driver</option>
             <option value="conductor">Conductor</option>
             <option value="depot_manager">Depot Manager</option>
+            <option value="support_agent">Support Agent</option>
+            <option value="data_collector">Data Collector</option>
           </select>
           
           <select
@@ -371,7 +398,6 @@ const AdminUsers = () => {
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
             <option value="suspended">Suspended</option>
-            <option value="pending">Pending</option>
           </select>
           
           <button
@@ -451,6 +477,13 @@ const AdminUsers = () => {
                       <div className="ml-4">
                         <div className="text-sm font-semibold text-gray-900">{user.name}</div>
                         <div className="text-sm text-gray-500">ID: {user._id.slice(-8)}</div>
+                        {(user.employeeCode || user.driverId || user.conductorId) && (
+                          <div className="text-xs text-blue-600 font-medium">
+                            {user.employeeCode && `Emp: ${user.employeeCode}`}
+                            {user.driverId && `Driver: ${user.driverId}`}
+                            {user.conductorId && `Conductor: ${user.conductorId}`}
+                          </div>
+                        )}
                         {user.address && (
                           <div className="text-xs text-gray-400 flex items-center mt-1">
                             <MapPin className="w-3 h-3 mr-1" />
@@ -462,6 +495,19 @@ const AdminUsers = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {getRoleBadge(user.role)}
+                    {user.source && (
+                      <div className="mt-1">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          user.source === 'driver_model' ? 'bg-green-100 text-green-800' :
+                          user.source === 'conductor_model' ? 'bg-purple-100 text-purple-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {user.source === 'driver_model' ? 'Driver Model' :
+                           user.source === 'conductor_model' ? 'Conductor Model' :
+                           'User Model'}
+                        </span>
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {getStatusBadge(user.status)}
@@ -605,6 +651,8 @@ const AdminUsers = () => {
                     <option value="driver">Driver</option>
                     <option value="conductor">Conductor</option>
                     <option value="depot_manager">Depot Manager</option>
+                    <option value="support_agent">Support Agent</option>
+                    <option value="data_collector">Data Collector</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>
@@ -619,7 +667,6 @@ const AdminUsers = () => {
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                     <option value="suspended">Suspended</option>
-                    <option value="pending">Pending</option>
                   </select>
                 </div>
                 

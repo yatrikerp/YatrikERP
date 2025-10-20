@@ -310,34 +310,18 @@ const Auth = ({ initialMode = 'login' }) => {
       // Accept both patterns: code-depot@yatrik.com or depot-code@yatrik.com
       const isDepotEmail = /^([a-z0-9]+-depot|depot-[a-z0-9]+)@yatrik\.com$/i.test(email);
 
-      // Decide endpoint and body based on identifier
-      let url = '/api/auth/login';
-      let body = { email, password: loginForm.password };
+      // Standardize to unified backend login for ALL roles
+      // Backend supports: admin, depot, driver, conductor, passenger via one endpoint
+      const url = '/api/auth/login';
+      const body = isEmail
+        ? { email, password: loginForm.password }
+        : { username: identifierRaw, password: loginForm.password };
       let roleHint = 'user';
-
-      if (isDepotEmail) {
-        url = '/api/depot-auth/login';
-        body = { email, password: loginForm.password };
-        roleHint = 'depot_manager';
-      } else if (!isEmail) {
-        // Username-based login → try driver first, then conductor on 401
-        url = '/api/driver/login';
-        body = { username: identifierRaw, password: loginForm.password };
-        roleHint = 'driver';
-      }
+      if (isDepotEmail) roleHint = 'depot_manager';
 
       console.log('[Auth] Login attempt:', { identifierRaw, email, isEmail, isDepotEmail, url, body, roleHint });
 
-      let res = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
-
-      // If username-based and driver failed with 401, try conductor
-      if (!res.ok && !isEmail && url === '/api/driver/login' && (res.status === 401 || res.status === 404)) {
-        console.warn('[Auth] Driver login failed, attempting conductor login...');
-        url = '/api/conductor/login';
-        body = { username: identifierRaw, password: loginForm.password };
-        roleHint = 'conductor';
-        res = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
-      }
+      const res = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
 
       console.log('[Auth] Login response:', res);
       

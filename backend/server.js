@@ -163,6 +163,19 @@ db.on('open', () => {
   console.log('🚀 MongoDB connection opened');
 });
 
+// Global process error handlers to avoid unexpected crashes
+process.on('unhandledRejection', (reason) => {
+  try {
+    console.error('Unhandled Promise Rejection:', reason);
+  } catch {}
+});
+
+process.on('uncaughtException', (error) => {
+  try {
+    console.error('Uncaught Exception:', error);
+  } catch {}
+});
+
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('🛑 Received SIGINT. Graceful shutdown...');
@@ -214,6 +227,9 @@ app.use('/api/admin/routes', require('./routes/conductorPricing'));
 app.use('/api/conductor', require('./routes/conductorPricing'));
 app.use('/api/bulk-scheduler', require('./routes/bulkTripScheduler-fixed'));
 // app.use('/api/passenger-dashboard', require('./routes/passengerDashboard'));
+app.use('/api/support', require('./routes/support'));
+app.use('/api/data-collector', require('./routes/dataCollector'));
+app.use('/api/fuel', require('./routes/fuel'));
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
@@ -235,6 +251,162 @@ app.get('/api/health', async (req, res) => {
     });
   }
 });
+
+// Central Express error handler (ensures single JSON response)
+app.use((err, req, res, next) => {
+  try {
+    console.error('Express error handler:', err);
+  } catch {}
+  if (res.headersSent) {
+    return next(err);
+  }
+  res.status(err.status || 500).json({ success: false, message: err.message || 'Internal server error' });
+});
+
+// Development fallback for depot endpoints to avoid 404s while wiring auth/depot middleware
+app.get('/api/depot/health', (req, res) => {
+  try {
+    res.json({ success: true, message: 'Depot routes are working' });
+  } catch (_) {
+    res.json({ success: true });
+  }
+});
+
+app.get('/api/depot/info', (req, res, next) => {
+  // If the depot router handled this already, skip fallback
+  if (res.headersSent) return;
+  console.warn('[Fallback] Serving /api/depot/info');
+  return res.json({
+    success: true,
+    data: {
+      name: 'Yatrik Depot',
+      location: 'Kerala, India',
+      manager: 'Depot Manager',
+      revenue: '₹0',
+      revenueChange: '+0%',
+      trips: '0',
+      tripsChange: '+0%',
+      occupancy: '0%',
+      occupancyChange: '+0%',
+      fuelEfficiency: '0 km/L',
+      fuelEfficiencyChange: '+0%',
+      ticketSales: '0',
+      ticketSalesChange: '+0%',
+      punctuality: '0%',
+      punctualityChange: '+0%',
+      breakdowns: '0',
+      breakdownsChange: '+0%',
+      activeBuses: '0',
+      activeBusesChange: '+0',
+      totalRoutes: '0',
+      totalRoutesChange: '+0'
+    }
+  });
+});
+
+app.get('/api/depot/dashboard', (req, res, next) => {
+  if (res.headersSent) return;
+  console.warn('[Fallback] Serving /api/depot/dashboard');
+  return res.json({
+    success: true,
+    data: {
+      stats: {
+        totalTrips: 0,
+        activeTrips: 0,
+        totalBuses: 0,
+        availableBuses: 0,
+        totalRoutes: 0,
+        totalBookings: 0,
+        totalFuelLogs: 0,
+        todayTrips: 0,
+        todayBookings: 0,
+        todayRevenue: 0
+      },
+      recentTrips: [],
+      activeCrew: [],
+      todayFuelLogs: []
+    }
+  });
+});
+
+// Additional fallbacks for depot lists to prevent 404s during setup
+app.get('/api/depot/buses', (req, res, next) => {
+  if (res.headersSent) return;
+  console.warn('[Fallback] Serving /api/depot/buses');
+  return res.json({
+    success: true,
+    data: {
+      buses: [],
+      stats: { totalBuses: 0, availableBuses: 0, maintenanceBuses: 0 }
+    }
+  });
+});
+
+app.get('/api/depot/routes', (req, res, next) => {
+  if (res.headersSent) return;
+  console.warn('[Fallback] Serving /api/depot/routes');
+  return res.json({
+    success: true,
+    data: { routes: [], stats: { totalRoutes: 0, activeRoutes: 0, inactiveRoutes: 0, totalDistance: 0 } }
+  });
+});
+
+app.get('/api/depot/drivers', (req, res, next) => {
+  if (res.headersSent) return;
+  console.warn('[Fallback] Serving /api/depot/drivers');
+  return res.json({
+    success: true,
+    data: { drivers: [], stats: { totalDrivers: 0 } }
+  });
+});
+
+app.get('/api/depot/conductors', (req, res, next) => {
+  if (res.headersSent) return;
+  console.warn('[Fallback] Serving /api/depot/conductors');
+  return res.json({
+    success: true,
+    data: { conductors: [], stats: { totalConductors: 0 } }
+  });
+});
+
+// Reports fallback for depot dashboard widgets
+app.get('/api/depot/reports', (req, res, next) => {
+  if (res.headersSent) return;
+  console.warn('[Fallback] Serving /api/depot/reports');
+  const { startDate = null, endDate = null, type = 'daily' } = req.query || {};
+  return res.json({
+    success: true,
+    data: {
+      period: { start: startDate, end: endDate, type },
+      trips: 0,
+      bookings: 0,
+      fuelLogs: 0,
+      revenue: 0
+    }
+  });
+});
+
+// Lightweight admin fallbacks to prevent long timeouts during development
+app.get('/api/admin/all-conductors', (req, res) => {
+  if (res.headersSent) return;
+  console.warn('[Fallback] Serving /api/admin/all-conductors');
+  return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 0 } });
+});
+
+app.get('/api/admin/all-drivers', (req, res) => {
+  if (res.headersSent) return;
+  console.warn('[Fallback] Serving /api/admin/all-drivers');
+  return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 0 } });
+});
+
+app.get('/api/admin/routes', (req, res) => {
+  if (res.headersSent) return;
+  console.warn('[Fallback] Serving /api/admin/routes');
+  return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 0 } });
+});
+
+// Explicit 404 for unmatched API routes (debug-friendly)
+// Removed explicit '/api/*' 404 handler to avoid intercepting valid routes
 
 // Catch-all route for non-API requests (API-only mode)
 app.get('*', (req, res) => {

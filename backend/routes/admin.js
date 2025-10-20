@@ -15,6 +15,10 @@ const Stop = require('../models/Stop');
 const AIAnalyticsService = require('../services/aiAnalytics');
 const NotificationService = require('../services/notificationService');
 const { auth, requireRole } = require('../middleware/auth');
+const { createResponseGuard, safeObjectId, extractUserId, asyncHandler } = require('../middleware/responseGuard');
+
+// Apply response guard middleware to all routes
+router.use(createResponseGuard);
 
 // Import optimized bus API
 const optimizedBusAPI = require('./optimized-bus-api');
@@ -521,38 +525,133 @@ router.put('/config', async (req, res) => {
 // GET /api/admin/users
 router.get('/users', async (req, res) => {
   try {
-    const { role, status, q, page = 1, limit = 20 } = req.query;
+    const { role, status, q, page = 1, limit = 100 } = req.query;
     const skip = (page - 1) * limit;
 
-    // Build query
-    const query = {};
-    if (role) query.role = role;
-    if (status) query.status = status;
+    console.log('=== ADMIN USERS API CALL ===');
+    console.log('Query params:', { role, status, q, page, limit });
+
+    // Build query for User model
+    const userQuery = {};
+    if (role) userQuery.role = role;
+    if (status) userQuery.status = status;
     if (q) {
-      query.$or = [
+      userQuery.$or = [
         { name: { $regex: q, $options: 'i' } },
         { email: { $regex: q, $options: 'i' } },
         { phone: { $regex: q, $options: 'i' } }
       ];
     }
 
-    const [users, total] = await Promise.all([
-      User.find(query)
+    // Build queries for Driver and Conductor models
+    const driverQuery = {};
+    const conductorQuery = {};
+    
+    if (status) {
+      driverQuery.status = status;
+      conductorQuery.status = status;
+    }
+    if (q) {
+      driverQuery.$or = [
+        { name: { $regex: q, $options: 'i' } },
+        { email: { $regex: q, $options: 'i' } },
+        { phone: { $regex: q, $options: 'i' } }
+      ];
+      conductorQuery.$or = [
+        { name: { $regex: q, $options: 'i' } },
+        { email: { $regex: q, $options: 'i' } },
+        { phone: { $regex: q, $options: 'i' } }
+      ];
+    }
+
+    console.log('Final queries:');
+    console.log('userQuery:', JSON.stringify(userQuery, null, 2));
+    console.log('driverQuery:', JSON.stringify(driverQuery, null, 2));
+    console.log('conductorQuery:', JSON.stringify(conductorQuery, null, 2));
+
+    // Fetch data from all three models
+    const [users, drivers, conductors, userTotal, driverTotal, conductorTotal] = await Promise.all([
+      User.find(userQuery)
         .select('-password')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit))
-        .populate('staffDetails.supervisor', 'name role'),
-      User.countDocuments(query)
+        .populate('depotId', 'depotName depotCode')
+        .sort({ createdAt: -1 }),
+      Driver.find(driverQuery)
+        .populate('depotId', 'depotName depotCode')
+        .sort({ createdAt: -1 }),
+      Conductor.find(conductorQuery)
+        .populate('depotId', 'depotName depotCode')
+        .sort({ createdAt: -1 }),
+      User.countDocuments(userQuery),
+      Driver.countDocuments(driverQuery),
+      Conductor.countDocuments(conductorQuery)
     ]);
 
+    console.log('Query results:');
+    console.log('Users count:', users.length);
+    console.log('Drivers count:', drivers.length);
+    console.log('Conductors count:', conductors.length);
+
+    // Transform drivers and conductors to match user format
+    const transformedDrivers = drivers.map(driver => ({
+      _id: driver._id,
+      name: driver.name,
+      email: driver.email,
+      phone: driver.phone,
+      role: 'driver',
+      status: driver.status,
+      depotId: driver.depotId,
+      createdAt: driver.createdAt,
+      source: 'driver_model',
+      employeeCode: driver.employeeCode,
+      driverId: driver.driverId,
+      drivingLicense: driver.drivingLicense
+    }));
+
+    const transformedConductors = conductors.map(conductor => ({
+      _id: conductor._id,
+      name: conductor.name,
+      email: conductor.email,
+      phone: conductor.phone,
+      role: 'conductor',
+      status: conductor.status,
+      depotId: conductor.depotId,
+      createdAt: conductor.createdAt,
+      source: 'conductor_model',
+      employeeCode: conductor.employeeCode,
+      conductorId: conductor.conductorId
+    }));
+
+    // Combine all users
+    let allUsers = [...users, ...transformedDrivers, ...transformedConductors];
+
+    // Apply role filter if specified
+    if (role && role !== 'all') {
+      allUsers = allUsers.filter(user => user.role === role);
+    }
+
+    // Sort by creation date
+    allUsers.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    // Apply pagination
+    const total = allUsers.length;
+    const paginatedUsers = allUsers.slice(skip, skip + parseInt(limit));
+
+    console.log('Final combined users:', paginatedUsers.length, 'out of', total);
+    console.log('User roles:', [...new Set(paginatedUsers.map(u => u.role))]);
+
     res.json({
-      users,
+      users: paginatedUsers,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
         total,
         pages: Math.ceil(total / limit)
+      },
+      sources: {
+        userModel: users.length,
+        driverModel: drivers.length,
+        conductorModel: conductors.length,
+        total: total
       }
     });
   } catch (error) {
@@ -6266,8 +6365,8 @@ router.get('/buses/export/:format', async (req, res) => {
     const { format } = req.params; // pdf or excel
     const buses = await Bus.find()
       .populate('depotId', 'depotName depotCode')
-      .populate('assignedDriverId', 'name driverId')
-      .populate('assignedConductorId', 'name conductorId')
+      .populate('assignedDriver', 'name driverId')
+      .populate('assignedConductor', 'name conductorId')
       .sort({ busNumber: 1 });
 
     if (format === 'pdf') {

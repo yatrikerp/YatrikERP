@@ -8,6 +8,10 @@ const Duty = require('../models/Duty');
 const Depot = require('../models/Depot');
 const { auth, requireRole } = require('../middleware/auth');
 const { validateConductorData } = require('../middleware/validation');
+const { createResponseGuard, safeObjectId, extractUserId, asyncHandler } = require('../middleware/responseGuard');
+
+// Apply response guard middleware to all routes
+router.use(createResponseGuard);
 
 // Conductor Authentication Routes
 
@@ -324,48 +328,34 @@ router.get('/duties', auth, async (req, res) => {
 });
 
 // GET /api/conductor/duties/current - Get current duty
-router.get('/duties/current', auth, async (req, res) => {
-  try {
-    // Ensure we have the correct conductor ID
-    if (!req.user) {
-      return res.json({ success: true, data: null, message: 'Not authenticated' });
-    }
-    const conductorId = req.user.conductorId || req.user._id;
-    if (!conductorId) {
-      return res.json({ success: true, data: null, message: 'No conductor ID found in token' });
-    }
-    
-    const duty = await Duty.findOne({
-      conductorId: conductorId,
-      status: { $in: ['assigned', 'started', 'in-progress', 'on-break'] }
-    })
-    .populate('driverId', 'name driverId')
-    .populate('busId', 'busNumber registrationNumber')
-    .populate('tripId', 'tripCode')
-    .populate('routeId', 'name routeCode');
-
-    if (!duty) {
-      return res.json({
-        success: true,
-        data: null,
-        message: 'No current duty assigned'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: duty
-    });
-
-  } catch (error) {
-    console.error('Get current duty error:', error);
-    return res.json({
-      success: true,
-      data: null,
-      message: 'No current duty assigned'
-    });
+router.get('/duties/current', auth, asyncHandler(async (req, res) => {
+  // Ensure we have the correct conductor ID
+  if (!req.user) {
+    return res.guard.success(null, 'Not authenticated');
   }
-});
+  
+  let conductorId;
+  try {
+    conductorId = extractUserId(req, 'conductor');
+  } catch (error) {
+    return res.guard.success(null, 'No current duty assigned');
+  }
+  
+  const duty = await Duty.findOne({
+    conductorId: conductorId,
+    status: { $in: ['assigned', 'started', 'in-progress', 'on-break'] }
+  })
+  .populate('driverId', 'name driverId')
+  .populate('busId', 'busNumber registrationNumber')
+  .populate('tripId', 'tripCode')
+  .populate('routeId', 'name routeCode');
+
+  if (!duty) {
+    return res.guard.success(null, 'No current duty assigned');
+  }
+
+  res.guard.success(duty);
+}));
 
 // POST /api/conductor/duties/:dutyId/start - Start duty
 router.post('/duties/:dutyId/start', auth, async (req, res) => {

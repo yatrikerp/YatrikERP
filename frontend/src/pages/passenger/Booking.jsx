@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch } from '../../utils/api';
 import notificationService from '../../services/notificationService';
+import { validateIndianMobile } from '../../utils/bookingValidation';
 
 const PaxBooking = () => {
   const { tripId } = useParams();
@@ -38,35 +39,21 @@ const PaxBooking = () => {
   const [contactDetails, setContactDetails] = useState({
     phone: '',
     email: '',
-    otp: '',
-    state: '',
-    whatsappUpdates: true
+    otp: ''
   });
-
-  // OTP related state
+  const [contactErrors, setContactErrors] = useState({});
+  // OTP state for email verification flow
   const [otpState, setOtpState] = useState({
     isSent: false,
     isVerified: false,
-    isLoading: false,
-    error: '',
-    timer: 0
+    error: ''
   });
 
-  // Handler for contact details updates
   const handleContactChange = (field, value) => {
-    setContactDetails(prev => ({
-      ...prev,
-      [field]: value
-    }));
-    
-    // Reset OTP verification if email changes
-    if (field === 'email' && otpState.isVerified) {
-      setOtpState(prev => ({
-        ...prev,
-        isVerified: false,
-        isSent: false,
-        error: ''
-      }));
+    setContactDetails(prev => ({ ...prev, [field]: value }));
+    if (field === 'phone') {
+      const isValid = validateIndianMobile(value);
+      setContactErrors(prev => ({ ...prev, phone: isValid || value === '' ? '' : 'Enter a valid 10-digit Indian mobile (starts with 6-9, no sequences/repeats)' }));
     }
   };
 
@@ -513,9 +500,9 @@ const PaxBooking = () => {
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-purple-50">
       <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left: Contact + Passengers */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="lg:col-span-2 space-y-8 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:pr-2">
           <div className="bg-white rounded-3xl border border-gray-100 shadow-xl shadow-pink-100/50 overflow-hidden">
-            <div className="bg-gradient-to-r from-pink-500 to-pink-600 px-8 py-6">
+            <div className="bg-gradient-to-r from-pink-500 to-rose-600 px-8 py-6">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
                   <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -524,7 +511,7 @@ const PaxBooking = () => {
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-white">Contact Details</h2>
-                  <p className="text-pink-100 text-sm">We'll send your booking confirmation here</p>
+                  <p className="text-rose-100 text-sm">We'll send your booking confirmation here</p>
                 </div>
               </div>
             </div>
@@ -550,10 +537,27 @@ const PaxBooking = () => {
                   <input 
                     className="col-span-3 border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-pink-500 focus:ring-2 focus:ring-pink-200 transition-all duration-200 bg-white shadow-sm placeholder-gray-400" 
                     placeholder="Enter your phone number" 
+                    inputMode="numeric"
+                    pattern="^[6-9][0-9]{9}$"
+                    maxLength={10}
                     value={contactDetails.phone}
-                    onChange={(e) => handleContactChange('phone', e.target.value)}
+                    onChange={(e) => {
+                      // Allow only digits, trim to 10, enforce Indian mobile starting 6-9
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      handleContactChange('phone', digits);
+                    }}
+                    onBlur={(e) => {
+                      // Keep minimal check; UI already blocks non-compliant input
+                      const valid = /^[6-9][0-9]{9}$/.test(e.target.value);
+                      if (!valid) {
+                        try { console.warn('Invalid Indian mobile number'); } catch {}
+                      }
+                    }}
                   />
                 </div>
+                {contactErrors.phone && (
+                  <p className="text-xs text-red-500 mt-1">{contactErrors.phone}</p>
+                )}
               </div>
 
               {/* Email Address */}
@@ -883,9 +887,9 @@ const PaxBooking = () => {
         </div>
 
         {/* Right: Trip summary */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           <div className="bg-white rounded-3xl border border-gray-100 shadow-xl shadow-pink-100/50 overflow-hidden sticky top-6">
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-4">
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3">
               <div className="flex items-center gap-2">
                 <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -893,13 +897,13 @@ const PaxBooking = () => {
                 <span className="text-white font-semibold">Trip Summary</span>
               </div>
             </div>
-            <div className="p-6 space-y-6">
+            <div className="p-4 space-y-4">
               <div className="text-center">
                 <div className="text-lg font-bold text-gray-800 mb-1">{trip?.routeName || 'Your Journey'}</div>
                 <div className="text-sm text-gray-500">Premium Bus Service</div>
               </div>
               
-              <div className="bg-gradient-to-r from-gray-50 to-blue-50 rounded-2xl p-4">
+              <div className="bg-gradient-to-r from-gray-50 to-blue-50 rounded-2xl p-3">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-green-500 rounded-full"></div>
@@ -915,7 +919,7 @@ const PaxBooking = () => {
                 </div>
                 <div className="text-sm text-gray-600 mb-2">{boarding?.title || 'Boarding Point'}</div>
                 
-                <div className="flex items-center justify-center my-3">
+                <div className="flex items-center justify-center my-2">
                   <div className="w-full h-0.5 bg-gray-300 relative">
                     <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-blue-500 text-white px-2 py-1 rounded-full text-xs font-semibold">
                       {trip?.routeId?.distance || '120'} km
@@ -932,7 +936,7 @@ const PaxBooking = () => {
                 </div>
               </div>
 
-              <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-4">
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-3">
                 <div className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                   <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
@@ -950,8 +954,8 @@ const PaxBooking = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-xl shadow-pink-100/50 overflow-hidden">
-            <div className="bg-gradient-to-r from-pink-500 to-pink-600 px-6 py-4">
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-xl shadow-pink-100/50 overflow-hidden sticky top-[calc(6rem+16px)]">
+            <div className="bg-gradient-to-r from-pink-500 to-pink-600 px-4 py-3">
               <div className="flex items-center gap-2">
                 <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
@@ -959,10 +963,10 @@ const PaxBooking = () => {
                 <span className="text-white font-semibold">Payment Summary</span>
               </div>
             </div>
-            <div className="p-6">
+            <div className="p-4">
               <div className="flex items-center justify-between mb-4">
                 <div className="text-gray-600">Total Amount</div>
-                <div className="text-3xl font-bold text-gray-800">₹{Math.max(0, (fare ?? deriveFarePerSeat(trip) ?? 0) * Math.max(1, selectedSeats.length || 1))}</div>
+                <div className="text-2xl font-bold text-gray-800">₹{Math.max(0, (fare ?? deriveFarePerSeat(trip) ?? 0) * Math.max(1, selectedSeats.length || 1))}</div>
               </div>
               <button 
                 onClick={confirm} 

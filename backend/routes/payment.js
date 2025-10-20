@@ -392,56 +392,63 @@ router.post('/mock', auth, async (req, res) => {
     booking.paymentReference.mockPaymentId = `mock_${Date.now()}`;
     await booking.save();
 
-    const pnr = 'YTK' + Math.random().toString(36).slice(2, 7).toUpperCase();
-    const seatNumber = booking.seatNo;
-    const basePayload = {
-      ver: 1,
-      typ: 'YATRIK_TICKET',
-      pnr,
-      bookingId: (booking._id || '').toString(),
-      tripId: (booking.tripId?._id || booking.tripId || '').toString(),
-      seatNumber: seatNumber || '',
-      passengerName: booking.passengerDetails?.name || 'Passenger',
-      issuedAt: Date.now(),
-      exp: Date.now() + 24 * 60 * 60 * 1000
-    };
-    const signedPayload = attachSignature(basePayload);
-    const payload = JSON.stringify(signedPayload);
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    // Create one ticket per booked seat with correct passengerName
+    const seats = Array.isArray(booking.seats) ? booking.seats : [];
+    const createdTickets = [];
+    for (const seat of seats) {
+      const seatNumber = seat.seatNumber || booking.seatNo || '';
+      const passengerName = seat.passengerName || booking.customer?.name || 'Passenger';
+      const pnr = 'YTK' + Math.random().toString(36).slice(2, 7).toUpperCase();
+      const basePayload = {
+        ver: 1,
+        typ: 'YATRIK_TICKET',
+        pnr,
+        bookingId: (booking._id || '').toString(),
+        tripId: (booking.tripId?._id || booking.tripId || '').toString(),
+        seatNumber: seatNumber,
+        passengerName,
+        issuedAt: Date.now(),
+        exp: Date.now() + 24 * 60 * 60 * 1000
+      };
+      const signedPayload = attachSignature(basePayload);
+      const payload = JSON.stringify(signedPayload);
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    const ticketNumber = `TKT${Date.now()}${Math.random().toString(36).substr(2,5).toUpperCase()}`;
-    const ticket = await Ticket.create({
-      bookingId: booking._id,
-      pnr,
-      qrPayload: payload,
-      expiresAt,
-      state: 'active',
-      ticketNumber,
-      passengerName: booking.passengerDetails?.name || 'Passenger',
-      seatNumber: seatNumber,
-      boardingStop: booking.boardingStopId?.toString() || '',
-      destinationStop: booking.destinationStopId?.toString() || '',
-      fareAmount: booking.totalAmount,
-      tripDetails: {
-        tripId: booking.tripId?._id || booking.tripId,
-        busNumber: booking.tripId?.busNumber || '',
-        departureTime: booking.tripId?.startTime ? new Date(`2000-01-01T${booking.tripId.startTime}:00Z`) : undefined,
-        arrivalTime: undefined,
-        routeName: ''
-      },
-      source: 'web'
-    });
+      const ticketNumber = `TKT${Date.now()}${Math.random().toString(36).substr(2,5).toUpperCase()}`;
+      const ticket = await Ticket.create({
+        bookingId: booking._id,
+        pnr,
+        qrPayload: payload,
+        expiresAt,
+        state: 'active',
+        ticketNumber,
+        passengerName,
+        seatNumber: seatNumber,
+        boardingStop: booking.boardingStopId?.toString() || booking.journey?.from || '',
+        destinationStop: booking.destinationStopId?.toString() || booking.journey?.to || '',
+        fareAmount: seat.price || booking.pricing?.totalAmount || 0,
+        tripDetails: {
+          tripId: booking.tripId?._id || booking.tripId,
+          busNumber: booking.tripId?.busNumber || '',
+          departureTime: booking.tripId?.startTime ? new Date(`2000-01-01T${booking.tripId.startTime}:00Z`) : undefined,
+          arrivalTime: undefined,
+          routeName: ''
+        },
+        source: 'web'
+      });
 
-    // Generate QR image (data URL)
-    let qrImage = null;
-    try {
-      qrImage = await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M' });
-      await Ticket.findByIdAndUpdate(ticket._id, { qrImage });
-    } catch (e) {
-      // Non-fatal
+      // Generate QR image (data URL)
+      try {
+        const qrImage = await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M' });
+        await Ticket.findByIdAndUpdate(ticket._id, { qrImage });
+      } catch (e) {
+        // Non-fatal
+      }
+
+      createdTickets.push({ ticket, pnr, qrPayload: payload });
     }
 
-    return res.json({ success: true, data: { ticket, pnr, qrPayload: payload, qrImage } });
+    return res.json({ success: true, data: { tickets: createdTickets } });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Mock payment failed', error: error.message });
   }

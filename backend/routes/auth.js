@@ -784,7 +784,7 @@ router.get('/me', async (req, res) => {
 
     const payload = jwt.verify(token, process.env.JWT_SECRET || 'secret');
     
-    // Check if it's a depot user based on token payload
+    // Check if it's a depot user, conductor, or driver based on token payload
     let user = null;
     if (payload.isDepotUser) {
       user = await DepotUser.findById(payload.userId).select('-password');
@@ -803,7 +803,42 @@ router.get('/me', async (req, res) => {
           isDepotUser: true
         };
       }
+    } else if (payload.conductorId) {
+      // Handle conductor token
+      const conductor = await Conductor.findById(payload.conductorId).select('-password');
+      if (conductor) {
+        user = {
+          _id: conductor._id,
+          name: conductor.name,
+          email: conductor.email || `${conductor.username}@yatrik.com`,
+          role: 'conductor',
+          depotId: conductor.depotId,
+          username: conductor.username,
+          conductorId: conductor.conductorId,
+          employeeCode: conductor.employeeCode,
+          status: conductor.status,
+          isDepotUser: false
+        };
+      }
+    } else if (payload.driverId) {
+      // Handle driver token
+      const driver = await Driver.findById(payload.driverId).select('-password');
+      if (driver) {
+        user = {
+          _id: driver._id,
+          name: driver.name,
+          email: driver.email || `${driver.username}@yatrik.com`,
+          role: 'driver',
+          depotId: driver.depotId,
+          username: driver.username,
+          driverId: driver.driverId,
+          licenseNumber: driver.licenseNumber,
+          status: driver.status,
+          isDepotUser: false
+        };
+      }
     } else {
+      // Regular user
       user = await User.findById(payload.userId).select('-password');
     }
     

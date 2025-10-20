@@ -15,17 +15,18 @@ const AppBanner = lazy(() => import('../components/LandingPage/AppBanner'));
 const PopularRoutes = lazy(() => import('../components/LandingPage/PopularRoutes'));
 const ServiceAlerts = lazy(() => import('../components/LandingPage/ServiceAlerts'));
 const BusTrackingModal = lazy(() => import('../components/Common/BusTrackingModal'));
-const EnhancedGoogleMapsTracker = lazy(() => import('../components/Common/EnhancedGoogleMapsTracker'));
 
 const LandingPage = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showBusTracking, setShowBusTracking] = useState(false);
-  const [featuredTrip, setFeaturedTrip] = useState(null);
+  // Removed live map; keep state placeholders to avoid large refactor
+  // removed usage; keep state commented out to avoid warnings
+  // const [featuredTrip, setFeaturedTrip] = useState(null);
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isMobile } = useMobileDetection();
   const mapSectionRef = useRef(null);
-  const [isMapVisible, setIsMapVisible] = useState(false);
+  // const [isMapVisible, setIsMapVisible] = useState(false);
 
   // Redirect mobile users to mobile landing page
   useEffect(() => {
@@ -117,7 +118,8 @@ const LandingPage = () => {
           estimatedArrival: ''
         };
 
-        setFeaturedTrip(demoTrip);
+        // Removed live map preview; do not set featuredTrip
+        // setFeaturedTrip(demoTrip);
       } catch (e) {
         // ignore errors on landing
       }
@@ -189,19 +191,9 @@ const LandingPage = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, [isMobile]);
 
-  // Observe map section to lazy-mount Google Maps when in view
+  // Disable live map observer
   useEffect(() => {
-    if (!mapSectionRef.current) return;
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          setIsMapVisible(true);
-          observer.disconnect();
-        }
-      });
-    }, { rootMargin: '200px 0px' });
-    observer.observe(mapSectionRef.current);
-    return () => observer.disconnect();
+    // live map removed
   }, []);
 
   return (
@@ -306,38 +298,7 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* Live Route Preview - Uber-style tracking on landing */}
-      <section className="section" ref={mapSectionRef}>
-          <div className="container">
-            <div className="section__intro">
-              <h2 className="section__title">Live Route Preview</h2>
-              <p className="section__subtitle">Real-time tracking preview from Streamlined Route Management</p>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" style={{ height: '360px' }}>
-              <Suspense fallback={<div className="w-full h-full" />}>
-                {isMapVisible ? (
-                  <EnhancedGoogleMapsTracker 
-                    trip={featuredTrip || {
-                      busId: { busNumber: 'LIVE-TRACK' },
-                      routeId: {
-                        routeName: 'Thrissur to Guruvayur',
-                        startingPoint: { city: 'Thrissur' },
-                        endingPoint: { city: 'Guruvayur' }
-                      },
-                      coordinates: { lat: 10.5276, lng: 76.2144 },
-                      currentLocation: 'Thrissur, Kerala',
-                      currentSpeed: '0 km/h',
-                      lastUpdate: new Date().toLocaleTimeString(),
-                      status: 'running'
-                    }}
-                    isTracking={true}
-                    className="w-full h-full" 
-                  />
-                ) : <div className="w-full h-full" />}
-              </Suspense>
-            </div>
-          </div>
-        </section>
+      {/* Live Route Preview - removed per request */}
 
       {/* App Banner */}
       <Suspense fallback={null}>

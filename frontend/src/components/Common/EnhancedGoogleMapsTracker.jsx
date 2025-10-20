@@ -98,8 +98,8 @@ const EnhancedGoogleMapsTracker = ({
       const deltaTime = (now - lastTimestamp) / 1000; // Convert to seconds
       lastTimestamp = now;
 
-      // Update progress (move 5% per second for smooth movement)
-      progress += deltaTime * 0.05;
+      // Update progress (gentle movement ~12% per second)
+      progress += deltaTime * 0.12;
 
       if (progress >= 1) {
         // Move to next waypoint
@@ -115,7 +115,7 @@ const EnhancedGoogleMapsTracker = ({
       const nextWaypoint = routeWaypoints[(waypointIndex + 1) % routeWaypoints.length];
       
       const newCoordinates = interpolatePosition(currentWaypoint, nextWaypoint, progress);
-      const newSpeed = calculateRealisticSpeed(0, 30 + Math.random() * 20, nextWaypoint);
+      const newSpeed = calculateRealisticSpeed(25, 45, nextWaypoint);
 
       // Update bus position for display
       const newBusPosition = {
@@ -123,7 +123,7 @@ const EnhancedGoogleMapsTracker = ({
         y: 50 - (newCoordinates.lat - 10.8505) * 500
       };
       setBusPosition(newBusPosition);
-      setRoutePath(prev => [...prev.slice(-20), newBusPosition]);
+      setRoutePath(prev => [...prev.slice(-30), newBusPosition]);
 
       // Update trip data
       const updatedTrip = {
@@ -144,7 +144,7 @@ const EnhancedGoogleMapsTracker = ({
       if (mapRef.current?.mapInstance && mapRef.current.markers && mapRef.current.markers.length > 0) {
         const busMarker = mapRef.current.markers[0];
         busMarker.setPosition(newCoordinates);
-        busMarker.setTitle(`🚌 Live Bus ${trip.busId?.busNumber || 'Unknown'} - ${getLocationName(newCoordinates)}`);
+        busMarker.setTitle(`🚌 ${trip.busId?.busNumber || 'Bus'} - ${getLocationName(newCoordinates)}`);
       }
 
       animationFrameRef.current = requestAnimationFrame(animate);
@@ -251,54 +251,23 @@ const EnhancedGoogleMapsTracker = ({
           title: `🚌 Live Bus ${trip.busId?.busNumber || 'Unknown'} - ${trip.currentLocation}`,
           icon: {
             url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-              <svg width="70" height="70" viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <style>
-                    .pulse-ring { animation: pulse-ring 2s infinite; }
-                    .bus-body { animation: bus-blink 1.5s infinite; }
-                    @keyframes pulse-ring {
-                      0% { transform: scale(0.8); opacity: 1; }
-                      100% { transform: scale(1.4); opacity: 0; }
-                    }
-                    @keyframes bus-blink {
-                      0%, 100% { opacity: 1; }
-                      50% { opacity: 0.7; }
-                    }
-                  </style>
-                </defs>
-                <!-- Animated pulse rings -->
-                <circle cx="35" cy="35" r="30" fill="#FF5722" opacity="0.1" class="pulse-ring"/>
-                <circle cx="35" cy="35" r="25" fill="#FF5722" opacity="0.2" class="pulse-ring" style="animation-delay: 0.5s"/>
-                <circle cx="35" cy="35" r="20" fill="#FF5722" opacity="0.3" class="pulse-ring" style="animation-delay: 1s"/>
-                
-                <!-- Main bus container -->
-                <circle cx="35" cy="35" r="18" fill="#FF5722" stroke="#FFFFFF" stroke-width="4"/>
-                
-                <!-- Bus body with blinking effect -->
-                <rect x="22" y="28" width="26" height="14" rx="3" fill="#FFFFFF" class="bus-body"/>
-                
-                <!-- Bus windows -->
-                <rect x="25" y="30" width="8" height="6" fill="#FF5722" opacity="0.8"/>
-                <rect x="35" y="30" width="8" height="6" fill="#FF5722" opacity="0.8"/>
-                
-                <!-- Bus wheels -->
-                <circle cx="28" cy="42" r="2.5" fill="#333333"/>
-                <circle cx="42" cy="42" r="2.5" fill="#333333"/>
-                
-                <!-- Speed indicator -->
-                <circle cx="35" cy="20" r="8" fill="#4CAF50" stroke="#FFFFFF" stroke-width="2"/>
-                <text x="35" y="25" text-anchor="middle" fill="white" font-size="10" font-weight="bold">${trip.currentSpeed?.replace(' km/h', '') || '0'}</text>
-                
-                <!-- Live indicator -->
-                <circle cx="50" cy="20" r="6" fill="#4CAF50" stroke="#FFFFFF" stroke-width="2"/>
-                <text x="50" y="24" text-anchor="middle" fill="white" font-size="8" font-weight="bold">LIVE</text>
+              <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+                <g>
+                  <circle cx="27" cy="27" r="20" fill="#0A2540" stroke="#FFFFFF" stroke-width="3"/>
+                  <rect x="16" y="20" width="22" height="12" rx="3" fill="#FFFFFF"/>
+                  <rect x="18" y="22" width="7" height="5" fill="#0A2540" opacity="0.85"/>
+                  <rect x="27" y="22" width="7" height="5" fill="#0A2540" opacity="0.85"/>
+                  <circle cx="22" cy="34" r="2.2" fill="#333333"/>
+                  <circle cx="31" cy="34" r="2.2" fill="#333333"/>
+                  <circle cx="39" cy="15" r="5" fill="#00A86B" stroke="#FFFFFF" stroke-width="2"/>
+                </g>
               </svg>
             `),
-            scaledSize: new window.google.maps.Size(70, 70),
-            anchor: new window.google.maps.Point(35, 35)
+            scaledSize: new window.google.maps.Size(54, 54),
+            anchor: new window.google.maps.Point(27, 27)
           },
-          animation: window.google.maps.Animation.BOUNCE,
-          zIndex: 1000
+          animation: null,
+          optimized: true
         });
 
         mapRef.current.markers.push(currentMarker);
