@@ -46,7 +46,8 @@ const EnhancedResults = () => {
       // Fallback: if no trips or failed, try absolute URL to bypass proxy issues
       if (!res?.ok || !Array.isArray(tripList) || tripList.length === 0) {
         try {
-          const abs = await apiFetch(`http://localhost:5000/api/trips/search?${params.toString()}`);
+          const apiBase = (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE_URL)) || process.env.REACT_APP_API_URL || 'http://localhost:5000';
+          const abs = await apiFetch(`${apiBase}/api/trips/search?${params.toString()}`);
           console.log('🔁 Fallback API Response (absolute):', abs);
           if (abs?.ok) {
             tripList = abs.data?.data?.trips || abs.data?.trips || abs.data?.items || abs.data || [];

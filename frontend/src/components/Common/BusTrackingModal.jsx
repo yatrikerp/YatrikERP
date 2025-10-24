@@ -133,8 +133,9 @@ const BusTrackingModal = ({ isOpen, onClose }) => {
   const fetchRunningTrips = async () => {
     setLoading(true);
     try {
-      // Try the correct backend URL first
-      const response = await fetch('http://localhost:5000/api/tracking/running-trips');
+      // Use environment variables for API URL
+      const apiBase = (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE_URL)) || process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${apiBase}/api/tracking/running-trips`);
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.data?.trips) {

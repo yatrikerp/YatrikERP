@@ -11,7 +11,7 @@ const REQUEST_TIMEOUT = 30000; // 30 seconds for dashboard endpoints
 let warnedBase = false;
 
 export async function apiFetch(path, options = {}) {
-  // Use direct backend URL in development to bypass proxy issues
+  // Use environment variables for API base URL
   const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const envBase = (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE_URL)) || process.env.REACT_APP_API_URL;
   const base = (envBase || (isDevelopment ? 'http://localhost:5000' : '')).replace(/\/$/, '');

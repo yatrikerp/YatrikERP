@@ -13,7 +13,8 @@
     "ml:test": "cd ml_models && python -c \"import sys; print('Python:', sys.version)\"",
     "build": "echo 'Backend build completed'",
     "test": "echo 'No tests specified'",
-    "health": "curl http://localhost:5000/api/health"
+    "health": "curl http://localhost:5000/api/health",
+    "deploy:render": "npm start"
   },
   "dependencies": {
     "axios": "^1.12.2",

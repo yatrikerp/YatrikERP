@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
       host: true,
       proxy: {
         '/api': {
-          target: 'http://localhost:5000',
+          target: env.VITE_BACKEND_URL || env.VITE_API_BASE_URL || 'http://localhost:5000',
           changeOrigin: true,
           secure: false,
           ws: true,

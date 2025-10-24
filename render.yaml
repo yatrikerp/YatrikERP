@@ -1,0 +1,65 @@
+services:
+  # Backend Web Service
+  - type: web
+    name: yatrikerp-backend
+    env: node
+    plan: starter
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRE
+        value: 7d
+      - key: SESSION_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        value: https://yatrik-frontend-app.onrender.com
+      - key: BACKEND_URL
+        value: https://yatrikerp.onrender.com
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        value: https://yatrikerp.onrender.com/api/auth/google/callback
+      - key: CORS_ORIGIN
+        value: https://yatrik-frontend-app.onrender.com,https://yatrikerp.live
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+      - key: EMAIL_PORT
+        value: 587
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+
+  # Frontend Static Site
+  - type: static
+    name: yatrik-frontend-app
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://yatrikerp.onrender.com
+      - key: VITE_API_BASE_URL
+        value: https://yatrikerp.onrender.com
+      - key: VITE_BACKEND_URL
+        value: https://yatrikerp.onrender.com
+      - key: VITE_GOOGLE_MAPS_API_KEY
+        value: AIzaSyAsAkznA2sJF0pp4iAq5H2uqP9FIATjdbk
+      - key: REACT_APP_RAZORPAY_KEY
+        sync: false
+      - key: NODE_ENV
+        value: production
