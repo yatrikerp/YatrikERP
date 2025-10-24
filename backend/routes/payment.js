@@ -137,9 +137,9 @@ router.post('/verify', auth, async (req, res) => {
     transaction.processedAt = new Date();
     await transaction.save();
     
-    // Update booking status
+    // Update booking status and populate trip details with driver/conductor
     const booking = await Booking.findById(transaction.metadata.bookingId)
-      .populate('tripId', 'serviceDate startTime endTime fare capacity')
+      .populate('tripId')
       .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
       .populate('busId', 'busNumber busType')
       .populate('depotId', 'depotName');
@@ -147,24 +147,194 @@ router.post('/verify', auth, async (req, res) => {
     if (booking) {
       booking.status = 'paid';
       booking.paymentStatus = 'completed';
+      booking.paymentReference = booking.paymentReference || {};
       booking.paymentReference.razorpayPaymentId = razorpay_payment_id;
       await booking.save();
       
-      // Queue payment confirmation email for instant processing (non-blocking)
-      const bookingData = {
-        bookingId: booking.bookingId,
-        bookingReference: booking.bookingReference,
-        customer: booking.customer,
-        journey: booking.journey,
-        seats: booking.seats,
-        pricing: booking.pricing,
-        bus: booking.busId,
-        route: booking.routeId,
-        trip: booking.tripId
-      };
+      // Get trip with driver and conductor information
+      const Trip = require('../models/Trip');
+      const trip = await Trip.findById(booking.tripId)
+        .populate('driverId', 'name email phone')
+        .populate('conductorId', 'name email phone');
       
-      queueEmail(booking.customer.email, 'ticketConfirmation', bookingData);
-      console.log('📧 Payment confirmation email queued for:', booking.customer.email);
+      // Generate tickets with QR codes for each seat
+      const seats = Array.isArray(booking.seats) ? booking.seats : [{ 
+        seatNumber: booking.seatNo || 'N/A',
+        passengerName: booking.customer?.name,
+        price: booking.pricing?.totalAmount 
+      }];
+      
+      const ticketsCreated = [];
+      
+      for (const seat of seats) {
+        const seatNumber = seat.seatNumber || booking.seatNo || 'N/A';
+        const passengerName = seat.passengerName || booking.customer?.name || 'Passenger';
+        const pnr = 'YTK' + Math.random().toString(36).slice(2, 7).toUpperCase();
+        
+        // Create QR payload with signature
+        const basePayload = {
+          ver: 1,
+          typ: 'YATRIK_TICKET',
+          pnr,
+          bookingId: booking._id.toString(),
+          tripId: booking.tripId._id.toString(),
+          seatNumber: seatNumber,
+          passengerName,
+          issuedAt: Date.now(),
+          exp: Date.now() + 24 * 60 * 60 * 1000
+        };
+        
+        const signedPayload = attachSignature(basePayload);
+        const qrPayload = JSON.stringify(signedPayload);
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        
+        // Generate ticket number
+        const ticketNumber = `TKT${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+        
+        // Create ticket in database
+        const ticket = await Ticket.create({
+          bookingId: booking._id,
+          pnr,
+          qrPayload,
+          expiresAt,
+          state: 'active',
+          ticketNumber,
+          passengerName,
+          seatNumber: seatNumber,
+          boardingStop: booking.journey?.from || '',
+          destinationStop: booking.journey?.to || '',
+          fareAmount: seat.price || booking.pricing?.totalAmount || 0,
+          tripDetails: {
+            tripId: booking.tripId._id,
+            busNumber: booking.busId?.busNumber || trip?.busId?.busNumber || '',
+            departureTime: trip?.serviceDate ? new Date(`${trip.serviceDate.toISOString().split('T')[0]}T${trip.startTime}:00Z`) : new Date(),
+            arrivalTime: trip?.serviceDate ? new Date(`${trip.serviceDate.toISOString().split('T')[0]}T${trip.endTime}:00Z`) : undefined,
+            routeName: booking.routeId?.routeName || ''
+          },
+          source: 'web'
+        });
+        
+        // Generate QR code image
+        let qrImage = '';
+        try {
+          qrImage = await QRCode.toDataURL(qrPayload, { 
+            errorCorrectionLevel: 'H',
+            type: 'image/png',
+            width: 300,
+            margin: 2
+          });
+          await Ticket.findByIdAndUpdate(ticket._id, { qrImage });
+        } catch (qrError) {
+          console.error('QR code generation error:', qrError);
+        }
+        
+        // Prepare ticket data for email with EXACT passenger booking details
+        const ticketData = {
+          ticketNumber,
+          pnr,
+          passengerName,
+          seatNumber,
+          // Use exact journey details from booking (passenger-selected)
+          boardingStop: booking.journey?.from || '',
+          destinationStop: booking.journey?.to || '',
+          fareAmount: seat.price || booking.pricing?.totalAmount || 0,
+          qrPayload,
+          qrImage,
+          bookingId: booking.bookingId || booking.bookingReference,
+          bookingReference: booking.bookingReference,
+          customer: {
+            name: booking.customer?.name || passengerName,
+            email: booking.customer?.email || '',
+            phone: booking.customer?.phone || ''
+          },
+          // Include complete journey information from passenger booking
+          journey: {
+            from: booking.journey?.from || '',
+            to: booking.journey?.to || '',
+            departureDate: booking.journey?.departureDate || new Date(),
+            departureTime: booking.journey?.departureTime || '',
+            arrivalDate: booking.journey?.arrivalDate,
+            arrivalTime: booking.journey?.arrivalTime,
+            duration: booking.journey?.duration
+          },
+          // Include seat details
+          seat: {
+            number: seatNumber,
+            type: seat.seatType || 'seater',
+            position: seat.seatPosition || '',
+            floor: seat.floor || 'lower'
+          },
+          // Include pricing breakdown
+          pricing: {
+            baseFare: booking.pricing?.baseFare || 0,
+            seatFare: booking.pricing?.seatFare || 0,
+            gst: booking.pricing?.taxes?.gst || 0,
+            totalAmount: booking.pricing?.totalAmount || 0
+          },
+          // Booking summary
+          bookingSummary: {
+            totalPassengers: seats.length,
+            allPassengers: seats.map(s => s.passengerName || 'Passenger'),
+            totalSeats: seats.length,
+            seatNumbers: seats.map(s => s.seatNumber)
+          },
+          tripDetails: {
+            tripId: booking.tripId._id,
+            busNumber: booking.busId?.busNumber || '',
+            busType: booking.busId?.busType || '',
+            routeName: booking.routeId?.routeName || `${booking.journey?.from} - ${booking.journey?.to}`,
+            departureTime: booking.journey?.departureDate || new Date(),
+            arrivalTime: booking.journey?.arrivalDate
+          },
+          route: {
+            name: booking.routeId?.routeName || '',
+            number: booking.routeId?.routeNumber || '',
+            startingPoint: booking.routeId?.startingPoint || booking.journey?.from,
+            endingPoint: booking.routeId?.endingPoint || booking.journey?.to
+          },
+          bus: {
+            number: booking.busId?.busNumber || '',
+            type: booking.busId?.busType || ''
+          },
+          depot: {
+            name: booking.depotId?.depotName || ''
+          },
+          driver: trip?.driverId ? {
+            name: trip.driverId.name,
+            email: trip.driverId.email,
+            phone: trip.driverId.phone
+          } : null,
+          conductor: trip?.conductorId ? {
+            name: trip.conductorId.name,
+            email: trip.conductorId.email,
+            phone: trip.conductorId.phone
+          } : null
+        };
+        
+        ticketsCreated.push(ticketData);
+      }
+      
+      // Send ticket email with QR code to passenger
+      if (ticketsCreated.length > 0 && booking.customer?.email) {
+        try {
+          // Send one email with the first ticket (or you can send all tickets)
+          const emailResult = await sendEmail(
+            booking.customer.email, 
+            'ticketConfirmationWithQR', 
+            ticketsCreated[0]
+          );
+          
+          console.log(`✅ Ticket email sent to ${booking.customer.email}:`, emailResult.success);
+          
+          // Mark email as sent in booking
+          booking.notifications = booking.notifications || {};
+          booking.notifications.emailSent = true;
+          await booking.save();
+        } catch (emailError) {
+          console.error('❌ Email sending error:', emailError);
+          // Don't fail the payment if email fails
+        }
+      }
     }
     
     // Log audit
@@ -192,6 +362,7 @@ router.post('/verify', auth, async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Payment verification error:', error);
     res.status(500).json({ message: 'Error verifying payment', error: error.message });
   }
 });
@@ -378,7 +549,12 @@ router.post('/mock', auth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'bookingId is required' });
     }
 
-    const booking = await Booking.findById(bookingId).populate('tripId');
+    const booking = await Booking.findById(bookingId)
+      .populate('tripId')
+      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+      .populate('busId', 'busNumber busType')
+      .populate('depotId', 'depotName');
+      
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
@@ -392,9 +568,22 @@ router.post('/mock', auth, async (req, res) => {
     booking.paymentReference.mockPaymentId = `mock_${Date.now()}`;
     await booking.save();
 
+    // Get trip with driver and conductor information
+    const Trip = require('../models/Trip');
+    const trip = await Trip.findById(booking.tripId)
+      .populate('driverId', 'name email phone')
+      .populate('conductorId', 'name email phone');
+
     // Create one ticket per booked seat with correct passengerName
-    const seats = Array.isArray(booking.seats) ? booking.seats : [];
+    const seats = Array.isArray(booking.seats) ? booking.seats : [{
+      seatNumber: booking.seatNo || 'N/A',
+      passengerName: booking.customer?.name,
+      price: booking.pricing?.totalAmount
+    }];
+    
     const createdTickets = [];
+    const ticketsData = [];
+    
     for (const seat of seats) {
       const seatNumber = seat.seatNumber || booking.seatNo || '';
       const passengerName = seat.passengerName || booking.customer?.name || 'Passenger';
@@ -429,27 +618,134 @@ router.post('/mock', auth, async (req, res) => {
         fareAmount: seat.price || booking.pricing?.totalAmount || 0,
         tripDetails: {
           tripId: booking.tripId?._id || booking.tripId,
-          busNumber: booking.tripId?.busNumber || '',
-          departureTime: booking.tripId?.startTime ? new Date(`2000-01-01T${booking.tripId.startTime}:00Z`) : undefined,
-          arrivalTime: undefined,
-          routeName: ''
+          busNumber: booking.busId?.busNumber || trip?.busId?.busNumber || '',
+          departureTime: trip?.serviceDate ? new Date(`${trip.serviceDate.toISOString().split('T')[0]}T${trip.startTime}:00Z`) : new Date(),
+          arrivalTime: trip?.serviceDate ? new Date(`${trip.serviceDate.toISOString().split('T')[0]}T${trip.endTime}:00Z`) : undefined,
+          routeName: booking.routeId?.routeName || ''
         },
         source: 'web'
       });
 
       // Generate QR image (data URL)
+      let qrImage = '';
       try {
-        const qrImage = await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M' });
+        qrImage = await QRCode.toDataURL(payload, { 
+          errorCorrectionLevel: 'H',
+          type: 'image/png',
+          width: 300,
+          margin: 2
+        });
         await Ticket.findByIdAndUpdate(ticket._id, { qrImage });
       } catch (e) {
-        // Non-fatal
+        console.error('QR generation error:', e);
       }
 
       createdTickets.push({ ticket, pnr, qrPayload: payload });
+      
+      // Prepare ticket data for email with EXACT passenger booking details
+      const ticketData = {
+        ticketNumber,
+        pnr,
+        passengerName,
+        seatNumber,
+        // Use exact journey details from booking (passenger-selected)
+        boardingStop: booking.journey?.from || '',
+        destinationStop: booking.journey?.to || '',
+        fareAmount: seat.price || booking.pricing?.totalAmount || 0,
+        qrPayload: payload,
+        qrImage,
+        bookingId: booking.bookingId || booking.bookingReference,
+        bookingReference: booking.bookingReference,
+        customer: {
+          name: booking.customer?.name || passengerName,
+          email: booking.customer?.email || '',
+          phone: booking.customer?.phone || ''
+        },
+        // Include complete journey information from passenger booking
+        journey: {
+          from: booking.journey?.from || '',
+          to: booking.journey?.to || '',
+          departureDate: booking.journey?.departureDate || new Date(),
+          departureTime: booking.journey?.departureTime || '',
+          arrivalDate: booking.journey?.arrivalDate,
+          arrivalTime: booking.journey?.arrivalTime,
+          duration: booking.journey?.duration
+        },
+        // Include seat details
+        seat: {
+          number: seatNumber,
+          type: seat.seatType || 'seater',
+          position: seat.seatPosition || '',
+          floor: seat.floor || 'lower'
+        },
+        // Include pricing breakdown
+        pricing: {
+          baseFare: booking.pricing?.baseFare || 0,
+          seatFare: booking.pricing?.seatFare || 0,
+          gst: booking.pricing?.taxes?.gst || 0,
+          totalAmount: booking.pricing?.totalAmount || 0
+        },
+        tripDetails: {
+          tripId: booking.tripId._id,
+          busNumber: booking.busId?.busNumber || '',
+          busType: booking.busId?.busType || '',
+          routeName: booking.routeId?.routeName || `${booking.journey?.from} - ${booking.journey?.to}`,
+          departureTime: booking.journey?.departureDate || new Date(),
+          arrivalTime: booking.journey?.arrivalDate
+        },
+        route: {
+          name: booking.routeId?.routeName || '',
+          number: booking.routeId?.routeNumber || '',
+          startingPoint: booking.routeId?.startingPoint || booking.journey?.from,
+          endingPoint: booking.routeId?.endingPoint || booking.journey?.to
+        },
+        bus: {
+          number: booking.busId?.busNumber || '',
+          type: booking.busId?.busType || ''
+        },
+        depot: {
+          name: booking.depotId?.depotName || ''
+        },
+        driver: trip?.driverId ? {
+          name: trip.driverId.name,
+          email: trip.driverId.email,
+          phone: trip.driverId.phone
+        } : null,
+        conductor: trip?.conductorId ? {
+          name: trip.conductorId.name,
+          email: trip.conductorId.email,
+          phone: trip.conductorId.phone
+        } : null
+      };
+      
+      ticketsData.push(ticketData);
+    }
+
+    // Send ticket email with QR code to passenger
+    if (ticketsData.length > 0 && booking.customer?.email) {
+      try {
+        // Send email with the first ticket (you can customize to send all)
+        const emailResult = await sendEmail(
+          booking.customer.email, 
+          'ticketConfirmationWithQR', 
+          ticketsData[0]
+        );
+        
+        console.log(`✅ Ticket email sent to ${booking.customer.email}:`, emailResult.success);
+        
+        // Mark email as sent in booking
+        booking.notifications = booking.notifications || {};
+        booking.notifications.emailSent = true;
+        await booking.save();
+      } catch (emailError) {
+        console.error('❌ Email sending error:', emailError);
+        // Don't fail the payment if email fails
+      }
     }
 
     return res.json({ success: true, data: { tickets: createdTickets } });
   } catch (error) {
+    console.error('Mock payment error:', error);
     return res.status(500).json({ success: false, message: 'Mock payment failed', error: error.message });
   }
 });

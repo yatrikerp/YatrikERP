@@ -219,6 +219,244 @@ const emailTemplates = {
     `
   }),
 
+  ticketConfirmationWithQR: async (ticketData) => {
+    const QRCode = require('qrcode');
+    
+    // Normalize and format data - use EXACT passenger booking details
+    const t = ticketData || {};
+    const bookingId = t.bookingId || t.bookingReference || 'N/A';
+    const customerName = t.passengerName || t.customer?.name || 'Passenger';
+    const customerEmail = t.customer?.email || 'N/A';
+    const customerPhone = t.customer?.phone || 'N/A';
+    
+    // Use EXACT boarding and destination from passenger booking
+    const fromCity = t.boardingStop || t.journey?.from || 'N/A';
+    const toCity = t.destinationStop || t.journey?.to || 'N/A';
+    
+    // Use EXACT departure date and time from passenger booking
+    const rawDate = t.journey?.departureDate;
+    const dateStr = rawDate ? new Date(rawDate).toLocaleDateString('en-IN', { 
+      weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' 
+    }) : 'N/A';
+    
+    // Use booking departure time (exact time passenger selected)
+    const timeStr = t.journey?.departureTime || 'N/A';
+    
+    // Arrival information from booking
+    const arrivalDateStr = t.journey?.arrivalDate ? new Date(t.journey.arrivalDate).toLocaleDateString('en-IN', { 
+      weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' 
+    }) : 'As per schedule';
+    const arrivalTimeStr = t.journey?.arrivalTime || 'As per schedule';
+    
+    // Journey duration
+    const durationMinutes = t.journey?.duration || 0;
+    const durationHours = Math.floor(durationMinutes / 60);
+    const durationMins = durationMinutes % 60;
+    const durationStr = durationMinutes > 0 
+      ? `${durationHours}h ${durationMins}m` 
+      : 'As scheduled';
+    
+    const busNumber = t.bus?.number || t.tripDetails?.busNumber || 'N/A';
+    const busType = t.bus?.type || t.tripDetails?.busType || '';
+    const routeName = t.route?.name || t.tripDetails?.routeName || `${fromCity} - ${toCity}`;
+    const seatNumber = t.seatNumber || t.seat?.number || 'N/A';
+    const seatType = t.seat?.type || 'Standard';
+    const seatPosition = t.seat?.position || '';
+    const pnr = t.pnr || bookingId;
+    const ticketNumber = t.ticketNumber || 'N/A';
+    
+    // Pricing details
+    const fareAmount = t.fareAmount || t.pricing?.totalAmount || 0;
+    const baseFare = t.pricing?.baseFare || 0;
+    const gst = t.pricing?.gst || 0;
+    
+    // Driver and Conductor information
+    const driverName = t.driver?.name || 'To be assigned';
+    const driverEmail = t.driver?.email || 'N/A';
+    const driverPhone = t.driver?.phone || 'N/A';
+    
+    const conductorName = t.conductor?.name || 'To be assigned';
+    const conductorEmail = t.conductor?.email || 'N/A';
+    const conductorPhone = t.conductor?.phone || 'N/A';
+    
+    // Booking summary - total passengers in this booking
+    const totalPassengers = t.bookingSummary?.totalPassengers || 1;
+    const allPassengers = t.bookingSummary?.allPassengers || [customerName];
+    const allSeatNumbers = t.bookingSummary?.seatNumbers || [seatNumber];
+    
+    // Generate QR Code
+    let qrCodeDataURL = t.qrImage || '';
+    if (!qrCodeDataURL && t.qrPayload) {
+      try {
+        qrCodeDataURL = await QRCode.toDataURL(t.qrPayload, {
+          errorCorrectionLevel: 'H',
+          type: 'image/png',
+          width: 300,
+          margin: 2
+        });
+      } catch (err) {
+        console.error('QR generation error:', err);
+        qrCodeDataURL = '';
+      }
+    }
+    
+    const currencyFormat = (amt) => {
+      if (amt === undefined || amt === null || isNaN(Number(amt))) return '0.00';
+      return Number(amt).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+    
+    const subject = `🎫 Your YATRIK Bus Ticket - ${pnr} | ${fromCity} to ${toCity}`;
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 680px; margin: 0 auto; background: #f5f5f5; padding: 20px;">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #E91E63, #9C27B0); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
+          <div style="font-size: 48px; margin-bottom: 10px;">🎫</div>
+          <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">Ticket Confirmed!</h1>
+          <p style="color: #f3e5f5; margin: 8px 0 0 0; font-size: 16px;">Your bus ticket is ready</p>
+        </div>
+
+        <!-- Main Content -->
+        <div style="background: #ffffff; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+          
+          <!-- Ticket Card -->
+          <div style="border: 2px dashed #E91E63; border-radius: 12px; padding: 24px; margin-bottom: 24px; background: #fef5f8;">
+            <div style="text-align: center; margin-bottom: 20px;">
+              <h2 style="color: #E91E63; margin: 0 0 8px 0; font-size: 22px;">PNR: ${pnr}</h2>
+              <p style="color: #666; margin: 0; font-size: 13px;">Ticket #${ticketNumber}</p>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: center; margin: 20px 0;">
+              <div style="text-align: center;">
+                <p style="margin: 0; color: #999; font-size: 12px; text-transform: uppercase;">Boarding From</p>
+                <p style="margin: 4px 0; color: #E91E63; font-size: 20px; font-weight: 700;">${fromCity}</p>
+                <p style="margin: 0; color: #666; font-size: 13px;">${dateStr}</p>
+                <p style="margin: 0; color: #666; font-size: 14px; font-weight: 600;">${timeStr}</p>
+              </div>
+              <div style="text-align: center;">
+                <div style="color: #E91E63; font-size: 24px;">→</div>
+                <p style="margin: 4px 0; color: #999; font-size: 11px;">${durationStr}</p>
+              </div>
+              <div style="text-align: center;">
+                <p style="margin: 0; color: #999; font-size: 12px; text-transform: uppercase;">Arriving At</p>
+                <p style="margin: 4px 0; color: #E91E63; font-size: 20px; font-weight: 700;">${toCity}</p>
+                <p style="margin: 0; color: #666; font-size: 13px;">${arrivalDateStr}</p>
+                <p style="margin: 0; color: #666; font-size: 13px;">${arrivalTimeStr}</p>
+              </div>
+            </div>
+            
+            <div style="background: #ffffff; border-radius: 8px; padding: 16px; margin-top: 16px;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div>
+                  <p style="margin: 0; color: #999; font-size: 11px; text-transform: uppercase;">Passenger</p>
+                  <p style="margin: 4px 0 0 0; color: #333; font-size: 15px; font-weight: 600;">${customerName}</p>
+                </div>
+                <div>
+                  <p style="margin: 0; color: #999; font-size: 11px; text-transform: uppercase;">Seat Number</p>
+                  <p style="margin: 4px 0 0 0; color: #E91E63; font-size: 18px; font-weight: 700;">${seatNumber}</p>
+                  ${seatType !== 'Standard' ? `<p style="margin: 2px 0 0 0; color: #666; font-size: 11px;">${seatType}${seatPosition ? ' - ' + seatPosition : ''}</p>` : ''}
+                </div>
+                <div>
+                  <p style="margin: 0; color: #999; font-size: 11px; text-transform: uppercase;">Bus Number</p>
+                  <p style="margin: 4px 0 0 0; color: #333; font-size: 15px; font-weight: 600;">${busNumber}</p>
+                  ${busType ? `<p style="margin: 2px 0 0 0; color: #666; font-size: 11px;">${busType}</p>` : ''}
+                </div>
+                <div>
+                  <p style="margin: 0; color: #999; font-size: 11px; text-transform: uppercase;">Fare Paid</p>
+                  <p style="margin: 4px 0 0 0; color: #00A86B; font-size: 18px; font-weight: 700;">₹${currencyFormat(fareAmount)}</p>
+                  ${gst > 0 ? `<p style="margin: 2px 0 0 0; color: #666; font-size: 11px;">(incl. GST ₹${currencyFormat(gst)})</p>` : ''}
+                </div>
+              </div>
+              ${routeName !== `${fromCity} - ${toCity}` ? `
+              <div style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e0e0e0;">
+                <p style="margin: 0; color: #999; font-size: 11px; text-transform: uppercase;">Route</p>
+                <p style="margin: 4px 0 0 0; color: #333; font-size: 13px; font-weight: 600;">${routeName}</p>
+              </div>
+              ` : ''}
+            </div>
+          </div>
+
+          ${qrCodeDataURL ? `
+          <!-- QR Code Section -->
+          <div style="background: linear-gradient(135deg, #f8f9fa, #e9ecef); border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px;">
+            <h3 style="color: #333; margin: 0 0 8px 0; font-size: 18px; font-weight: 600;">🔍 Scan QR Code for Boarding</h3>
+            <p style="color: #666; margin: 0 0 16px 0; font-size: 13px;">Show this QR code to the conductor for verification</p>
+            <div style="background: #ffffff; display: inline-block; padding: 16px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+              <img src="${qrCodeDataURL}" alt="Ticket QR Code" style="width: 240px; height: 240px; display: block;" />
+            </div>
+            <p style="color: #999; margin: 12px 0 0 0; font-size: 11px; font-style: italic;">This QR code is unique and secure</p>
+          </div>
+          ` : ''}
+
+          <!-- Crew Information -->
+          <div style="background: #f0f4ff; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+            <h3 style="color: #1976D2; margin: 0 0 16px 0; font-size: 18px; font-weight: 600; display: flex; align-items: center;">
+              <span style="margin-right: 8px;">👨‍✈️</span> Crew Information
+            </h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div style="background: #ffffff; border-radius: 8px; padding: 14px;">
+                <p style="margin: 0 0 8px 0; color: #1976D2; font-size: 12px; font-weight: 600; text-transform: uppercase;">🚗 Driver</p>
+                <p style="margin: 0 0 4px 0; color: #333; font-size: 15px; font-weight: 600;">${driverName}</p>
+                ${driverEmail !== 'N/A' ? `<p style="margin: 0; color: #666; font-size: 12px;">📧 ${driverEmail}</p>` : ''}
+                ${driverPhone !== 'N/A' ? `<p style="margin: 0; color: #666; font-size: 12px;">📱 ${driverPhone}</p>` : ''}
+              </div>
+              <div style="background: #ffffff; border-radius: 8px; padding: 14px;">
+                <p style="margin: 0 0 8px 0; color: #1976D2; font-size: 12px; font-weight: 600; text-transform: uppercase;">🎫 Conductor</p>
+                <p style="margin: 0 0 4px 0; color: #333; font-size: 15px; font-weight: 600;">${conductorName}</p>
+                ${conductorEmail !== 'N/A' ? `<p style="margin: 0; color: #666; font-size: 12px;">📧 ${conductorEmail}</p>` : ''}
+                ${conductorPhone !== 'N/A' ? `<p style="margin: 0; color: #666; font-size: 12px;">📱 ${conductorPhone}</p>` : ''}
+              </div>
+            </div>
+          </div>
+
+          <!-- Important Instructions -->
+          <div style="background: #fff8e1; border-left: 4px solid #FFC107; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+            <h4 style="color: #F57C00; margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">⚠️ Important Instructions</h4>
+            <ul style="color: #5D4037; margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.8;">
+              <li>Report at the boarding point <strong>15 minutes before departure</strong></li>
+              <li>Carry a <strong>valid photo ID proof</strong> for verification</li>
+              <li>Show this <strong>QR code to the conductor</strong> for seat allocation</li>
+              <li>The conductor will scan and verify your ticket before boarding</li>
+              <li>Keep your mobile phone <strong>charged</strong> to display the QR code</li>
+              <li>Save this email or take a screenshot of the QR code</li>
+            </ul>
+          </div>
+
+          <!-- Contact Information -->
+          <div style="background: #e8f5e9; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+            <h4 style="color: #2E7D32; margin: 0 0 8px 0; font-size: 14px; font-weight: 600;">📞 Need Help?</h4>
+            <p style="color: #558B2F; margin: 0; font-size: 13px; line-height: 1.6;">
+              For any queries or assistance, please contact our support team or reach out to the crew members listed above.
+            </p>
+          </div>
+
+          <!-- CTA Buttons -->
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/passenger/dashboard" 
+               style="background: linear-gradient(135deg, #E91E63, #9C27B0); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 24px; display: inline-block; font-weight: 700; font-size: 14px; margin: 0 8px; box-shadow: 0 4px 12px rgba(233, 30, 99, 0.3);">
+              📱 View My Bookings
+            </a>
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/support" 
+               style="background: #ffffff; color: #E91E63; padding: 14px 28px; text-decoration: none; border-radius: 24px; display: inline-block; font-weight: 700; font-size: 14px; margin: 0 8px; border: 2px solid #E91E63;">
+              💬 Get Support
+            </a>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="background: #263238; padding: 24px; text-align: center; border-radius: 12px; margin-top: 20px;">
+          <p style="color: #B0BEC5; margin: 0 0 8px 0; font-size: 13px;">This is an automated confirmation email. Please do not reply.</p>
+          <p style="color: #78909C; margin: 0 0 12px 0; font-size: 12px;">&copy; ${new Date().getFullYear()} YATRIK ERP. All rights reserved.</p>
+          <div style="margin-top: 12px;">
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}" style="color: #E91E63; text-decoration: none; margin: 0 12px; font-size: 12px;">Website</a>
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/terms" style="color: #E91E63; text-decoration: none; margin: 0 12px; font-size: 12px;">Terms</a>
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/privacy" style="color: #E91E63; text-decoration: none; margin: 0 12px; font-size: 12px;">Privacy</a>
+          </div>
+        </div>
+      </div>`;
+
+    return { subject, html };
+  },
+
   ticketConfirmation: (bookingData) => {
     // Normalize and format data defensively to ensure accurate content
     const d = bookingData || {};
@@ -410,6 +648,10 @@ const sendEmail = async (to, templateOrHTML, dataOrSubject = {}) => {
             break;
           case 'ticketConfirmation':
             emailContent = emailTemplates[template](data);
+            break;
+          case 'ticketConfirmationWithQR':
+            // This is an async function, so we need to await it
+            emailContent = await emailTemplates[template](data);
             break;
           default:
             throw new Error(`Unknown email template: ${template}`);

@@ -208,10 +208,12 @@ app.use('/api/bus-schedule', require('./routes/busSchedule'));
 app.use('/api/driver', require('./routes/driver'));
 app.use('/api/conductor', require('./routes/conductor'));
 app.use('/api/staff', require('./routes/staff'));
+app.use('/api/payment', require('./routes/payment'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/seats', require('./routes/seats'));
 app.use('/api/tracking', require('./routes/tracking'));
 app.use('/api/booking', require('./routes/booking'));
+app.use('/api/booking', require('./routes/ticketPNR')); // Ticket PNR lookup endpoint
 app.use('/api/routes', require('./routes/routes'));
 app.use('/api/trips', require('./routes/trips'));
 app.use('/api/stops', require('./routes/stops'));
@@ -230,6 +232,7 @@ app.use('/api/bulk-scheduler', require('./routes/bulkTripScheduler-fixed'));
 app.use('/api/support', require('./routes/support'));
 app.use('/api/data-collector', require('./routes/dataCollector'));
 app.use('/api/fuel', require('./routes/fuel'));
+app.use('/api/ai', require('./routes/mlAnalytics'));
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {

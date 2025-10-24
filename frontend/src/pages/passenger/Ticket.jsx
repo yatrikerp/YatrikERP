@@ -62,7 +62,7 @@ const PassengerTicket = () => {
             passengerGender: bookingData.customer?.gender || '',
             from: bookingData.journey?.from || bookingData.trip?.routeId?.startingPoint?.city || 'Kochi',
             to: bookingData.journey?.to || bookingData.trip?.routeId?.endingPoint?.city || 'Thiruvananthapuram',
-            routeName: bookingData.trip?.routeId?.routeName || `${bookingData.journey?.from || 'Kochi'} to ${bookingData.journey?.to || 'Thiruvananthapuram'}`,
+            routeName: bookingData.trip?.routeId?.routeName || bookingData.route?.routeName || `${bookingData.journey?.from || 'Kochi'} to ${bookingData.journey?.to || 'Thiruvananthapuram'}`,
             departureDate: bookingData.journey?.departureDate || new Date().toISOString().split('T')[0],
             departureTime: bookingData.journey?.departureTime || '08:00',
             arrivalTime: bookingData.journey?.arrivalTime || '14:00',
@@ -72,13 +72,16 @@ const PassengerTicket = () => {
             droppingPoint: bookingData.journey?.droppingPoint || bookingData.trip?.routeId?.endingPoint?.location || 'Central Bus Stand',
             busNumber: bookingData.bus?.busNumber || bookingData.trip?.busId?.busNumber || 'KL-07-AB-1234',
             busType: bookingData.bus?.busType || bookingData.trip?.busId?.busType || 'AC Sleeper',
+            // Add conductor and driver details
+            conductor: bookingData.conductor || null,
+            driver: bookingData.driver || null,
             qrData: JSON.stringify({
               pnr: pnr,
               bookingId: bookingData.bookingId,
               passengerName: bookingData.customer?.name || 'Guest Passenger',
               from: bookingData.journey?.from || bookingData.trip?.routeId?.startingPoint?.city || 'Kochi',
               to: bookingData.journey?.to || bookingData.trip?.routeId?.endingPoint?.city || 'Thiruvananthapuram',
-              routeName: bookingData.trip?.routeId?.routeName || `${bookingData.journey?.from || 'Kochi'} to ${bookingData.journey?.to || 'Thiruvananthapuram'}`,
+              routeName: bookingData.trip?.routeId?.routeName || bookingData.route?.routeName || `${bookingData.journey?.from || 'Kochi'} to ${bookingData.journey?.to || 'Thiruvananthapuram'}`,
               departureDate: bookingData.journey?.departureDate || new Date().toISOString().split('T')[0],
               departureTime: bookingData.journey?.departureTime || '08:00',
               seatNumbers: bookingData.seats?.map(s => s.seatNumber).join(', ') || 'U1',
@@ -630,6 +633,111 @@ Please present this ticket at boarding.
               </div>
             </div>
           </div>
+
+          {/* Crew Information Card */}
+          {(ticket.conductor || ticket.driver) && (
+            <div className="lg:col-span-2">
+              <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl shadow-sm border border-indigo-200 p-5">
+                <h3 className="font-semibold text-indigo-900 mb-4 flex items-center gap-2">
+                  <Bus className="w-5 h-5 text-indigo-600" />
+                  Crew Information
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Driver Details */}
+                  {ticket.driver && (
+                    <div className="bg-white rounded-lg p-4 border border-indigo-100">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                          <span className="text-indigo-600 font-semibold text-lg">🚗</span>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 uppercase font-medium">Driver</div>
+                          <div className="font-semibold text-gray-900">{ticket.driver.name}</div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {ticket.driver.phone && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <span className="text-indigo-600">📞</span>
+                            <span>{ticket.driver.phone}</span>
+                          </div>
+                        )}
+                        {ticket.driver.email && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <span className="text-indigo-600">📧</span>
+                            <span className="truncate">{ticket.driver.email}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Conductor Details */}
+                  {ticket.conductor && (
+                    <div className="bg-white rounded-lg p-4 border border-indigo-100">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                          <span className="text-blue-600 font-semibold text-lg">🎫</span>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 uppercase font-medium">Conductor</div>
+                          <div className="font-semibold text-gray-900">{ticket.conductor.name}</div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {ticket.conductor.phone && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <span className="text-blue-600">📞</span>
+                            <span>{ticket.conductor.phone}</span>
+                          </div>
+                        )}
+                        {ticket.conductor.email && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <span className="text-blue-600">📧</span>
+                            <span className="truncate">{ticket.conductor.email}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* If only one crew member, show a placeholder */}
+                  {!ticket.driver && ticket.conductor && (
+                    <div className="bg-white rounded-lg p-4 border border-gray-200 opacity-50">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                          <span className="text-gray-400 font-semibold text-lg">🚗</span>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-400 uppercase font-medium">Driver</div>
+                          <div className="font-medium text-gray-400">To be assigned</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {!ticket.conductor && ticket.driver && (
+                    <div className="bg-white rounded-lg p-4 border border-gray-200 opacity-50">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                          <span className="text-gray-400 font-semibold text-lg">🎫</span>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-400 uppercase font-medium">Conductor</div>
+                          <div className="font-medium text-gray-400">To be assigned</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-4 bg-indigo-100 rounded-lg p-3">
+                  <p className="text-xs text-indigo-800">
+                    <strong>Note:</strong> The crew will verify your QR code before boarding. Please have your ticket ready.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Instructions */}

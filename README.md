@@ -215,6 +215,72 @@ Fully responsive design works seamlessly on all devices.
 
 ---
 
+## 🤖 AI/ML Integration (NEW!)
+
+### Machine Learning Models
+
+YATRIK ERP now includes **5 production-ready ML models** for intelligent transport analytics:
+
+#### 1. 📈 KNN - Passenger Demand Prediction
+- **Purpose:** Forecast passenger count for optimal bus allocation
+- **Accuracy:** R² Score ~0.82
+- **Use Case:** Reduce empty seats and overcrowding
+
+#### 2. 🏆 Naive Bayes - Route Performance Classification
+- **Purpose:** Categorize routes as High/Medium/Low performers
+- **Accuracy:** ~75%
+- **Use Case:** Identify underperforming routes for optimization
+
+#### 3. ⏱️ Decision Tree - Trip Delay Prediction
+- **Purpose:** Predict whether trips will be on-time or delayed
+- **Accuracy:** ~78%
+- **Use Case:** Improve scheduling and reduce delays
+
+#### 4. 🎯 SVM - Route Optimization Suggestion
+- **Purpose:** Identify routes needing optimization
+- **Accuracy:** ~72%
+- **Use Case:** Data-driven route improvement recommendations
+
+#### 5. ⚖️ Neural Network - Crew Load Balancing
+- **Purpose:** Predict crew fitness for optimal workload distribution
+- **Accuracy:** R² Score ~0.85
+- **Use Case:** Prevent crew fatigue, improve safety
+
+### ML Features
+
+✅ **Flask Microservice** - Separate ML service for model execution  
+✅ **REST API Integration** - 14 endpoints for model operations  
+✅ **React Dashboard** - Interactive ML analytics visualization  
+✅ **Real-time Charts** - Matplotlib/Seaborn visualizations  
+✅ **MongoDB Integration** - Results saved to ml_reports collection  
+✅ **Admin Access** - Secure JWT-based authentication  
+
+### Quick ML Start
+
+```bash
+# Install ML dependencies
+cd backend/ml_models
+pip install -r requirements.txt
+
+# Start ML service
+cd ..
+python ml_service.py
+
+# Run all models
+curl -X POST http://localhost:5000/run_all
+```
+
+### ML Documentation
+
+| Document | Description |
+|----------|-------------|
+| 📘 **ML Integration Guide** | Complete setup and usage | [Read](./ML_INTEGRATION_GUIDE.md) |
+| 📊 **ML Project Summary** | Models overview and architecture | [Read](./ML_PROJECT_SUMMARY.md) |
+| ⚡ **ML Quick Reference** | Commands and API reference | [Read](./ML_QUICK_REFERENCE.md) |
+| 📝 **ML Final Report** | Complete implementation report | [Read](./ML_PROJECT_FINAL_REPORT.md) |
+
+---
+
 ## 🌐 Deployment
 
 ### Quick Deploy Options
