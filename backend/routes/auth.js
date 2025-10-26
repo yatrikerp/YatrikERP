@@ -890,6 +890,11 @@ router.get('/me', async (req, res) => {
 // OAuth routes - RESTRICTED TO PASSENGERS ONLY
 // Staff members (conductors, drivers, depot managers, admins) must use email/password authentication
 router.get('/google', (req, res, next) => {
+  // Determine redirect URL based on environment
+  const redirectURL = process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:3000'
+    : (process.env.FRONTEND_URL || 'https://yatrikerp.live');
+  
   // Pass the 'next' parameter directly to Google OAuth
   const nextParam = req.query.next || '/pax';
   passport.authenticate('google', { 
@@ -900,8 +905,20 @@ router.get('/google', (req, res, next) => {
 
 const oauthConfig = require('../config/oauth');
 
-router.get('/google/callback', passport.authenticate('google', { failureRedirect: oauthConfig.frontendURL + '/login' }), async (req, res) => {
+router.get('/google/callback', (req, res, next) => {
+  // Determine redirect URL based on environment
+  const redirectURL = process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:3000'
+    : (process.env.FRONTEND_URL || 'https://yatrikerp.live');
+  
+  passport.authenticate('google', { failureRedirect: `${redirectURL}/login` })(req, res, next);
+}, async (req, res) => {
   try {
+    // Determine redirect URL based on environment
+    const redirectURL = process.env.NODE_ENV === 'development' 
+      ? 'http://localhost:3000'
+      : (process.env.FRONTEND_URL || 'https://yatrikerp.live');
+    
     const user = req.user;
     
     // Generate JWT token instantly
@@ -928,11 +945,14 @@ router.get('/google/callback', passport.authenticate('google', { failureRedirect
     const userParam = encodeURIComponent(JSON.stringify({ ...user.toObject(), password: undefined }));
     
     // Instant redirect with all data
-    const redirectUrl = `${oauthConfig.frontendURL}/oauth/callback?token=${encodeURIComponent(token)}&user=${userParam}&next=${encodeURIComponent(nextParam)}`;
+    const redirectUrl = `${redirectURL}/oauth/callback?token=${encodeURIComponent(token)}&user=${userParam}&next=${encodeURIComponent(nextParam)}`;
     res.redirect(redirectUrl);
   } catch (err) {
     console.error('Google OAuth callback error:', err);
-    res.redirect(oauthConfig.frontendURL + '/login');
+    const redirectURL = process.env.NODE_ENV === 'development' 
+      ? 'http://localhost:3000'
+      : (process.env.FRONTEND_URL || 'https://yatrikerp.live');
+    res.redirect(`${redirectURL}/login`);
   }
 });
 
@@ -974,8 +994,20 @@ router.get('/microsoft', (req, res, next) => {
   passport.authenticate('microsoft')(req, res, next);
 });
 
-router.get('/microsoft/callback', passport.authenticate('microsoft', { failureRedirect: oauthConfig.frontendURL + '/login' }), async (req, res) => {
+router.get('/microsoft/callback', (req, res, next) => {
+  // Determine redirect URL based on environment
+  const redirectURL = process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:3000'
+    : (process.env.FRONTEND_URL || 'https://yatrikerp.live');
+  
+  passport.authenticate('microsoft', { failureRedirect: `${redirectURL}/login` })(req, res, next);
+}, async (req, res) => {
   try {
+    // Determine redirect URL based on environment
+    const redirectURL = process.env.NODE_ENV === 'development' 
+      ? 'http://localhost:3000'
+      : (process.env.FRONTEND_URL || 'https://yatrikerp.live');
+    
     const user = req.user;
     const token = jwt.sign({ 
       userId: user._id, 
@@ -986,13 +1018,16 @@ router.get('/microsoft/callback', passport.authenticate('microsoft', { failureRe
     const userParam = encodeURIComponent(JSON.stringify({ ...user.toObject(), password: undefined }));
     
     // Get the stored 'next' parameter from session
-    const nextParam = req.session.oauthNext || 'pax';
+    const nextParam = req.session.oauthNext || '/pax';
     delete req.session.oauthNext; // Clean up session
     
-    const redirectUrl = `${oauthConfig.frontendURL}/oauth/callback?token=${encodeURIComponent(token)}&user=${userParam}&next=${encodeURIComponent(nextParam)}`;
+    const redirectUrl = `${redirectURL}/oauth/callback?token=${encodeURIComponent(token)}&user=${userParam}&next=${encodeURIComponent(nextParam)}`;
     res.redirect(redirectUrl);
   } catch (err) {
-    res.redirect(oauthConfig.frontendURL + '/login');
+    const redirectURL = process.env.NODE_ENV === 'development' 
+      ? 'http://localhost:3000'
+      : (process.env.FRONTEND_URL || 'https://yatrikerp.live');
+    res.redirect(`${redirectURL}/login`);
   }
 });
 

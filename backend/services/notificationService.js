@@ -63,6 +63,31 @@ class NotificationService {
     }
   }
 
+  // Create system-wide notification (for admins and system events)
+  static async createSystemNotification(data) {
+    try {
+      // Create notification for all admins
+      const admins = await User.find({ role: 'admin' });
+      const notifications = [];
+
+      for (const admin of admins) {
+        const notification = await Notification.createNotification({
+          ...data,
+          recipientId: admin._id,
+          recipientRole: 'admin',
+          type: data.type || 'system_announcement',
+          priority: data.priority || 'medium'
+        });
+        notifications.push(notification);
+      }
+
+      return notifications;
+    } catch (error) {
+      console.error('Error creating system notification:', error);
+      throw error;
+    }
+  }
+
   // Trip assignment notification
   static async notifyTripAssignment(trip, depotId, assignedBy) {
     const depot = await Depot.findById(depotId);

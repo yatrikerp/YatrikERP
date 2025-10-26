@@ -17,6 +17,7 @@
     "deploy:render": "npm start"
   },
   "dependencies": {
+    "@playwright/test": "^1.56.1",
     "axios": "^1.12.2",
     "bcryptjs": "^2.4.3",
     "compression": "^1.8.1",

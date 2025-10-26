@@ -348,32 +348,13 @@ const AdminDrivers = () => {
 
   // Auto-generate display credentials (deterministic suggestion, not persisted)
   const generateAutoEmail = (fullName, depotId) => {
-    const depot = depots.find(d => d._id === depotId);
-    if (!depot) return 'driver001@unknown-depot.com';
-
-    const depotName = (depot.depotName || depot.name || 'unknown')
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '');
-
-    // Prefer a number from employeeId if provided
-    const rawEmpId = (driverForm?.employeeId || editingDriver?.staffDetails?.employeeId || '').toString();
-    const fromEmpDigits = rawEmpId.match(/\d+/g)?.join('');
-
-    let seq = '001';
-    if (fromEmpDigits) {
-      seq = String(parseInt(fromEmpDigits, 10)).padStart(3, '0');
-    } else {
-      // Fallback: count existing drivers for this depot and suggest next number
-      const countInDepot = drivers.filter(d => {
-        const id = typeof d.depotId === 'object' && d.depotId ? d.depotId._id : d.depotId;
-        return id === depotId;
-      }).length;
-      seq = String(Math.max(1, countInDepot + 1)).padStart(3, '0');
-    }
-
-    return `driver${seq}@${depotName}-depot.com`;
+    if (!fullName) return 'unknown-driver@yatrik.com';
+    
+    // Clean name: convert to lowercase and remove special characters
+    const cleanName = fullName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return `${cleanName}-driver@yatrik.com`;
   };
-  const AUTO_PASSWORD = 'Yatrik123';
+  const AUTO_PASSWORD = 'Yatrik@123';
 
   const isLicenseExpired = (expiryDate) => {
     if (!expiryDate) return false;
@@ -641,7 +622,7 @@ const AdminDrivers = () => {
                 </div>
               {/* Auto email removed to avoid showing two emails; only display saved email above */}
               <div className="flex items-center gap-2 mt-1">
-                <span className="text-gray-500">Auto password:</span>
+                <span className="text-gray-500">Password:</span>
                 <span className="font-mono text-gray-900">{AUTO_PASSWORD}</span>
               </div>
               </div>
@@ -721,7 +702,7 @@ const AdminDrivers = () => {
                           </button>
                         )}
                       </div>
-                      <div className="text-[11px] text-gray-500 mt-1">Default pwd: driver123 (if seeded)</div>
+                      <div className="text-[11px] text-gray-500 mt-1">Password: Yatrik@123</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
@@ -1018,11 +999,11 @@ const AdminDrivers = () => {
               )}
             </div>
             <div className="flex items-center gap-2 mt-2">
-              <span className="text-gray-500">Auto email:</span>
-              <span className="font-mono text-gray-900">{generateAutoEmail(viewingDriver.name, viewingDriver.depotId)}</span>
-              <button onClick={() => navigator.clipboard.writeText(generateAutoEmail(viewingDriver.name, viewingDriver.depotId))} className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50">Copy</button>
+              <span className="text-gray-500">Email:</span>
+              <span className="font-mono text-gray-900">{viewingDriver.email || generateAutoEmail(viewingDriver.name, viewingDriver.depotId)}</span>
+              <button onClick={() => navigator.clipboard.writeText(viewingDriver.email || generateAutoEmail(viewingDriver.name, viewingDriver.depotId))} className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50">Copy</button>
             </div>
-            <p className="text-xs text-gray-500 mt-1">Auto password: <span className="font-mono">{AUTO_PASSWORD}</span></p>
+            <p className="text-xs text-gray-500 mt-1">Password: <span className="font-mono">{AUTO_PASSWORD}</span></p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div className="flex items-center gap-2"><Mail className="w-4 h-4 text-gray-400" /><span>{viewingDriver.email || '—'}</span></div>

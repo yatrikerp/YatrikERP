@@ -75,7 +75,8 @@ router.post('/scan-ticket', auth, requireRole(['conductor', 'admin', 'depot_mana
       });
     }
     
-    // Verify signature
+    // Verify signature using enhanced validation
+    const { verifySignature } = require('../utils/qrSignature');
     const isValidSignature = verifySignature(ticketData);
     if (!isValidSignature) {
       return res.status(400).json({ 
@@ -151,12 +152,14 @@ router.post('/scan-ticket', auth, requireRole(['conductor', 'admin', 'depot_mana
     ticket.scannedAt = new Date();
     ticket.scannedBy = req.user._id;
     
-    // Add to validation history
+    // Add to validation history with enhanced tracking
     ticket.validationHistory.push({
       conductorId: req.user._id,
       validatedAt: new Date(),
       location: {
-        stopName: req.body.currentStop || 'Unknown'
+        stopName: req.body.currentStop || 'Unknown',
+        latitude: req.body.latitude || null,
+        longitude: req.body.longitude || null
       },
       deviceInfo: {
         deviceId: req.body.deviceId || 'Unknown',

@@ -265,10 +265,11 @@ const emailTemplates = {
     const pnr = t.pnr || bookingId;
     const ticketNumber = t.ticketNumber || 'N/A';
     
-    // Pricing details
+    // Pricing details - use actual pricing from booking
     const fareAmount = t.fareAmount || t.pricing?.totalAmount || 0;
-    const baseFare = t.pricing?.baseFare || 0;
+    const baseFare = t.pricing?.baseFare || t.pricing?.seatFare || fareAmount;
     const gst = t.pricing?.gst || 0;
+    const totalAmount = t.pricing?.totalAmount || fareAmount;
     
     // Driver and Conductor information
     const driverName = t.driver?.name || 'To be assigned';
@@ -284,7 +285,7 @@ const emailTemplates = {
     const allPassengers = t.bookingSummary?.allPassengers || [customerName];
     const allSeatNumbers = t.bookingSummary?.seatNumbers || [seatNumber];
     
-    // Generate QR Code
+    // Generate QR Code with enhanced settings
     let qrCodeDataURL = t.qrImage || '';
     if (!qrCodeDataURL && t.qrPayload) {
       try {
@@ -292,7 +293,11 @@ const emailTemplates = {
           errorCorrectionLevel: 'H',
           type: 'image/png',
           width: 300,
-          margin: 2
+          margin: 2,
+          color: {
+            dark: '#E91E63',
+            light: '#FFFFFF'
+          }
         });
       } catch (err) {
         console.error('QR generation error:', err);

@@ -1,0 +1,29 @@
+{
+  "name": "yatrik-erp-playwright-tests",
+  "version": "1.0.0",
+  "description": "Playwright tests for YATRIK ERP login functionality",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:login": "playwright test tests/login.spec.js --headed",
+    "report": "playwright show-report",
+    "install:browsers": "playwright install"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0"
+  },
+  "keywords": [
+    "playwright",
+    "testing",
+    "yatrik",
+    "erp",
+    "login"
+  ],
+  "author": "YATRIK ERP Team",
+  "license": "MIT"
+}
+
+
+

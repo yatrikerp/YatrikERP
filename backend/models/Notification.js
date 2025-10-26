@@ -94,6 +94,25 @@ notificationSchema.index({ userId: 1, isRead: 1 });
 notificationSchema.index({ type: 1 });
 notificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
+// Static method to create notification
+notificationSchema.statics.createNotification = async function(data) {
+  const notification = new this({
+    userId: data.recipientId || data.userId,
+    type: data.type || 'system_announcement',
+    title: data.title,
+    message: data.message,
+    priority: data.priority || 'medium',
+    data: data.data || {},
+    relatedEntity: data.relatedEntity || {},
+    actionData: data.actionData || {},
+    senderId: data.senderId,
+    senderRole: data.senderRole,
+    metadata: data.metadata || {}
+  });
+  
+  return await notification.save();
+};
+
 // Static method to create trip assignment notification
 notificationSchema.statics.createTripAssignmentNotification = async function(userId, tripData) {
   const notification = new this({

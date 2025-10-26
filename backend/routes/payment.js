@@ -214,14 +214,18 @@ router.post('/verify', auth, async (req, res) => {
           source: 'web'
         });
         
-        // Generate QR code image
+        // Generate QR code image with enhanced settings
         let qrImage = '';
         try {
           qrImage = await QRCode.toDataURL(qrPayload, { 
             errorCorrectionLevel: 'H',
             type: 'image/png',
             width: 300,
-            margin: 2
+            margin: 2,
+            color: {
+              dark: '#E91E63',
+              light: '#FFFFFF'
+            }
           });
           await Ticket.findByIdAndUpdate(ticket._id, { qrImage });
         } catch (qrError) {
@@ -264,10 +268,10 @@ router.post('/verify', auth, async (req, res) => {
             position: seat.seatPosition || '',
             floor: seat.floor || 'lower'
           },
-          // Include pricing breakdown
+          // Include pricing breakdown - use actual booking pricing
           pricing: {
-            baseFare: booking.pricing?.baseFare || 0,
-            seatFare: booking.pricing?.seatFare || 0,
+            baseFare: booking.pricing?.baseFare || seat.price || 0,
+            seatFare: seat.price || booking.pricing?.seatFare || 0,
             gst: booking.pricing?.taxes?.gst || 0,
             totalAmount: booking.pricing?.totalAmount || 0
           },

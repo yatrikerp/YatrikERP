@@ -331,22 +331,17 @@ const AdminConductors = () => {
     return depot ? (depot.depotCode || depot.code) : 'N/A';
   };
 
-  // Generate standardized conductor login email per pattern: conductor{seq}@{depotcode}-depot.com
+  // Generate standardized conductor login email per new pattern: {name}-conductor@yatrik.com
   const generateConductorEmail = (conductorLike, depotId) => {
-    const depotCode = (getDepotCode(depotId) || '').toString().toLowerCase();
-    const depotSlug = depotCode ? `${depotCode}-depot.com` : 'unknown-depot.com';
     const source = conductorLike || {};
-    const username = String(source.username || '').trim();
-    const employeeCode = String(source.employeeCode || source.employeeId || '').trim();
-    const conductorId = String(source.conductorId || '').trim();
-    const fromUsername = (username.match(/(\d{1,4})$/) || [])[1];
-    const fromEmp = (employeeCode.match(/(\d{1,4})$/) || [])[1];
-    const fromCnd = (conductorId.match(/(\d{1,4})$/) || [])[1];
-    let seq = fromUsername || fromEmp || fromCnd || '001';
-    seq = seq.padStart(3, '0');
-    return `conductor${seq}@${depotSlug}`;
+    const name = String(source.name || '').trim();
+    if (!name) return 'unknown-conductor@yatrik.com';
+    
+    // Clean name: convert to lowercase and remove special characters
+    const cleanName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return `${cleanName}-conductor@yatrik.com`;
   };
-  const AUTO_PASSWORD = 'Yatrik123';
+  const AUTO_PASSWORD = 'Yatrik@123';
 
   const exportConductors = () => {
     const csvContent = [
@@ -668,7 +663,7 @@ const AdminConductors = () => {
                         </button>
                       )}
                     </div>
-                    <div className="text-[11px] text-gray-500 mt-1">Default pwd: conductor123 (if seeded)</div>
+                    <div className="text-[11px] text-gray-500 mt-1">Password: Yatrik@123</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
@@ -931,9 +926,9 @@ const AdminConductors = () => {
               )}
             </div>
             <div className="flex items-center gap-2 mt-2">
-              <span className="text-gray-500">Login email:</span>
-              <span className="font-mono text-gray-900">{generateConductorEmail(viewingConductor, viewingConductor.depotId)}</span>
-              <button onClick={() => navigator.clipboard.writeText(generateConductorEmail(viewingConductor, viewingConductor.depotId))} className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50">Copy</button>
+              <span className="text-gray-500">Email:</span>
+              <span className="font-mono text-gray-900">{viewingConductor.email || generateConductorEmail(viewingConductor, viewingConductor.depotId)}</span>
+              <button onClick={() => navigator.clipboard.writeText(viewingConductor.email || generateConductorEmail(viewingConductor, viewingConductor.depotId))} className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50">Copy</button>
             </div>
             <p className="text-xs text-gray-500 mt-1">Password: <span className="font-mono">{AUTO_PASSWORD}</span></p>
           </div>

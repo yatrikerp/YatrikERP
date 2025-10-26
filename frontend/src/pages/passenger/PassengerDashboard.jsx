@@ -17,8 +17,9 @@ const PassengerDashboard = () => {
   const navigate = useNavigate();
   const { isMobile } = useMobileDetection();
   const [upcomingTrips, setUpcomingTrips] = useState([]);
-  const [recentActivity, setRecentActivity] = useState([]);
+  const [recentTickets, setRecentTickets] = useState([]);
   const [walletBalance, setWalletBalance] = useState(0);
+  const [recentActivity, setRecentActivity] = useState([]);
   
   // Default popular routes for instant display
   const defaultPopularRoutes = [
@@ -57,7 +58,8 @@ const PassengerDashboard = () => {
         return;
       }
 
-      const response = await fetch('/api/passenger/dashboard', {
+      // Fetch user's tickets/bookings with real data
+      const response = await fetch('/api/passenger/tickets', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -67,23 +69,39 @@ const PassengerDashboard = () => {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setUpcomingTrips(data.data.upcomingTrips || []);
-          setRecentActivity(data.data.recentActivity || []);
-          setWalletBalance(data.data.walletBalance || 0);
+          setRecentTickets(data.tickets || []);
+          
+          // Filter upcoming trips (future dates)
+          const upcoming = (data.tickets || []).filter(ticket => {
+            const tripDate = new Date(ticket.tripDetails?.serviceDate);
+            const now = new Date();
+            return tripDate >= now && ticket.state === 'active';
+          });
+          setUpcomingTrips(upcoming);
+          
+          // Set recent activity (past trips for frequent trips display)
+          const pastTrips = (data.tickets || []).filter(ticket => {
+            const tripDate = new Date(ticket.tripDetails?.serviceDate);
+            const now = new Date();
+            return tripDate < now && ticket.state === 'completed';
+          });
+          setRecentActivity(pastTrips);
         }
       } else {
         console.error('Failed to fetch dashboard data:', response.statusText);
         // Keep empty arrays if API fails
         setUpcomingTrips([]);
-        setRecentActivity([]);
+        setRecentTickets([]);
         setWalletBalance(0);
+        setRecentActivity([]);
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       // Keep empty arrays if API fails
       setUpcomingTrips([]);
-      setRecentActivity([]);
+      setRecentTickets([]);
       setWalletBalance(0);
+      setRecentActivity([]);
     }
   };
 
@@ -266,15 +284,15 @@ const PassengerDashboard = () => {
                       <Bus className="w-5 h-5 text-blue-600" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900">{trip.routeName}</h3>
-                      <p className="text-sm text-gray-600">{trip.from} → {trip.to}</p>
-                      <p className="text-xs text-gray-500">{trip.departureDate} • {trip.departureTime}</p>
+                      <h3 className="font-semibold text-gray-900">{trip.boardingStop} → {trip.destinationStop}</h3>
+                      <p className="text-sm text-gray-600">Seat: {trip.seatNumber}</p>
+                      <p className="text-xs text-gray-500">{trip.tripDetails?.serviceDate} • {trip.tripDetails?.startTime}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-bold text-gray-900">₹{trip.fare}</div>
-                    <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(trip.status)}`}>
-                      {trip.status}
+                    <div className="text-lg font-bold text-gray-900">₹{trip.fareAmount}</div>
+                    <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(trip.state)}`}>
+                      {trip.state}
                     </span>
                   </div>
                 </div>
@@ -319,19 +337,19 @@ const PassengerDashboard = () => {
             
             <div className="space-y-3">
               {recentActivity.slice(0, 5).map((activity) => (
-                <div key={activity.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div key={activity._id || activity.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center space-x-3">
                     <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
                       <Ticket className="w-4 h-4 text-gray-600" />
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">{activity.routeName}</p>
-                      <p className="text-sm text-gray-600">{activity.from} → {activity.to}</p>
+                      <p className="font-medium text-gray-900">{activity.tripDetails?.routeName || 'N/A'}</p>
+                      <p className="text-sm text-gray-600">{activity.boardingStop} → {activity.destinationStop}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-semibold text-gray-900">₹{activity.fare}</div>
-                    <div className="text-xs text-gray-500">{activity.date}</div>
+                    <div className="text-sm font-semibold text-gray-900">₹{activity.fareAmount}</div>
+                    <div className="text-xs text-gray-500">{activity.tripDetails?.serviceDate || 'N/A'}</div>
                   </div>
                 </div>
               ))}
