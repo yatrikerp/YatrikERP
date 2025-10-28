@@ -811,21 +811,54 @@ const ConductorDashboard = () => {
               <p>Scan passenger tickets for validation</p>
             </div>
             
+            {/* Mobile-Optimized Scanning Interface */}
             <div className="qr-scanning-section">
-              <div className="scan-area">
-                <div className={`scan-camera ${isScanning ? 'scanning' : ''}`}>
-                  <Camera size={48} />
-                  {!isScanning && <p>Tap to start scanning</p>}
+              {!isScanning && (
+                <div className="scan-area">
+                  <div className="scan-preview">
+                    <div className="scan-icon-circle">
+                      <QrCode size={64} />
+                    </div>
+                    <h3>Ready to Scan</h3>
+                    <p>Tap the button below to start scanning QR codes</p>
+                    <button 
+                      className="scan-btn-large"
+                      onClick={startQRScan}
+                    >
+                      <Camera className="btn-icon" />
+                      <span>Start QR Scan</span>
+                    </button>
+                  </div>
+
+                  {/* Quick Stats */}
+                  <div className="scan-stats">
+                    <div className="stat-card">
+                      <div className="stat-icon success">
+                        <CheckCircle size={20} />
+                      </div>
+                      <div className="stat-info">
+                        <span className="stat-label">Successful</span>
+                        <span className="stat-value">
+                          {scanHistory.filter(s => s.success).length}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="stat-card">
+                      <div className="stat-icon error">
+                        <AlertCircle size={20} />
+                      </div>
+                      <div className="stat-info">
+                        <span className="stat-label">Failed</span>
+                        <span className="stat-value">
+                          {scanHistory.filter(s => !s.success).length}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                
-                <button 
-                  className={`scan-btn ${isScanning ? 'scanning' : ''}`}
-                  onClick={startQRScan}
-                >
-                  {isScanning ? 'Scanning...' : 'Start QR Scan'}
-                </button>
-              </div>
-              
+              )}
+
+              {/* Scanner Modal */}
               {isScanning && (
                 <QRScanner 
                   onScan={handleScanData}
@@ -833,38 +866,76 @@ const ConductorDashboard = () => {
                 />
               )}
 
-              {scanResult && (
-                <div className={`scan-result ${scanResult.success ? 'success' : 'error'}`}>
-                  <div className="result-icon">
-                    {scanResult.success ? <CheckCircle size={24} /> : <AlertCircle size={24} />}
+              {/* Scan Result Display */}
+              {scanResult && !isScanning && (
+                <div className={`scan-result-card ${scanResult.success ? 'success' : 'error'}`}>
+                  <div className="result-header">
+                    <div className="result-icon-large">
+                      {scanResult.success ? <CheckCircle size={48} /> : <AlertCircle size={48} />}
+                    </div>
+                    <h3>{scanResult.success ? '✅ Ticket Validated!' : '❌ Scan Failed'}</h3>
                   </div>
-                  <div className="result-details">
-                    <h4>{scanResult.success ? 'Ticket Validated!' : 'Scan Failed'}</h4>
-                    {scanResult.success ? (
-                      <div className="ticket-info">
-                        <p><strong>PNR:</strong> {scanResult.pnr}</p>
-                        <p><strong>Passenger:</strong> {scanResult.passenger}</p>
-                        <p><strong>Seat:</strong> {scanResult.seat}</p>
+                  
+                  {scanResult.success ? (
+                    <div className="result-details-card">
+                      <div className="detail-row">
+                        <span className="detail-label">PNR:</span>
+                        <span className="detail-value">{scanResult.pnr || 'N/A'}</span>
+                      </div>
+                      <div className="detail-row">
+                        <span className="detail-label">Passenger:</span>
+                        <span className="detail-value">{scanResult.passenger || 'N/A'}</span>
+                      </div>
+                      <div className="detail-row">
+                        <span className="detail-label">Seat:</span>
+                        <span className="detail-value seat-number">{scanResult.seat || 'N/A'}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="result-error-message">
+                      <p>Invalid or duplicate ticket.</p>
+                      <p className="error-hint">Please try scanning again.</p>
+                    </div>
+                  )}
+                  
+                  <div className="result-actions">
+                    <button 
+                      className="rescan-btn"
+                      onClick={() => {
+                        setScanResult(null);
+                        startQRScan();
+                      }}
+                    >
+                      Scan Another
+                    </button>
+                  </div>
                 </div>
-                    ) : (
-                      <p>Invalid or duplicate ticket. Please try again.</p>
-                    )}
-            </div>
-          </div>
-        )}
+              )}
 
-              <div className="scan-history">
-                <h4>Recent Scans</h4>
-                <div className="history-list">
-                  {scanHistory.slice(0, 5).map((scan, index) => (
-                    <div key={index} className={`history-item ${scan.success ? 'success' : 'error'}`}>
-                      <span className="scan-time">{new Date().toLocaleTimeString()}</span>
-                      <span className="scan-pnr">{scan.pnr}</span>
-                      <span className="scan-status">{scan.success ? '✓' : '✗'}</span>
-            </div>
-                  ))}
+              {/* Recent Scan History */}
+              {scanHistory.length > 0 && (
+                <div className="scan-history-section">
+                  <h4>Recent Scans</h4>
+                  <div className="history-list">
+                    {scanHistory.slice(0, 5).map((scan, index) => (
+                      <div key={index} className={`history-item-card ${scan.success ? 'success' : 'error'}`}>
+                        <div className="history-indicator">
+                          {scan.success ? '✓' : '✗'}
+                        </div>
+                        <div className="history-info">
+                          <div className="history-pnr">{scan.pnr || 'Unknown PNR'}</div>
+                          <div className="history-time">{new Date().toLocaleTimeString()}</div>
+                        </div>
+                        <div className="history-status">
+                          <span className={`status-badge ${scan.success ? 'success' : 'error'}`}>
+                            {scan.success ? 'Valid' : 'Invalid'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         )}

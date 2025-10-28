@@ -1,61 +1,50 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Camera, Upload, QrCode, CheckCircle, AlertCircle } from 'lucide-react';
+import { X, Camera, Upload, QrCode, CheckCircle, AlertCircle, Maximize2, Minimize2 } from 'lucide-react';
 import QrScanner from 'qr-scanner';
+import './QRScanner.css';
 
 const QRScanner = ({ onScan, onClose }) => {
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [mode, setMode] = useState('camera'); // 'camera' or 'upload'
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const videoRef = useRef(null);
   const scannerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const scanningIndicatorRef = useRef(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    const boot = async () => {
-      if (mode === 'camera' && videoRef.current) {
-        // Ensure any existing scanner is stopped before starting new
-        if (scannerRef.current) {
-          try { await scannerRef.current.stop(); } catch {}
-          try { scannerRef.current.destroy(); } catch {}
-          scannerRef.current = null;
-        }
-        if (!cancelled) {
-          await initializeScanner();
-        }
+  const handleScanResult = useCallback((result) => {
+    if (result?.data) {
+      setResult(result.data);
+      setScanning(false);
+      
+      // Vibrate on successful scan (mobile only)
+      if (navigator.vibrate) {
+        navigator.vibrate([200, 100, 200]);
       }
-    };
-    boot();
-
-    const onVisibility = async () => {
-      if (document.hidden) {
-        try { await scannerRef.current?.stop(); } catch {}
-      } else if (mode === 'camera' && videoRef.current && !scannerRef.current) {
-        await initializeScanner();
-      }
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-
-    return () => {
-      cancelled = true;
-      document.removeEventListener('visibilitychange', onVisibility);
+      
+      // Stop scanner
       if (scannerRef.current) {
-        try { scannerRef.current.stop(); } catch {}
-        try { scannerRef.current.destroy(); } catch {}
-        scannerRef.current = null;
+        scannerRef.current.stop();
       }
-      if (videoRef.current) {
-        try { videoRef.current.srcObject = null; } catch {}
-      }
-    };
-  }, [mode]);
 
-  const initializeScanner = async () => {
+      // Parse QR data
+      try {
+        const data = JSON.parse(result.data);
+        onScan(data);
+      } catch (e) {
+        onScan(result.data);
+      }
+    }
+  }, [onScan]);
+
+  const initializeScanner = useCallback(async () => {
     try {
       setScanning(true);
       setError(null);
+      
       // Preflight: ensure camera exists and request permission explicitly
       const hasCamera = await QrScanner.hasCamera();
       if (!hasCamera) {
@@ -87,14 +76,14 @@ const QRScanner = ({ onScan, onClose }) => {
 
       const scanner = new QrScanner(
         videoRef.current,
-        result => handleScanResult(result),
+        handleScanResult,
         {
           onDecodeError: error => {
             // benign decode errors during scanning; keep silent
           },
           highlightScanRegion: true,
           highlightCodeOutline: true,
-          maxScansPerSecond: 5,
+          maxScansPerSecond: 10,
           preferredCamera
         }
       );
@@ -111,27 +100,49 @@ const QRScanner = ({ onScan, onClose }) => {
       );
       setScanning(false);
     }
-  };
+  }, [handleScanResult]);
 
-  const handleScanResult = (result) => {
-    if (result?.data) {
-      setResult(result.data);
-      setScanning(false);
-      
-      // Stop scanner
+  useEffect(() => {
+    let cancelled = false;
+    const boot = async () => {
+      const video = videoRef.current;
+      if (mode === 'camera' && video) {
+        // Ensure any existing scanner is stopped before starting new
+        if (scannerRef.current) {
+          try { await scannerRef.current.stop(); } catch {}
+          try { scannerRef.current.destroy(); } catch {}
+          scannerRef.current = null;
+        }
+        if (!cancelled) {
+          await initializeScanner();
+        }
+      }
+    };
+    boot();
+
+    const onVisibility = async () => {
+      if (document.hidden) {
+        try { await scannerRef.current?.stop(); } catch {}
+      } else if (mode === 'camera' && videoRef.current && !scannerRef.current) {
+        await initializeScanner();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibility);
       if (scannerRef.current) {
-        scannerRef.current.stop();
+        try { scannerRef.current.stop(); } catch {}
+        try { scannerRef.current.destroy(); } catch {}
+        scannerRef.current = null;
       }
-
-      // Parse QR data
-      try {
-        const data = JSON.parse(result.data);
-        onScan(data);
-      } catch (e) {
-        onScan(result.data);
+      const video = videoRef.current;
+      if (video) {
+        try { video.srcObject = null; } catch {}
       }
-    }
-  };
+    };
+  }, [mode, initializeScanner]);
 
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
@@ -158,100 +169,120 @@ const QRScanner = ({ onScan, onClose }) => {
     }
   };
 
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+  };
+
   return (
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        className={`qr-scanner-overlay ${isFullscreen ? 'fullscreen' : ''}`}
+        onClick={onClose}
       >
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
-          className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+          className={`qr-scanner-container ${isFullscreen ? 'fullscreen' : ''}`}
+          onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-semibold flex items-center gap-2">
-                <QrCode className="w-6 h-6" />
-                QR Code Scanner
-              </h3>
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+          <div className="qr-scanner-header">
+            <div className="qr-scanner-header-content">
+              <div className="qr-scanner-title">
+                <QrCode className="qr-icon" />
+                <h3>QR Code Scanner</h3>
+              </div>
+              <div className="qr-scanner-actions">
+                <button
+                  onClick={toggleFullscreen}
+                  className="qr-toggle-fullscreen-btn"
+                  title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                >
+                  {isFullscreen ? <Minimize2 className="qr-icon" /> : <Maximize2 className="qr-icon" />}
+                </button>
+                <button
+                  onClick={onClose}
+                  className="qr-close-btn"
+                  title="Close Scanner"
+                >
+                  <X className="qr-icon" />
+                </button>
+              </div>
             </div>
             
             {/* Mode Selector */}
-            <div className="flex gap-2 mt-4">
+            <div className="qr-mode-selector">
               <button
                 onClick={() => setMode('camera')}
-                className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
-                  mode === 'camera'
-                    ? 'bg-white text-blue-600'
-                    : 'bg-white/20 text-white hover:bg-white/30'
-                }`}
+                className={`qr-mode-btn ${mode === 'camera' ? 'active' : ''}`}
               >
-                <Camera className="w-4 h-4 inline mr-2" />
+                <Camera className="qr-icon" />
                 Camera
               </button>
               <button
                 onClick={() => setMode('upload')}
-                className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
-                  mode === 'upload'
-                    ? 'bg-white text-blue-600'
-                    : 'bg-white/20 text-white hover:bg-white/30'
-                }`}
+                className={`qr-mode-btn ${mode === 'upload' ? 'active' : ''}`}
               >
-                <Upload className="w-4 h-4 inline mr-2" />
+                <Upload className="qr-icon" />
                 Upload
               </button>
             </div>
           </div>
 
           {/* Scanner Content */}
-          <div className="p-6">
+          <div className="qr-scanner-body">
             {mode === 'camera' ? (
-              <div className="space-y-4">
+              <div className="qr-camera-container">
                 {!result && (
                   <>
-                    <div className="relative rounded-lg overflow-hidden bg-black aspect-square">
+                    <div className="qr-video-wrapper">
                       <video
                         ref={videoRef}
-                        className="w-full h-full object-cover"
+                        className="qr-video"
+                        playsInline
+                        autoPlay
+                        muted
                       />
                       {scanning && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-48 h-48 border-2 border-white rounded-lg animate-pulse"></div>
+                        <div className="qr-scanning-overlay">
+                          <div className="qr-corner qr-corner-tl"></div>
+                          <div className="qr-corner qr-corner-tr"></div>
+                          <div className="qr-corner qr-corner-bl"></div>
+                          <div className="qr-corner qr-corner-br"></div>
+                          <div className="qr-scan-line" ref={scanningIndicatorRef}></div>
                         </div>
                       )}
                     </div>
-                    <p className="text-center text-sm text-gray-600">
-                      Position the QR code within the frame to scan
-                    </p>
+                    <div className="qr-scanning-instructions">
+                      <p className="qr-scanning-text">
+                        👉 Position the QR code within the frame
+                      </p>
+                      <p className="qr-scanning-hint">
+                        Hold steady for best results
+                      </p>
+                    </div>
                   </>
                 )}
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="qr-upload-container">
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center cursor-pointer hover:border-blue-500 transition-colors"
+                  className="qr-upload-box"
                 >
-                  <Upload className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-gray-600">Click to upload QR code image</p>
-                  <p className="text-sm text-gray-400 mt-2">PNG, JPG up to 10MB</p>
+                  <Upload className="qr-upload-icon" />
+                  <p className="qr-upload-text">Click to upload QR code image</p>
+                  <p className="qr-upload-hint">PNG, JPG up to 10MB</p>
                   <input
                     ref={fileInputRef}
                     type="file"
                     accept="image/*"
                     onChange={handleFileUpload}
-                    className="hidden"
+                    className="qr-file-input"
                   />
                 </div>
               </div>
@@ -262,18 +293,18 @@ const QRScanner = ({ onScan, onClose }) => {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg"
+                className="qr-result-success"
               >
-                <div className="flex items-start gap-3">
-                  <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-green-800">QR Code Scanned Successfully!</h4>
-                    <p className="text-sm text-green-700 mt-1 font-mono break-all">{result}</p>
+                <div className="qr-result-content">
+                  <CheckCircle className="qr-success-icon" />
+                  <div className="qr-result-info">
+                    <h4>QR Code Scanned Successfully!</h4>
+                    <p className="qr-result-data">{result}</p>
                   </div>
                 </div>
                 <button
                   onClick={resetScanner}
-                  className="mt-3 text-sm text-green-600 hover:text-green-700 font-medium"
+                  className="qr-rescan-btn"
                 >
                   Scan another code
                 </button>
@@ -285,18 +316,18 @@ const QRScanner = ({ onScan, onClose }) => {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg"
+                className="qr-result-error"
               >
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-red-800">Scan Error</h4>
-                    <p className="text-sm text-red-700 mt-1">{error}</p>
+                <div className="qr-result-content">
+                  <AlertCircle className="qr-error-icon" />
+                  <div className="qr-result-info">
+                    <h4>Scan Error</h4>
+                    <p>{error}</p>
                   </div>
                 </div>
                 <button
                   onClick={resetScanner}
-                  className="mt-3 text-sm text-red-600 hover:text-red-700 font-medium"
+                  className="qr-retry-btn"
                 >
                   Try again
                 </button>
@@ -305,17 +336,17 @@ const QRScanner = ({ onScan, onClose }) => {
           </div>
 
           {/* Footer */}
-          <div className="bg-gray-50 px-6 py-4">
-            <div className="flex items-center justify-between text-sm text-gray-600">
+          <div className="qr-scanner-footer">
+            <div className="qr-footer-left">
               <span>Powered by advanced QR technology</span>
-              <span className="flex items-center gap-1">
-                {scanning && (
-                  <>
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    Scanning...
-                  </>
-                )}
-              </span>
+            </div>
+            <div className="qr-footer-right">
+              {scanning && (
+                <span className="qr-scanning-indicator">
+                  <span className="qr-pulse-dot"></span>
+                  Scanning...
+                </span>
+              )}
             </div>
           </div>
         </motion.div>
@@ -325,4 +356,3 @@ const QRScanner = ({ onScan, onClose }) => {
 };
 
 export default QRScanner;
-
