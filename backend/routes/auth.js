@@ -223,7 +223,166 @@ router.post("/login", async (req, res) => {
         }
       }
 
-      // Check for conductor email format: conductor{number}@{depotname}-depot.com
+      // Check for custom driver email format (e.g., suresh.driver@yatrik.com)
+      const customDriverEmail = normalizedIdentifier.match(/^(.+)\.driver@yatrik\.com$/);
+      if (customDriverEmail) {
+        const driverName = customDriverEmail[1];
+        console.log(`🔍 [AUTH] Custom driver login attempt: ${normalizedIdentifier}`);
+        
+        // Try to find driver by email - explicitly select password field
+        let driver = await Driver.findOne({ 
+          email: normalizedIdentifier,
+          status: 'active'
+        }).select('+password').populate('depotId', 'depotName depotCode');
+        
+        console.log(`🔍 [AUTH] Driver found by email:`, driver ? 'YES' : 'NO');
+        
+        // If not found by email, try by username - explicitly select password field
+        if (!driver) {
+          const username = normalizedIdentifier.split('@')[0];
+          driver = await Driver.findOne({ 
+            username: username,
+            status: 'active'
+          }).select('+password').populate('depotId', 'depotName depotCode');
+          console.log(`🔍 [AUTH] Driver found by username:`, driver ? 'YES' : 'NO');
+        }
+        
+        if (driver) {
+          console.log(`🔍 [AUTH] Driver found: ${driver.name}, verifying password...`);
+          // Verify password using bcrypt
+          const isPasswordValid = await bcrypt.compare(rawPassword, driver.password);
+          console.log(`🔍 [AUTH] Password valid:`, isPasswordValid);
+          
+          if (isPasswordValid) {
+            const token = jwt.sign(
+              {
+                driverId: driver._id,
+                userId: driver._id,
+                role: 'DRIVER',
+                name: driver.name,
+                email: driver.email,
+                depotId: driver.depotId?._id,
+                depotCode: driver.depotId?.depotCode,
+                depotName: driver.depotId?.depotName,
+                isDriver: true
+              },
+              process.env.JWT_SECRET || 'secret',
+              { expiresIn: '12h' }
+            );
+            
+            // Update last login
+            driver.lastLogin = new Date();
+            await driver.save();
+            
+            return res.json({ 
+              success: true, 
+              token, 
+              user: {
+                _id: driver._id,
+                name: driver.name,
+                email: driver.email,
+                role: 'driver',
+                depotId: driver.depotId?._id,
+                depotCode: driver.depotId?.depotCode,
+                depotName: driver.depotId?.depotName,
+                isDriver: true
+              }, 
+              redirectPath: '/driver' 
+            });
+          } else {
+            return res.status(401).json({
+              success: false,
+              message: 'Invalid password'
+            });
+          }
+        } else {
+          return res.status(401).json({
+            success: false,
+            message: 'Driver account not found or inactive'
+          });
+        }
+      }
+
+      // Check for custom conductor email format (e.g., conductor001.conductor@yatrik.com)
+      const customConductorEmail = normalizedIdentifier.match(/^(.+)\.conductor@yatrik\.com$/);
+      if (customConductorEmail) {
+        console.log(`🔍 [AUTH] Custom conductor login attempt: ${normalizedIdentifier}`);
+        
+        // Try to find conductor by email - explicitly select password field
+        let conductor = await Conductor.findOne({ 
+          email: normalizedIdentifier,
+          status: 'active'
+        }).select('+password').populate('depotId', 'depotName depotCode');
+        
+        console.log(`🔍 [AUTH] Conductor found by email:`, conductor ? 'YES' : 'NO');
+        
+        // If not found by email, try by username - explicitly select password field
+        if (!conductor) {
+          const username = normalizedIdentifier.split('@')[0];
+          conductor = await Conductor.findOne({ 
+            username: username,
+            status: 'active'
+          }).select('+password').populate('depotId', 'depotName depotCode');
+          console.log(`🔍 [AUTH] Conductor found by username:`, conductor ? 'YES' : 'NO');
+        }
+        
+        if (conductor) {
+          console.log(`🔍 [AUTH] Conductor found: ${conductor.name}, verifying password...`);
+          // Verify password using bcrypt
+          const isPasswordValid = await bcrypt.compare(rawPassword, conductor.password);
+          console.log(`🔍 [AUTH] Password valid:`, isPasswordValid);
+          
+          if (isPasswordValid) {
+            const token = jwt.sign(
+              {
+                conductorId: conductor._id,
+                userId: conductor._id,
+                role: 'CONDUCTOR',
+                name: conductor.name,
+                email: conductor.email,
+                depotId: conductor.depotId?._id,
+                depotCode: conductor.depotId?.depotCode,
+                depotName: conductor.depotId?.depotName,
+                isConductor: true
+              },
+              process.env.JWT_SECRET || 'secret',
+              { expiresIn: '12h' }
+            );
+            
+            // Update last login
+            conductor.lastLogin = new Date();
+            await conductor.save();
+            
+            return res.json({ 
+              success: true, 
+              token, 
+              user: {
+                _id: conductor._id,
+                name: conductor.name,
+                email: conductor.email,
+                role: 'conductor',
+                depotId: conductor.depotId?._id,
+                depotCode: conductor.depotId?.depotCode,
+                depotName: conductor.depotId?.depotName,
+                isConductor: true
+              }, 
+              redirectPath: '/conductor' 
+            });
+          } else {
+            return res.status(401).json({
+              success: false,
+              message: 'Invalid password'
+            });
+          }
+        } else {
+          return res.status(401).json({
+            success: false,
+            message: 'Conductor account not found or inactive'
+          });
+        }
+      }
+
+      // Check for legacy conductor email format: conductor{number}@{depotname}-depot.com
       const conductorMatch = normalizedIdentifier.match(/^conductor(\d+)@([a-z0-9]+)-depot\.com$/);
       if (conductorMatch) {
         const [, conductorNumber, depotName] = conductorMatch;

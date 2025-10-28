@@ -142,13 +142,20 @@ const AdminBookings = () => {
       const response = await apiFetch(`/api/admin/bookings?${queryParams}`);
       
       if (response.ok) {
-        const bookingsData = response.data?.data?.bookings || response.data?.bookings || [];
+        let bookingsData = response.data?.data?.bookings || response.data?.bookings || response.data || [];
         const statsData = response.data?.data?.stats || response.data?.stats || {};
+        
+        // Ensure bookingsData is an array
+        if (!Array.isArray(bookingsData)) {
+          console.error('Bookings data is not an array:', bookingsData);
+          bookingsData = [];
+        }
         
         setBookings(bookingsData);
         setStats(statsData);
       } else {
         console.error('Failed to fetch bookings:', response.message);
+        setBookings([]);
       }
     } catch (error) {
       console.error('Error fetching bookings:', error);
@@ -579,7 +586,7 @@ const AdminBookings = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {bookings.map((booking) => (
+              {Array.isArray(bookings) && bookings.map((booking) => (
                 <tr key={booking._id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{booking.bookingId}</div>

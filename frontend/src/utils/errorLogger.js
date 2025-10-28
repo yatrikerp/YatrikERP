@@ -56,12 +56,15 @@ class ErrorLogger {
     const originalFetch = window.fetch;
     window.fetch = (...args) => {
       return originalFetch.apply(window, args).catch(error => {
-        this.logNetworkError('Fetch Error', {
-          url: args[0],
-          error: error.message,
-          stack: error.stack,
-          timestamp: new Date().toISOString()
-        });
+        // Don't log expected AbortErrors (timeouts, component unmounts, etc.)
+        if (error.name !== 'AbortError' && error.message !== 'signal is aborted without reason') {
+          this.logNetworkError('Fetch Error', {
+            url: args[0],
+            error: error.message,
+            stack: error.stack,
+            timestamp: new Date().toISOString()
+          });
+        }
         throw error;
       });
     };

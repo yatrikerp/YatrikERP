@@ -59,126 +59,109 @@ const StaffManagement = () => {
   const fetchStaff = async () => {
     try {
       setLoading(true);
-      // Use different endpoints based on user role
-      const userRole = JSON.parse(localStorage.getItem('user') || '{}').role;
-      console.log('User role:', userRole);
       
-      // For now, use the original endpoints until the new ones are working
-      const driverEndpoint = '/api/driver/all';
-      const conductorEndpoint = '/api/conductor/all';
-      console.log('Using endpoints:', { driverEndpoint, conductorEndpoint });
+      // Get depot ID from multiple sources
+      let depotId = null;
       
+      // Try localStorage first
+      const userInfo = JSON.parse(localStorage.getItem('user') || '{}');
+      depotId = userInfo.depotId || user?.depotId;
+      
+      // If still not found, try fetching depot info from API
+      if (!depotId) {
+        console.log('Attempting to fetch depot info from API...');
+        const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
+        const depotInfoRes = await fetch('/api/depot/info', {
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (depotInfoRes.ok) {
+          const depotInfoData = await depotInfoRes.json();
+          depotId = depotInfoData.data?._id || depotInfoData._id;
+          console.log('Got depot ID from API:', depotId);
+        }
+      }
+      
+      if (!depotId) {
+        console.error('No depot ID found for user', { userInfo, user });
+        setStaff([]);
+        setLoading(false);
+        return;
+      }
+      
+      console.log('Fetching staff for depotId:', depotId);
+      
+      // Use working admin endpoints
+      const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
+      
+      // Fetch drivers and conductors from admin API
       const [driversRes, conductorsRes] = await Promise.all([
-        fetch(driverEndpoint, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        fetch(`/api/admin/drivers?depot=${depotId}&limit=1000`, {
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         }),
-        fetch(conductorEndpoint, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        fetch(`/api/admin/conductors?depot=${depotId}&limit=1000`, {
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         })
       ]);
 
-      if (!driversRes.ok) {
-        console.error('Driver fetch failed:', driversRes.status, await driversRes.text());
-      }
-      if (!conductorsRes.ok) {
-        console.error('Conductor fetch failed:', conductorsRes.status, await conductorsRes.text());
+      if (!driversRes.ok || !conductorsRes.ok) {
+        console.error('Staff fetch failed:', { drivers: driversRes.status, conductors: conductorsRes.status });
+        setStaff([]);
+        setLoading(false);
+        return;
       }
       
-      const driversData = driversRes.ok ? await driversRes.json() : { data: [] };
-      const conductorsData = conductorsRes.ok ? await conductorsRes.json() : { data: [] };
-
-      const driversList = Array.isArray(driversData.data) ? driversData.data : (driversData.data?.drivers || []);
-      const conductorsList = Array.isArray(conductorsData.data) ? conductorsData.data : (conductorsData.data?.conductors || []);
-
-      // Normalize shape and add role to enable filtering
-      const driversMapped = driversList.map(d => ({
-        ...d,
-        role: 'driver',
-        employeeId: d.employeeCode || d.employeeId || d.driverId || '',
-        licenseNumber: d.drivingLicense?.licenseNumber || d.licenseNumber || '',
-        licenseExpiry: d.drivingLicense?.expiryDate || d.licenseExpiry || '',
-        joiningDate: d.joiningDate || d.createdAt
-      }));
-
-      const conductorsMapped = conductorsList.map(c => ({
-        ...c,
-        role: 'conductor',
-        employeeId: c.employeeCode || c.employeeId || c.conductorId || '',
-        licenseNumber: c.licenseNumber || '',
-        licenseExpiry: c.licenseExpiry || '',
-        joiningDate: c.joiningDate || c.createdAt
-      }));
-
-      setDrivers(driversMapped);
-      setConductors(conductorsMapped);
-
-      // Calculate active drivers as those with a duty assigned/active today
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, '0');
-      const dd = String(today.getDate()).padStart(2, '0');
-      const todayStr = `${yyyy}-${mm}-${dd}`;
-
-      let activeAssignedDriverCount = 0;
-      let activeAssignedConductorCount = 0;
-      try {
-        const tripsQueryParams = new URLSearchParams({ date: todayStr });
-        // If depot is available, scope by depotId for safety (backend already scopes by auth)
-        const depotId = JSON.parse(localStorage.getItem('user') || '{}').depotId || user?.depotId;
-        if (depotId) tripsQueryParams.append('depotId', depotId);
-
-        const dutiesRes = await fetch(`/api/depot/trips?${tripsQueryParams.toString()}`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (dutiesRes.ok) {
-          const dutiesJson = await dutiesRes.json();
-          const duties = Array.isArray(dutiesJson.data?.trips) ? dutiesJson.data.trips : (Array.isArray(dutiesJson.data) ? dutiesJson.data : []);
-          const activeStatuses = new Set(['scheduled', 'running', 'in-progress', 'on-break', 'assigned', 'started']);
-          const driverIdsSet = new Set(
-            duties
-              .filter(d => activeStatuses.has(d.status))
-              .map(d => {
-                const drv = d.driverId; // could be id or populated object
-                if (!drv) return null;
-                if (typeof drv === 'string') return drv;
-                if (typeof drv === 'object') return drv._id || drv.id || null;
-                return null;
-              })
-              .filter(Boolean)
-          );
-          activeAssignedDriverCount = driverIdsSet.size;
-
-          const conductorIdsSet = new Set(
-            duties
-              .filter(d => activeStatuses.has(d.status))
-              .map(d => {
-                const cnd = d.conductorId;
-                if (!cnd) return null;
-                if (typeof cnd === 'string') return cnd;
-                if (typeof cnd === 'object') return cnd._id || cnd.id || null;
-                return null;
-              })
-              .filter(Boolean)
-          );
-          activeAssignedConductorCount = conductorIdsSet.size;
-        }
-      } catch (e) {
-        // Fallback silently; keep previous calculation if duty API fails
-        console.warn('Failed to fetch duties for active drivers calc:', e);
-      }
-
-      setStats(prev => ({
-        ...prev,
-        totalDrivers: driversList.length,
-        activeDrivers: activeAssignedDriverCount,
-        totalConductors: conductorsList.length,
-        activeConductors: activeAssignedConductorCount
-      }));
-
-      setStaff([...driversMapped, ...conductorsMapped]);
+      const driversData = await driversRes.json();
+      const conductorsData = await conductorsRes.json();
+      
+      console.log('API responses:', { driversData, conductorsData });
+      
+      const drivers = driversData.data?.drivers || [];
+      const conductors = conductorsData.data?.conductors || [];
+      
+      // Combine and normalize staff list
+      const staffList = [
+        ...drivers.map(d => ({
+          ...d,
+          role: 'driver',
+          employeeId: d.employeeCode || d.driverId || d._id,
+          licenseNumber: d.drivingLicense?.licenseNumber || '',
+          licenseExpiry: d.drivingLicense?.expiryDate || '',
+          joiningDate: d.joiningDate || d.createdAt
+        })),
+        ...conductors.map(c => ({
+          ...c,
+          role: 'conductor',
+          employeeId: c.employeeCode || c._id,
+          licenseNumber: c.licenseNumber || '',
+          joiningDate: c.joiningDate || c.createdAt
+        }))
+      ];
+      
+      console.log('Setting staff:', staffList.length);
+      
+      setStaff(staffList);
+      
+      // Update stats
+      setStats({
+        totalDrivers: drivers.length,
+        activeDrivers: drivers.filter(d => d.status === 'active').length,
+        totalConductors: conductors.length,
+        activeConductors: conductors.filter(c => c.status === 'active').length
+      });
+      
+      setLoading(false);
     } catch (error) {
       console.error('Error fetching staff:', error);
-    } finally {
       setLoading(false);
     }
   };

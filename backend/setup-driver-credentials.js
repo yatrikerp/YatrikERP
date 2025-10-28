@@ -27,6 +27,61 @@ async function setupDriverCredentials() {
       console.log(`${index + 1}. ${depot.depotName || depot.name} (${depot.depotCode || depot.code}) - ID: ${depot._id}`);
     });
 
+    // First, create Suresh's driver account with specific credentials
+    console.log('\n🚗 Setting up Suresh driver with specific credentials...');
+    const sureshEmail = 'suresh.driver@yatrik.com';
+    const sureshPassword = 'Yatrik@123';
+    const sureshDepot = depots[0]; // Use the first depot
+    
+    const existingSuresh = await Driver.findOne({ email: sureshEmail });
+    
+    if (existingSuresh) {
+      console.log(`   ⚠️  Suresh driver already exists, updating credentials...`);
+      const hashedSureshPassword = await bcrypt.hash(sureshPassword, 12);
+      existingSuresh.password = hashedSureshPassword;
+      existingSuresh.name = 'Suresh Driver';
+      existingSuresh.depotId = sureshDepot._id;
+      existingSuresh.status = 'active';
+      existingSuresh.lastLogin = null;
+      existingSuresh.loginAttempts = 0;
+      await existingSuresh.save();
+      console.log(`   ✅ Updated Suresh driver credentials`);
+    } else {
+      console.log(`   Creating Suresh driver...`);
+      const hashedSureshPassword = await bcrypt.hash(sureshPassword, 12);
+      
+      const sureshDriver = new Driver({
+        driverId: 'DRVSURE',
+        name: 'Suresh Driver',
+        email: sureshEmail,
+        phone: '+919876543210',
+        depotId: sureshDepot._id,
+        employeeCode: 'EMPSURE',
+        username: 'suresh.driver',
+        password: hashedSureshPassword,
+        drivingLicense: {
+          licenseNumber: 'DL-KL-1234567890',
+          licenseType: 'LMV',
+          issueDate: new Date(),
+          expiryDate: new Date(Date.now() + 5 * 365 * 24 * 60 * 60 * 1000),
+          issuingAuthority: 'RTO',
+          status: 'valid'
+        },
+        status: 'active',
+        createdBy: new mongoose.Types.ObjectId()
+      });
+      
+      await sureshDriver.save();
+      console.log(`   ✅ Created Suresh driver: ${sureshEmail}`);
+    }
+    
+    console.log(`\n📝 Suresh Driver Login Credentials:`);
+    console.log(`   Email: ${sureshEmail}`);
+    console.log(`   Password: ${sureshPassword}`);
+    console.log(`   Depot: ${sureshDepot.depotName} (${sureshDepot.depotCode})`);
+    console.log(`   Dashboard: http://localhost:3000/admin/drivers`);
+    console.log('');
+
     // Create drivers for each depot
     for (const depot of depots) {
       const depotName = (depot.depotName || depot.name || 'unknown').toLowerCase().replace(/[^a-z0-9]/g, '');

@@ -22,34 +22,53 @@ router.get('/depot/:depotId', auth, requireRole(['admin', 'depot_manager']), asy
       });
     }
     
-    let query = { depotId };
+    console.log('Fetching drivers and conductors for depot:', depotId);
     
-    if (role && role !== 'all') {
-      query.role = role;
-    }
+    // Build query for filtering
+    const driverQuery = { depotId };
+    const conductorQuery = { depotId };
     
     if (status && status !== 'all') {
-      query.status = status;
+      driverQuery.status = status;
+      conductorQuery.status = status;
     }
     
+    let driverSearchQuery = driverQuery;
+    let conductorSearchQuery = conductorQuery;
+    
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { employeeCode: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
-      ];
+      driverSearchQuery = {
+        ...driverQuery,
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { employeeCode: { $regex: search, $options: 'i' } },
+          { phone: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ]
+      };
+      
+      conductorSearchQuery = {
+        ...conductorQuery,
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { employeeCode: { $regex: search, $options: 'i' } },
+          { phone: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ]
+      };
     }
     
     const [drivers, conductors] = await Promise.all([
-      Driver.find(query).select('-password -loginAttempts -lockUntil').populate('depotId', 'depotName depotCode'),
-      Conductor.find(query).select('-password -loginAttempts -lockUntil').populate('depotId', 'depotName depotCode')
+      Driver.find(driverSearchQuery).select('-password -loginAttempts -lockUntil').lean(),
+      Conductor.find(conductorSearchQuery).select('-password -loginAttempts -lockUntil').lean()
     ]);
+    
+    console.log(`Found ${drivers.length} drivers and ${conductors.length} conductors`);
     
     // Add role information
     const staffWithRoles = [
-      ...drivers.map(driver => ({ ...driver.toObject(), role: 'driver' })),
-      ...conductors.map(conductor => ({ ...conductor.toObject(), role: 'conductor' }))
+      ...drivers.map(driver => ({ ...driver, role: 'driver' })),
+      ...conductors.map(conductor => ({ ...conductor, role: 'conductor' }))
     ];
     
     res.json({
@@ -66,9 +85,12 @@ router.get('/depot/:depotId', auth, requireRole(['admin', 'depot_manager']), asy
     
   } catch (error) {
     console.error('Get depot staff error:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Depot ID:', depotId);
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error',
+      error: error.message
     });
   }
 });

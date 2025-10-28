@@ -332,14 +332,26 @@ const FleetManagement = () => {
       });
       
       const res = await apiFetch('/api/depot/buses');
+      console.log('Fleet API Response:', res); // Debug log
+      
       if (res.ok) {
-        setBuses(res.data?.data?.buses || []);
-        setStats(res.data?.data?.stats || {});
+        const busesData = res.data?.data?.buses || res.data?.buses || [];
+        const statsData = res.data?.data?.stats || res.data?.stats || {};
+        
+        console.log('Setting buses:', busesData.length); // Debug log
+        console.log('Sample bus:', busesData[0]); // Debug log
+        
+        setBuses(busesData);
+        setStats(statsData);
       } else {
         console.error('Failed to load buses:', res.status, res.message);
+        setBuses([]);
+        setStats({});
       }
     } catch (error) {
       console.error('Error fetching buses:', error);
+      setBuses([]);
+      setStats({});
     } finally {
       setLoading(false);
     }

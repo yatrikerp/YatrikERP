@@ -2,10 +2,9 @@
 .staff-management {
   padding: 12px;
   background: #f7f8fa;
-  min-height: calc(100vh - 60px);
+  min-height: 100%;
   overflow-x: auto;
-  max-width: 1200px; /* contain layout width to reduce perceived zoom */
-  margin: 0 auto;    /* center the section */
+  width: 100%;
 }
 
 .staff-header {
@@ -290,8 +289,6 @@
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   overflow: hidden;
-  max-height: calc(100vh - 350px);
-  overflow-y: auto;
 }
 
 .staff-table {

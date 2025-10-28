@@ -10,6 +10,8 @@ const Booking = require('../models/Booking');
 const FuelLog = require('../models/FuelLog');
 const Depot = require('../models/Depot');
 const Ticket = require('../models/Ticket'); // Added Ticket model
+const Driver = require('../models/Driver');
+const Conductor = require('../models/Conductor');
 const NotificationService = require('../services/notificationService');
 const { createResponseGuard, safeObjectId, extractUserId, asyncHandler } = require('../middleware/responseGuard');
 
@@ -1725,8 +1727,16 @@ router.get('/drivers', async (req, res) => {
       });
     }
     
-    // Get all drivers in the depot
-    const drivers = await User.find({
+    // Get all drivers from Driver model for this depot
+    const drivers = await Driver.find({
+      depotId: depotId,
+      status: 'active'
+    })
+    .select('name phone email employeeCode drivingLicense currentDuty')
+    .lean();
+
+    // Also check User model as fallback
+    const userDrivers = await User.find({
       role: 'driver',
       depotId: depotId,
       status: 'active'
@@ -1734,12 +1744,20 @@ router.get('/drivers', async (req, res) => {
     .select('name phone email licenseNumber staffDetails')
     .lean();
 
+    // Combine and deduplicate
+    const allDrivers = [...drivers, ...userDrivers];
+    
+    // Remove duplicates based on email or phone
+    const uniqueDrivers = Array.from(
+      new Map(allDrivers.map(d => [d.email || d.phone, d])).values()
+    );
+
     res.json({
       success: true,
       data: {
-        drivers,
+        drivers: uniqueDrivers,
         stats: {
-          totalDrivers: drivers.length
+          totalDrivers: uniqueDrivers.length
         }
       }
     });
@@ -1765,8 +1783,16 @@ router.get('/conductors', async (req, res) => {
       });
     }
     
-    // Get all conductors in the depot
-    const conductors = await User.find({
+    // Get all conductors from Conductor model for this depot
+    const conductors = await Conductor.find({
+      depotId: depotId,
+      status: 'active'
+    })
+    .select('name phone email employeeCode currentDuty')
+    .lean();
+
+    // Also check User model as fallback
+    const userConductors = await User.find({
       role: 'conductor',
       depotId: depotId,
       status: 'active'
@@ -1774,12 +1800,20 @@ router.get('/conductors', async (req, res) => {
     .select('name phone email staffDetails')
     .lean();
 
+    // Combine and deduplicate
+    const allConductors = [...conductors, ...userConductors];
+    
+    // Remove duplicates based on email or phone
+    const uniqueConductors = Array.from(
+      new Map(allConductors.map(c => [c.email || c.phone, c])).values()
+    );
+
     res.json({
       success: true,
       data: {
-        conductors,
+        conductors: uniqueConductors,
         stats: {
-          totalConductors: conductors.length
+          totalConductors: uniqueConductors.length
         }
       }
     });
@@ -2184,26 +2218,40 @@ router.post('/buses/:id/assign-crew', async (req, res) => {
       });
     }
 
-    // Verify driver exists and has correct role (if provided)
+    // Verify driver exists and belongs to the same depot
     let driver = null;
     if (driverId) {
-      driver = await User.findById(driverId);
-      if (!driver || driver.role !== 'driver') {
+      driver = await Driver.findById(driverId);
+      if (!driver) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid driver ID or user is not a driver'
+          message: 'Driver not found'
+        });
+      }
+      // Verify driver belongs to the same depot
+      if (driver.depotId && driver.depotId.toString() !== depotId.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Driver does not belong to this depot'
         });
       }
     }
 
-    // Verify conductor exists and has correct role (if provided)
+    // Verify conductor exists and belongs to the same depot
     let conductor = null;
     if (conductorId) {
-      conductor = await User.findById(conductorId);
-      if (!conductor || conductor.role !== 'conductor') {
+      conductor = await Conductor.findById(conductorId);
+      if (!conductor) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid conductor ID or user is not a conductor'
+          message: 'Conductor not found'
+        });
+      }
+      // Verify conductor belongs to the same depot
+      if (conductor.depotId && conductor.depotId.toString() !== depotId.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Conductor does not belong to this depot'
         });
       }
     }

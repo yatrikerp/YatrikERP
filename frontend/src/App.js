@@ -310,6 +310,12 @@ function App() {
             </RequireAuth>
           } />
 
+          <Route path="/mobile/conductor" element={
+            <RequireAuth roles={['conductor']}>
+              <ConductorDashboard />
+            </RequireAuth>
+          } />
+
           <Route path="/driver" element={
             <RequireAuth roles={['driver']}>
               <DriverDashboard />

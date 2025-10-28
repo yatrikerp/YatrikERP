@@ -57,6 +57,9 @@ async function createTestUsers() {
       { upsert: true, new: true }
     );
     console.log('Created admin:', admin.email);
+    
+    // Get admin user ID for createdBy field
+    const adminId = admin._id;
 
     // 2. Create Depot Manager
     const depotManager = await DepotUser.findOneAndUpdate(
@@ -76,46 +79,46 @@ async function createTestUsers() {
     );
     console.log('Created depot manager:', depotManager.email);
 
+    // Delete existing test conductor and driver before creating new ones
+    await Conductor.deleteMany({ $or: [{ username: 'conductor001' }, { conductorId: 'COND001' }] });
+    await Driver.deleteMany({ $or: [{ username: 'driver001' }, { driverId: 'DRV001' }] });
+
     // 3. Create Conductor
-    const conductor = await Conductor.findOneAndUpdate(
-      { username: 'conductor001' },
-      {
-        conductorId: 'COND001',
-        name: 'Test Conductor',
-        username: 'conductor001',
-        password: hashedPassword,
-        email: 'conductor@yatrik.com',
-        phone: '+919876543211',
-        employeeCode: 'EMP-COND-001',
-        depotId: depot._id,
-        status: 'active'
-      },
-      { upsert: true, new: true }
-    );
+    const conductor = new Conductor({
+      conductorId: 'COND001',
+      name: 'Test Conductor',
+      username: 'conductor001',
+      password: hashedPassword,
+      email: 'conductor@yatrik.com',
+      phone: '+919876543211',
+      employeeCode: 'EMP-COND-001',
+      depotId: depot._id,
+      status: 'active',
+      createdBy: adminId
+    });
+    await conductor.save();
     console.log('Created conductor:', conductor.username);
 
     // 4. Create Driver
-    const driver = await Driver.findOneAndUpdate(
-      { username: 'driver001' },
-      {
-        driverId: 'DRV001',
-        name: 'Test Driver',
-        username: 'driver001',
-        password: hashedPassword,
-        email: 'driver@yatrik.com',
-        phone: '+919876543212',
-        employeeCode: 'EMP-DRV-001',
-        depotId: depot._id,
-        drivingLicense: {
-          licenseNumber: 'KL-2023-0123456789',
-          licenseType: 'HMV',
-          expiryDate: new Date('2025-12-31'),
-          status: 'valid'
-        },
-        status: 'active'
+    const driver = new Driver({
+      driverId: 'DRV001',
+      name: 'Test Driver',
+      username: 'driver001',
+      password: hashedPassword,
+      email: 'driver@yatrik.com',
+      phone: '+919876543212',
+      employeeCode: 'EMP-DRV-001',
+      depotId: depot._id,
+      drivingLicense: {
+        licenseNumber: 'KL-2023-0123456789',
+        licenseType: 'HMV',
+        expiryDate: new Date('2025-12-31'),
+        status: 'valid'
       },
-      { upsert: true, new: true }
-    );
+      status: 'active',
+      createdBy: adminId
+    });
+    await driver.save();
     console.log('Created driver:', driver.username);
 
     // 5. Create Passenger

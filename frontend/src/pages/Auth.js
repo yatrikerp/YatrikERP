@@ -230,19 +230,7 @@ const Auth = ({ initialMode = 'login' }) => {
   // Preload authentication endpoints for instant performance
   useEffect(() => {
     const preloadAuthEndpoints = () => {
-      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      
-      // Preload Google OAuth (safe GET endpoint)
-      const googleOAuthUrl = `${baseUrl}/api/auth/google?next=${encodeURIComponent(redirectTo)}`;
-      const googleLink = document.createElement('link');
-      googleLink.rel = 'prefetch';
-      googleLink.href = googleOAuthUrl;
-      document.head.appendChild(googleLink);
-      
-      // Remove prefetching POST-only login endpoints to avoid 404s
-      // Previously appended prefetch links for /api/depot-auth/login and /api/auth/login
-      
-      // Preload the callback route (frontend route)
+      // Preload the callback route (frontend route) - this is safe to prefetch
       const callbackLink = document.createElement('link');
       callbackLink.rel = 'prefetch';
       callbackLink.href = '/oauth/callback';

@@ -11,15 +11,47 @@ const REQUEST_TIMEOUT = 30000; // 30 seconds for dashboard endpoints
 let warnedBase = false;
 
 export async function apiFetch(path, options = {}) {
-  // Use environment variables for API base URL
-  const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const envBase = (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE_URL)) || process.env.REACT_APP_API_URL;
-  const base = (envBase || (isDevelopment ? 'http://localhost:5000' : '')).replace(/\/$/, '');
-  if (!envBase && !warnedBase) {
-    // Helpful dev hint if env not configured
-    try { console.warn('[apiFetch] REACT_APP_API_URL not set; using direct backend URL in development'); } catch {}
+  // Detect environment more accurately
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+  const isDevelopment = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0';
+  const isProduction = hostname.includes('yatrikerp.live') || hostname.includes('onrender.com');
+  
+  // Get base URL from environment variables with fallbacks
+  let envBase = '';
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    envBase = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE_URL || import.meta.env.PUBLIC_API_URL;
+  }
+  
+  // Fallback to process.env for older React apps
+  if (!envBase && typeof process !== 'undefined' && process.env) {
+    envBase = process.env.REACT_APP_API_URL || process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  // Determine base URL
+  let base = '';
+  if (envBase) {
+    base = envBase.replace(/\/$/, '');
+  } else if (isDevelopment) {
+    // Development: use proxy for same-origin requests or explicit localhost
+    base = 'http://localhost:5000';
+  } else if (isProduction) {
+    // Production: use the Render backend
+    base = 'https://yatrikerp.onrender.com';
+  }
+  
+  // Final cleanup
+  base = base.replace(/\/$/, '');
+  
+  // Warn only once if no environment variable is set
+  if (!envBase && !warnedBase && isDevelopment) {
+    try { 
+      console.warn('[apiFetch] Using default backend URL:', base);
+      console.warn('[apiFetch] To use a different backend, set VITE_BACKEND_URL in .env file');
+    } catch {}
     warnedBase = true;
   }
+  
   // Prefer depotToken when present (depot panel), fallback to regular token
   const token = localStorage.getItem('depotToken') || localStorage.getItem('token');
   
@@ -69,10 +101,19 @@ export async function apiFetch(path, options = {}) {
   
   const timeout = options.timeout || getTimeout(path);
   
+  let timeoutId;
+  let controller;
+  let abortedByTimeout = false;
+  
   try {
     // Create abort controller for timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    controller = new AbortController();
+    timeoutId = setTimeout(() => {
+      if (controller && !controller.signal.aborted) {
+        abortedByTimeout = true;
+        controller.abort();
+      }
+    }, timeout);
     
     // Avoid double "/api" when base already ends with "/api" and path starts with "/api"
     const normalizedPath = (base.endsWith('/api') && path.startsWith('/api/'))
@@ -85,7 +126,8 @@ export async function apiFetch(path, options = {}) {
       signal: controller.signal
     });
     
-    clearTimeout(timeoutId);
+    // Clear timeout on successful response
+    if (timeoutId) clearTimeout(timeoutId);
     
     let data = null;
     try { 
@@ -147,16 +189,22 @@ export async function apiFetch(path, options = {}) {
     
     return result;
   } catch (error) {
+    // Always clear timeout on error
+    if (timeoutId) clearTimeout(timeoutId);
+    
     if (error.name === 'AbortError') {
-      const timeoutError = { 
-        message: `Request timed out after ${timeout/1000} seconds. Please try again.`, 
-        code: 'TIMEOUT' 
-      };
-      if (!options.suppressError) {
+      // Only show error for actual timeouts, not component unmounts
+      if (abortedByTimeout && !options.suppressError) {
+        const timeoutError = { 
+          message: `Request timed out after ${timeout/1000} seconds. Please try again.`, 
+          code: 'TIMEOUT' 
+        };
         handleError(timeoutError);
       }
+      
       return { ok: false, status: 408, message: 'Request timeout', data: null };
     }
+    
     const networkError = { message: 'Network error. Please check your connection.', code: 'NETWORK_ERROR' };
     if (!options.suppressError) {
       handleError(networkError);

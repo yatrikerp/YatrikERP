@@ -839,16 +839,10 @@ const DepotDashboard = () => {
                 {/* Dashboard Header */}
                 <div className="dashboard-header">
                   <div className="header-left">
-                    <h1>Yatrik Depot Dashboard</h1>
+                    <h1>{depotInfo.name} Dashboard</h1>
                     <p className="welcome-text">Welcome back! Here's what's happening with your depot today.</p>
                   </div>
                   <div className="quick-actions-grid">
-                    <button className="quick-action red" onClick={handleLogout} aria-label="Logout" data-testid="header-logout">
-                      <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
-                      </svg>
-                      <span className="qa-title">Logout</span>
-                    </button>
                     <button className="quick-action blue">
                       <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z" />
@@ -866,12 +860,6 @@ const DepotDashboard = () => {
                         <path fillRule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
                       <span className="qa-title">View Reports</span>
-                    </button>
-                    <button className="quick-action orange">
-                      <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                      <span className="qa-title">System Status</span>
                     </button>
                     <button className="quick-action red" onClick={handleLogout} aria-label="Logout" data-testid="header-logout">
                       <svg className="action-icon" fill="currentColor" viewBox="0 0 20 20">
