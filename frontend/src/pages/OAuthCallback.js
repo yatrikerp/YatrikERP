@@ -9,8 +9,7 @@ const OAuthCallback = () => {
   const [searchParams] = useSearchParams();
   const { login } = useAuth();
   const { isMobile } = useMobileDetection();
-  const [isProcessing, setIsProcessing] = useState(true);
-  const [error, setError] = useState(null);
+  const [message, setMessage] = useState("Processing your sign-in...");
 
   useEffect(() => {
     const handleGoogleCallback = async () => {
@@ -19,7 +18,7 @@ const OAuthCallback = () => {
         const oauthError = searchParams.get('error');
         
         if (oauthError) {
-          setError('Authentication failed. Please try again.');
+          setMessage("Login failed. Redirecting to login...");
           setTimeout(() => navigate('/login'), 2000);
           return;
         }
@@ -30,17 +29,23 @@ const OAuthCallback = () => {
         const nextParam = searchParams.get('next');
         
         if (!user || !token) {
-          setError('Missing authentication data. Please try again.');
+          setMessage("Login failed. Redirecting to login...");
           setTimeout(() => navigate('/login'), 2000);
           return;
         }
 
         try {
+          // Update message before processing
+          setMessage("Verifying your account...");
+          
           // Parse user data from backend
           const userData = JSON.parse(decodeURIComponent(user));
           
           // Log in the user with backend data
           await login(userData, token);
+          
+          // Update message after login
+          setMessage("Login successful! Redirecting...");
           
           // Wait a bit for the login to complete and mobile detection to be ready
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -68,6 +73,11 @@ const OAuthCallback = () => {
               // For mobile users, redirect /pax to mobile dashboard
               if ((currentIsMobile || shouldUseMobile) && nextParam === '/pax' && role === 'PASSENGER') {
                 dest = '/passenger/mobile';
+              } else if ((currentIsMobile || shouldUseMobile) && nextParam.startsWith('/pax/') && role === 'PASSENGER') {
+                // For mobile passengers, redirect /pax/* routes appropriately
+                dest = nextParam.replace('/pax/', '/mobile/passenger/');
+              } else if ((currentIsMobile || shouldUseMobile) && nextParam.startsWith('/passenger/') && role === 'PASSENGER') {
+                dest = nextParam.replace('/passenger/', '/mobile/passenger/');
               } else {
                 dest = nextParam;
               }
@@ -86,38 +96,24 @@ const OAuthCallback = () => {
             }
           } catch (_) {}
           
-          // Debug logging for mobile redirect
-          console.log('🔍 OAuth Callback Redirect Debug:');
-          console.log('  Role:', role);
-          console.log('  Hook isMobile:', isMobile);
-          console.log('  Current isMobile:', currentIsMobile);
-          console.log('  Should Use Mobile:', shouldUseMobile);
-          console.log('  Window width:', window.innerWidth);
-          console.log('  Touch device:', 'ontouchstart' in window);
-          console.log('  Max touch points:', navigator.maxTouchPoints);
-          console.log('  Next Param:', nextParam);
-          console.log('  Final Destination:', dest);
-          console.log('  User Agent:', navigator.userAgent);
-          console.log('  User Data:', userData);
+          console.log('OAuth Callback - Redirecting to:', dest, 'Mobile:', currentIsMobile || shouldUseMobile);
           
           // Use a small delay to ensure state is fully updated
           setTimeout(() => {
             navigate(dest, { replace: true });
-          }, 200);
+          }, 500);
           return;
         } catch (parseError) {
           console.error('Parse error:', parseError);
-          setError('Invalid user data received. Please try again.');
+          setMessage("Login failed. Redirecting to login...");
           setTimeout(() => navigate('/login'), 2000);
           return;
         }
         
       } catch (error) {
         console.error('OAuth callback error:', error);
-        setError('Authentication failed. Please try again.');
+        setMessage("Login failed. Redirecting to login...");
         setTimeout(() => navigate('/login'), 2000);
-      } finally {
-        setIsProcessing(false);
       }
     };
 
@@ -129,36 +125,59 @@ const OAuthCallback = () => {
         'CONDUCTOR': '/conductor',
         'DRIVER': '/driver',
         'DEPOT_MANAGER': '/depot',
-        'PASSENGER': currentIsMobile ? '/passenger/mobile' : '/pax' // Mobile users go to mobile dashboard
+        'PASSENGER': currentIsMobile ? '/mobile/passenger' : '/pax'
       };
       
-      return baseRoutes[role] || (currentIsMobile ? '/passenger/mobile' : '/pax');
+      return baseRoutes[role] || (currentIsMobile ? '/mobile/passenger' : '/pax');
     };
 
     handleGoogleCallback();
   }, [searchParams, login, navigate, isMobile]);
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center p-8 bg-white rounded-2xl shadow-lg border border-gray-200">
-          <div className="text-red-500 text-xl mb-4">❌ {error}</div>
-          <div className="text-gray-600">Redirecting to login page...</div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center p-8 bg-white rounded-2xl shadow-lg border border-gray-200">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        <p className="text-gray-900 font-medium">Completing Google sign-in...</p>
-        <p className="text-sm text-gray-500 mt-2">Please wait while we authenticate you</p>
-      </div>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        alignItems: "center",
+        height: "100vh",
+        padding: "20px",
+        fontFamily: "Inter, sans-serif",
+        backgroundColor: "#0B0C10",
+        color: "#66FCF1",
+      }}
+    >
+      <h2 style={{ 
+        fontSize: window.innerWidth <= 768 ? "1.4rem" : "1.8rem", 
+        marginBottom: "1rem",
+        textAlign: "center",
+        padding: "0 10px"
+      }}>{message}</h2>
+      <div className="loader" style={{
+        border: "4px solid #1F2833",
+        borderTop: "4px solid #66FCF1",
+        borderRadius: "50%",
+        width: "40px",
+        height: "40px",
+        animation: "spin 1s linear infinite"
+      }}></div>
+
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+          h2 {
+            font-size: 1.2rem !important;
+          }
+        }
+      `}</style>
     </div>
   );
-};
+}
 
 export default OAuthCallback;
 

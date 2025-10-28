@@ -1,0 +1,72 @@
+==================================================
+ADD BOOKINGS TO MONGODB - COPY & PASTE THESE COMMANDS
+==================================================
+
+Run these commands in MongoDB Compass or mongosh:
+
+1. Open MongoDB Compass
+2. Connect to your database (mongodb://localhost:27017 or your Atlas URI)
+3. Switch to database: yatrik_erp
+4. Open the "bookings" collection
+5. Click "Documents" -> "Insert Document"
+6. Use this example document:
+
+{
+  "bookingId": "BK123456789",
+  "bookingReference": "REFABC123",
+  "tripId": ObjectId("PASTE_ANY_EXISTING_TRIP_ID"),
+  "customer": {
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "phone": "+919876543210",
+    "age": 35,
+    "gender": "male"
+  },
+  "journey": {
+    "from": "Mumbai",
+    "to": "Pune",
+    "departureDate": ISODate("2025-11-01T00:00:00Z"),
+    "departureTime": "08:00",
+    "arrivalDate": ISODate("2025-11-01T00:00:00Z"),
+    "arrivalTime": "11:00"
+  },
+  "seats": [{"seatNumber": "A1", "seatType": "seater", "price": 300}],
+  "pricing": {
+    "baseFare": 300,
+    "seatCharges": 0,
+    "taxes": 0,
+    "discounts": 0,
+    "total": 300
+  },
+  "baseFare": 300,
+  "fare": 300,
+  "status": "confirmed",
+  "paymentStatus": "paid",
+  "createdAt": new Date(),
+  "createdBy": ObjectId("PASTE_ANY_USER_ID")
+}
+
+7. Click "Insert" for each booking
+8. Repeat step 6-7 to create 20-30 bookings
+
+==================================================
+ALTERNATIVE: QUICK API METHOD
+==================================================
+
+If you have trips in your database:
+
+1. Open Postman or use curl
+2. GET http://localhost:5000/api/trips
+3. Copy a trip _id
+4. POST http://localhost:5000/api/booking/create-sample
+5. This will create sample bookings automatically
+
+==================================================
+FILES CREATED:
+==================================================
+
+✅ backend/insert-ml-bookings.js - Node.js script
+✅ backend/ml-insert-bookings.mongodb.js - MongoDB script
+✅ backend/add-bookings-only.js - Add to existing trips
+✅ backend/simple-ml-data.js - Check database status
+
