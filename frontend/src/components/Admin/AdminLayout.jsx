@@ -77,18 +77,6 @@ const AdminLayout = ({ children }) => {
       current: location.pathname === '/admin/bookings'
     },
     {
-      name: 'Support Agents',
-      href: '/admin/support-agents',
-      icon: Users,
-      current: location.pathname === '/admin/support-agents' || location.pathname === '/support'
-    },
-    {
-      name: 'Data Collectors',
-      href: '/admin/data-collectors',
-      icon: Database,
-      current: location.pathname === '/admin/data-collectors' || location.pathname === '/data-collector'
-    },
-    {
       name: 'Depot Management',
       href: '/admin/depot-management',
       icon: Building2,
@@ -123,6 +111,12 @@ const AdminLayout = ({ children }) => {
       href: '/admin/rbac',
       icon: Shield,
       current: location.pathname === '/admin/rbac'
+    },
+    {
+      name: 'ML Analytics',
+      href: '/admin/ml-analytics',
+      icon: BarChart3,
+      current: location.pathname === '/admin/ml-analytics'
     },
     {
       name: 'Reports',

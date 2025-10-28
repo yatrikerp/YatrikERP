@@ -290,7 +290,7 @@ db.once('open', async () => {
         const passengerName = passengerNames[Math.floor(Math.random() * passengerNames.length)];
         const bookingId = `BK${Date.now()}${bookingCount}`;
         const bookingRef = `REF${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-        const bookingDate = new Date(trip.date);
+        const bookingDate = new Date(trip.serviceDate);
         bookingDate.setHours(bookingDate.getHours() - Math.floor(Math.random() * 48));
         
         await Booking.create({
@@ -308,29 +308,38 @@ db.once('open', async () => {
             gender: ['male', 'female'][Math.floor(Math.random() * 2)]
           },
           journey: {
-            from: 'Origin',
-            to: 'Destination',
+            from: 'Thiruvananthapuram',
+            to: 'Kochi',
             departureDate: trip.serviceDate,
             departureTime: trip.startTime,
             arrivalDate: trip.serviceDate,
-            arrivalTime: trip.endTime
+            arrivalTime: trip.endTime,
+            duration: 180
           },
           seats: [{
             seatNumber: `${['A','B','C'][Math.floor(Math.random() * 3)]}${Math.floor(Math.random() * 20) + 1}`,
             seatType: 'seater',
+            seatPosition: ['window', 'aisle', 'middle'][Math.floor(Math.random() * 3)],
+            passengerName: passengerName,
+            passengerAge: Math.floor(Math.random() * 50) + 20,
+            passengerGender: ['male', 'female'][Math.floor(Math.random() * 2)],
             price: trip.fare
           }],
           pricing: {
             baseFare: trip.fare,
-            seatCharges: 0,
-            taxes: 0,
-            discounts: 0,
-            total: trip.fare
+            seatFare: trip.fare,
+            taxes: { gst: 0, serviceTax: 0, other: 0 },
+            discounts: { earlyBird: 0, loyalty: 0, promo: 0, other: 0 },
+            totalAmount: trip.fare,
+            paidAmount: trip.fare
           },
-          baseFare: trip.fare,
-          fare: trip.fare,
+          payment: {
+            method: 'upi',
+            paymentStatus: 'completed',
+            transactionId: `TXN${Date.now()}${bookingCount}`,
+            paidAt: bookingDate
+          },
           status: 'confirmed',
-          paymentStatus: 'paid',
           createdAt: bookingDate,
           createdBy: adminUser._id
         });

@@ -73,6 +73,7 @@ import AdminUpcomingPayments from './pages/admin/AdminUpcomingPayments';
 import AdminPaymentHistory from './pages/admin/AdminPaymentHistory';
 import AdminRevenue from './pages/admin/AdminRevenue';
 import RedirectDashboard from './pages/RedirectDashboard';
+import MLVisualization from './pages/admin/MLVisualization';
 
 // New Streamlined Components
 import StreamlinedBusManagement from './pages/admin/StreamlinedBusManagement';
@@ -903,6 +904,14 @@ function App() {
             <RequireAuth roles={['admin']}>
               <AdminLayout>
                 <AdminReports />
+              </AdminLayout>
+            </RequireAuth>
+          } />
+
+          <Route path="/admin/ml-analytics" element={
+            <RequireAuth roles={['admin']}>
+              <AdminLayout>
+                <MLVisualization />
               </AdminLayout>
             </RequireAuth>
           } />
