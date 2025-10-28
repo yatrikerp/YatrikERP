@@ -18,25 +18,55 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
 // Middleware
-const corsOrigins = process.env.CORS_ORIGIN 
-  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
-  : [
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-      'http://localhost:5000',
-      'https://yatrikerp.live',
-      'https://yatrikerp.onrender.com',
-      'https://yatrik-frontend-app.onrender.com'
-    ];
+const defaultCorsOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:5000',
+  'https://yatrikerp.live',
+  'https://www.yatrikerp.live',
+  'https://yatrikerp.onrender.com',
+  'https://yatrik-frontend-app.onrender.com'
+];
 
+const corsOrigins = process.env.CORS_ORIGIN 
+  ? [...defaultCorsOrigins, ...process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())]
+  : defaultCorsOrigins;
+
+// Enhanced CORS configuration
+console.log('🌐 CORS Origins:', corsOrigins);
 app.use(cors({
-  origin: corsOrigins,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (corsOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.warn(`⚠️ CORS blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 200
 }));
+
+// Explicit OPTIONS handler for preflight requests
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Max-Age', '86400');
+  res.sendStatus(200);
+});
 // HTTP compression (apply early)
 app.use(compression({ threshold: 1024 }));
 
@@ -122,9 +152,10 @@ async function startServer() {
     // Initialize Socket.IO
     const io = new Server(server, {
       cors: {
-        origin: process.env.FRONTEND_URL || "http://localhost:3000",
+        origin: corsOrigins,
         methods: ["GET", "POST"],
-        credentials: true
+        credentials: true,
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
       }
     });
     

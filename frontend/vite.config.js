@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
     publicDir: 'public',
     cacheDir: 'node_modules/.vite',
     server: {
-      port: 5173,
+      port: 3000,
       open: false,
       host: true,
       proxy: {

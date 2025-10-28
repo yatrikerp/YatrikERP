@@ -47,16 +47,16 @@
     "zustand": "^4.4.7"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "dev": "react-scripts start",
+    "start": "set PORT=3000 && react-scripts start",
+    "dev": "set PORT=3000 && react-scripts start",
     "build": "react-scripts build",
     "build:production": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "dev:vite": "vite",
+    "dev:vite": "vite --port 3000",
     "build:vite": "vite build",
-    "preview:vite": "vite preview --port 4173",
-    "serve": "npx serve -s build -l 3000",
+    "preview:vite": "vite preview --port 3000",
+    "serve:3000": "npx serve -s build -l 3000",
     "deploy:vercel": "vercel --prod",
     "deploy:netlify": "netlify deploy --prod --dir=build",
     "deploy:render": "npm run build && npm run serve"

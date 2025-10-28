@@ -31,7 +31,7 @@ services:
       - key: GOOGLE_CALLBACK_URL
         value: https://yatrikerp.onrender.com/api/auth/google/callback
       - key: CORS_ORIGIN
-        value: https://yatrik-frontend-app.onrender.com,https://yatrikerp.live
+        value: https://yatrikerp.live,https://www.yatrikerp.live,https://yatrik-frontend-app.onrender.com
       - key: EMAIL_HOST
         value: smtp.gmail.com
       - key: EMAIL_PORT
