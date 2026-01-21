@@ -1,0 +1,60 @@
+4a907e6 | YatrikERP | 21-01-2026 11:41 | project updation
+c01e8dc | YatrikERP | 28-10-2025 18:13 | conductor dashboard
+0e4bd7d | YatrikERP | 28-10-2025 15:53 | CORS functionality updation
+2ddb006 | YatrikERP | 28-10-2025 15:42 | Fix CORS for yatrikerp.live and configure port 3000 for local development
+fc2f9c4 | YatrikERP | 28-10-2025 14:32 | host update
+ff61303 | YatrikERP | 28-10-2025 11:12 | just updation
+8d1eb8f | YatrikERP | 26-10-2025 14:56 | update
+d6f7da9 | YatrikERP | 26-10-2025 11:53 | Booking Trips Updation
+f09fd8c | YatrikERP | 26-10-2025 10:50 | Hosting Updation
+02244e8 | YatrikERP | 24-10-2025 23:47 | Processing the hosting
+8362c58 | YatrikERP | 24-10-2025 22:28 | Hosting
+4248b7f | YatrikERP | 24-10-2025 15:56 | playwright testing
+ad11fc9 | YatrikERP | 20-10-2025 10:45 | Creating the support agents and the data collectors
+b7bf4d1 | YatrikERP | 10-10-2025 17:25 | Just Updating
+5347e78 | YatrikERP | 07-10-2025 03:17 | setting up the Ticket
+b35a559 | YatrikERP | 03-10-2025 22:46 | remove-all-hosting-configs
+345aa41 | YatrikERP | 03-10-2025 22:14 | chore-backend-lockfile-fix
+4810ab2 | YatrikERP | 03-10-2025 20:37 | Just Updation
+bcccab0 | YatrikERP | 03-10-2025 17:44 | deploying to host
+2845cad | YatrikERP | 03-10-2025 10:32 | Mobile Responsive
+15c7c70 | YatrikERP | 01-10-2025 22:09 | Backend Hosting
+13f2114 | YatrikERP | 01-10-2025 16:18 | Google auth setup
+4ef10f5 | YatrikERP | 01-10-2025 12:05 | Mobile responsive
+1f7eed0 | YatrikERP | 01-10-2025 09:40 | Hosting Updation
+1356ec1 | YatrikERP | 30-09-2025 21:47 | Automate Trip scheduling
+6ea7e3a | YatrikERP | 29-09-2025 11:30 | Bus route map integration
+79d75cd | YatrikERP | 28-09-2025 16:46 | Depots Updation
+ec836e4 | YatrikERP | 26-09-2025 16:10 | Scheduling Enhancement
+2b2d51d | YatrikERP | 25-09-2025 14:50 | Just Updation
+d6282b2 | YatrikERP | 21-09-2025 13:39 | Email message set up
+8439151 | YatrikERP | 18-09-2025 08:00 | all dashboards  fixing
+8e1ffab | YatrikERP | 17-09-2025 13:49 | Passsenger Dashboatrd
+96601db | YatrikERP | 15-09-2025 14:55 | Driver & Conductor
+cd74484 | YatrikERP | 12-09-2025 16:09 | Updation
+6cb7ca5 | YatrikERP | 11-09-2025 18:08 | Depot trip management
+0ec081f | YatrikERP | 10-09-2025 09:45 | Bus Ticket Booking
+63b5a3d | YatrikERP | 09-09-2025 01:58 | New Updation
+ffbe9a8 | YatrikERP | 08-09-2025 00:28 | Booking
+691172a | YatrikERP | 04-09-2025 11:40 | Admin Dashboard Updation
+6a663a0 | YatrikERP | 04-09-2025 01:30 | Trip Scheduling
+2af1ccf | YatrikERP | 02-09-2025 01:01 | Depot Operations
+aa91560 | YatrikERP | 30-08-2025 12:09 | Normal updation
+26d87fa | YatrikERP | 30-08-2025 01:09 | Depot Dashboard
+ad5c727 | YatrikERP | 25-08-2025 01:34 | Booking on progress
+907ab8e | YatrikERP | 23-08-2025 16:06 | just updation
+f1b59b3 | YatrikERP | 23-08-2025 09:28 | Saving progress
+a550fa7 | YatrikERP | 22-08-2025 22:36 | DEPOT dashboard
+12abefd | YatrikERP | 19-08-2025 16:18 | Merge branch 'main' of https://github.com/yatrikerp/YatrikERP
+54826c3 | YatrikERP | 19-08-2025 16:18 | updation login and Admin dashboard
+2705e98 | Yatrik-ERP | 19-08-2025 10:36 | Update README.md
+3f4635b | YatrikERP | 19-08-2025 10:32 | Landing page,login,admin Dashboard
+6f1c452 | YatrikERP | 10-08-2025 19:57 | clear
+0c6e0b6 | YatrikERP | 08-08-2025 07:33 | Login and register
+d3354e7 | YatrikERP | 07-08-2025 16:14 | login
+a726ce5 | YatrikERP | 07-08-2025 15:35 | intial 1
+a3df9d4 | YatrikERP | 07-08-2025 14:43 | Initial Commit
+00b9b54 | YatrikERP | 05-08-2025 10:59 | yatrik
+d1c5158 | YatrikERP | 05-08-2025 10:31 | Cleaned repository - removed all tracked files
+d7bf263 | akhilkurian2255 | 05-08-2025 10:24 | frontend
+02df021 | akhilkurian2255 | 05-08-2025 10:11 | first commit
