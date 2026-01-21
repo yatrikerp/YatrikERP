@@ -17,6 +17,7 @@ import {
   Calendar,
   BarChart3
 } from 'lucide-react';
+import { apiFetch } from '../../utils/api';
 
 const ModernDashboard = () => {
   const [systemStats, setSystemStats] = useState({
@@ -37,25 +38,28 @@ const ModernDashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const response = await fetch('/api/admin/dashboard', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+      const res = await apiFetch('/api/admin/dashboard', {
+        suppressLogout: true,
+        suppressError: true
       });
       
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
+      if (res.ok) {
+        const data = res.data;
+        if (data.success || data.kpis) {
           setSystemStats({
-            totalUsers: data.stats?.totalUsers || 0,
-            runningTrips: data.stats?.runningTrips || 0,
-            todayRevenue: data.stats?.todayRevenue || 0,
-            pendingBookings: data.stats?.pendingBookings || 0
+            totalUsers: data.stats?.totalUsers || data.kpis?.users || 0,
+            runningTrips: data.stats?.runningTrips || data.kpis?.runningTrips || 0,
+            todayRevenue: data.stats?.todayRevenue || data.kpis?.todayRevenue || 0,
+            pendingBookings: data.stats?.pendingBookings || data.kpis?.pendingBookings || 0
           });
           setAlerts(data.alerts || []);
           setRecentActivity(data.recentActivity || []);
           setRevenueData(data.revenueData || []);
         }
+      } else if (res.status === 401) {
+        console.warn('Authentication required. Please log in again.');
+        localStorage.clear();
+        window.location.href = '/login';
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);

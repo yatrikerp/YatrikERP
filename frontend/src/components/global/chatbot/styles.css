@@ -1,0 +1,287 @@
+/**
+ * YATRIK Quick Help - Styles
+ * Minimal, modern, fast-rendering styles
+ */
+
+/* Floating Button */
+.yatrik-quick-help-btn {
+  position: fixed;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  border: none;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  cursor: grab;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow 0.3s ease;
+  color: white;
+}
+
+.yatrik-quick-help-btn:active {
+  cursor: grabbing;
+}
+
+.yatrik-quick-help-btn.dragging {
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.6);
+  transform: scale(1.1);
+  transition: none;
+}
+
+/* Robot Icon - Centered */
+.yatrik-robot-icon {
+  font-size: 28px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+}
+
+.yatrik-quick-help-btn:hover:not(.dragging) {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.6);
+}
+
+/* Robot Icon - Centered */
+.yatrik-robot-icon {
+  font-size: 28px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+}
+
+/* Pulse animation */
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.7);
+  }
+}
+
+.yatrik-quick-help-btn.pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Chat Panel */
+.yatrik-quick-help-panel {
+  position: fixed;
+  width: 320px;
+  max-width: calc(100vw - 48px);
+  height: 420px;
+  max-height: calc(100vh - 112px);
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  z-index: 9998;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Panel Header */
+.yatrik-quick-help-header {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.yatrik-quick-help-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.yatrik-quick-help-close {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.yatrik-quick-help-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Messages Container */
+.yatrik-quick-help-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #f9fafb;
+}
+
+/* Message Bubbles */
+.yatrik-quick-help-message {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.yatrik-quick-help-message.user {
+  align-self: flex-end;
+  background: #3b82f6;
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.yatrik-quick-help-message.assistant {
+  align-self: flex-start;
+  background: white;
+  color: #1f2937;
+  border: 1px solid #e5e7eb;
+  border-bottom-left-radius: 4px;
+}
+
+/* Input Area */
+.yatrik-quick-help-input-area {
+  border-top: 1px solid #e5e7eb;
+  padding: 12px;
+  background: white;
+  display: flex;
+  gap: 8px;
+}
+
+.yatrik-quick-help-input {
+  flex: 1;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.yatrik-quick-help-input:focus {
+  border-color: #3b82f6;
+}
+
+.yatrik-quick-help-send {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.yatrik-quick-help-send:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.yatrik-quick-help-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Quick Suggestions */
+.yatrik-quick-help-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 16px;
+  border-top: 1px solid #e5e7eb;
+  background: white;
+}
+
+.yatrik-quick-help-suggestion {
+  padding: 6px 12px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #374151;
+}
+
+.yatrik-quick-help-suggestion:hover {
+  background: #e5e7eb;
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+/* Welcome Message */
+.yatrik-quick-help-welcome {
+  text-align: center;
+  padding: 20px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* Scrollbar Styling */
+.yatrik-quick-help-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.yatrik-quick-help-messages::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+.yatrik-quick-help-messages::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.yatrik-quick-help-messages::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Mobile Responsive */
+@media (max-width: 640px) {
+  .yatrik-quick-help-panel {
+    width: calc(100vw - 24px);
+    height: calc(100vh - 96px);
+  }
+  
+  .yatrik-quick-help-btn {
+    width: 44px;
+    height: 44px;
+  }
+  
+  .yatrik-robot-icon {
+    font-size: 24px;
+  }
+}

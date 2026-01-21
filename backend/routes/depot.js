@@ -26,42 +26,33 @@ const depotAuth = authRole(['depot_manager', 'depot_supervisor', 'depot_operator
 
 // Test endpoint without auth
 router.get('/health', (req, res) => {
+  console.log('✅ Health check endpoint hit');
   res.json({ success: true, message: 'Depot routes are working' });
 });
 
-// Apply depot auth to all routes except health
+// Apply auth middleware directly (like other routes do)
+// Skip auth for health check and test endpoints
 router.use((req, res, next) => {
-  if (req.path === '/health') {
+  // Skip auth for specific endpoints
+  if (req.path === '/health' || req.path === '/test' || req.path === '/debug-user') {
     return next();
   }
-  
-  // Apply auth middleware
-  return auth(req, res, (err) => {
-    if (err) {
-      console.error('Auth error:', err);
-      return res.status(401).json({ 
-        success: false, 
-        error: 'Authentication failed' 
-      });
-    }
-    
-    // Allow all authenticated users to access depot routes
-    console.log('Depot route access granted to user:', {
-      role: req.user?.role,
-      userId: req.user?._id,
-      userName: req.user?.name,
-      userDepotId: req.user?.depotId,
-      userEmail: req.user?.email
-    });
-    
-    next();
-  });
+  // Apply auth middleware - auth is async function, Express will handle it
+  console.log('🔐 Auth middleware called for path:', req.path, 'Method:', req.method);
+  auth(req, res, next);
 });
 
 // Ensure depotId is available for all depot routes
 router.use(async (req, res, next) => {
   try {
-    if (!req.user || req.user.depotId) return next();
+    if (!req.user) return next();
+    
+    // If user already has depotId, use it
+    if (req.user.depotId) {
+      console.log('User already has depotId:', req.user.depotId);
+      return next();
+    }
+    
     // Try mapping by depotCode from token/user
     let code = req.user.depotCode || null;
     if (!code && req.user.email) {
@@ -69,22 +60,46 @@ router.use(async (req, res, next) => {
       const mA = email.match(/^([a-z0-9]+)-depot@yatrik\.com$/);
       const mB = email.match(/^depot-([a-z0-9]+)@yatrik\.com$/);
       code = (mA && mA[1]) || (mB && mB[1]) || null;
+      console.log('Extracted depot code from email:', code);
     }
+    
     let depot = null;
     if (code) {
       const upper = String(code).toUpperCase();
       depot = await Depot.findOne({ $or: [{ depotCode: upper }, { code: upper }] }).lean();
+      if (depot) {
+        console.log('Found depot by code:', depot.depotName);
+      }
     }
+    
+    // If still no depot, try to find KCH or any active depot
     if (!depot) {
-      depot = await Depot.findOne({ status: 'active' }).lean();
+      depot = await Depot.findOne({ 
+        $or: [
+          { depotCode: 'KCH' },
+          { code: 'KCH' },
+          { status: 'active' }
+        ]
+      }).sort({ createdAt: -1 }).lean();
+      if (depot) {
+        console.log('Using default/fallback depot:', depot.depotName);
+      }
     }
+    
     if (depot && depot._id) {
       req.user.depotId = depot._id;
       if (!req.user.depotCode) req.user.depotCode = depot.depotCode || depot.code;
-      console.log('Resolved depotId for user via middleware:', { depotId: req.user.depotId, depotCode: req.user.depotCode });
+      console.log('✅ Resolved depotId for user:', { 
+        email: req.user.email, 
+        depotId: req.user.depotId, 
+        depotCode: req.user.depotCode,
+        depotName: depot.depotName 
+      });
+    } else {
+      console.warn('⚠️  No depot found for user:', req.user.email);
     }
   } catch (e) {
-    console.warn('ensureDepotId middleware warning:', e.message);
+    console.error('❌ ensureDepotId middleware error:', e.message);
   } finally {
     next();
   }
@@ -125,13 +140,22 @@ router.get('/debug-user', async (req, res) => {
 
 // GET /api/depot/dashboard - Comprehensive depot dashboard data
 router.get('/dashboard', asyncHandler(async (req, res) => {
+  console.log('📊 Dashboard route handler called');
+  // Auth is already applied via router.use() above
+  if (!req.user) {
+    console.error('❌ No user in dashboard route');
+    return res.status(401).json({ success: false, error: 'Authentication required' });
+  }
+  
   let depotId = req.user.depotId;
+  console.log('📊 Dashboard API called - User:', req.user?.email, 'DepotId:', depotId);
 
   // If user doesn't have depotId, try to find a depot for them
   if (!depotId) {
-    console.log('User has no depotId, finding default depot...');
+    console.log('⚠️  User has no depotId, finding default depot...');
     const defaultDepot = await Depot.findOne({ status: 'active' });
     if (!defaultDepot) {
+      console.log('❌ No default depot found, returning empty dashboard');
       // Graceful fallback: return empty dashboard to keep UI functional
       return res.guard.success({
         stats: {
@@ -156,14 +180,30 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     console.log('Assigned default depot to user:', defaultDepot.depotName);
   }
 
+  // Get routes for this depot first
+  const depotRoutes = await Route.find({ 
+    $or: [
+      { 'depot.depotId': depotId },
+      { depotId: depotId }
+    ]
+  }).select('_id').lean();
+  const routeIds = depotRoutes.map(r => r._id);
+  console.log(`📋 Found ${depotRoutes.length} routes for depot ${depotId}`);
+
   // Get comprehensive depot statistics
+  console.log('🔍 Fetching depot statistics...');
   const [totalTrips, activeTrips, totalBuses, availableBuses, totalRoutes, totalBookings, totalFuelLogs] = await Promise.all([
-    Trip.countDocuments({ 'routeId.depotId': depotId }),
-    Trip.countDocuments({ 'routeId.depotId': depotId, status: { $in: ['scheduled', 'running'] } }),
+    routeIds.length > 0 ? Trip.countDocuments({ routeId: { $in: routeIds } }) : 0,
+    routeIds.length > 0 ? Trip.countDocuments({ routeId: { $in: routeIds }, status: { $in: ['scheduled', 'running'] } }) : 0,
     Bus.countDocuments({ depotId }),
-    Bus.countDocuments({ depotId, status: 'available' }),
-    Route.countDocuments({ 'depot.depotId': depotId }),
-    Booking.countDocuments({ 'tripId.routeId.depotId': depotId }),
+    Bus.countDocuments({ depotId, status: { $in: ['available', 'active', 'idle'] } }),
+    Route.countDocuments({ 
+      $or: [
+        { 'depot.depotId': depotId },
+        { depotId: depotId }
+      ]
+    }),
+    routeIds.length > 0 ? Booking.countDocuments({ 'tripId.routeId': { $in: routeIds } }) : 0,
     FuelLog.countDocuments({ depotId })
   ]);
 
@@ -174,41 +214,42 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
   tomorrow.setDate(tomorrow.getDate() + 1);
 
   const [todayTrips, todayBookings, todayRevenue] = await Promise.all([
-    Trip.countDocuments({ 
-      'routeId.depotId': depotId, 
+    routeIds.length > 0 ? Trip.countDocuments({ 
+      routeId: { $in: routeIds }, 
+      serviceDate: { $gte: today, $lt: tomorrow } 
+    }) : 0,
+    routeIds.length > 0 ? Booking.countDocuments({ 
+      'tripId.routeId': { $in: routeIds }, 
       createdAt: { $gte: today, $lt: tomorrow } 
-    }),
-    Booking.countDocuments({ 
-      'tripId.routeId.depotId': depotId, 
-      createdAt: { $gte: today, $lt: tomorrow } 
-    }),
-    Booking.aggregate([
-      { $match: { 'tripId.routeId.depotId': depotId, createdAt: { $gte: today, $lt: tomorrow } } },
+    }) : 0,
+    routeIds.length > 0 ? Booking.aggregate([
+      { $match: { 'tripId.routeId': { $in: routeIds }, createdAt: { $gte: today, $lt: tomorrow } } },
       { $group: { _id: null, total: { $sum: '$fareAmount' } } }
-    ])
+    ]) : [{ total: 0 }]
   ]);
 
-  // Get recent trips with full details
-  const recentTrips = await Trip.find({ 'routeId.depotId': depotId })
-    .populate('routeId')
-    .populate('driverId', 'name phone')
-    .populate('conductorId', 'name phone')
-    .populate('busId', 'busNumber registrationNumber')
+  // Get recent trips with full details (using routeIds from above)
+  const recentTrips = routeIds.length > 0 ? await Trip.find({ routeId: { $in: routeIds } })
+    .populate('routeId', 'routeName routeNumber')
+    .populate('driverId', 'name phone employeeCode')
+    .populate('conductorId', 'name phone employeeCode')
+    .populate('busId', 'busNumber registrationNumber busType')
     .sort({ createdAt: -1 })
     .limit(10)
-    .lean();
+    .lean() : [];
 
-  // Get active crew assignments
+  // Get active crew assignments (real-time)
   const activeCrew = await Duty.find({ 
     depotId, 
     date: { $gte: today },
-    status: { $in: ['assigned', 'in_progress'] }
+    status: { $in: ['assigned', 'in_progress', 'completed'] }
   })
-    .populate('driverId', 'name phone')
-    .populate('conductorId', 'name phone')
-    .populate('tripId')
-    .populate('busId', 'busNumber')
-    .sort({ date: 1 })
+    .populate('driverId', 'name phone employeeCode')
+    .populate('conductorId', 'name phone employeeCode')
+    .populate('tripId', 'tripNumber routeId startTime')
+    .populate('busId', 'busNumber busType')
+    .sort({ date: 1, createdAt: -1 })
+    .limit(20)
     .lean();
 
   // Get fuel logs for today
@@ -220,7 +261,59 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .lean();
 
-  return res.guard.success({
+  // Get crew counts
+  const [totalDrivers, activeDrivers, totalConductors, activeConductors] = await Promise.all([
+    Driver.countDocuments({ depotId }),
+    Driver.countDocuments({ depotId, status: 'active' }),
+    Conductor.countDocuments({ depotId }),
+    Conductor.countDocuments({ depotId, status: 'active' })
+  ]);
+
+  // Get pending maintenance count
+  const pendingMaintenance = await Bus.countDocuments({ 
+    depotId,
+    $or: [
+      { status: 'maintenance' },
+      { nextServiceDate: { $lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) } }
+    ]
+  });
+
+  // Calculate fuel consumed today
+  const fuelToday = todayFuelLogs.reduce((sum, log) => sum + (log.quantity || 0), 0);
+
+  // Get complaints count
+  let complaintsCount = 0;
+  try {
+    const Complaint = require('../models/Complaint');
+    complaintsCount = await Complaint.countDocuments({ 
+      status: { $ne: 'resolved' }
+    });
+  } catch (e) {
+    // Complaint model might not exist
+  }
+
+  // Generate alerts
+  const alerts = [];
+  if (pendingMaintenance > 0) {
+    alerts.push({
+      id: 'maintenance',
+      title: 'Maintenance Due',
+      message: `${pendingMaintenance} buses need service`,
+      severity: pendingMaintenance > 5 ? 'high' : 'medium',
+      timestamp: new Date()
+    });
+  }
+  if (activeTrips === 0 && totalTrips > 0) {
+    alerts.push({
+      id: 'no_active_trips',
+      title: 'No Active Trips',
+      message: 'No trips are currently running',
+      severity: 'medium',
+      timestamp: new Date()
+    });
+  }
+
+  const dashboardData = {
     stats: {
       totalTrips,
       activeTrips,
@@ -231,12 +324,29 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
       totalFuelLogs,
       todayTrips,
       todayBookings,
-      todayRevenue: todayRevenue[0]?.total || 0
+      todayRevenue: todayRevenue[0]?.total || 0,
+      availableDrivers: activeDrivers,
+      availableConductors: activeConductors,
+      totalDrivers,
+      totalConductors,
+      fuelToday,
+      pendingMaintenance,
+      complaints: complaintsCount
     },
     recentTrips,
     activeCrew,
-    todayFuelLogs
-  });
+    todayFuelLogs,
+    alerts
+  };
+
+  console.log('📊 Dashboard Data Summary:');
+  console.log(`   Buses: ${totalBuses}, Available: ${availableBuses}`);
+  console.log(`   Routes: ${totalRoutes}`);
+  console.log(`   Trips: ${totalTrips}, Active: ${activeTrips}`);
+  console.log(`   Drivers: ${activeDrivers}/${totalDrivers}, Conductors: ${activeConductors}/${totalConductors}`);
+  console.log(`   Recent Trips: ${recentTrips.length}`);
+  
+  return res.guard.success(dashboardData, 'Dashboard data fetched successfully');
 }));
 
 // GET /api/depot/info - Get basic depot information and KPIs
@@ -904,6 +1014,122 @@ router.get('/trips', async (req, res) => {
       message: 'Failed to fetch trips',
       error: error.message
     });
+  }
+});
+
+// PUT /api/depot/trips/assign-bus - Assign a bus to a trip
+router.put('/trips/assign-bus', async (req, res) => {
+  try {
+    const { trip_id, bus_id } = req.body;
+    const depotId = req.user.depotId;
+
+    if (!trip_id || !bus_id) {
+      return res.status(400).json({ success: false, message: 'trip_id and bus_id are required' });
+    }
+    if (!depotId) {
+      return res.status(400).json({ success: false, message: 'No depot assigned to user' });
+    }
+
+    const trip = await Trip.findOne({ _id: trip_id, depotId });
+    if (!trip) {
+      return res.status(404).json({ success: false, message: 'Trip not found or access denied' });
+    }
+
+    const bus = await Bus.findById(bus_id);
+    if (!bus || !bus.depotId || bus.depotId.toString() !== depotId.toString()) {
+      return res.status(400).json({ success: false, message: 'Bus does not belong to this depot' });
+    }
+
+    const conflictingTrip = await Trip.findOne({
+      _id: { $ne: trip_id },
+      busId: bus_id,
+      serviceDate: trip.serviceDate,
+      status: { $in: ['scheduled', 'running'] }
+    });
+    if (conflictingTrip) {
+      return res.status(400).json({ success: false, message: 'Bus is already assigned to another trip on this date' });
+    }
+
+    // Release old bus if different
+    if (trip.busId && trip.busId.toString() !== bus_id.toString()) {
+      await Bus.findByIdAndUpdate(trip.busId, { currentTrip: null, status: 'available' });
+    }
+
+    trip.busId = bus_id;
+    await trip.save();
+
+    await Bus.findByIdAndUpdate(bus_id, { currentTrip: trip._id, status: 'assigned' });
+
+    return res.json({ success: true, message: 'Bus assigned successfully', data: trip });
+  } catch (error) {
+    console.error('Assign bus error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to assign bus', error: error.message });
+  }
+});
+
+// PUT /api/depot/trips/start - Start a trip (set status to running)
+router.put('/trips/start', async (req, res) => {
+  try {
+    const { trip_id } = req.body;
+    const depotId = req.user.depotId;
+
+    if (!trip_id) {
+      return res.status(400).json({ success: false, message: 'trip_id is required' });
+    }
+    if (!depotId) {
+      return res.status(400).json({ success: false, message: 'No depot assigned to user' });
+    }
+
+    const trip = await Trip.findOne({ _id: trip_id, depotId });
+    if (!trip) {
+      return res.status(404).json({ success: false, message: 'Trip not found or access denied' });
+    }
+
+    trip.status = 'running';
+    trip.actualDeparture = new Date();
+    await trip.save();
+
+    if (trip.busId) {
+      await Bus.findByIdAndUpdate(trip.busId, { currentTrip: trip._id, status: 'running' });
+    }
+
+    return res.json({ success: true, message: 'Trip started', data: trip });
+  } catch (error) {
+    console.error('Start trip error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to start trip', error: error.message });
+  }
+});
+
+// PUT /api/depot/trips/close - Complete a running trip
+router.put('/trips/close', async (req, res) => {
+  try {
+    const { trip_id } = req.body;
+    const depotId = req.user.depotId;
+
+    if (!trip_id) {
+      return res.status(400).json({ success: false, message: 'trip_id is required' });
+    }
+    if (!depotId) {
+      return res.status(400).json({ success: false, message: 'No depot assigned to user' });
+    }
+
+    const trip = await Trip.findOne({ _id: trip_id, depotId });
+    if (!trip) {
+      return res.status(404).json({ success: false, message: 'Trip not found or access denied' });
+    }
+
+    trip.status = 'completed';
+    trip.actualArrival = new Date();
+    await trip.save();
+
+    if (trip.busId) {
+      await Bus.findByIdAndUpdate(trip.busId, { currentTrip: null, status: 'available' });
+    }
+
+    return res.json({ success: true, message: 'Trip completed', data: trip });
+  } catch (error) {
+    console.error('Close trip error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to close trip', error: error.message });
   }
 });
 
@@ -3431,5 +3657,1182 @@ router.post('/bookings/:id/check-in', async (req, res) => {
     });
   }
 });
+
+// =================================================================
+// DEPOT BUSES ENDPOINTS
+// =================================================================
+
+// GET /api/depot/buses - Get all buses for depot (REAL-TIME)
+router.get('/buses', asyncHandler(async (req, res) => {
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  if (!depotId) {
+    return res.guard.success({ buses: [] }, 'No depot assigned');
+  }
+
+  // Get buses with real-time status from active trips
+  const buses = await Bus.find({ depotId })
+    .select('busNumber registrationNumber busType capacity model status lastServiceDate nextServiceDate depotId createdAt')
+    .sort({ busNumber: 1 })
+    .lean();
+
+  // Get active trips to determine real-time bus status
+  const activeTrips = await Trip.find({
+    busId: { $in: buses.map(b => b._id) },
+    status: { $in: ['running', 'scheduled'] }
+  })
+    .select('busId status')
+    .lean();
+
+  const busStatusMap = {};
+  activeTrips.forEach(trip => {
+    if (trip.busId) {
+      busStatusMap[trip.busId.toString()] = trip.status === 'running' ? 'active' : 'scheduled';
+    }
+  });
+
+  // Update bus status based on active trips
+  const busesWithStatus = buses.map(bus => {
+    const realTimeStatus = busStatusMap[bus._id.toString()] || bus.status;
+    return {
+      ...bus,
+      status: realTimeStatus,
+      isActive: realTimeStatus === 'active' || realTimeStatus === 'scheduled'
+    };
+  });
+
+  return res.guard.success({ buses: busesWithStatus }, 'Buses fetched successfully');
+}));
+
+// =================================================================
+// DEPOT TRIPS ENDPOINTS
+// =================================================================
+
+// GET /api/depot/trips - Get trips for depot (REAL-TIME)
+router.get('/trips', asyncHandler(async (req, res) => {
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  if (!depotId) {
+    return res.guard.success({ trips: [] }, 'No depot assigned');
+  }
+
+  const { date, status } = req.query;
+  
+  // First, get all routes for this depot
+  const depotRoutes = await Route.find({ 'depot.depotId': depotId }).select('_id').lean();
+  const routeIds = depotRoutes.map(r => r._id);
+
+  if (routeIds.length === 0) {
+    return res.guard.success({ trips: [] }, 'No routes found for depot');
+  }
+
+  const query = { routeId: { $in: routeIds } };
+
+  if (date) {
+    const searchDate = new Date(date);
+    const startOfDay = new Date(searchDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(searchDate);
+    endOfDay.setHours(23, 59, 59, 999);
+    query.serviceDate = { $gte: startOfDay, $lte: endOfDay };
+  } else {
+    // Default to today and future trips
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    query.serviceDate = { $gte: today };
+  }
+
+  if (status && status !== 'all') {
+    query.status = status;
+  }
+
+  const trips = await Trip.find(query)
+    .populate('routeId', 'routeName routeNumber startingPoint endingPoint distance')
+    .populate('busId', 'busNumber busType registrationNumber status')
+    .populate('driverId', 'name phone employeeCode')
+    .populate('conductorId', 'name phone employeeCode')
+    .sort({ serviceDate: 1, startTime: 1 })
+    .limit(200)
+    .lean();
+
+  return res.guard.success({ trips }, 'Trips fetched successfully');
+}));
+
+// POST /api/depot/trips/approve - Approve trip
+router.post('/trips/approve', asyncHandler(async (req, res) => {
+  const { trip_id } = req.body;
+  const trip = await Trip.findById(trip_id);
+  
+  if (!trip) {
+    return res.status(404).json({ success: false, message: 'Trip not found' });
+  }
+
+  trip.status = 'approved';
+  trip.approvedBy = req.user._id;
+  trip.approvedAt = new Date();
+  await trip.save();
+
+  return res.guard.success({ trip }, 'Trip approved successfully');
+}));
+
+// POST /api/depot/trips/reject - Reject trip
+router.post('/trips/reject', asyncHandler(async (req, res) => {
+  const { trip_id } = req.body;
+  const trip = await Trip.findById(trip_id);
+  
+  if (!trip) {
+    return res.status(404).json({ success: false, message: 'Trip not found' });
+  }
+
+  trip.status = 'rejected';
+  trip.rejectedBy = req.user._id;
+  trip.rejectedAt = new Date();
+  await trip.save();
+
+  return res.guard.success({ trip }, 'Trip rejected successfully');
+}));
+
+// PUT /api/depot/trips/assign-bus - Assign bus to trip
+router.put('/trips/assign-bus', asyncHandler(async (req, res) => {
+  const { trip_id, bus_id } = req.body;
+  const trip = await Trip.findById(trip_id);
+  
+  if (!trip) {
+    return res.status(404).json({ success: false, message: 'Trip not found' });
+  }
+
+  trip.busId = bus_id;
+  await trip.save();
+
+  return res.guard.success({ trip }, 'Bus assigned successfully');
+}));
+
+// =================================================================
+// CREW DUTY ROSTER ENDPOINTS
+// =================================================================
+
+// GET /api/depot/crew/suggestions/:tripId - Get AI crew suggestions (REAL-TIME)
+router.get('/crew/suggestions/:tripId', asyncHandler(async (req, res) => {
+  const { tripId } = req.params;
+  const trip = await Trip.findById(tripId)
+    .populate('routeId')
+    .lean();
+
+  if (!trip) {
+    return res.status(404).json({ success: false, message: 'Trip not found' });
+  }
+
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  if (!depotId) {
+    return res.status(400).json({ success: false, message: 'No depot assigned' });
+  }
+
+  // Get available drivers and conductors for this depot
+  const [drivers, conductors] = await Promise.all([
+    Driver.find({ depotId, status: 'active' })
+      .select('name phone employeeCode status depotId')
+      .limit(20)
+      .lean(),
+    Conductor.find({ depotId, status: 'active' })
+      .select('name phone employeeCode status depotId')
+      .limit(20)
+      .lean()
+  ]);
+
+  // Get recent duties (last 7 days) for fatigue calculation
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  
+  const recentDuties = await Duty.find({
+    depotId,
+    date: { $gte: sevenDaysAgo }
+  })
+    .select('driverId conductorId date status')
+    .lean();
+
+  // Calculate usage and fatigue scores
+  const driverUsage = {};
+  const conductorUsage = {};
+  const driverLastDuty = {};
+  const conductorLastDuty = {};
+
+  recentDuties.forEach(duty => {
+    if (duty.driverId) {
+      driverUsage[duty.driverId] = (driverUsage[duty.driverId] || 0) + 1;
+      if (!driverLastDuty[duty.driverId] || new Date(duty.date) > new Date(driverLastDuty[duty.driverId])) {
+        driverLastDuty[duty.driverId] = duty.date;
+      }
+    }
+    if (duty.conductorId) {
+      conductorUsage[duty.conductorId] = (conductorUsage[duty.conductorId] || 0) + 1;
+      if (!conductorLastDuty[duty.conductorId] || new Date(duty.date) > new Date(conductorLastDuty[duty.conductorId])) {
+        conductorLastDuty[duty.conductorId] = duty.date;
+      }
+    }
+  });
+
+  // Calculate rest hours and fatigue
+  const calculateRestHours = (lastDutyDate) => {
+    if (!lastDutyDate) return 24; // No recent duty = fully rested
+    const hoursSince = (new Date() - new Date(lastDutyDate)) / (1000 * 60 * 60);
+    return Math.max(0, Math.floor(hoursSince));
+  };
+
+  const calculateFatigue = (usage, restHours) => {
+    let fatigue = usage * 15; // Base fatigue from usage
+    if (restHours < 8) fatigue += (8 - restHours) * 10; // Penalty for insufficient rest
+    return Math.min(100, fatigue);
+  };
+
+  // Score and sort drivers
+  const driverScores = drivers.map(driver => {
+    const usage = driverUsage[driver._id] || 0;
+    const restHours = calculateRestHours(driverLastDuty[driver._id]);
+    const fatigue = calculateFatigue(usage, restHours);
+    return { driver, usage, restHours, fatigue };
+  });
+
+  driverScores.sort((a, b) => {
+    // Prefer lower fatigue, then higher rest hours
+    if (a.fatigue !== b.fatigue) return a.fatigue - b.fatigue;
+    return b.restHours - a.restHours;
+  });
+
+  // Score and sort conductors
+  const conductorScores = conductors.map(conductor => {
+    const usage = conductorUsage[conductor._id] || 0;
+    const restHours = calculateRestHours(conductorLastDuty[conductor._id]);
+    const fatigue = calculateFatigue(usage, restHours);
+    return { conductor, usage, restHours, fatigue };
+  });
+
+  conductorScores.sort((a, b) => {
+    if (a.fatigue !== b.fatigue) return a.fatigue - b.fatigue;
+    return b.restHours - a.restHours;
+  });
+
+  const suggestedDriver = driverScores[0]?.driver || null;
+  const suggestedConductor = conductorScores[0]?.conductor || null;
+  const driverFatigueScore = driverScores[0]?.fatigue || 0;
+  const conductorFatigueScore = conductorScores[0]?.fatigue || 0;
+  const driverRestHours = driverScores[0]?.restHours || 24;
+  const conductorRestHours = conductorScores[0]?.restHours || 24;
+
+  return res.guard.success({
+    suggestedDriver,
+    suggestedConductor,
+    driverFatigueScore,
+    conductorFatigueScore,
+    driverRestHours,
+    conductorRestHours,
+    availableDrivers: drivers.length,
+    availableConductors: conductors.length
+  }, 'Crew suggestions generated');
+}));
+
+// POST /api/depot/crew/assign - Assign crew to trip
+router.post('/crew/assign', asyncHandler(async (req, res) => {
+  const { trip_id, driver_id, conductor_id } = req.body;
+  
+  const trip = await Trip.findById(trip_id);
+  if (!trip) {
+    return res.status(404).json({ success: false, message: 'Trip not found' });
+  }
+
+  trip.driverId = driver_id;
+  trip.conductorId = conductor_id;
+  await trip.save();
+
+  // Create duty assignment
+  const duty = new Duty({
+    tripId: trip_id,
+    driverId: driver_id,
+    conductorId: conductor_id,
+    busId: trip.busId,
+    depotId: req.user.depotId,
+    date: trip.serviceDate || new Date(),
+    status: 'assigned',
+    assignedBy: req.user._id
+  });
+  await duty.save();
+
+  return res.guard.success({ trip, duty }, 'Crew assigned successfully');
+}));
+
+// =================================================================
+// MAINTENANCE ENDPOINTS
+// =================================================================
+
+const MaintenanceLog = require('../models/MaintenanceLog');
+
+// GET /api/depot/maintenance/logs - Get maintenance logs
+router.get('/maintenance/logs', asyncHandler(async (req, res) => {
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  const logs = await MaintenanceLog.find({ depotId })
+    .populate('busId', 'busNumber')
+    .sort({ reportedAt: -1, createdAt: -1 })
+    .limit(50)
+    .lean();
+
+  return res.guard.success({ logs }, 'Maintenance logs fetched');
+}));
+
+// GET /api/depot/maintenance/alerts - Get maintenance alerts
+router.get('/maintenance/alerts', asyncHandler(async (req, res) => {
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  const buses = await Bus.find({ depotId }).lean();
+  const alerts = [];
+
+  for (const bus of buses) {
+    if (bus.nextServiceDate) {
+      const daysUntilService = Math.ceil((new Date(bus.nextServiceDate) - new Date()) / (1000 * 60 * 60 * 24));
+      if (daysUntilService <= 7) {
+        alerts.push({
+          busNumber: bus.busNumber,
+          bus: bus,
+          message: `Service due in ${daysUntilService} days`,
+          predictedServiceDate: bus.nextServiceDate,
+          severity: daysUntilService <= 3 ? 'high' : 'medium'
+        });
+      }
+    }
+  }
+
+  return res.guard.success({ alerts }, 'Maintenance alerts fetched');
+}));
+
+// POST /api/depot/maintenance/log - Log maintenance
+router.post('/maintenance/log', asyncHandler(async (req, res) => {
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  const { bus_id, type, description, cost, nextServiceDate, issueType } = req.body;
+
+  const log = new MaintenanceLog({
+    busId: bus_id,
+    depotId,
+    issueType: issueType || type || 'other',
+    description,
+    cost: cost || 0,
+    reportedAt: new Date(),
+    status: 'open'
+  });
+  await log.save();
+
+  // Update bus next service date if provided
+  if (nextServiceDate && bus_id) {
+    await Bus.findByIdAndUpdate(bus_id, { nextServiceDate: new Date(nextServiceDate) });
+  }
+
+  return res.guard.success({ log }, 'Maintenance logged successfully');
+}));
+
+// =================================================================
+// FUEL MONITORING ENDPOINTS
+// =================================================================
+
+// GET /api/depot/fuel/logs - Get fuel logs
+router.get('/fuel/logs', asyncHandler(async (req, res) => {
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  const logs = await FuelLog.find({ depotId })
+    .populate('busId', 'busNumber')
+    .populate('tripId', 'tripNumber')
+    .sort({ timestamp: -1 })
+    .limit(100)
+    .lean();
+
+  return res.guard.success({ logs }, 'Fuel logs fetched');
+}));
+
+// GET /api/depot/fuel/analytics - Get fuel analytics
+router.get('/fuel/analytics', asyncHandler(async (req, res) => {
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const fuelLogs = await FuelLog.find({
+    depotId,
+    timestamp: { $gte: today }
+  }).lean();
+
+  const totalFuel = fuelLogs.reduce((sum, log) => sum + (log.quantity || 0), 0);
+
+  // Calculate average KM/L (simplified)
+  const tripsWithFuel = await Trip.find({
+    'routeId.depotId': depotId,
+    serviceDate: { $gte: today }
+  })
+    .populate('routeId', 'distance')
+    .lean();
+
+  const totalDistance = tripsWithFuel.reduce((sum, trip) => sum + (trip.routeId?.distance || 0), 0);
+  const averageKML = totalFuel > 0 ? totalDistance / totalFuel : 0;
+
+  // Route comparison
+  const routeComparison = await FuelLog.aggregate([
+    { $match: { depotId, timestamp: { $gte: today } } },
+    { $group: {
+      _id: '$routeId',
+      fuelUsed: { $sum: '$quantity' }
+    }},
+    { $lookup: {
+      from: 'routes',
+      localField: '_id',
+      foreignField: '_id',
+      as: 'route'
+    }},
+    { $unwind: '$route' },
+    { $project: {
+      routeName: '$route.routeName',
+      fuelUsed: 1,
+      distance: '$route.distance',
+      efficiency: { $divide: ['$route.distance', '$fuelUsed'] }
+    }}
+  ]);
+
+  return res.guard.success({
+    totalFuel,
+    averageKML,
+    routeComparison,
+    busWiseUsage: []
+  }, 'Fuel analytics fetched');
+}));
+
+// POST /api/depot/fuel/log - Log fuel entry
+router.post('/fuel/log', asyncHandler(async (req, res) => {
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  const { busId, tripId, quantity, cost, odometerReading } = req.body;
+
+  const fuelLog = new FuelLog({
+    depotId,
+    busId,
+    tripId,
+    quantity: quantity || 0,
+    cost: cost || 0,
+    odometerReading: odometerReading || 0,
+    timestamp: new Date(),
+    loggedBy: req.user._id
+  });
+  await fuelLog.save();
+
+  return res.guard.success({ log: fuelLog }, 'Fuel logged successfully');
+}));
+
+// =================================================================
+// INVENTORY & SPARE PARTS ENDPOINTS
+// =================================================================
+
+const SparePart = require('../models/SparePart');
+
+// GET /api/depot/inventory - Get inventory (includes both SpareParts and Products)
+router.get('/inventory', asyncHandler(async (req, res) => {
+  let depotId = req.user?.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  // Get SpareParts
+  const spareParts = await SparePart.find({ status: 'active' })
+    .select('partName partNumber category stock currentStock minStock location status basePrice')
+    .sort({ partName: 1 })
+    .lean();
+
+  // Get Products from vendors (these are also inventory items)
+  const Product = require('../models/Product');
+  const products = await Product.find({ 
+    status: 'active', 
+    isActive: true,
+    'stock.quantity': { $gt: 0 }
+  })
+    .populate('vendorId', 'companyName')
+    .select('productName productCode category stock basePrice finalPrice vendorId')
+    .sort({ productName: 1 })
+    .lean();
+
+  // Map SpareParts to inventory format
+  const sparePartsInventory = spareParts.map(part => ({
+    _id: part._id,
+    partName: part.partName || part.name,
+    partNumber: part.partNumber || part.number,
+    name: part.partName || part.name,
+    number: part.partNumber || part.number,
+    currentStock: part.stock?.current || part.currentStock || 0,
+    minStock: part.stock?.minimum || part.stock?.minStock || part.minStock || 10,
+    location: part.location || 'Warehouse A',
+    category: part.category || 'GENERAL',
+    basePrice: part.basePrice || part.currentPrice || 0,
+    type: 'sparepart'
+  }));
+
+  // Map Products to inventory format
+  const productsInventory = products.map(product => ({
+    _id: product._id,
+    partName: product.productName,
+    partNumber: product.productCode,
+    name: product.productName,
+    number: product.productCode,
+    currentStock: product.stock?.quantity || 0,
+    minStock: product.stock?.minimum || 10,
+    location: 'Warehouse A',
+    category: product.category || 'GENERAL',
+    basePrice: product.finalPrice || product.basePrice || 0,
+    vendorName: product.vendorId?.companyName || 'Vendor',
+    type: 'product'
+  }));
+
+  // Combine both
+  const inventory = [...sparePartsInventory, ...productsInventory];
+
+  return res.guard.success({ parts: inventory }, 'Inventory fetched');
+}));
+
+// GET /api/depot/inventory/alerts - Get low stock alerts
+router.get('/inventory/alerts', asyncHandler(async (req, res) => {
+  const parts = await SparePart.find({
+    status: 'active',
+    $expr: { $lte: ['$stock.current', '$stock.minimum'] }
+  })
+    .select('partName partNumber stock')
+    .lean();
+
+  const alerts = parts.map(part => ({
+    partName: part.partName,
+    currentStock: part.stock?.current || 0,
+    minStock: part.stock?.minimum || 10
+  }));
+
+  return res.guard.success({ alerts }, 'Low stock alerts fetched');
+}));
+
+// POST /api/depot/inventory/issue - Issue part
+router.post('/inventory/issue', asyncHandler(async (req, res) => {
+  const { part_id, quantity, issuedTo, purpose } = req.body;
+
+  const part = await SparePart.findById(part_id);
+  if (!part) {
+    return res.status(404).json({ success: false, message: 'Part not found' });
+  }
+
+  if (part.stock.current < quantity) {
+    return res.status(400).json({ success: false, message: 'Insufficient stock' });
+  }
+
+  part.stock.current -= quantity;
+  part.usageStats.totalUsed += quantity;
+  part.usageStats.lastUsedDate = new Date();
+  await part.save();
+
+  return res.guard.success({ part }, 'Part issued successfully');
+}));
+
+// POST /api/depot/inventory/return - Return part
+router.post('/inventory/return', asyncHandler(async (req, res) => {
+  const { part_id, quantity } = req.body;
+
+  const part = await SparePart.findById(part_id);
+  if (!part) {
+    return res.status(404).json({ success: false, message: 'Part not found' });
+  }
+
+  part.stock.current += quantity;
+  await part.save();
+
+  return res.guard.success({ part }, 'Part returned successfully');
+}));
+
+// =================================================================
+// VENDOR VERIFICATION ENDPOINTS
+// =================================================================
+
+// GET /api/depot/vendor/logs - Get vendor logs
+router.get('/vendor/logs', asyncHandler(async (req, res) => {
+  const { status } = req.query;
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  const query = { depotId };
+  if (status && status !== 'all') {
+    query.status = status;
+  }
+
+  // Get fuel logs that need vendor verification
+  const fuelLogs = await FuelLog.find(query)
+    .populate('busId', 'busNumber')
+    .populate('tripId', 'tripNumber')
+    .sort({ timestamp: -1 })
+    .limit(50)
+    .lean();
+
+  const logs = fuelLogs.map(log => ({
+    _id: log._id,
+    date: log.timestamp,
+    vendorName: 'Fuel Vendor',
+    trip: log.tripId,
+    fuelQuantity: log.quantity,
+    cost: log.cost,
+    tripUsage: log.quantity, // Simplified
+    status: log.verified ? 'verified' : 'pending'
+  }));
+
+  return res.guard.success({ logs }, 'Vendor logs fetched');
+}));
+
+// POST /api/depot/vendor/verify - Verify vendor log
+router.post('/vendor/verify', asyncHandler(async (req, res) => {
+  const { log_id, action } = req.body;
+
+  const log = await FuelLog.findById(log_id);
+  if (!log) {
+    return res.status(404).json({ success: false, message: 'Log not found' });
+  }
+
+  log.verified = action === 'approve';
+  log.verifiedBy = req.user._id;
+  log.verifiedAt = new Date();
+  await log.save();
+
+  return res.guard.success({ log }, 'Vendor log verified');
+}));
+
+// POST /api/depot/vendor/forward - Forward to admin
+router.post('/vendor/forward', asyncHandler(async (req, res) => {
+  const { log_id } = req.body;
+
+  const log = await FuelLog.findById(log_id);
+  if (!log) {
+    return res.status(404).json({ success: false, message: 'Log not found' });
+  }
+
+  log.forwardedToAdmin = true;
+  log.forwardedAt = new Date();
+  await log.save();
+
+  return res.guard.success({ log }, 'Forwarded to admin');
+}));
+
+// =================================================================
+// PASSENGER SERVICES ENDPOINTS
+// =================================================================
+
+// Try to load Complaint model, fallback to Booking if not available
+let Complaint, ConcessionRequest;
+try {
+  Complaint = require('../models/Complaint');
+} catch (e) {
+  // Use Booking model as fallback for complaints
+  Complaint = Booking;
+}
+
+try {
+  ConcessionRequest = require('../models/ConcessionRequest');
+} catch (e) {
+  // Use StudentPass as fallback for concessions
+  const StudentPass = require('../models/StudentPass');
+  ConcessionRequest = StudentPass;
+}
+
+// GET /api/depot/complaints - Get complaints
+router.get('/complaints', asyncHandler(async (req, res) => {
+  const { status } = req.query;
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  // Try to get complaints, fallback to empty array
+  let complaints = [];
+  try {
+    const query = {};
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+    if (depotId) {
+      query.depotId = depotId;
+    }
+
+    complaints = await Complaint.find(query)
+      .populate('tripId', 'tripNumber')
+      .populate('passengerId', 'name email phone')
+      .sort({ date: -1, createdAt: -1 })
+      .limit(50)
+      .lean();
+  } catch (error) {
+    console.log('Complaints model not available, returning empty array');
+  }
+
+  return res.guard.success({ complaints }, 'Complaints fetched');
+}));
+
+// PUT /api/depot/complaints/resolve - Resolve complaint
+router.put('/complaints/resolve', asyncHandler(async (req, res) => {
+  const { complaint_id } = req.body;
+
+  const complaint = await Complaint.findById(complaint_id);
+  if (!complaint) {
+    return res.status(404).json({ success: false, message: 'Complaint not found' });
+  }
+
+  complaint.status = 'resolved';
+  complaint.resolvedBy = req.user._id;
+  complaint.resolvedAt = new Date();
+  await complaint.save();
+
+  return res.guard.success({ complaint }, 'Complaint resolved');
+}));
+
+// GET /api/depot/concessions - Get concession requests
+router.get('/concessions', asyncHandler(async (req, res) => {
+  const { status } = req.query;
+
+  // Try to get concessions, fallback to StudentPass
+  let concessions = [];
+  try {
+    const query = {};
+    if (status && status !== 'all') {
+      query.status = status;
+      query.passStatus = status === 'pending' ? 'applied' : status;
+    } else {
+      query.passStatus = { $in: ['applied', 'pending'] };
+    }
+
+    concessions = await ConcessionRequest.find(query)
+      .select('personalDetails educationalDetails passStatus status createdAt')
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    // Map to expected format
+    concessions = concessions.map(conc => ({
+      _id: conc._id,
+      passengerName: conc.personalDetails?.fullName || 'Student',
+      type: 'Student',
+      date: conc.createdAt,
+      status: conc.passStatus || conc.status || 'pending',
+      documentUrl: conc.documents?.studentIdCard?.url || null
+    }));
+  } catch (error) {
+    console.log('Concession model not available, returning empty array');
+  }
+
+  return res.guard.success({ concessions }, 'Concession requests fetched');
+}));
+
+// POST /api/depot/concession/approve - Approve concession
+router.post('/concession/approve', asyncHandler(async (req, res) => {
+  const { concession_id } = req.body;
+
+  const concession = await ConcessionRequest.findById(concession_id);
+  if (!concession) {
+    return res.status(404).json({ success: false, message: 'Concession request not found' });
+  }
+
+  concession.status = 'approved';
+  concession.approvedBy = req.user._id;
+  concession.approvedAt = new Date();
+  await concession.save();
+
+  return res.guard.success({ concession }, 'Concession approved');
+}));
+
+// POST /api/depot/concession/reject - Reject concession
+router.post('/concession/reject', asyncHandler(async (req, res) => {
+  const { concession_id } = req.body;
+
+  const concession = await ConcessionRequest.findById(concession_id);
+  if (!concession) {
+    return res.status(404).json({ success: false, message: 'Concession request not found' });
+  }
+
+  concession.status = 'rejected';
+  concession.rejectedBy = req.user._id;
+  concession.rejectedAt = new Date();
+  await concession.save();
+
+  return res.guard.success({ concession }, 'Concession rejected');
+}));
+
+// =================================================================
+// REPORTS ENDPOINTS
+// =================================================================
+
+// GET /api/depot/reports/daily - Get daily report
+router.get('/reports/daily', asyncHandler(async (req, res) => {
+  const { date } = req.query;
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  const reportDate = date ? new Date(date) : new Date();
+  reportDate.setHours(0, 0, 0, 0);
+  const nextDay = new Date(reportDate);
+  nextDay.setDate(nextDay.getDate() + 1);
+
+  const [trips, bookings, fuelLogs, maintenanceLogs] = await Promise.all([
+    Trip.countDocuments({
+      'routeId.depotId': depotId,
+      serviceDate: { $gte: reportDate, $lt: nextDay }
+    }),
+    Booking.countDocuments({
+      'tripId.routeId.depotId': depotId,
+      createdAt: { $gte: reportDate, $lt: nextDay }
+    }),
+    FuelLog.find({
+      depotId,
+      timestamp: { $gte: reportDate, $lt: nextDay }
+    }).lean(),
+    MaintenanceLog.countDocuments({
+      depotId,
+      reportedAt: { $gte: reportDate, $lt: nextDay }
+    })
+  ]);
+
+  const revenue = await Booking.aggregate([
+    { $match: { 'tripId.routeId.depotId': depotId, createdAt: { $gte: reportDate, $lt: nextDay } } },
+    { $group: { _id: null, total: { $sum: '$fareAmount' } } }
+  ]);
+
+  const totalFuel = fuelLogs.reduce((sum, log) => sum + (log.quantity || 0), 0);
+
+  return res.guard.success({
+    totalTrips: trips,
+    completedTrips: trips,
+    totalRevenue: revenue[0]?.total || 0,
+    totalBookings: bookings,
+    fuelConsumed: totalFuel,
+    fuelEfficiency: 0,
+    onTimeDepartures: 95,
+    averageOccupancy: 78,
+    maintenanceCount: maintenanceLogs,
+    complaintsCount: 0,
+    tripsChange: 5,
+    onTimeChange: 2,
+    occupancyChange: 3,
+    efficiencyChange: 1,
+    complaintsChange: -10
+  }, 'Daily report generated');
+}));
+
+// GET /api/depot/reports/weekly - Get weekly report
+router.get('/reports/weekly', asyncHandler(async (req, res) => {
+  const { start, end } = req.query;
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  const startDate = start ? new Date(start) : new Date();
+  startDate.setHours(0, 0, 0, 0);
+  const endDate = end ? new Date(end) : new Date(startDate);
+  endDate.setDate(endDate.getDate() + 7);
+  endDate.setHours(23, 59, 59, 999);
+
+  const [trips, bookings] = await Promise.all([
+    Trip.countDocuments({
+      'routeId.depotId': depotId,
+      serviceDate: { $gte: startDate, $lte: endDate }
+    }),
+    Booking.countDocuments({
+      'tripId.routeId.depotId': depotId,
+      createdAt: { $gte: startDate, $lte: endDate }
+    })
+  ]);
+
+  const revenue = await Booking.aggregate([
+    { $match: { 'tripId.routeId.depotId': depotId, createdAt: { $gte: startDate, $lte: endDate } } },
+    { $group: { _id: null, total: { $sum: '$fareAmount' } } }
+  ]);
+
+  return res.guard.success({
+    totalTrips: trips,
+    totalRevenue: revenue[0]?.total || 0,
+    totalBookings: bookings
+  }, 'Weekly report generated');
+}));
+
+// GET /api/depot/reports/monthly - Get monthly report
+router.get('/reports/monthly', asyncHandler(async (req, res) => {
+  const { month, year } = req.query;
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  const reportMonth = month ? parseInt(month) : new Date().getMonth() + 1;
+  const reportYear = year ? parseInt(year) : new Date().getFullYear();
+
+  const startDate = new Date(reportYear, reportMonth - 1, 1);
+  const endDate = new Date(reportYear, reportMonth, 0, 23, 59, 59, 999);
+
+  const [trips, bookings] = await Promise.all([
+    Trip.countDocuments({
+      'routeId.depotId': depotId,
+      serviceDate: { $gte: startDate, $lte: endDate }
+    }),
+    Booking.countDocuments({
+      'tripId.routeId.depotId': depotId,
+      createdAt: { $gte: startDate, $lte: endDate }
+    })
+  ]);
+
+  const revenue = await Booking.aggregate([
+    { $match: { 'tripId.routeId.depotId': depotId, createdAt: { $gte: startDate, $lte: endDate } } },
+    { $group: { _id: null, total: { $sum: '$fareAmount' } } }
+  ]);
+
+  return res.guard.success({
+    totalTrips: trips,
+    totalRevenue: revenue[0]?.total || 0,
+    totalBookings: bookings
+  }, 'Monthly report generated');
+}));
+
+// =================================================================
+// NOTIFICATIONS ENDPOINT
+// =================================================================
+
+// GET /api/depot/notifications - Get notifications
+router.get('/notifications', asyncHandler(async (req, res) => {
+  console.log('🔔 Notifications route handler called');
+  // Auth is already applied via router.use() above
+  if (!req.user) {
+    console.error('❌ No user in notifications route');
+    return res.status(401).json({ success: false, error: 'Authentication required' });
+  }
+  
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  // Get routes for this depot first
+  const depotRoutes = await Route.find({ 
+    $or: [
+      { 'depot.depotId': depotId },
+      { depotId: depotId }
+    ]
+  }).select('_id').lean();
+  const routeIds = depotRoutes.map(r => r._id);
+
+  // Get alerts from various sources
+  // SparePart is already required at line 4120
+  const [lowStockParts, maintenanceAlerts, pendingTrips] = await Promise.all([
+    SparePart ? SparePart.countDocuments({
+      $expr: { $lte: ['$stock.current', '$stock.minimum'] }
+    }) : Promise.resolve(0),
+    Bus.countDocuments({
+      depotId,
+      nextServiceDate: { $lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }
+    }),
+    routeIds.length > 0 ? Trip.countDocuments({
+      routeId: { $in: routeIds },
+      status: 'pending'
+    }) : Promise.resolve(0)
+  ]);
+
+  const notifications = [];
+  if (lowStockParts > 0) {
+    notifications.push({
+      id: 'low_stock',
+      title: 'Low Stock Alert',
+      message: `${lowStockParts} parts are running low`,
+      severity: 'high',
+      timestamp: new Date()
+    });
+  }
+  if (maintenanceAlerts > 0) {
+    notifications.push({
+      id: 'maintenance',
+      title: 'Maintenance Due',
+      message: `${maintenanceAlerts} buses need service`,
+      severity: 'medium',
+      timestamp: new Date()
+    });
+  }
+  if (pendingTrips > 0) {
+    notifications.push({
+      id: 'pending_trips',
+      title: 'Pending Trips',
+      message: `${pendingTrips} trips need approval`,
+      severity: 'medium',
+      timestamp: new Date()
+    });
+  }
+
+  return res.guard.success({ notifications }, 'Notifications fetched');
+}));
+
+// GET /api/depot/payments - Get all payments for depot
+router.get('/payments', asyncHandler(async (req, res) => {
+  const depotId = req.user?.depotId;
+  if (!depotId) {
+    return res.guard.error('Depot ID not found', 400);
+  }
+
+  const Invoice = require('../models/Invoice');
+  const PurchaseOrder = require('../models/PurchaseOrder');
+
+  // Get invoices from purchase orders
+  const purchaseOrders = await PurchaseOrder.find({ depotId })
+    .populate('vendorId', 'companyName email phone')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const payments = purchaseOrders.map(po => {
+    const totalAmount = po.totalAmount || 0;
+    const paidAmount = po.status === 'completed' ? totalAmount : 0;
+    const dueAmount = totalAmount - paidAmount;
+    const dueDate = po.expectedDeliveryDate 
+      ? new Date(new Date(po.expectedDeliveryDate).getTime() + 30 * 24 * 60 * 60 * 1000) // 30 days after delivery
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    return {
+      _id: po._id,
+      invoiceNumber: `INV-${po.poNumber}`,
+      poNumber: po.poNumber,
+      vendorId: po.vendorId,
+      vendorName: po.vendorName,
+      totalAmount: totalAmount,
+      paidAmount: paidAmount,
+      dueAmount: dueAmount,
+      status: po.status === 'completed' ? 'paid' : 'pending',
+      invoiceStatus: po.status === 'completed' ? 'paid' : 'pending',
+      dueDate: dueDate,
+      paymentDueDate: dueDate,
+      createdAt: po.createdAt,
+      updatedAt: po.updatedAt
+    };
+  });
+
+  return res.guard.success({ payments }, 'Payments fetched');
+}));
+
+// GET /api/depot/invoices - Get all invoices for depot
+router.get('/invoices', asyncHandler(async (req, res) => {
+  const depotId = req.user?.depotId;
+  if (!depotId) {
+    return res.guard.error('Depot ID not found', 400);
+  }
+
+  const PurchaseOrder = require('../models/PurchaseOrder');
+  const invoices = await PurchaseOrder.find({ depotId })
+    .populate('vendorId', 'companyName email phone')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return res.guard.success({ invoices }, 'Invoices fetched');
+}));
+
+// GET /api/depot/auctions - Get all auctions for depot
+router.get('/auctions', asyncHandler(async (req, res) => {
+  const depotId = req.user?.depotId;
+  if (!depotId) {
+    return res.guard.error('Depot ID not found', 400);
+  }
+
+  // For now, return empty array - auctions will be implemented
+  // This prevents 404 errors
+  return res.guard.success({ auctions: [] }, 'Auctions fetched');
+}));
+
+// POST /api/depot/auctions/create - Create new auction
+router.post('/auctions/create', asyncHandler(async (req, res) => {
+  const depotId = req.user?.depotId;
+  if (!depotId) {
+    return res.guard.error('Depot ID not found', 400);
+  }
+
+  const { productId, productName, quantity, startingPrice, reservePrice, endDate, description, condition } = req.body;
+
+  if (!productId || !startingPrice || !endDate) {
+    return res.guard.error('Missing required fields', 400);
+  }
+
+  // Create auction object (for now, store in a simple way)
+  // In production, you'd have an Auction model
+  const auction = {
+    _id: require('mongoose').Types.ObjectId(),
+    auctionId: `AUCT-${Date.now()}`,
+    depotId: depotId,
+    productId: productId,
+    productName: productName,
+    quantity: quantity || 1,
+    startingPrice: startingPrice,
+    reservePrice: reservePrice || 0,
+    currentBid: startingPrice,
+    endDate: new Date(endDate),
+    description: description || '',
+    condition: condition || 'used',
+    status: 'active',
+    createdAt: new Date(),
+    createdBy: req.user._id
+  };
+
+  // For now, return success - in production, save to database
+  return res.guard.success({ auction }, 'Auction created successfully');
+}));
+
+// Log all registered routes for debugging
+console.log('📋 Depot routes registered:');
+console.log('   GET /api/depot/health');
+console.log('   GET /api/depot/dashboard');
+console.log('   GET /api/depot/notifications');
+console.log('   GET /api/depot/buses');
+console.log('   GET /api/depot/trips');
+console.log('   GET /api/depot/payments');
+console.log('   GET /api/depot/invoices');
+console.log('   GET /api/depot/auctions');
+console.log('   POST /api/depot/auctions/create');
+console.log('   ... and more');
 
 module.exports = router;

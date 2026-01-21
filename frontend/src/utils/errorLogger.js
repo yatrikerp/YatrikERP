@@ -35,11 +35,39 @@ class ErrorLogger {
     
     // Capture console errors
     console.error = (...args) => {
-      this.logError('Console Error', {
-        message: args.join(' '),
-        timestamp: new Date().toISOString(),
-        stack: new Error().stack
-      });
+      const errorMessage = args.join(' ');
+      
+      // Ignore expected 404 errors from depot API endpoints
+      const isDepot404 = errorMessage.includes('404') && 
+                        (errorMessage.includes('/api/depot/') || 
+                         errorMessage.includes('Failed to load resource'));
+      
+      // Ignore network errors for expected missing endpoints
+      const isExpected404 = errorMessage.includes('404') && 
+                           (errorMessage.includes('/api/depot/notifications') ||
+                            errorMessage.includes('/api/depot/trips') ||
+                            errorMessage.includes('/api/depot/crew/') ||
+                            errorMessage.includes('/api/depot/maintenance/') ||
+                            errorMessage.includes('/api/depot/fuel/') ||
+                            errorMessage.includes('/api/depot/inventory') ||
+                            errorMessage.includes('/api/depot/vendor/') ||
+                            errorMessage.includes('/api/depot/complaints') ||
+                            errorMessage.includes('/api/depot/concessions') ||
+                            errorMessage.includes('/api/depot/reports/'));
+      
+      // Also ignore generic "Failed to load resource" messages for depot endpoints
+      const isDepotResourceError = errorMessage.includes('Failed to load resource') &&
+                                  (errorMessage.includes('/api/depot/') || 
+                                   errorMessage.includes('localhost:5000/api/depot/'));
+      
+      if (!isDepot404 && !isExpected404 && !isDepotResourceError) {
+        this.logError('Console Error', {
+          message: errorMessage,
+          timestamp: new Date().toISOString(),
+          stack: new Error().stack
+        });
+      }
+      // Always call original console.error but only log to errorLogger if not expected
       this.originalConsoleError.apply(console, args);
     };
     
@@ -55,18 +83,35 @@ class ErrorLogger {
     // Capture fetch errors
     const originalFetch = window.fetch;
     window.fetch = (...args) => {
-      return originalFetch.apply(window, args).catch(error => {
-        // Don't log expected AbortErrors (timeouts, component unmounts, etc.)
-        if (error.name !== 'AbortError' && error.message !== 'signal is aborted without reason') {
-          this.logNetworkError('Fetch Error', {
-            url: args[0],
-            error: error.message,
-            stack: error.stack,
-            timestamp: new Date().toISOString()
-          });
-        }
-        throw error;
-      });
+      const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+      
+      return originalFetch.apply(window, args)
+        .then(response => {
+          // Check for 404 on depot endpoints and suppress logging
+          if (response.status === 404 && url.includes('/api/depot/')) {
+            // Don't log expected 404s from depot endpoints
+            return response;
+          }
+          return response;
+        })
+        .catch(error => {
+          // Don't log expected AbortErrors (timeouts, component unmounts, etc.)
+          if (error.name !== 'AbortError' && error.message !== 'signal is aborted without reason') {
+            // Don't log 404 errors from depot endpoints (expected missing endpoints)
+            const isDepot404 = url.includes('/api/depot/') && 
+                             (error.message?.includes('404') || error.status === 404);
+            
+            if (!isDepot404) {
+              this.logNetworkError('Fetch Error', {
+                url: url,
+                error: error.message,
+                stack: error.stack,
+                timestamp: new Date().toISOString()
+              });
+            }
+          }
+          throw error;
+        });
     };
   }
 

@@ -85,24 +85,58 @@ const Login = () => {
       }
       
       const user = res.data.data?.user || res.data.user;
-      const token = res.data.data?.token || res.data.token;
+      let token = res.data.data?.token || res.data.token;
+      
+      // Clean token - remove any Bearer prefix that might have been added
+      if (token) {
+        token = token.replace(/^Bearer\s+/i, '').trim();
+      }
+      
       const apiRedirect = res.data.redirectPath || res.data.data?.redirectPath;
       
       if (user && token) {
+        // Validate token format
+        const tokenParts = token.split('.');
+        if (tokenParts.length !== 3) {
+          console.error('❌ [Login] Invalid token format received from server:', {
+            tokenLength: token.length,
+            parts: tokenParts.length,
+            tokenPreview: token.substring(0, 50)
+          });
+          throw new Error('Invalid authentication token received from server');
+        }
+        
         // Log user data for debugging
-        console.log('Login successful - User data received:', {
+        console.log('✅ [Login] Login successful - User data received:', {
           id: user._id,
           name: user.name,
           email: user.email,
           role: user.role,
           status: user.status,
-          depotId: user.depotId
+          depotId: user.depotId,
+          tokenLength: token.length,
+          tokenPreview: token.substring(0, 20) + '...'
         });
         
-        // OPTIMIZED: Immediate UI response - don't await login
-        login(user, token).catch(err => 
-          console.error('Background login processing failed:', err)
-        );
+        // OPTIMIZED: Immediate UI response - await login to ensure token is stored
+        try {
+          await login(user, token);
+          console.log('✅ [Login] Token stored successfully in localStorage');
+          
+          // Verify token was stored correctly
+          const storedToken = localStorage.getItem('token') || localStorage.getItem('depotToken');
+          if (storedToken && storedToken === token) {
+            console.log('✅ [Login] Token verification: Stored token matches received token');
+          } else {
+            console.warn('⚠️ [Login] Token verification: Stored token does not match!', {
+              storedLength: storedToken?.length,
+              receivedLength: token.length
+            });
+          }
+        } catch (err) {
+          console.error('❌ [Login] Login processing failed:', err);
+          throw err;
+        }
         
         // OPTIMIZED: Navigate immediately for fastest performance
         // Prefer backend-provided redirectPath when present

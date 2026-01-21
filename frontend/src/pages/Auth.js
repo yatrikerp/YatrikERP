@@ -24,6 +24,17 @@ const Auth = ({ initialMode = 'login' }) => {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [signupForm, setSignupForm] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
   const [forgotPasswordForm, setForgotPasswordForm] = useState({ email: '' });
+  const [signupType, setSignupType] = useState('passenger'); // 'passenger', 'vendor', 'student'
+  
+  // Vendor registration form - email will auto-append @vendor.com
+  const [vendorForm, setVendorForm] = useState({ companyName: '', email: '@vendor.com', password: '', panNumber: '', phone: '', companyType: 'other' });
+  const [vendorErrors, setVendorErrors] = useState({});
+  const [isRegisteringVendor, setIsRegisteringVendor] = useState(false);
+  
+  // Student registration form
+  const [studentForm, setStudentForm] = useState({ name: '', email: '', phone: '', password: '', aadhaarNumber: '', dateOfBirth: '', institution: { name: '', type: 'other' }, passType: 'student_concession' });
+  const [studentErrors, setStudentErrors] = useState({});
+  const [isRegisteringStudent, setIsRegisteringStudent] = useState(false);
   
   // Loading states for instant feedback
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -116,16 +127,28 @@ const Auth = ({ initialMode = 'login' }) => {
 
       const email = (userFromLogin?.email || '').toLowerCase();
       const role = (userFromLogin?.role || '').toLowerCase();
+      const roleType = userFromLogin?.roleType || 'internal';
       const isDepot = role === 'depot_manager' || /-depot@yatrik\.com$/.test(email) || /^depot-/.test(email);
+      const isVendor = role === 'vendor' || (roleType === 'external' && role === 'vendor');
+      const isStudent = role === 'student' || (roleType === 'external' && role === 'student');
 
-      // For depot users, use the login response directly (no extra API call)
+      // For depot users, vendors, and students, use the login response directly (no extra API call)
+      // The login response already contains all necessary user data
       let finalUser = userFromLogin;
       
-      // Only fetch profile for non-depot users (passengers, admin, etc.)
-      if (!isDepot) {
-        const me = await apiFetch('/api/auth/me');
-        if (me?.ok && me.data) {
-          finalUser = me.data.data?.user || me.data.user || me.data;
+      // Only fetch profile for regular users (passengers, admin, etc.) - skip for vendors/students
+      if (!isDepot && !isVendor && !isStudent) {
+        try {
+          const me = await apiFetch('/api/auth/me', {
+            suppressError: true,
+            suppressLogout: true
+          });
+          if (me?.ok && me.data) {
+            finalUser = me.data.data?.user || me.data.user || me.data;
+          }
+        } catch (error) {
+          console.warn('[Auth] /api/auth/me failed, using login response:', error);
+          // Continue with userFromLogin if /me fails
         }
       }
 
@@ -215,14 +238,28 @@ const Auth = ({ initialMode = 'login' }) => {
         return;
       }
       
-      // Fallback to role-based routing
-      const role = (user.role || 'passenger').toUpperCase();
-      const dest = role === 'ADMIN' ? '/admin' : 
-                   role === 'CONDUCTOR' ? '/conductor' : 
-                   role === 'DRIVER' ? '/driver' : 
-                   role === 'DEPOT_MANAGER' ? '/depot' : 
-                   redirectTo;
-      console.log('[Auth] existing session redirect:', { role, dest });
+      // Auto-redirect based on role and roleType
+      const role = (user.role || 'passenger').toLowerCase();
+      const roleType = user.roleType || 'internal';
+      
+      let dest = redirectTo;
+      
+      // Internal users → /dashboard/{role}
+      if (roleType === 'internal') {
+        if (role === 'admin') dest = '/admin';
+        else if (role === 'depot_manager') dest = '/depot';
+        else if (role === 'conductor') dest = '/conductor';
+        else if (role === 'driver') dest = '/driver';
+        else dest = `/dashboard/${role}`;
+      } 
+      // External users → specific routes
+      else {
+        if (role === 'vendor') dest = '/vendor/dashboard';
+        else if (role === 'student') dest = '/student/dashboard';
+        else dest = '/passenger/dashboard';
+      }
+      
+      console.log('[Auth] Auto-redirect:', { role, roleType, dest });
       navigate(dest, { replace: true });
     }
   }, [user, navigate, redirectTo, searchParams]);
@@ -244,13 +281,26 @@ const Auth = ({ initialMode = 'login' }) => {
 
 
 
-  // Comprehensive form validation
+  // Comprehensive form validation - supports email, phone, or aadhaar
   const validateLoginForm = useCallback(() => {
     const errors = {};
-    if (!loginForm.email.trim()) errors.email = 'Email is required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginForm.email.trim())) errors.email = 'Please enter a valid email address';
+    const identifier = loginForm.email.trim();
+    
+    if (!identifier) {
+      errors.email = 'Email, Phone, or Aadhaar is required';
+    } else {
+      // Accept email, phone (10 digits), or aadhaar (12 digits)
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
+      const isPhone = /^[0-9]{10}$/.test(identifier);
+      const isAadhaar = /^[0-9]{12}$/.test(identifier);
+      
+      if (!isEmail && !isPhone && !isAadhaar) {
+        errors.email = 'Please enter a valid Email, Phone (10 digits), or Aadhaar (12 digits)';
+      }
+    }
+    
     if (!loginForm.password) errors.password = 'Password is required';
-    else if (loginForm.password.length < 6) errors.password = 'Password must be at least 6 characters';
+    else if (loginForm.password.length < 8) errors.password = 'Password must be at least 8 characters';
     setLoginErrors(errors);
     return Object.keys(errors).length === 0;
   }, [loginForm]);
@@ -295,34 +345,68 @@ const Auth = ({ initialMode = 'login' }) => {
       const identifierRaw = loginForm.email.trim();
       const email = identifierRaw.toLowerCase();
       const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-      // Accept both patterns: code-depot@yatrik.com or depot-code@yatrik.com
-      const isDepotEmail = /^([a-z0-9]+-depot|depot-[a-z0-9]+)@yatrik\.com$/i.test(email);
+      const isPhone = /^[0-9]{10}$/.test(identifierRaw);
+      const isAadhaar = /^[0-9]{12}$/.test(identifierRaw);
+      
+      // Use login endpoint - auto-detects role (supports vendors and students)
+      const loginUrl = '/api/auth/login';
+      let body = {};
+      
+      if (isEmail) {
+        body = { email, password: loginForm.password };
+      } else if (isPhone) {
+        body = { email: identifierRaw, password: loginForm.password }; // Use email field for phone
+      } else if (isAadhaar) {
+        body = { email: identifierRaw, password: loginForm.password }; // Use email field for Aadhaar
+      } else {
+        // Fallback to email format
+        body = { email: identifierRaw, password: loginForm.password };
+      }
+      
+      console.log('[Auth] Login attempt:', { identifierRaw, email, isEmail, isPhone, isAadhaar, loginUrl });
 
-      // Standardize to unified backend login for ALL roles
-      // Backend supports: admin, depot, driver, conductor, passenger via one endpoint
-      const url = '/api/auth/login';
-      const body = isEmail
-        ? { email, password: loginForm.password }
-        : { username: identifierRaw, password: loginForm.password };
-      let roleHint = 'user';
-      if (isDepotEmail) roleHint = 'depot_manager';
-
-      console.log('[Auth] Login attempt:', { identifierRaw, email, isEmail, isDepotEmail, url, body, roleHint });
-
-      const res = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
+      const res = await apiFetch(loginUrl, { method: 'POST', body: JSON.stringify(body) });
 
       console.log('[Auth] Login response:', res);
       
+      // apiFetch returns { ok: boolean, data: {...}, message: string }
       if (!res.ok) { 
-        console.error('[Auth] Login failed:', res.message);
-        toast.error(res.message || 'Login failed'); 
+        console.error('[Auth] Login failed:', res.message || res.data?.message);
+        toast.error(res.message || res.data?.message || 'Login failed'); 
+        setIsLoggingIn(false);
         return; 
       }
 
-      // Normalize responses across roles
-      let user = res.data?.user || res.data?.data?.user;
-      let token = res.data?.token || res.data?.data?.token;
-      let redirectPath = res.data?.redirectPath || res.data?.data?.redirectPath;
+      // Unified login response structure
+      // Response from backend: { success: true, token, user, redirectPath }
+      let user = res.data?.user;
+      let token = res.data?.token;
+      let redirectPath = res.data?.redirectPath;
+      
+      // Handle vendor login response structure (vendor field as fallback)
+      if (!user && res.data?.vendor) {
+        const v = res.data.vendor;
+        user = {
+          _id: v._id || v.id,
+          name: v.companyName || v.name,
+          email: v.email || '',
+          phone: v.phone,
+          role: 'vendor',
+          roleType: 'external',
+          status: v.status,
+          vendorId: v._id || v.id,
+          companyName: v.companyName
+        };
+        token = res.data.token || token;
+        redirectPath = res.data.redirectPath || '/vendor/dashboard';
+      }
+      
+      if (!user || !token) {
+        console.error('[Auth] Login response missing user or token:', { user, token, data: res.data });
+        toast.error('Invalid response from server');
+        setIsLoggingIn(false);
+        return;
+      }
 
       // Driver shape: { data: { token, driver: { ... } } }
       if (!user && res.data?.data?.driver) {
@@ -352,9 +436,56 @@ const Auth = ({ initialMode = 'login' }) => {
         token = res.data.data.token;
       }
 
-      // If still missing role, use hint
-      if (user && !user.role && roleHint !== 'user') {
-        user.role = roleHint;
+      // Handle vendor response structure if needed
+      if (!user && res.data?.data?.vendor) {
+        const v = res.data.data.vendor;
+        user = {
+          _id: v.id || v._id,
+          name: v.companyName || v.name,
+          email: v.email || '',
+          phone: v.phone,
+          role: 'vendor',
+          roleType: 'external',
+          status: v.status,
+          vendorId: v._id || v.id,
+          companyName: v.companyName
+        };
+        token = res.data.data.token || token;
+      }
+
+      // Ensure user has role (unified login should always provide it)
+      if (user && !user.role) {
+        user.role = 'passenger'; // Default fallback
+      }
+
+      // Ensure vendor users have vendorId set and roleType
+      if (user && user.role === 'vendor') {
+        if (!user.vendorId && user._id) {
+          user.vendorId = user._id;
+        }
+        if (!user.roleType) {
+          user.roleType = 'external';
+        }
+        // Ensure redirectPath is set for vendors if not already set
+        if (!redirectPath) {
+          redirectPath = '/vendor/dashboard';
+        }
+      }
+
+      // Ensure student users have studentId set and roleType
+      if (user && (user.role === 'student' || user.role === 'STUDENT')) {
+        // Normalize role to lowercase
+        user.role = 'student';
+        if (!user.studentId && user._id) {
+          user.studentId = user._id;
+        }
+        if (!user.roleType) {
+          user.roleType = 'external';
+        }
+        // Ensure redirectPath is set for students if not already set
+        if (!redirectPath) {
+          redirectPath = '/student/dashboard';
+        }
       }
 
       console.log('[Auth] Extracted user and token:', { user, token, redirectPath });
@@ -432,12 +563,396 @@ const Auth = ({ initialMode = 'login' }) => {
     }
   };
 
+  // Vendor email validation timeout ref
+  const vendorEmailTimeoutRef = useRef(null);
+  const [vendorEmailStatus, setVendorEmailStatus] = useState('idle'); // 'idle', 'checking', 'available', 'exists', 'error'
+  const [vendorEmailMessage, setVendorEmailMessage] = useState('');
+
+  // Check vendor email availability
+  const checkVendorEmail = useCallback(async (email) => {
+    // Normalize email - ensure it has @vendor.com
+    let normalizedEmail = email.toLowerCase().trim();
+    
+    if (!normalizedEmail) {
+      setVendorEmailStatus('idle');
+      setVendorEmailMessage('');
+      return;
+    }
+
+    // Auto-append @vendor.com if needed
+    if (!normalizedEmail.includes('@')) {
+      normalizedEmail = normalizedEmail + '@vendor.com';
+    } else if (normalizedEmail.endsWith('@')) {
+      normalizedEmail = normalizedEmail + 'vendor.com';
+    } else if (!normalizedEmail.endsWith('@vendor.com') && normalizedEmail.includes('@')) {
+      // If user typed a different domain, replace it with @vendor.com
+      const emailParts = normalizedEmail.split('@');
+      if (emailParts.length === 2) {
+        normalizedEmail = emailParts[0] + '@vendor.com';
+      }
+    }
+
+    // Validate email format - use same regex as backend (more lenient)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      setVendorEmailStatus('idle');
+      setVendorEmailMessage('');
+      return; // Don't show error while typing
+    }
+
+    setVendorEmailStatus('checking');
+    setVendorEmailMessage('Checking availability...');
+
+    try {
+      console.log('🔍 Checking email:', normalizedEmail);
+      const response = await apiFetch('/api/auth/check-email', {
+        method: 'POST',
+        body: JSON.stringify({ email: normalizedEmail }),
+        suppressError: true // Don't show global error toast for email checks
+      });
+
+      console.log('📧 Email check response:', response);
+
+      // apiFetch returns { ok, status, data, message }
+      if (!response.ok) {
+        // 400 error means invalid format - just reset to idle
+        if (response.status === 400) {
+          console.warn('Email validation error (400):', response.data?.error);
+          setVendorEmailStatus('idle');
+          setVendorEmailMessage('');
+        } else {
+          setVendorEmailStatus('error');
+          setVendorEmailMessage(response.message || 'Error checking email');
+        }
+        return;
+      }
+
+      // Success response
+      const responseData = response.data;
+      
+      if (responseData && responseData.success !== undefined) {
+        if (responseData.exists) {
+          setVendorEmailStatus('exists');
+          setVendorEmailMessage(responseData.message || 'Email already registered');
+          setVendorErrors(prev => ({ ...prev, email: responseData.message || 'Email already registered' }));
+        } else {
+          setVendorEmailStatus('available');
+          setVendorEmailMessage('Email is available');
+          setVendorErrors(prev => ({ ...prev, email: '' }));
+        }
+      } else {
+        setVendorEmailStatus('error');
+        setVendorEmailMessage('Unexpected response format');
+      }
+    } catch (error) {
+      console.error('Email check error:', error);
+      setVendorEmailStatus('error');
+      setVendorEmailMessage('Error checking email availability');
+    }
+  }, []);
+
+  // Vendor form handlers
+  const handleVendorChange = useCallback((field, value) => {
+    if (field === 'email') {
+      // Extract only the name part (before @) - remove any @vendor.com or other domain
+      let namePart = value;
+      
+      // Remove @vendor.com if present
+      if (namePart.includes('@')) {
+        namePart = namePart.split('@')[0];
+      }
+      
+      // Remove any special characters that shouldn't be in email name
+      namePart = namePart.replace(/[^a-zA-Z0-9._-]/g, '');
+      
+      // Always append @vendor.com automatically
+      const emailValue = namePart + '@vendor.com';
+
+      setVendorForm(prev => ({ ...prev, [field]: emailValue }));
+      
+      // Clear previous timeout
+      if (vendorEmailTimeoutRef.current) {
+        clearTimeout(vendorEmailTimeoutRef.current);
+      }
+
+      // Clear error
+      if (vendorErrors.email) {
+        setVendorErrors(prev => ({ ...prev, email: '' }));
+      }
+
+      // Debounce email validation (only if name part is not empty)
+      if (namePart.length > 0) {
+        vendorEmailTimeoutRef.current = setTimeout(() => {
+          checkVendorEmail(emailValue);
+        }, 500);
+      } else {
+        setVendorEmailStatus('idle');
+        setVendorEmailMessage('');
+      }
+    } else {
+      setVendorForm(prev => ({ ...prev, [field]: value }));
+      if (vendorErrors[field]) {
+        setVendorErrors(prev => ({ ...prev, [field]: '' }));
+      }
+    }
+  }, [vendorErrors, checkVendorEmail]);
+
+  // Cleanup vendor email timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (vendorEmailTimeoutRef.current) {
+        clearTimeout(vendorEmailTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Student form handlers
+  const handleStudentChange = (field, value) => {
+    if (field.includes('.')) {
+      const [parent, child] = field.split('.');
+      setStudentForm(prev => ({
+        ...prev,
+        [parent]: { ...prev[parent], [child]: value }
+      }));
+    } else {
+      setStudentForm(prev => ({ ...prev, [field]: value }));
+    }
+    if (studentErrors[field]) {
+      setStudentErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  // Vendor registration handler
+  const onSubmitVendor = async (e) => {
+    e.preventDefault();
+    
+    // Ensure email has @vendor.com domain
+    let finalEmail = vendorForm.email.toLowerCase().trim();
+    if (!finalEmail.includes('@')) {
+      finalEmail = finalEmail + '@vendor.com';
+    } else if (!finalEmail.endsWith('@vendor.com')) {
+      // If user typed a different domain, replace it with @vendor.com
+      const emailParts = finalEmail.split('@');
+      if (emailParts.length === 2) {
+        finalEmail = emailParts[0] + '@vendor.com';
+      }
+    }
+    
+    // Extract name part from email
+    const emailNamePart = finalEmail.split('@')[0];
+    
+    // Validation
+    const errors = {};
+    if (!vendorForm.companyName.trim()) errors.companyName = 'Company name is required';
+    
+    // Email validation
+    if (!emailNamePart || emailNamePart.trim() === '' || emailNamePart === '@vendor.com') {
+      errors.email = 'Email name is required';
+    } else if (!/^[a-zA-Z0-9._-]+$/.test(emailNamePart)) {
+      errors.email = 'Email name can only contain letters, numbers, dots, hyphens, and underscores';
+    } else if (!finalEmail.endsWith('@vendor.com')) {
+      errors.email = 'Email must end with @vendor.com';
+    } else if (vendorEmailStatus === 'exists') {
+      errors.email = vendorEmailMessage || 'Email already registered. Please use a different name.';
+    } else if (vendorEmailStatus === 'checking') {
+      errors.email = 'Please wait while we check email availability';
+    } else if (vendorEmailStatus === 'idle' && emailNamePart.length > 0) {
+      // If email name is provided but not checked yet, trigger check
+      errors.email = 'Please wait for email validation';
+    }
+    
+    if (!vendorForm.password) errors.password = 'Password is required';
+    else if (vendorForm.password.length < 8) errors.password = 'Password must be at least 8 characters';
+    if (!vendorForm.panNumber.trim()) errors.panNumber = 'PAN number is required';
+    else if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(vendorForm.panNumber.toUpperCase())) errors.panNumber = 'Invalid PAN format (e.g., ABCDE1234F)';
+    if (!vendorForm.phone.trim()) errors.phone = 'Phone is required';
+    else if (!/^[6-9]\d{9}$/.test(vendorForm.phone)) errors.phone = 'Invalid phone number';
+    
+    // Prevent registration if email already exists
+    if (vendorEmailStatus === 'exists') {
+      toast.error('This email is already registered. Please use a different name.');
+      setVendorErrors(prev => ({ ...prev, email: vendorEmailMessage || 'Email already registered' }));
+      return;
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setVendorErrors(errors);
+      return;
+    }
+    
+    setIsRegisteringVendor(true);
+    try {
+      const payload = {
+        companyName: vendorForm.companyName.trim(),
+        email: finalEmail,
+        password: vendorForm.password,
+        panNumber: vendorForm.panNumber.toUpperCase().trim(),
+        phone: vendorForm.phone.trim(),
+        companyType: vendorForm.companyType
+      };
+      
+      const res = await apiFetch('/api/auth/register-vendor', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      
+      if (!res.ok) {
+        // Check if it's an email exists error with wrong password
+        if (res.data?.emailExists) {
+          toast.error('Email already registered. Please use the correct password to login.');
+          // Switch to login mode
+          setMode('login');
+          setSignupType('passenger');
+          // Pre-fill login form with email
+          setLoginForm({ email: finalEmail, password: vendorForm.password });
+        } else {
+          toast.error(res.message || res.data?.message || 'Vendor registration failed');
+        }
+        return;
+      }
+      
+      // Check response structure - backend returns { success, message, data: { vendor, token }, redirectPath }
+      const responseData = res.data;
+      const vendorData = responseData?.data?.vendor;
+      const token = responseData?.data?.token || responseData?.token;
+      
+      // Check if auto-login happened
+      if (responseData?.autoLogin && token && vendorData) {
+        toast.success('Welcome back! You have been automatically logged in.');
+        const vendorUserData = {
+          _id: vendorData._id,
+          name: vendorData.companyName,
+          email: vendorData.email,
+          role: 'vendor',
+          roleType: 'external',
+          status: vendorData.status,
+          vendorId: vendorData._id
+        };
+        await fetchProfileAndLogin(vendorUserData, token);
+      } else if (token && vendorData) {
+        // New registration with auto-approval
+        toast.success('Vendor account created and approved!');
+        const vendorUserData = {
+          _id: vendorData._id,
+          name: vendorData.companyName,
+          email: vendorData.email,
+          role: 'vendor',
+          roleType: 'external',
+          status: vendorData.status,
+          vendorId: vendorData._id
+        };
+        await fetchProfileAndLogin(vendorUserData, token);
+      } else {
+        // New registration pending approval
+        toast.success('Vendor registration submitted. Pending admin approval.');
+        setMode('login');
+        setSignupType('passenger');
+        setVendorForm({ companyName: '', email: '@vendor.com', password: '', panNumber: '', phone: '', companyType: 'other' });
+        setVendorEmailStatus('idle');
+        setVendorEmailMessage('');
+      }
+    } catch (error) {
+      toast.error('Network error. Please try again.');
+    } finally {
+      setIsRegisteringVendor(false);
+    }
+  };
+
+  // Student registration handler
+  const onSubmitStudent = async (e) => {
+    e.preventDefault();
+    
+    // Validation
+    const errors = {};
+    if (!studentForm.name.trim()) errors.name = 'Name is required';
+    if (!studentForm.email.trim()) errors.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(studentForm.email)) errors.email = 'Invalid email format';
+    if (!studentForm.phone.trim()) errors.phone = 'Phone is required';
+    else if (!/^[6-9]\d{9}$/.test(studentForm.phone)) errors.phone = 'Invalid phone number';
+    if (!studentForm.password) errors.password = 'Password is required';
+    else if (studentForm.password.length < 8) errors.password = 'Password must be at least 8 characters';
+    if (!studentForm.aadhaarNumber.trim()) errors.aadhaarNumber = 'Aadhaar number is required';
+    else if (!/^\d{12}$/.test(studentForm.aadhaarNumber)) errors.aadhaarNumber = 'Aadhaar must be 12 digits';
+    if (!studentForm.dateOfBirth) errors.dateOfBirth = 'Date of birth is required';
+    if (!studentForm.institution.name.trim()) errors.institutionName = 'Institution name is required';
+    
+    if (Object.keys(errors).length > 0) {
+      setStudentErrors(errors);
+      return;
+    }
+    
+    setIsRegisteringStudent(true);
+    try {
+      const payload = {
+        name: studentForm.name.trim(),
+        email: studentForm.email.toLowerCase().trim(),
+        phone: studentForm.phone.trim(),
+        password: studentForm.password,
+        aadhaarNumber: studentForm.aadhaarNumber.trim(),
+        dateOfBirth: studentForm.dateOfBirth,
+        institution: {
+          name: studentForm.institution.name.trim(),
+          type: studentForm.institution.type
+        },
+        passType: studentForm.passType
+      };
+      
+      const res = await apiFetch('/api/auth/register-student', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      
+      if (!res.ok) {
+        toast.error(res.message || res.data?.message || 'Student registration failed');
+        return;
+      }
+      
+      if (res.data?.token) {
+        toast.success('Student pass created and approved!');
+        const studentData = {
+          _id: res.data.data.studentPass._id,
+          name: res.data.data.studentPass.name,
+          email: studentForm.email,
+          role: 'student',
+          roleType: 'external',
+          status: res.data.data.studentPass.status
+        };
+        await fetchProfileAndLogin(studentData, res.data.token);
+      } else {
+        toast.success('Student pass application submitted. Pending approval.');
+        setMode('login');
+        setSignupType('passenger');
+        setStudentForm({ name: '', email: '', phone: '', password: '', aadhaarNumber: '', dateOfBirth: '', institution: { name: '', type: 'other' }, passType: 'student_concession' });
+      }
+    } catch (error) {
+      toast.error('Network error. Please try again.');
+    } finally {
+      setIsRegisteringStudent(false);
+    }
+  };
+
   // Optimized form change handlers
   const handleLoginChange = useCallback((field, value) => {
     setLoginForm(prev => ({ ...prev, [field]: value }));
     if (loginErrors[field]) setLoginErrors(prev => ({ ...prev, [field]: '' }));
-    if (field === 'email' && value.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) setLoginErrors(prev => ({ ...prev, email: 'Please enter a valid email address' }));
-    if (field === 'password' && value && value.length < 6) setLoginErrors(prev => ({ ...prev, password: 'Password must be at least 6 characters' }));
+    
+    if (field === 'email') {
+      const identifier = value.trim();
+      if (identifier) {
+        // Accept email, phone (10 digits), or aadhaar (12 digits)
+        const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
+        const isPhone = /^[0-9]{10}$/.test(identifier);
+        const isAadhaar = /^[0-9]{12}$/.test(identifier);
+        
+        if (!isEmail && !isPhone && !isAadhaar && identifier.length > 0) {
+          setLoginErrors(prev => ({ ...prev, email: 'Enter Email, Phone (10 digits), or Aadhaar (12 digits)' }));
+        }
+      }
+    }
+    
+      if (field === 'password' && value && value.length < 8) {
+      setLoginErrors(prev => ({ ...prev, password: 'Password must be at least 6 characters' }));
+    }
   }, [loginErrors]);
 
   const handleSignupChange = useCallback((field, value) => {
@@ -535,58 +1050,110 @@ const Auth = ({ initialMode = 'login' }) => {
     <LayoutComponent title={title} subtitle={subtitle}>
       <div className="fade-in">
         {/* Tabs */}
-        <div className="mb-6 grid grid-cols-2 rounded-lg border border-gray-200 overflow-hidden">
-          <button type="button" onClick={() => setMode('login')} className={`py-2.5 text-sm font-medium transition-all duration-200 ${mode === 'login' ? 'bg-primary-50 text-primary-700' : 'bg-white text-neutral-600 hover:bg-gray-50'}`} disabled={isLoggingIn || isSigningUp}>Sign in</button>
-          <button type="button" onClick={() => setMode('signup')} className={`py-2.5 text-sm font-medium transition-all duration-200 ${mode === 'signup' ? 'bg-primary-50 text-primary-700' : 'bg-white text-neutral-600 hover:bg-gray-50'}`} disabled={isLoggingIn || isSigningUp}>Create account</button>
+        <div className="mb-3 grid grid-cols-2 rounded-lg border border-gray-200 overflow-hidden">
+          <button type="button" onClick={() => setMode('login')} className={`py-1.5 text-xs font-medium transition-all duration-200 ${mode === 'login' ? 'bg-primary-50 text-primary-700' : 'bg-white text-neutral-600 hover:bg-gray-50'}`} disabled={isLoggingIn || isSigningUp}>Sign in</button>
+          <button type="button" onClick={() => setMode('signup')} className={`py-1.5 text-xs font-medium transition-all duration-200 ${mode === 'signup' ? 'bg-primary-50 text-primary-700' : 'bg-white text-neutral-600 hover:bg-gray-50'}`} disabled={isLoggingIn || isSigningUp}>Create account</button>
         </div>
 
         {mode === 'login' ? (
           <div>
             {!showForgotPassword ? (
               <>
-                <form className="space-y-6 login-form-compact" onSubmit={onSubmitLogin}>
-                  <InputField id="email" label="Email address" type="email" autoComplete="email" value={loginForm.email} onChange={(e) => handleLoginChange('email', e.target.value)} error={loginErrors.email} disabled={isLoggingIn} />
+                <form className="space-y-3 login-form-compact" onSubmit={onSubmitLogin}>
+                  <InputField 
+                    id="email" 
+                    label="Email / Phone / Aadhaar" 
+                    type="text" 
+                    autoComplete="email" 
+                    value={loginForm.email} 
+                    onChange={(e) => handleLoginChange('email', e.target.value)} 
+                    error={loginErrors.email} 
+                    disabled={isLoggingIn}
+                    placeholder="Email, Phone (10 digits), or Aadhaar (12 digits)"
+                  />
+                  <p className="text-xs text-gray-500 -mt-3 mb-1">
+                    System will automatically detect your account type
+                  </p>
                   <PasswordField id="password" label="Password" autoComplete="current-password" value={loginForm.password} onChange={(e) => handleLoginChange('password', e.target.value)} error={loginErrors.password} disabled={isLoggingIn} />
-                  <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-2 text-sm text-neutral-600"><input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" /> Remember me</label>
-                    <button type="button" onClick={() => setShowForgotPassword(true)} className="text-sm font-medium text-primary-600 hover:text-primary-500">Forgot password?</button>
+                  <div className="flex items-center justify-between -mt-1">
+                    <label className="flex items-center gap-1.5 text-xs text-neutral-600"><input type="checkbox" className="h-3 w-3 rounded border-gray-300 text-primary-600 focus:ring-primary-500" /> Remember me</label>
+                    <button type="button" onClick={() => setShowForgotPassword(true)} className="text-xs font-medium text-primary-600 hover:text-primary-500">Forgot password?</button>
                   </div>
-                  <div>
-                    <button type="submit" className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 btn-transition login-form-compact" disabled={isLoggingIn}>
+                  <div className="-mt-1">
+                    <button type="submit" className="w-full flex justify-center py-1.5 px-4 border border-transparent rounded-md shadow-sm text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 btn-transition login-form-compact" disabled={isLoggingIn}>
                       {isLoggingIn ? (<div className="flex items-center space-x-2"><LoadingSpinner size="sm" color="white" /><span>Signing in...</span></div>) : ('Sign in')}
                     </button>
                   </div>
                 </form>
                 
-                <div className="mt-6 login-form-compact">
+                <div className="mt-3 login-form-compact">
                   <div className="relative">
                     <div className="absolute inset-0 flex items-center">
                       <div className="w-full border-t border-gray-300" />
                     </div>
-                    <div className="relative flex justify-center text-sm">
+                    <div className="relative flex justify-center text-xs">
                       <span className="px-2 bg-white text-gray-500">or</span>
                     </div>
                   </div>
-                  <div className="mt-6">
+                  <div className="mt-3">
                     <OAuthButton 
                       href={`${(((typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_BACKEND_URL) || process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, ''))}/api/auth/google?next=${encodeURIComponent(redirectTo)}`} 
                       ariaLabel="Sign in with Google" 
                       icon={<FaGoogle className="text-red-500" />}
                       disabled={isLoggingIn || isSigningUp}
-                      className="transform hover:scale-105 active:scale-95 transition-transform duration-100 mobile-google-signin"
+                      className="transform hover:scale-105 active:scale-95 transition-transform duration-100 mobile-google-signin py-1.5 text-xs"
                     >
                       Sign in with Google
                     </OAuthButton>
                   </div>
                 </div>
+
+                {/* Quick Access Section */}
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <p className="text-xs text-gray-500 text-center mb-2">Quick Access Registration</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode('signup');
+                        setSignupType('vendor');
+                      }}
+                      className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md text-xs font-medium text-blue-700 transition-all duration-200 hover:shadow-sm"
+                      disabled={isLoggingIn || isSigningUp || isRegisteringVendor || isRegisteringStudent}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                      Vendor
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode('signup');
+                        setSignupType('student');
+                      }}
+                      className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-md text-xs font-medium text-purple-700 transition-all duration-200 hover:shadow-sm"
+                      disabled={isLoggingIn || isSigningUp || isRegisteringVendor || isRegisteringStudent}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                      </svg>
+                      Student
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 text-center mt-1.5">
+                    Click to register as Vendor or Student
+                  </p>
+                </div>
               </>
             ) : (
               <div>
                 {!forgotPasswordSuccess ? (
-                  <form className="space-y-6" onSubmit={onSubmitForgotPassword}>
-                    <div className="text-center mb-6">
-                      <h3 className="text-lg font-medium text-gray-900">Reset your password</h3>
-                      <p className="text-sm text-gray-600 mt-1">Enter your email address and we'll send you a link to reset your password.</p>
+                  <form className="space-y-3 login-form-compact" onSubmit={onSubmitForgotPassword}>
+                    <div className="text-center mb-3">
+                      <h3 className="text-sm font-medium text-gray-900">Reset your password</h3>
+                      <p className="text-xs text-gray-600 mt-0.5">Enter your email address and we'll send you a link to reset your password.</p>
                     </div>
                     
                     <InputField 
@@ -600,15 +1167,15 @@ const Auth = ({ initialMode = 'login' }) => {
                       disabled={isResettingPassword} 
                     />
                     
-                    <div className="flex gap-3">
+                    <div className="flex gap-2">
                       <button 
                         type="button" 
                         onClick={() => setShowForgotPassword(false)}
-                        className="flex-1 py-2 px-4 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                        className="flex-1 py-1.5 px-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-xs"
                       >
                         Back to Sign in
                       </button>
-                      <button type="submit" className="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200" disabled={isResettingPassword}>
+                      <button type="submit" className="flex-1 py-1.5 px-3 border border-transparent rounded-md shadow-sm text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200" disabled={isResettingPassword}>
                         {isResettingPassword ? (
                           <div className="flex items-center justify-center space-x-2">
                             <LoadingSpinner size="sm" color="white" />
@@ -621,14 +1188,14 @@ const Auth = ({ initialMode = 'login' }) => {
                     </div>
                   </form>
                 ) : (
-                  <div className="text-center py-8">
-                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="text-center py-4">
+                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
                     </div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">Check your email</h3>
-                    <p className="text-sm text-gray-600 mb-6">
+                    <h3 className="text-sm font-medium text-gray-900 mb-1">Check your email</h3>
+                    <p className="text-xs text-gray-600 mb-3">
                       We've sent a password reset link to <strong>{forgotPasswordForm.email}</strong>
                     </p>
                     <button 
@@ -638,7 +1205,7 @@ const Auth = ({ initialMode = 'login' }) => {
                         setForgotPasswordSuccess(false);
                         setForgotPasswordForm({ email: '' });
                       }}
-                      className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                      className="px-3 py-1.5 text-xs bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
                     >
                       Back to Sign in
                     </button>
@@ -650,70 +1217,369 @@ const Auth = ({ initialMode = 'login' }) => {
         ) : (
           <div>
             <div className="max-w-lg mx-auto">
-              <form className="space-y-2 login-form-compact" onSubmit={onSubmitSignup}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <InputField id="name" label="Full Name" type="text" autoComplete="name" value={signupForm.name} onChange={(e) => handleSignupChange('name', e.target.value)} error={signupErrors.name} disabled={isSigningUp || otherDisabled} />
-                  <div>
-                    <InputField 
-                      id="email" 
-                      label="Email address" 
-                      type="email" 
-                      autoComplete="email" 
-                      value={signupForm.email} 
-                      onChange={(e) => handleSignupChange('email', e.target.value)} 
-                      error={signupErrors.email} 
-                      disabled={isSigningUp}
-                      className={`${emailStatus === 'available' ? 'border-green-500' : emailStatus === 'exists' ? 'border-red-500' : emailStatus === 'checking' ? 'border-blue-500' : ''}`}
-                    />
-                    {emailMessage && (
-                      <div className={`mt-1 text-sm ${emailStatus === 'available' ? 'text-green-600' : emailStatus === 'exists' ? 'text-red-600' : emailStatus === 'checking' ? 'text-blue-600' : 'text-gray-600'}`}>
-                        {emailMessage}
-                      </div>
-                    )}
-                  </div>
-                  <InputField 
-                    id="phone" 
-                    label="Mobile Number" 
-                    type="tel" 
-                    autoComplete="tel" 
-                    placeholder="9876543210" 
-                    value={signupForm.phone} 
-                    onChange={handlePhoneChange} 
-                    error={signupErrors.phone} 
-                    disabled={isSigningUp || otherDisabled}
-                    maxLength="10"
-                  />
-                  <PasswordField id="password" label="Password" autoComplete="new-password" value={signupForm.password} onChange={(e) => handleSignupChange('password', e.target.value)} error={signupErrors.password} disabled={isSigningUp || otherDisabled} />
-                </div>
-                <PasswordField id="confirmPassword" label="Confirm Password" autoComplete="new-password" value={signupForm.confirmPassword} onChange={(e) => handleSignupChange('confirmPassword', e.target.value)} error={signupErrors.confirmPassword} disabled={isSigningUp || otherDisabled} />
-                <div>
-                  <button type="submit" className="w-full flex justify-center py-1.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 btn-transition login-form-compact" disabled={isSigningUp || otherDisabled || emailStatus === 'checking'}>
-                    {isSigningUp ? (<div className="flex items-center space-x-2"><LoadingSpinner size="sm" color="white" /><span>Creating account...</span></div>) : ('Create Account')}
+              {/* Registration Type Selector */}
+              {signupType !== 'passenger' && (
+                <div className="mb-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSignupType('passenger')}
+                    className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                    disabled={isSigningUp || isRegisteringVendor || isRegisteringStudent}
+                  >
+                    ← Back to Passenger Registration
                   </button>
                 </div>
-              </form>
-              
-              <div className="mt-4">
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-300" />
+              )}
+
+              {/* Vendor Registration Form */}
+              {signupType === 'vendor' ? (
+                <form className="space-y-2 login-form-compact" onSubmit={onSubmitVendor}>
+                  <div className="mb-2">
+                    <h3 className="text-sm font-semibold text-gray-900">Vendor Registration</h3>
+                    <p className="text-xs text-gray-600 mt-0.5">Register your business to start selling</p>
                   </div>
-                  <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-white text-gray-500">or</span>
+                  
+                  <InputField
+                    id="companyName"
+                    label="Company Name *"
+                    type="text"
+                    value={vendorForm.companyName}
+                    onChange={(e) => handleVendorChange('companyName', e.target.value)}
+                    error={vendorErrors.companyName}
+                    disabled={isRegisteringVendor}
+                    placeholder="Enter company name"
+                  />
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                        Email * <span className="text-gray-400">(@vendor.com)</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          id="vendorEmail"
+                          value={vendorForm.email === '@vendor.com' ? '' : vendorForm.email.replace('@vendor.com', '')}
+                          onChange={(e) => {
+                            // Only allow editing the name part - filter invalid characters
+                            const namePart = e.target.value.replace(/[^a-zA-Z0-9._-]/g, '');
+                            handleVendorChange('email', namePart);
+                          }}
+                          onBlur={(e) => {
+                            // Ensure @vendor.com is always appended on blur if name exists
+                            const namePart = e.target.value.replace(/[^a-zA-Z0-9._-]/g, '');
+                            if (namePart) {
+                              handleVendorChange('email', namePart);
+                            } else {
+                              // If empty, set to @vendor.com placeholder
+                              setVendorForm(prev => ({ ...prev, email: '@vendor.com' }));
+                            }
+                          }}
+                          className={`w-full px-2 py-1.5 pr-24 text-xs border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                            vendorErrors.email ? 'border-red-500' : 'border-gray-300'
+                          } ${isRegisteringVendor ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                          placeholder="company"
+                          disabled={isRegisteringVendor}
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 pointer-events-none">
+                          @vendor.com
+                        </span>
+                      </div>
+                      {vendorErrors.email && (
+                        <p className="text-xs text-red-600 mt-0.5">{vendorErrors.email}</p>
+                      )}
+                      {!vendorErrors.email && vendorEmailStatus === 'checking' && (
+                        <p className="text-xs text-blue-600 mt-0.5">Checking availability...</p>
+                      )}
+                      {!vendorErrors.email && vendorEmailStatus === 'available' && (
+                        <p className="text-xs text-green-600 mt-0.5">✓ {vendorEmailMessage}</p>
+                      )}
+                      {!vendorErrors.email && vendorEmailStatus === 'exists' && (
+                        <p className="text-xs text-red-600 mt-0.5">✗ {vendorEmailMessage}</p>
+                      )}
+                      {!vendorErrors.email && vendorEmailStatus === 'error' && vendorEmailMessage && (
+                        <p className="text-xs text-red-600 mt-0.5">✗ {vendorEmailMessage}</p>
+                      )}
+                    </div>
+                    
+                    <InputField
+                      id="vendorPhone"
+                      label="Phone *"
+                      type="tel"
+                      value={vendorForm.phone}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
+                        handleVendorChange('phone', value);
+                      }}
+                      error={vendorErrors.phone}
+                      disabled={isRegisteringVendor}
+                      placeholder="9876543210"
+                      maxLength="10"
+                    />
                   </div>
-                </div>
-                <div className="mt-6">
-                  <OAuthButton 
-                    href={`${(((typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_BACKEND_URL) || process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, ''))}/api/auth/google?next=${encodeURIComponent(redirectTo)}&mode=signup`} 
-                    ariaLabel="Sign up with Google" 
-                    icon={<FaGoogle className="text-red-500" />}
-                    className="py-2 transform hover:scale-105 active:scale-95 transition-transform duration-100 mobile-google-signin"
-                    disabled={isLoggingIn || isSigningUp}
-                  >
-                    Sign up with Google
-                  </OAuthButton>
-                </div>
-              </div>
+                  
+                  <InputField
+                    id="panNumber"
+                    label="PAN Number *"
+                    type="text"
+                    value={vendorForm.panNumber}
+                    onChange={(e) => handleVendorChange('panNumber', e.target.value.toUpperCase())}
+                    error={vendorErrors.panNumber}
+                    disabled={isRegisteringVendor}
+                    placeholder="ABCDE1234F"
+                    maxLength="10"
+                  />
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-0.5">Company Type</label>
+                    <select
+                      value={vendorForm.companyType}
+                      onChange={(e) => handleVendorChange('companyType', e.target.value)}
+                      disabled={isRegisteringVendor}
+                      className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="other">Other</option>
+                      <option value="manufacturer">Manufacturer</option>
+                      <option value="supplier">Supplier</option>
+                      <option value="service_provider">Service Provider</option>
+                    </select>
+                  </div>
+                  
+                  <PasswordField
+                    id="vendorPassword"
+                    label="Password *"
+                    value={vendorForm.password}
+                    onChange={(e) => handleVendorChange('password', e.target.value)}
+                    error={vendorErrors.password}
+                    disabled={isRegisteringVendor}
+                  />
+                  
+                  <div>
+                    <button
+                      type="submit"
+                      className="w-full flex justify-center py-1.5 px-4 border border-transparent rounded-md shadow-sm text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                      disabled={isRegisteringVendor}
+                    >
+                      {isRegisteringVendor ? (
+                        <div className="flex items-center space-x-2">
+                          <LoadingSpinner size="sm" color="white" />
+                          <span>Registering...</span>
+                        </div>
+                      ) : (
+                        'Register as Vendor'
+                      )}
+                    </button>
+                  </div>
+                </form>
+              ) : signupType === 'student' ? (
+                <form className="space-y-2 login-form-compact" onSubmit={onSubmitStudent}>
+                  <div className="mb-2">
+                    <h3 className="text-sm font-semibold text-gray-900">Student Pass Registration</h3>
+                    <p className="text-xs text-gray-600 mt-0.5">Apply for a student concession pass</p>
+                  </div>
+                  
+                  <InputField
+                    id="studentName"
+                    label="Full Name *"
+                    type="text"
+                    value={studentForm.name}
+                    onChange={(e) => handleStudentChange('name', e.target.value)}
+                    error={studentErrors.name}
+                    disabled={isRegisteringStudent}
+                    placeholder="Enter your full name"
+                  />
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <InputField
+                      id="studentEmail"
+                      label="Email *"
+                      type="email"
+                      value={studentForm.email}
+                      onChange={(e) => handleStudentChange('email', e.target.value)}
+                      error={studentErrors.email}
+                      disabled={isRegisteringStudent}
+                      placeholder="student@example.com"
+                    />
+                    
+                    <InputField
+                      id="studentPhone"
+                      label="Phone *"
+                      type="tel"
+                      value={studentForm.phone}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
+                        handleStudentChange('phone', value);
+                      }}
+                      error={studentErrors.phone}
+                      disabled={isRegisteringStudent}
+                      placeholder="9876543210"
+                      maxLength="10"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <InputField
+                      id="aadhaarNumber"
+                      label="Aadhaar Number *"
+                      type="text"
+                      value={studentForm.aadhaarNumber}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 12);
+                        handleStudentChange('aadhaarNumber', value);
+                      }}
+                      error={studentErrors.aadhaarNumber}
+                      disabled={isRegisteringStudent}
+                      placeholder="123456789012"
+                      maxLength="12"
+                    />
+                    
+                    <InputField
+                      id="dateOfBirth"
+                      label="Date of Birth *"
+                      type="date"
+                      value={studentForm.dateOfBirth}
+                      onChange={(e) => handleStudentChange('dateOfBirth', e.target.value)}
+                      error={studentErrors.dateOfBirth}
+                      disabled={isRegisteringStudent}
+                    />
+                  </div>
+                  
+                  <InputField
+                    id="institutionName"
+                    label="Institution Name *"
+                    type="text"
+                    value={studentForm.institution.name}
+                    onChange={(e) => handleStudentChange('institution.name', e.target.value)}
+                    error={studentErrors.institutionName}
+                    disabled={isRegisteringStudent}
+                    placeholder="School/College/University name"
+                  />
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">Institution Type</label>
+                      <select
+                        value={studentForm.institution.type}
+                        onChange={(e) => handleStudentChange('institution.type', e.target.value)}
+                        disabled={isRegisteringStudent}
+                        className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                      >
+                        <option value="other">Other</option>
+                        <option value="school">School</option>
+                        <option value="college">College</option>
+                        <option value="university">University</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">Pass Type</label>
+                      <select
+                        value={studentForm.passType}
+                        onChange={(e) => handleStudentChange('passType', e.target.value)}
+                        disabled={isRegisteringStudent}
+                        className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                      >
+                        <option value="student_concession">Student Concession</option>
+                        <option value="monthly">Monthly Pass</option>
+                        <option value="annual">Annual Pass</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <PasswordField
+                    id="studentPassword"
+                    label="Password *"
+                    value={studentForm.password}
+                    onChange={(e) => handleStudentChange('password', e.target.value)}
+                    error={studentErrors.password}
+                    disabled={isRegisteringStudent}
+                  />
+                  
+                  <div>
+                    <button
+                      type="submit"
+                      className="w-full flex justify-center py-1.5 px-4 border border-transparent rounded-md shadow-sm text-xs font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200"
+                      disabled={isRegisteringStudent}
+                    >
+                      {isRegisteringStudent ? (
+                        <div className="flex items-center space-x-2">
+                          <LoadingSpinner size="sm" color="white" />
+                          <span>Applying...</span>
+                        </div>
+                      ) : (
+                        'Apply for Student Pass'
+                      )}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <form className="space-y-2 login-form-compact" onSubmit={onSubmitSignup}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <InputField id="name" label="Full Name" type="text" autoComplete="name" value={signupForm.name} onChange={(e) => handleSignupChange('name', e.target.value)} error={signupErrors.name} disabled={isSigningUp || otherDisabled} />
+                      <div>
+                        <InputField 
+                          id="email" 
+                          label="Email address" 
+                          type="email" 
+                          autoComplete="email" 
+                          value={signupForm.email} 
+                          onChange={(e) => handleSignupChange('email', e.target.value)} 
+                          error={signupErrors.email} 
+                          disabled={isSigningUp}
+                          className={`${emailStatus === 'available' ? 'border-green-500' : emailStatus === 'exists' ? 'border-red-500' : emailStatus === 'checking' ? 'border-blue-500' : ''}`}
+                        />
+                        {emailMessage && (
+                          <div className={`mt-1 text-sm ${emailStatus === 'available' ? 'text-green-600' : emailStatus === 'exists' ? 'text-red-600' : emailStatus === 'checking' ? 'text-blue-600' : 'text-gray-600'}`}>
+                            {emailMessage}
+                          </div>
+                        )}
+                      </div>
+                      <InputField 
+                        id="phone" 
+                        label="Mobile Number" 
+                        type="tel" 
+                        autoComplete="tel" 
+                        placeholder="9876543210" 
+                        value={signupForm.phone} 
+                        onChange={handlePhoneChange} 
+                        error={signupErrors.phone} 
+                        disabled={isSigningUp || otherDisabled}
+                        maxLength="10"
+                      />
+                      <PasswordField id="password" label="Password" autoComplete="new-password" value={signupForm.password} onChange={(e) => handleSignupChange('password', e.target.value)} error={signupErrors.password} disabled={isSigningUp || otherDisabled} />
+                    </div>
+                    <PasswordField id="confirmPassword" label="Confirm Password" autoComplete="new-password" value={signupForm.confirmPassword} onChange={(e) => handleSignupChange('confirmPassword', e.target.value)} error={signupErrors.confirmPassword} disabled={isSigningUp || otherDisabled} />
+                    <div>
+                      <button type="submit" className="w-full flex justify-center py-1.5 px-4 border border-transparent rounded-md shadow-sm text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 btn-transition login-form-compact" disabled={isSigningUp || otherDisabled || emailStatus === 'checking'}>
+                        {isSigningUp ? (<div className="flex items-center space-x-2"><LoadingSpinner size="sm" color="white" /><span>Creating account...</span></div>) : ('Create Account')}
+                      </button>
+                    </div>
+                  </form>
+                  
+                  <div className="mt-3">
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-gray-300" />
+                      </div>
+                      <div className="relative flex justify-center text-xs">
+                        <span className="px-2 bg-white text-gray-500">or</span>
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <OAuthButton 
+                        href={`${(((typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_BACKEND_URL) || process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, ''))}/api/auth/google?next=${encodeURIComponent(redirectTo)}&mode=signup`} 
+                        ariaLabel="Sign up with Google" 
+                        icon={<FaGoogle className="text-red-500" />}
+                        className="py-1.5 text-xs transform hover:scale-105 active:scale-95 transition-transform duration-100 mobile-google-signin"
+                        disabled={isLoggingIn || isSigningUp}
+                      >
+                        Sign up with Google
+                      </OAuthButton>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

@@ -1,7 +1,0 @@
-🚀 Creating more bookings...
-
-✅ Connected to MongoDB
-
-
-❌ Error: Schema hasn't been registered for model "Bus".
-Use mongoose.model(name, schema)

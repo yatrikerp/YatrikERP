@@ -23,7 +23,8 @@ import {
   UserX,
   Filter,
   Car,
-  UserPlus
+  UserPlus,
+  Activity
 } from 'lucide-react';
 import BulkAssignmentModal from '../../components/Admin/BulkAssignmentModal';
 
@@ -39,6 +40,8 @@ const AdminDrivers = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingDriver, setEditingDriver] = useState(null);
   const [viewingDriver, setViewingDriver] = useState(null);
+  const [driverFatigueData, setDriverFatigueData] = useState(null);
+  const [loadingFatigue, setLoadingFatigue] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [driverToDelete, setDriverToDelete] = useState(null);
   const [showBulkAssignment, setShowBulkAssignment] = useState(false);
@@ -301,8 +304,23 @@ const AdminDrivers = () => {
     });
   };
 
-  const openViewDriver = (driver) => {
+  const openViewDriver = async (driver) => {
     setViewingDriver(driver);
+    // Fetch fatigue data
+    try {
+      setLoadingFatigue(true);
+      const response = await fetch(`/api/admin/drivers/${driver._id}/fatigue`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setDriverFatigueData(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching fatigue data:', error);
+    } finally {
+      setLoadingFatigue(false);
+    }
   };
 
   const openDeleteModal = (driver) => {
@@ -986,7 +1004,10 @@ const AdminDrivers = () => {
               <p className="text-sm text-gray-500">ID: {String(viewingDriver._id).slice(-8)}</p>
             </div>
           </div>
-          <button onClick={() => setViewingDriver(null)} className="px-3 py-1 rounded border border-gray-300 hover:bg-gray-50">Close</button>
+          <button onClick={() => {
+            setViewingDriver(null);
+            setDriverFatigueData(null);
+          }} className="px-3 py-1 rounded border border-gray-300 hover:bg-gray-50">Close</button>
         </div>
         <div className="p-6 space-y-4">
           <div>
@@ -1011,9 +1032,80 @@ const AdminDrivers = () => {
             <div className="flex items-center gap-2"><Building2 className="w-4 h-4 text-gray-400" /><span>{getDepotName(viewingDriver.depotId)} ({getDepotCode(viewingDriver.depotId)})</span></div>
             <div>{getStatusBadge(viewingDriver.status)}</div>
           </div>
+
+          {/* Fatigue & Duty Tracking */}
+          {loadingFatigue ? (
+            <div className="text-center py-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="text-sm text-gray-500 mt-2">Loading fatigue data...</p>
+            </div>
+          ) : driverFatigueData ? (
+            <div className="mt-6 p-4 bg-gradient-to-br from-orange-50 to-red-50 rounded-lg border border-orange-200">
+              <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-orange-600" />
+                Fatigue & Duty Tracking (Last 7 Days)
+              </h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div className="bg-white rounded-lg p-3">
+                  <p className="text-xs text-gray-600 mb-1">Total Hours</p>
+                  <p className="text-lg font-bold text-gray-900">{driverFatigueData.totalHours}h</p>
+                </div>
+                <div className="bg-white rounded-lg p-3">
+                  <p className="text-xs text-gray-600 mb-1">Distance Covered</p>
+                  <p className="text-lg font-bold text-gray-900">{driverFatigueData.distanceCovered.toFixed(0)} km</p>
+                </div>
+                <div className="bg-white rounded-lg p-3">
+                  <p className="text-xs text-gray-600 mb-1">Rest Hours/Day</p>
+                  <p className="text-lg font-bold text-gray-900">{driverFatigueData.restHours.toFixed(1)}h</p>
+                </div>
+                <div className="bg-white rounded-lg p-3">
+                  <p className="text-xs text-gray-600 mb-1">Fatigue Score</p>
+                  <p className={`text-lg font-bold ${
+                    driverFatigueData.fatigueScore > 60 ? 'text-red-600' : 
+                    driverFatigueData.fatigueScore > 40 ? 'text-yellow-600' : 'text-green-600'
+                  }`}>
+                    {driverFatigueData.fatigueScore}/100
+                  </p>
+                </div>
+              </div>
+              {driverFatigueData.alerts.length > 0 && (
+                <div className="space-y-2">
+                  {driverFatigueData.alerts.map((alert, idx) => (
+                    <div key={idx} className={`p-3 rounded-lg ${
+                      alert.severity === 'high' ? 'bg-red-100 border border-red-300' : 'bg-yellow-100 border border-yellow-300'
+                    }`}>
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className={`w-5 h-5 ${
+                          alert.severity === 'high' ? 'text-red-600' : 'text-yellow-600'
+                        }`} />
+                        <p className={`text-sm font-medium ${
+                          alert.severity === 'high' ? 'text-red-800' : 'text-yellow-800'
+                        }`}>
+                          {alert.message}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {driverFatigueData.licenseExpiringSoon && (
+                <div className="mt-3 p-3 bg-yellow-100 border border-yellow-300 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-yellow-600" />
+                    <p className="text-sm font-medium text-yellow-800">
+                      License expires in {driverFatigueData.daysUntilExpiry} days
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
         <div className="p-6 border-t border-gray-200 flex items-center justify-end gap-2">
-          <button onClick={() => setViewingDriver(null)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Close</button>
+          <button onClick={() => {
+            setViewingDriver(null);
+            setDriverFatigueData(null);
+          }} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Close</button>
         </div>
       </div>
     </div>

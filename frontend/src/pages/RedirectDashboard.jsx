@@ -66,6 +66,13 @@ export default function RedirectDashboard() {
       } else if (role === 'driver') {
         destination = '/driver';
         console.log('Redirecting driver to:', destination);
+      } else if (role === 'vendor') {
+        destination = '/vendor/dashboard';
+        console.log('Redirecting vendor to:', destination);
+      } else if (role === 'student') {
+        // Students go to student dashboard
+        destination = '/student/dashboard';
+        console.log('Redirecting student to:', destination);
       } else {
         // Check if user is on mobile device
         const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);

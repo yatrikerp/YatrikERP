@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Users, 
-  Bus, 
-  Route, 
-  Calendar, 
-  TrendingUp, 
-  AlertTriangle, 
-  DollarSign, 
+import {
+  Users,
+  Bus,
+  Route,
+  Calendar,
+  TrendingUp,
+  AlertTriangle,
+  DollarSign,
   Activity,
   MapPin,
   Clock,
@@ -16,7 +16,9 @@ import {
   BarChart3,
   LineChart,
   UserCheck,
-  UserCog
+  UserCog,
+  Building2,
+  GraduationCap
 } from 'lucide-react';
 
 import { apiFetch } from '../../utils/api';
@@ -93,15 +95,119 @@ const AdminMasterDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [activityFilter, setActivityFilter] = useState('all');
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
+    // Check for token and validate before making API calls
+    let token = localStorage.getItem('token') || localStorage.getItem('depotToken');
+    
+    // Clean token if it has Bearer prefix
+    if (token && token.startsWith('Bearer ')) {
+      token = token.replace('Bearer ', '').trim();
+      // Update stored token
+      if (localStorage.getItem('depotToken')) {
+        localStorage.setItem('depotToken', token);
+      } else if (localStorage.getItem('token')) {
+        localStorage.setItem('token', token);
+      }
+    }
+    
+    if (!token || token.trim() === '') {
+      console.warn('⚠️ [AdminMasterDashboard] No authentication token found. Please log in.');
+      console.warn('⚠️ [AdminMasterDashboard] Available localStorage:', Object.keys(localStorage));
+      setAuthError('No authentication token found. Please log in.');
+      setLoading(false);
+      // Redirect to login after a brief delay
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 2000);
+      return;
+    }
+
+    // Basic token validation - let apiFetch handle detailed auth
+    try {
+      const cleanToken = token.replace('Bearer ', '').trim();
+      const parts = cleanToken.split('.');
+      if (parts.length !== 3) {
+        console.error('❌ [AdminMasterDashboard] Invalid token format:', {
+          partsLength: parts.length,
+          tokenPreview: cleanToken.substring(0, 30)
+        });
+        setAuthError('Invalid authentication token. Please log in again.');
+        setLoading(false);
+        localStorage.clear();
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 2000);
+        return;
+      }
+      
+      const payload = JSON.parse(atob(parts[1]));
+      
+      // Check if token is expired
+      if (payload.exp && payload.exp * 1000 < Date.now()) {
+        console.error('❌ [AdminMasterDashboard] Token expired:', {
+          exp: payload.exp,
+          now: Date.now(),
+          expiredAt: new Date(payload.exp * 1000).toISOString()
+        });
+        setAuthError('Authentication token has expired. Please log in again.');
+        setLoading(false);
+        localStorage.clear();
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 2000);
+        return;
+      }
+      
+      console.log('✅ [AdminMasterDashboard] Token validated:', {
+        role: payload.role,
+        email: payload.email,
+        userId: payload.userId,
+        exp: payload.exp ? new Date(payload.exp * 1000).toISOString() : 'No expiration'
+      });
+      
+      // Don't block API calls based on role here - let apiFetch handle it
+      // This allows the API to provide better error messages
+    } catch (e) {
+      console.error('❌ [AdminMasterDashboard] Error validating token:', e);
+      setAuthError('Invalid authentication token. Please log in again.');
+      setLoading(false);
+      localStorage.clear();
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 2000);
+      return;
+    }
+
+    // Fetch data - apiFetch will handle authentication and role checking
     fetchDashboardData();
     fetchRecentActivities();
     
     if (autoRefresh) {
       const interval = setInterval(() => {
-        fetchDashboardData();
-        fetchRecentActivities();
+        const currentToken = localStorage.getItem('token') || localStorage.getItem('depotToken');
+        if (currentToken) {
+          // Re-validate token before each refresh
+          try {
+            const parts = currentToken.split('.');
+            if (parts.length === 3) {
+              const payload = JSON.parse(atob(parts[1]));
+              if (payload.exp && payload.exp * 1000 < Date.now()) {
+                // Token expired, clear and stop refreshing
+                localStorage.clear();
+                setAuthError('Session expired. Please log in again.');
+                clearInterval(interval);
+                return;
+              }
+              fetchDashboardData();
+              fetchRecentActivities();
+            }
+          } catch (e) {
+            // Invalid token, stop refreshing
+            clearInterval(interval);
+          }
+        }
       }, 15000); // Refresh every 15 seconds
       return () => clearInterval(interval);
     }
@@ -109,9 +215,31 @@ const AdminMasterDashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
+      // Check for token first
+      let token = localStorage.getItem('token') || localStorage.getItem('depotToken');
+      
+      if (!token || token.trim() === '') {
+        console.error('❌ [fetchDashboardData] No token available');
+        setAuthError('No authentication token found. Please log in.');
+        setLoading(false);
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 2000);
+        return;
+      }
+      
+      // Clean token
+      token = token.replace('Bearer ', '').trim();
+
       setLoading(true);
-      console.log('🔄 Fetching dashboard data...');
-      const res = await apiFetch('/api/admin/dashboard');
+      // Only log in development mode
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 [fetchDashboardData] Fetching dashboard data...');
+      }
+      const res = await apiFetch('/api/admin/dashboard', {
+        suppressLogout: true,
+        suppressError: true
+      });
       
       if (res.ok) {
         const data = res.data;
@@ -190,10 +318,48 @@ const AdminMasterDashboard = () => {
         
         console.log('✅ Dashboard stats updated successfully');
       } else {
-        console.error('❌ Dashboard API error:', res.status, res.message);
+        // Handle 401 errors specifically
+        if (res.status === 401) {
+          console.error('❌ [fetchDashboardData] Authentication failed:', {
+            status: res.status,
+            message: res.message,
+            data: res.data
+          });
+          
+          const currentToken = localStorage.getItem('token') || localStorage.getItem('depotToken');
+          if (!currentToken || currentToken.trim() === '') {
+            setAuthError('No authentication token found. Please log in.');
+            setLoading(false);
+            setTimeout(() => {
+              localStorage.clear();
+              window.location.href = '/login';
+            }, 2000);
+          } else {
+            // Token exists but backend rejected it - likely expired or invalid
+            setAuthError('Authentication failed. Your session may have expired. Please log in again.');
+            setLoading(false);
+            setTimeout(() => {
+              localStorage.clear();
+              window.location.href = '/login';
+            }, 3000);
+          }
+        } else if (res.status === 403) {
+          console.error('❌ [fetchDashboardData] Access denied:', {
+            status: res.status,
+            message: res.message
+          });
+          setAuthError('You do not have permission to access the admin dashboard.');
+          setLoading(false);
+        } else {
+          console.error('❌ [fetchDashboardData] API error:', res.status, res.message);
+          setLoading(false);
+        }
       }
     } catch (error) {
-      console.error('💥 Error fetching dashboard data:', error);
+      // Don't log network errors as errors if suppressError is set
+      if (!error.message?.includes('Network')) {
+        console.error('💥 Error fetching dashboard data:', error);
+      }
     } finally {
       setLoading(false);
     }
@@ -201,8 +367,36 @@ const AdminMasterDashboard = () => {
 
   const fetchRecentActivities = async () => {
     try {
-      console.log('🔄 Fetching recent activities...');
-      const res = await apiFetch('/api/admin/recent-activities');
+      // Check for token first
+      const token = localStorage.getItem('token') || localStorage.getItem('depotToken');
+      if (!token) {
+        console.warn('⚠️ No token available for activities fetch');
+        return;
+      }
+
+      // Validate token
+      try {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1]));
+          if (payload.exp && payload.exp * 1000 < Date.now()) {
+            console.warn('⚠️ Token expired for activities fetch');
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ Invalid token for activities fetch');
+        return;
+      }
+
+      // Only log in development mode
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 Fetching recent activities...');
+      }
+      const res = await apiFetch('/api/admin/recent-activities', {
+        suppressLogout: true,
+        suppressError: true
+      });
       
       console.log('📡 Recent activities response status:', res.status);
       
@@ -216,10 +410,18 @@ const AdminMasterDashboard = () => {
         setRecentActivities(data.activities || []);
         console.log('✅ Recent activities updated:', data.activities?.length || 0, 'activities');
       } else {
-        console.error('❌ Recent activities failed:', res.status, res.message);
+        // Handle 401 errors - don't spam console
+        if (res.status === 401) {
+          console.warn('⚠️ Authentication required for activities.');
+        } else if (res.status !== 401) {
+          console.error('❌ Recent activities failed:', res.status, res.message);
+        }
       }
     } catch (error) {
-      console.error('💥 Error fetching recent activities:', error);
+      // Don't log network errors as errors if suppressError is set
+      if (!error.message?.includes('Network')) {
+        console.error('💥 Error fetching recent activities:', error);
+      }
     }
   };
 
@@ -296,10 +498,137 @@ const AdminMasterDashboard = () => {
     </div>
   );
 
-  if (loading) {
+  // Check authentication status and validate token
+  const token = localStorage.getItem('token') || localStorage.getItem('depotToken');
+  const userData = localStorage.getItem('user') || localStorage.getItem('depotUser');
+  
+  // Helper to decode JWT token (basic check)
+  const isValidToken = (token) => {
+    if (!token) return false;
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return false;
+      const payload = JSON.parse(atob(parts[1]));
+      // Check if token is expired
+      if (payload.exp && payload.exp * 1000 < Date.now()) {
+        return false;
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // Check if user has admin role from token or userData
+  const isAdminUser = () => {
+    // First check token payload
+    if (token) {
+      try {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1]));
+          const role = (payload.role || '').toLowerCase();
+          const roleUpper = String(payload.role || '').toUpperCase();
+          const isDepotManager = roleUpper === 'DEPOT_MANAGER' || roleUpper === 'DEPOT_SUPERVISOR' || roleUpper === 'DEPOT_OPERATOR';
+          const isAdmin = role === 'admin' || role === 'administrator' || roleUpper === 'ADMIN' || roleUpper === 'ADMINISTRATOR';
+          return isAdmin || isDepotManager;
+        }
+      } catch (e) {
+        // Continue to check userData
+      }
+    }
+    
+    // Then check userData
+    if (userData) {
+      try {
+        const user = JSON.parse(userData);
+        const role = (user.role || '').toLowerCase();
+        const roleUpper = String(user.role || '').toUpperCase();
+        const isDepotManager = roleUpper === 'DEPOT_MANAGER' || roleUpper === 'DEPOT_SUPERVISOR' || roleUpper === 'DEPOT_OPERATOR';
+        const isAdmin = role === 'admin' || role === 'administrator' || roleUpper === 'ADMIN' || roleUpper === 'ADMINISTRATOR';
+        return isAdmin || isDepotManager;
+      } catch (e) {
+        return false;
+      }
+    }
+    
+    return false;
+  };
+
+  const isAuthenticated = !!token && isValidToken(token);
+  const hasAdminRole = isAdminUser();
+
+  if (loading && isAuthenticated && hasAdminRole) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // Only show auth error screen if we have a definitive error and not loading
+  // Allow the component to try API calls first before blocking
+  if (!isAuthenticated && !loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8 max-w-md w-full mx-4">
+          <div className="text-center">
+            <AlertTriangle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Authentication Required</h2>
+            <p className="text-gray-600 mb-6">
+              {authError || 'No authentication token found. Please log in to access the admin dashboard.'}
+            </p>
+            <div className="flex flex-col space-y-3">
+              <button
+                onClick={() => {
+                  localStorage.clear();
+                  window.location.href = '/login';
+                }}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Go to Login
+              </button>
+              <button
+                onClick={() => {
+                  // Retry checking auth
+                  setAuthError(null);
+                  window.location.reload();
+                }}
+                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If authenticated but has role issue, show error
+  if (isAuthenticated && !hasAdminRole && !loading && !authError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8 max-w-md w-full mx-4">
+          <div className="text-center">
+            <AlertTriangle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+            <p className="text-gray-600 mb-6">
+              You do not have admin privileges. Please log in with an admin account.
+            </p>
+            <div className="flex flex-col space-y-3">
+              <button
+                onClick={() => {
+                  localStorage.clear();
+                  window.location.href = '/login';
+                }}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Go to Login
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -478,6 +807,20 @@ const AdminMasterDashboard = () => {
             icon={BarChart3}
             color="bg-orange-500"
             action={() => window.location.href = '/admin/reports'}
+          />
+          <QuickActionCard
+            title="Vendor Management"
+            description="Manage vendors, approvals, payments, and inventory"
+            icon={Building2}
+            color="bg-indigo-500"
+            action={() => window.location.href = '/admin/vendors'}
+          />
+          <QuickActionCard
+            title="Student Concession"
+            description="Manage concession policies, approvals, and monitor usage"
+            icon={GraduationCap}
+            color="bg-purple-500"
+            action={() => window.location.href = '/admin/student-concession'}
           />
         </div>
       </div>

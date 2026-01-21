@@ -17,23 +17,36 @@ const userSchema = new mongoose.Schema({
   phone: {
     type: String,
     required: function() { return this.authProvider === 'local'; },
-    match: [/^[\+]?[0-9]{7,15}$/, 'Please enter a valid phone number (7-15 digits)']
+    match: [/^[+]?[0-9]{7,15}$/, 'Please enter a valid phone number (7-15 digits)']
   },
   password: {
     type: String,
     required: function() { return this.authProvider === 'local'; },
-    minlength: [6, 'Password must be at least 6 characters long'],
+    minlength: [8, 'Password must be at least 8 characters long'],
     select: false // This means password won't be returned in queries by default
   },
   role: {
     type: String,
-    enum: ['passenger', 'conductor', 'driver', 'depot_manager', 'admin', 'support_agent', 'data_collector'],
+    enum: ['passenger', 'conductor', 'driver', 'depot_manager', 'admin', 'support_agent', 'data_collector', 'vendor', 'student'],
     default: 'passenger'
+  },
+  roleType: {
+    type: String,
+    enum: ['internal', 'external'],
+    default: function() {
+      // Auto-determine roleType based on role
+      const internalRoles = ['admin', 'depot_manager', 'conductor', 'driver', 'support_agent', 'data_collector'];
+      return internalRoles.includes(this.role) ? 'internal' : 'external';
+    }
   },
   status: {
     type: String,
-    enum: ['active', 'inactive', 'suspended'],
+    enum: ['active', 'pending', 'suspended', 'inactive'],
     default: 'active'
+  },
+  profileCompleted: {
+    type: Boolean,
+    default: false
   },
   depotId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -107,6 +120,62 @@ const userSchema = new mongoose.Schema({
       ref: 'Transaction'
     }]
   },
+  // Vendor specific fields (for external vendor users)
+  vendorDetails: {
+    companyName: String,
+    companyType: {
+      type: String,
+      enum: ['fuel', 'spare_parts', 'maintenance', 'cleaning', 'other']
+    },
+    panNumber: {
+      type: String,
+      uppercase: true,
+      match: [/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Invalid PAN format']
+    },
+    gstNumber: String,
+    bankDetails: {
+      accountNumber: String,
+      ifscCode: String,
+      bankName: String
+    },
+    trustScore: { type: Number, default: 50, min: 0, max: 100 },
+    complianceScore: { type: Number, default: 50, min: 0, max: 100 }
+  },
+  // Student specific fields (for external student users)
+  studentDetails: {
+    aadhaarNumber: {
+      type: String,
+      match: [/^[0-9]{12}$/, 'Invalid Aadhaar number']
+    },
+    dateOfBirth: Date,
+    institution: {
+      name: String,
+      type: {
+        type: String,
+        enum: ['school', 'college', 'university', 'other']
+      },
+      registrationNumber: String
+    },
+    course: {
+      name: String,
+      year: String,
+      department: String
+    },
+    passType: {
+      type: String,
+      enum: ['monthly', 'student_concession', 'senior_citizen', 'annual']
+    },
+    passNumber: String,
+    validityPeriod: {
+      startDate: Date,
+      endDate: Date
+    },
+    eligibilityStatus: {
+      type: String,
+      enum: ['approved', 'pending', 'rejected'],
+      default: 'pending'
+    }
+  },
   // Authentication
   authProvider: {
     type: String,
@@ -142,12 +211,15 @@ const userSchema = new mongoose.Schema({
 // Indexes
 userSchema.index({ phone: 1 });
 userSchema.index({ role: 1 });
+userSchema.index({ roleType: 1 });
 userSchema.index({ depotId: 1 });
-userSchema.index({ email: 1 }); // Add email index for faster login queries
+userSchema.index({ email: 1 }, { unique: true }); // Unique email index for faster login queries
 userSchema.index({ status: 1 }); // Add status index for role-based filtering
 userSchema.index({ 'providerIds.google': 1 }); // Add OAuth provider indexes
 userSchema.index({ 'providerIds.twitter': 1 });
 userSchema.index({ 'providerIds.microsoft': 1 });
+userSchema.index({ 'vendorDetails.panNumber': 1 }, { sparse: true }); // Vendor PAN index
+userSchema.index({ 'studentDetails.aadhaarNumber': 1 }, { sparse: true }); // Student Aadhaar index
 
 // Password hashing middleware
 userSchema.pre('save', async function(next) {

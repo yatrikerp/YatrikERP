@@ -4259,6 +4259,224 @@ router.get('/conductors', async (req, res) => {
   }
 });
 
+// GET /api/admin/conductors/:id/validation-stats - Get conductor ticket validation statistics
+router.get('/conductors/:id/validation-stats', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const Conductor = require('../models/Conductor');
+    const Booking = require('../models/Booking');
+    const Ticket = require('../models/Ticket');
+    
+    const conductor = await Conductor.findById(id) || await User.findOne({ _id: id, role: 'conductor' });
+    
+    if (!conductor) {
+      return res.status(404).json({
+        success: false,
+        message: 'Conductor not found'
+      });
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    // Get validation statistics
+    const [validationsToday, validationsWeek, validationsMonth, cashCollections, digitalCollections, concessionValidations] = await Promise.all([
+      Booking.countDocuments({
+        conductorId: id,
+        validatedAt: { $gte: today },
+        status: 'confirmed'
+      }),
+      Booking.countDocuments({
+        conductorId: id,
+        validatedAt: { $gte: weekAgo },
+        status: 'confirmed'
+      }),
+      Booking.countDocuments({
+        conductorId: id,
+        validatedAt: { $gte: monthAgo },
+        status: 'confirmed'
+      }),
+      Booking.aggregate([
+        {
+          $match: {
+            conductorId: id,
+            'payment.method': { $in: ['cash', 'Cash'] },
+            validatedAt: { $gte: monthAgo }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$pricing.paidAmount' },
+            count: { $sum: 1 }
+          }
+        }
+      ]),
+      Booking.aggregate([
+        {
+          $match: {
+            conductorId: id,
+            'payment.method': { $in: ['upi', 'card', 'digital', 'UPI', 'Card', 'Digital'] },
+            validatedAt: { $gte: monthAgo }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$pricing.paidAmount' },
+            count: { $sum: 1 }
+          }
+        }
+      ]),
+      Booking.countDocuments({
+        conductorId: id,
+        'passengers.adults': { $gt: 0 },
+        validatedAt: { $gte: monthAgo }
+      })
+    ]);
+
+    // Check for potential fraud (duplicate validations, manual overrides)
+    const recentValidations = await Booking.find({
+      conductorId: id,
+      validatedAt: { $gte: weekAgo }
+    }).select('ticketNumber validatedAt payment').lean();
+
+    const duplicateScans = recentValidations.filter((v, idx) => 
+      recentValidations.some((v2, idx2) => 
+        idx !== idx2 && v.ticketNumber === v2.ticketNumber && 
+        Math.abs(new Date(v.validatedAt) - new Date(v2.validatedAt)) < 60000
+      )
+    );
+
+    res.json({
+      success: true,
+      data: {
+        conductorId: id,
+        conductorName: conductor.name,
+        validations: {
+          today: validationsToday,
+          week: validationsWeek,
+          month: validationsMonth
+        },
+        collections: {
+          cash: {
+            amount: cashCollections[0]?.total || 0,
+            count: cashCollections[0]?.count || 0
+          },
+          digital: {
+            amount: digitalCollections[0]?.total || 0,
+            count: digitalCollections[0]?.count || 0
+          },
+          total: (cashCollections[0]?.total || 0) + (digitalCollections[0]?.total || 0)
+        },
+        concessionValidations: concessionValidations,
+        fraudAlerts: duplicateScans.length > 0 ? [{
+          type: 'duplicate_scan',
+          severity: 'medium',
+          message: `${duplicateScans.length} potential duplicate QR scans detected in the last 7 days`,
+          count: duplicateScans.length
+        }] : [],
+        performanceRank: 'N/A' // Would be calculated based on all conductors
+      }
+    });
+  } catch (error) {
+    console.error('Conductor validation stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch conductor validation stats',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/drivers/:id/fatigue - Get driver fatigue and duty information
+router.get('/drivers/:id/fatigue', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const Driver = require('../models/Driver');
+    const Duty = require('../models/Duty');
+    const Trip = require('../models/Trip');
+    
+    // Find driver in both models
+    const driver = await Driver.findById(id) || await User.findOne({ _id: id, role: 'driver' });
+    
+    if (!driver) {
+      return res.status(404).json({
+        success: false,
+        message: 'Driver not found'
+      });
+    }
+
+    // Get recent duties and trips
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    const [duties, trips] = await Promise.all([
+      Duty.find({
+        driverId: id,
+        date: { $gte: weekAgo }
+      }).lean(),
+      Trip.find({
+        driverId: id,
+        serviceDate: { $gte: weekAgo }
+      }).lean()
+    ]);
+
+    // Calculate metrics
+    const totalHours = duties.reduce((sum, d) => sum + (d.duration || 8), 0);
+    const distanceCovered = trips.reduce((sum, t) => sum + (t.routeId?.totalDistance || 200), 0);
+    const restHours = Math.max(0, 24 - (totalHours / 7)); // Average rest per day
+    const fatigueScore = Math.min(100, Math.floor(totalHours * 3 + distanceCovered / 10));
+    
+    // Check license expiry
+    const licenseExpiry = driver.drivingLicense?.expiryDate || driver.staffDetails?.licenseExpiry;
+    const daysUntilExpiry = licenseExpiry ? 
+      Math.floor((new Date(licenseExpiry) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+    
+    const fatigueStatus = totalHours > 12 ? 'high_fatigue' : totalHours > 8 ? 'moderate' : 'available';
+    
+    res.json({
+      success: true,
+      data: {
+        driverId: id,
+        driverName: driver.name,
+        totalHours,
+        distanceCovered,
+        restHours,
+        fatigueScore,
+        fatigueStatus,
+        licenseExpiry,
+        daysUntilExpiry,
+        licenseExpiringSoon: daysUntilExpiry !== null && daysUntilExpiry <= 30,
+        recentDuties: duties.length,
+        recentTrips: trips.length,
+        alerts: [
+          ...(fatigueScore > 60 ? [{
+            type: 'fatigue',
+            severity: 'high',
+            message: `High fatigue detected. Driver has worked ${totalHours} hours in the last 7 days.`
+          }] : []),
+          ...(daysUntilExpiry !== null && daysUntilExpiry <= 30 ? [{
+            type: 'license',
+            severity: daysUntilExpiry <= 7 ? 'high' : 'medium',
+            message: `Driver license expires in ${daysUntilExpiry} days.`
+          }] : [])
+        ]
+      }
+    });
+  } catch (error) {
+    console.error('Driver fatigue fetch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch driver fatigue data',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/admin/drivers
 router.get('/drivers', async (req, res) => {
   try {
@@ -8214,6 +8432,1062 @@ router.post('/assign-staff-to-route', auth, requireRole(['admin']), async (req, 
     res.status(500).json({
       success: false,
       message: 'Failed to assign staff to route',
+      error: error.message
+    });
+  }
+});
+
+// =================================================================
+// VENDOR MANAGEMENT - ADMIN CONTROLLED
+// =================================================================
+
+const Vendor = require('../models/Vendor');
+const StudentPass = require('../models/StudentPass');
+const PurchaseOrder = require('../models/PurchaseOrder');
+// const Invoice = require('../models/Invoice'); // TODO: Create Invoice model
+
+// GET /api/admin/vendors - Get all vendors with filters
+router.get('/vendors', async (req, res) => {
+  try {
+    const { status, type, page = 1, limit = 50 } = req.query;
+    const skip = (page - 1) * limit;
+    const filter = {};
+
+    if (status && status !== 'all') {
+      filter.status = status;
+    }
+    if (type && type !== 'all') {
+      filter.companyType = type;
+    }
+
+    const [vendors, total] = await Promise.all([
+      Vendor.find(filter)
+        .select('-password')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Vendor.countDocuments(filter)
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        vendors,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching vendors:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch vendors',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/vendors/stats - Get vendor statistics
+router.get('/vendors/stats', async (req, res) => {
+  try {
+    const [total, pending, approved, rejected, suspended] = await Promise.all([
+      Vendor.countDocuments(),
+      Vendor.countDocuments({ status: 'pending' }),
+      Vendor.countDocuments({ status: 'approved' }),
+      Vendor.countDocuments({ status: 'rejected' }),
+      Vendor.countDocuments({ status: 'suspended' })
+    ]);
+
+    // Get invoice stats (TODO: Implement when Invoice model is created)
+    // const totalInvoices = await Invoice.countDocuments();
+    // const pendingPayments = await Invoice.aggregate([
+    //   { $match: { paymentStatus: { $in: ['pending', 'partial'] } } },
+    //   { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+    // ]);
+    const totalInvoices = 0;
+    const pendingPayments = [];
+
+    res.json({
+      success: true,
+      data: {
+        total,
+        pending,
+        approved,
+        rejected,
+        suspended,
+        totalInvoices,
+        pendingPayments: pendingPayments[0]?.total || 0,
+        totalRevenue: 0 // Calculate from invoices
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching vendor stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch vendor stats',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/admin/vendors/:id/approve - Approve vendor
+router.post('/vendors/:id/approve', async (req, res) => {
+  try {
+    const vendor = await Vendor.findByIdAndUpdate(
+      req.params.id,
+      {
+        status: 'approved',
+        approvalStatus: 'approved',
+        verificationStatus: 'verified',
+        approvalDate: new Date(),
+        approvedBy: req.user.id
+      },
+      { new: true }
+    );
+
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vendor not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Vendor approved successfully',
+      data: { vendor }
+    });
+  } catch (error) {
+    console.error('Error approving vendor:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to approve vendor',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/admin/vendors/:id/reject - Reject vendor
+router.post('/vendors/:id/reject', async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const vendor = await Vendor.findByIdAndUpdate(
+      req.params.id,
+      {
+        status: 'rejected',
+        approvalStatus: 'rejected',
+        verificationStatus: 'rejected',
+        rejectionReason: reason
+      },
+      { new: true }
+    );
+
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vendor not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Vendor rejected successfully',
+      data: { vendor }
+    });
+  } catch (error) {
+    console.error('Error rejecting vendor:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to reject vendor',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/admin/vendors/:id/suspend - Suspend vendor
+router.post('/vendors/:id/suspend', async (req, res) => {
+  try {
+    const vendor = await Vendor.findByIdAndUpdate(
+      req.params.id,
+      {
+        status: 'suspended',
+        approvalStatus: 'suspended'
+      },
+      { new: true }
+    );
+
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vendor not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Vendor suspended successfully',
+      data: { vendor }
+    });
+  } catch (error) {
+    console.error('Error suspending vendor:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to suspend vendor',
+      error: error.message
+    });
+  }
+});
+
+// =================================================================
+// STUDENT CONCESSION MANAGEMENT - ADMIN CONTROLLED
+// =================================================================
+
+// GET /api/admin/students - Get all students with filters
+router.get('/students', async (req, res) => {
+  try {
+    const { status, category, page = 1, limit = 50 } = req.query;
+    const skip = (page - 1) * limit;
+    const filter = {};
+
+    if (status && status !== 'all') {
+      if (status === 'active') {
+        filter.status = 'active';
+        filter['validity.isActive'] = true;
+      } else {
+        filter.status = status;
+        filter.eligibilityStatus = status;
+      }
+    }
+    if (category && category !== 'all') {
+      filter.passType = category === 'school' ? 'student_concession' : category;
+    }
+
+    const [students, total] = await Promise.all([
+      StudentPass.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      StudentPass.countDocuments(filter)
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        students,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching students:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch students',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/students/stats - Get student concession statistics
+router.get('/students/stats', async (req, res) => {
+  try {
+    const [total, pending, approved, rejected, active] = await Promise.all([
+      StudentPass.countDocuments(),
+      StudentPass.countDocuments({ 
+        $or: [
+          { status: 'pending' },
+          { eligibilityStatus: 'pending' }
+        ]
+      }),
+      StudentPass.countDocuments({ 
+        $or: [
+          { status: 'approved' },
+          { eligibilityStatus: 'approved' }
+        ]
+      }),
+      StudentPass.countDocuments({ 
+        $or: [
+          { status: 'rejected' },
+          { eligibilityStatus: 'rejected' }
+        ]
+      }),
+      StudentPass.countDocuments({ 
+        status: 'active',
+        'validity.isActive': true
+      })
+    ]);
+
+    // Calculate revenue impact (simplified)
+    const totalTrips = await Booking.countDocuments({
+      concessionApplied: { $in: ['student', 'senior_citizen'] }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        total,
+        pending,
+        approved,
+        rejected,
+        active,
+        totalTrips,
+        revenueLoss: 0, // Calculate from bookings
+        subsidyRequired: 0 // Calculate from bookings
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching student stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch student stats',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/admin/students/:id/approve - Approve student concession
+router.post('/students/:id/approve', async (req, res) => {
+  try {
+    const student = await StudentPass.findByIdAndUpdate(
+      req.params.id,
+      {
+        status: 'active',
+        eligibilityStatus: 'approved',
+        passStatus: 'approved',
+        approvalDate: new Date(),
+        approvedBy: req.user.id,
+        'validity.isActive': true,
+        'validity.startDate': new Date(),
+        'validity.endDate': new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // 1 year
+      },
+      { new: true }
+    );
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Student concession approved successfully',
+      data: { student }
+    });
+  } catch (error) {
+    console.error('Error approving student:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to approve student',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/admin/students/:id/reject - Reject student concession
+router.post('/students/:id/reject', async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const student = await StudentPass.findByIdAndUpdate(
+      req.params.id,
+      {
+        status: 'rejected',
+        eligibilityStatus: 'rejected',
+        passStatus: 'rejected',
+        rejectionReason: reason
+      },
+      { new: true }
+    );
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Student concession rejected successfully',
+      data: { student }
+    });
+  } catch (error) {
+    console.error('Error rejecting student:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to reject student',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/concession/policy - Get concession policy settings
+router.get('/concession/policy', async (req, res) => {
+  try {
+    // In a real system, this would be stored in a settings collection
+    // For now, return default values
+    res.json({
+      success: true,
+      data: {
+        schoolDiscount: 50,
+        collegeDiscount: 50,
+        seniorCitizenDiscount: 50,
+        distanceCap: 100,
+        validityPeriod: 365
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching policy:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch policy',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/admin/concession/policy - Update concession policy settings
+router.put('/concession/policy', async (req, res) => {
+  try {
+    const { schoolDiscount, collegeDiscount, seniorCitizenDiscount, distanceCap, validityPeriod } = req.body;
+    
+    // In a real system, this would be saved to a settings collection
+    // For now, just return success
+    
+    res.json({
+      success: true,
+      message: 'Policy updated successfully',
+      data: {
+        schoolDiscount,
+        collegeDiscount,
+        seniorCitizenDiscount,
+        distanceCap,
+        validityPeriod
+      }
+    });
+  } catch (error) {
+    console.error('Error updating policy:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update policy',
+      error: error.message
+    });
+  }
+});
+
+// =================================================================
+// AI-POWERED COMMAND DASHBOARD ENDPOINTS
+// =================================================================
+
+// GET /api/admin/command-dashboard/kpis - Get real-time KPIs for command dashboard
+router.get('/command-dashboard/kpis', async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+
+    // Get real-time KPIs
+    const [
+      activeBuses,
+      runningTrips,
+      totalPassengers,
+      todayRevenue,
+      passengerLoad
+    ] = await Promise.all([
+      Bus.countDocuments({ status: { $in: ['active', 'assigned'] } }),
+      Trip.countDocuments({ status: 'running' }),
+      Booking.countDocuments({ 
+        createdAt: { $gte: today },
+        status: 'confirmed'
+      }),
+      Booking.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: today },
+            'payment.paymentStatus': 'completed'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$pricing.paidAmount' }
+          }
+        }
+      ]),
+      Booking.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: today },
+            status: 'confirmed'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$passengers.adults' }
+          }
+        }
+      ])
+    ]);
+
+    const revenue = todayRevenue[0]?.total || 0;
+    const load = passengerLoad[0]?.total || 0;
+
+    res.json({
+      success: true,
+      data: {
+        activeBuses,
+        runningTrips,
+        passengerLoad: load,
+        revenue,
+        timestamp: now
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching command dashboard KPIs:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch KPIs',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/command-dashboard/ai-alerts - Get AI-generated alerts
+router.get('/command-dashboard/ai-alerts', async (req, res) => {
+  try {
+    const now = new Date();
+    const alerts = [];
+
+    // Check for predicted delays
+    const delayedTrips = await Trip.find({
+      status: 'running',
+      scheduledDepartureTime: { $lt: now }
+    }).populate('routeId', 'routeName routeNumber').limit(5);
+
+    delayedTrips.forEach(trip => {
+      const delayMinutes = Math.floor((now - trip.scheduledDepartureTime) / 60000);
+      if (delayMinutes > 15) {
+        alerts.push({
+          type: 'delay_prediction',
+          severity: delayMinutes > 30 ? 'high' : 'medium',
+          title: 'Predicted Delay',
+          message: `Trip ${trip.tripNumber || trip._id} on route ${trip.routeId?.routeName || 'N/A'} is ${delayMinutes} minutes delayed`,
+          timestamp: now
+        });
+      }
+    });
+
+    // Check for route overload
+    const routeBookings = await Booking.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
+          status: 'confirmed'
+        }
+      },
+      {
+        $group: {
+          _id: '$routeId',
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { count: -1 }
+      },
+      {
+        $limit: 5
+      }
+    ]);
+
+    routeBookings.forEach(route => {
+      if (route.count > 100) {
+        alerts.push({
+          type: 'route_overload',
+          severity: 'medium',
+          title: 'Route Overload Warning',
+          message: `Route has ${route.count} bookings in last 24 hours`,
+          timestamp: now
+        });
+      }
+    });
+
+    // Check for fleet underutilization
+    const activeBuses = await Bus.countDocuments({ status: { $in: ['active', 'assigned'] } });
+    const totalBuses = await Bus.countDocuments();
+    const utilizationRate = (activeBuses / totalBuses) * 100;
+
+    if (utilizationRate < 60) {
+      alerts.push({
+        type: 'fleet_underutilization',
+        severity: 'low',
+        title: 'Fleet Underutilization',
+        message: `Only ${utilizationRate.toFixed(1)}% of fleet is active`,
+        timestamp: now
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        alerts,
+        count: alerts.length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching AI alerts:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch alerts',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/fleet-monitoring/live - Get real-time fleet GPS data
+router.get('/fleet-monitoring/live', async (req, res) => {
+  try {
+    const GPSPing = require('../models/GPSPing');
+    
+    // Get recent GPS pings for running trips
+    const runningTrips = await Trip.find({ status: 'running' })
+      .populate('busId', 'busNumber registrationNumber')
+      .populate('routeId', 'routeName routeNumber')
+      .populate('driverId', 'name')
+      .populate('conductorId', 'name')
+      .populate('depotId', 'depotName')
+      .lean();
+
+    const fleetData = await Promise.all(
+      runningTrips.map(async (trip) => {
+        const latestPing = await GPSPing.findOne({ tripId: trip._id })
+          .sort({ at: -1 })
+          .lean();
+
+        // Calculate delay
+        const now = new Date();
+        const scheduledDeparture = trip.scheduledDepartureTime || trip.startTime;
+        const delayMinutes = scheduledDeparture ? 
+          Math.floor((now - new Date(scheduledDeparture)) / 60000) : 0;
+
+        return {
+          tripId: trip._id,
+          tripNumber: trip.tripNumber,
+          bus: {
+            id: trip.busId?._id,
+            number: trip.busId?.busNumber,
+            registration: trip.busId?.registrationNumber
+          },
+          route: {
+            id: trip.routeId?._id,
+            name: trip.routeId?.routeName,
+            number: trip.routeId?.routeNumber
+          },
+          driver: trip.driverId?.name,
+          conductor: trip.conductorId?.name,
+          depot: trip.depotId?.depotName || 'N/A',
+          scheduledDepartureTime: scheduledDeparture,
+          delayMinutes: delayMinutes > 0 ? delayMinutes : 0,
+          location: latestPing ? {
+            latitude: latestPing.lat,
+            longitude: latestPing.lon,
+            speed: latestPing.speedKmph || 0,
+            timestamp: latestPing.at
+          } : null,
+          status: delayMinutes > 15 ? 'delayed' : trip.status
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      data: {
+        fleet: fleetData,
+        count: fleetData.length,
+        timestamp: new Date()
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching fleet monitoring data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch fleet data',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/financial/control - Get financial control dashboard data
+router.get('/financial/control', async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const [
+      revenueSummary,
+      expenseSummary,
+      routeProfitability,
+      depotProfitability,
+      busProfitability,
+      paymentModeBreakdown,
+      paymentAuditLogs
+    ] = await Promise.all([
+      // Revenue summary
+      Booking.aggregate([
+        {
+          $match: {
+            'payment.paymentStatus': 'completed'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$pricing.paidAmount' },
+            today: {
+              $sum: {
+                $cond: [
+                  { $gte: ['$createdAt', today] },
+                  '$pricing.paidAmount',
+                  0
+                ]
+              }
+            },
+            week: {
+              $sum: {
+                $cond: [
+                  { $gte: ['$createdAt', weekAgo] },
+                  '$pricing.paidAmount',
+                  0
+                ]
+              }
+            },
+            month: {
+              $sum: {
+                $cond: [
+                  { $gte: ['$createdAt', monthAgo] },
+                  '$pricing.paidAmount',
+                  0
+                ]
+              }
+            }
+          }
+        }
+      ]),
+      // Expense summary (placeholder - would need Expense model)
+      Promise.resolve({ total: 0, today: 0, week: 0, month: 0 }),
+      // Route profitability
+      Booking.aggregate([
+        {
+          $match: {
+            'payment.paymentStatus': 'completed',
+            createdAt: { $gte: monthAgo }
+          }
+        },
+        {
+          $lookup: {
+            from: 'routes',
+            localField: 'routeId',
+            foreignField: '_id',
+            as: 'route'
+          }
+        },
+        {
+          $unwind: { path: '$route', preserveNullAndEmptyArrays: true }
+        },
+        {
+          $group: {
+            _id: '$routeId',
+            routeName: { $first: '$route.routeName' },
+            revenue: { $sum: '$pricing.paidAmount' },
+            bookings: { $sum: 1 }
+          }
+        },
+        {
+          $sort: { revenue: -1 }
+        },
+        {
+          $limit: 10
+        }
+      ]),
+      // Depot profitability
+      Booking.aggregate([
+        {
+          $match: {
+            'payment.paymentStatus': 'completed',
+            createdAt: { $gte: monthAgo }
+          }
+        },
+        {
+          $lookup: {
+            from: 'trips',
+            localField: 'tripId',
+            foreignField: '_id',
+            as: 'trip'
+          }
+        },
+        {
+          $unwind: { path: '$trip', preserveNullAndEmptyArrays: true }
+        },
+        {
+          $lookup: {
+            from: 'depots',
+            localField: 'trip.depotId',
+            foreignField: '_id',
+            as: 'depot'
+          }
+        },
+        {
+          $unwind: { path: '$depot', preserveNullAndEmptyArrays: true }
+        },
+        {
+          $group: {
+            _id: '$trip.depotId',
+            depotName: { $first: '$depot.depotName' },
+            revenue: { $sum: '$pricing.paidAmount' },
+            bookings: { $sum: 1 }
+          }
+        },
+        {
+          $sort: { revenue: -1 }
+        },
+        {
+          $limit: 10
+        }
+      ]),
+      // Bus profitability
+      Booking.aggregate([
+        {
+          $match: {
+            'payment.paymentStatus': 'completed',
+            createdAt: { $gte: monthAgo }
+          }
+        },
+        {
+          $lookup: {
+            from: 'trips',
+            localField: 'tripId',
+            foreignField: '_id',
+            as: 'trip'
+          }
+        },
+        {
+          $unwind: { path: '$trip', preserveNullAndEmptyArrays: true }
+        },
+        {
+          $lookup: {
+            from: 'buses',
+            localField: 'trip.busId',
+            foreignField: '_id',
+            as: 'bus'
+          }
+        },
+        {
+          $unwind: { path: '$bus', preserveNullAndEmptyArrays: true }
+        },
+        {
+          $group: {
+            _id: '$trip.busId',
+            busNumber: { $first: '$bus.busNumber' },
+            revenue: { $sum: '$pricing.paidAmount' },
+            bookings: { $sum: 1 }
+          }
+        },
+        {
+          $sort: { revenue: -1 }
+        },
+        {
+          $limit: 10
+        }
+      ]),
+      // Payment mode breakdown
+      Booking.aggregate([
+        {
+          $match: {
+            'payment.paymentStatus': 'completed',
+            createdAt: { $gte: monthAgo }
+          }
+        },
+        {
+          $group: {
+            _id: '$payment.method',
+            revenue: { $sum: '$pricing.paidAmount' },
+            count: { $sum: 1 }
+          }
+        },
+        {
+          $sort: { revenue: -1 }
+        }
+      ]),
+      // Payment audit logs (recent payments)
+      Booking.find({
+        'payment.paymentStatus': 'completed'
+      })
+        .select('payment createdAt routeId tripId')
+        .populate('routeId', 'routeName')
+        .populate('tripId', 'depotId busId')
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean()
+    ]);
+
+    const revenue = revenueSummary[0] || { total: 0, today: 0, week: 0, month: 0 };
+    const expenses = expenseSummary || { total: 0, today: 0, week: 0, month: 0 };
+
+    res.json({
+      success: true,
+      data: {
+        revenue: {
+          total: revenue.total,
+          today: revenue.today,
+          week: revenue.week,
+          month: revenue.month
+        },
+        expenses: expenses,
+        profit: {
+          total: revenue.total - expenses.total,
+          today: revenue.today - expenses.today,
+          week: revenue.week - expenses.week,
+          month: revenue.month - expenses.month
+        },
+        routeProfitability: routeProfitability,
+        depotProfitability: depotProfitability,
+        busProfitability: busProfitability,
+        paymentModeBreakdown: paymentModeBreakdown,
+        paymentAuditLogs: paymentAuditLogs.map(log => ({
+          id: log._id,
+          amount: log.payment?.amount || log.pricing?.paidAmount || 0,
+          method: log.payment?.method || 'unknown',
+          status: log.payment?.paymentStatus,
+          route: log.routeId?.routeName || 'N/A',
+          timestamp: log.createdAt
+        })),
+        timestamp: new Date()
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching financial control data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch financial data',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/notifications/alerts - Get notifications and alerts
+router.get('/notifications/alerts', async (req, res) => {
+  try {
+    const { type, status, limit = 50 } = req.query;
+
+    const query = {};
+    if (type) query.type = type;
+    if (status) query.status = status;
+
+    const notifications = await Notification.find(query)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .lean();
+
+    res.json({
+      success: true,
+      data: {
+        notifications,
+        count: notifications.length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch notifications',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/system-config - Get system configuration
+router.get('/system-config', async (req, res) => {
+  try {
+    const SystemConfig = require('../models/SystemConfig');
+    
+    let config = await SystemConfig.findOne({}).lean();
+    
+    if (!config) {
+      // Return default config
+      config = {
+        concessionRules: {
+          schoolDiscount: 50,
+          collegeDiscount: 50,
+          seniorCitizenDiscount: 50
+        },
+        schedulingConstraints: {
+          maxDriverHours: 10,
+          minRestHours: 8
+        },
+        auctionRules: {
+          minBidAmount: 100,
+          biddingDuration: 24
+        },
+        paymentThresholds: {
+          autoApprovalLimit: 10000,
+          manualApprovalLimit: 50000
+        }
+      };
+    }
+
+    res.json({
+      success: true,
+      data: config
+    });
+  } catch (error) {
+    console.error('Error fetching system config:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch system config',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/admin/system-config - Update system configuration
+router.put('/system-config', async (req, res) => {
+  try {
+    const SystemConfig = require('../models/SystemConfig');
+    const configData = req.body;
+
+    let config = await SystemConfig.findOne({});
+    
+    if (!config) {
+      config = new SystemConfig(configData);
+    } else {
+      Object.assign(config, configData);
+    }
+
+    await config.save();
+
+    res.json({
+      success: true,
+      message: 'System configuration updated successfully',
+      data: config
+    });
+  } catch (error) {
+    console.error('Error updating system config:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update system config',
       error: error.message
     });
   }

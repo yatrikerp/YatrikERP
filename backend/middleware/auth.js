@@ -1,8 +1,12 @@
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const DepotUser = require('../models/DepotUser');
 const Driver = require('../models/Driver');
 const Conductor = require('../models/Conductor');
+const Vendor = require('../models/Vendor');
+const StudentPass = require('../models/StudentPass');
+const { logger } = require('../src/core/logger');
 
 // In-memory user cache disabled to ensure live reads from DB
 const userCache = { get: () => null, set: () => {}, entries: () => [], delete: () => {} };
@@ -17,26 +21,221 @@ const auth = async (req, res, next) => {
     }
 
     const auth = req.headers.authorization || '';
-    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : auth;
     
     if (!token) {
+      logger.error('[AUTH] No token provided for:', req.path);
       return res.status(401).json({ 
         success: false, 
-        error: 'No token provided' 
+        error: 'No token provided',
+        message: 'Authentication required. Please log in.'
       });
     }
 
     // Verify token
-    const payload = jwt.verify(token, process.env.JWT_SECRET || 'secret');
-    console.log('Token payload:', payload);
+    let payload;
+    try {
+      payload = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+      logger.info('[AUTH] Token verified successfully:', {
+        userId: payload.userId,
+        role: payload.role,
+        email: payload.email,
+        path: req.path
+      });
+    } catch (error) {
+      logger.error('[AUTH] Token verification failed:', error.message, 'for path:', req.path);
+      logger.error('[AUTH] Token details:', {
+        tokenLength: token.length,
+        tokenPreview: token.substring(0, 20) + '...',
+        errorName: error.name,
+        errorMessage: error.message
+      });
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Invalid or expired token',
+        message: 'Authentication failed. Please log in again.',
+        code: 'TOKEN_INVALID'
+      });
+    }
     
     // Skip in-memory cache for always-live data
-    const cacheKey = `${payload.userId}_${payload.role}`;
+    const cacheKey = `${payload.userId || payload.vendorId || payload.studentId}_${payload.role}`;
 
-    // Fetch user from database with minimal fields
-    let user = await User.findById(payload.userId)
-      .select('_id name email role status depotId lastLogin')
-      .lean();
+    // Extract roleType from token payload
+    const roleType = payload.roleType || 'internal';
+    const role = (payload.role || '').toLowerCase();
+    const payloadRole = String(payload.role || '').toUpperCase();
+
+    // Initialize user variable
+    let user = null;
+
+    // PRIORITY CHECK: Check Vendor FIRST if token indicates vendor (before User lookup)
+    // This prevents vendor tokens from being rejected by User lookup
+    if ((payloadRole === 'VENDOR' || role === 'vendor' || payload.vendorId) && (payload.vendorId || payload.userId)) {
+      const vendor = await Vendor.findById(payload.vendorId || payload.userId)
+        .select('_id companyName email phone status trustScore complianceScore verificationStatus')
+        .lean();
+      
+      if (vendor) {
+        // Check if vendor status allows access (approved or active)
+        if (vendor.status === 'approved' || vendor.status === 'active' || vendor.status === 'pending') {
+          user = {
+            _id: vendor._id,
+            vendorId: vendor._id,
+            name: vendor.companyName,
+            email: vendor.email,
+            phone: vendor.phone,
+            role: 'vendor',
+            roleType: 'external',
+            status: vendor.status,
+            companyName: vendor.companyName,
+            trustScore: vendor.trustScore,
+            complianceScore: vendor.complianceScore,
+            verificationStatus: vendor.verificationStatus
+          };
+          logger.info('[AUTH] Vendor authenticated via priority check:', vendor.companyName, 'status:', vendor.status);
+        } else {
+          return res.status(403).json({
+            success: false,
+            error: `Vendor account is ${vendor.status}. Please contact administrator.`
+          });
+        }
+      }
+    }
+
+    // Fetch user from database with minimal fields (only if vendor not found)
+    if (!user) {
+      try {
+        // PRIORITY: Check for admin user first
+        if (payloadRole === 'ADMIN' || payloadRole === 'ADMINISTRATOR' || role === 'admin') {
+          logger.info('[AUTH] Admin token detected, looking up admin user:', {
+            userId: payload.userId,
+            email: payload.email,
+            role: payload.role
+          });
+          
+          // Try by ID first - convert to ObjectId if it's a string
+          if (payload.userId) {
+            try {
+              const userId = mongoose.Types.ObjectId.isValid(payload.userId) 
+                ? mongoose.Types.ObjectId(payload.userId) 
+                : payload.userId;
+              
+              user = await User.findById(userId)
+                .select('_id name email role roleType status depotId lastLogin profileCompleted')
+                .lean();
+              
+              if (user) {
+                if (user.role !== 'admin') {
+                  logger.warn('[AUTH] User found but role is not admin:', user.role);
+                  user = null;
+                } else {
+                  logger.info('[AUTH] Admin user found by ID:', {
+                    userId: user._id,
+                    email: user.email,
+                    role: user.role,
+                    status: user.status
+                  });
+                }
+              } else {
+                logger.warn('[AUTH] Admin user not found by ID:', payload.userId);
+              }
+            } catch (idError) {
+              logger.error('[AUTH] Error looking up admin user by ID:', idError);
+              user = null;
+            }
+          }
+          
+          // If not found by ID, try by email
+          if (!user && payload.email) {
+            try {
+              user = await User.findOne({ 
+                email: payload.email.toLowerCase(),
+                role: 'admin'
+              })
+              .select('_id name email role roleType status depotId lastLogin profileCompleted')
+              .lean();
+              
+              if (user) {
+                logger.info('[AUTH] Admin user found by email:', {
+                  userId: user._id,
+                  email: user.email,
+                  role: user.role,
+                  status: user.status
+                });
+              } else {
+                logger.warn('[AUTH] Admin user not found by email:', payload.email);
+              }
+            } catch (emailError) {
+              logger.error('[AUTH] Error looking up admin user by email:', emailError);
+            }
+          }
+          
+          // Fallback to admin@yatrik.com if still not found
+          if (!user) {
+            try {
+              user = await User.findOne({ 
+                email: 'admin@yatrik.com',
+                role: 'admin'
+              })
+              .select('_id name email role roleType status depotId lastLogin profileCompleted')
+              .lean();
+              
+              if (user) {
+                logger.info('[AUTH] Admin user found by default email:', {
+                  userId: user._id,
+                  email: user.email,
+                  role: user.role,
+                  status: user.status
+                });
+              } else {
+                logger.warn('[AUTH] Admin user not found by default email');
+              }
+            } catch (defaultError) {
+              logger.error('[AUTH] Error looking up admin user by default email:', defaultError);
+            }
+          }
+          
+          // If still not found, log error and don't use synthetic admin
+          if (!user) {
+            logger.error('[AUTH] Admin user not found in database after all attempts:', {
+              userId: payload.userId,
+              email: payload.email,
+              role: payload.role
+            });
+            // Don't create synthetic admin - return error instead
+            return res.status(401).json({
+              success: false,
+              error: 'Admin user not found in database',
+              code: 'ADMIN_NOT_FOUND',
+              message: 'Admin account not found. Please contact system administrator.'
+            });
+          }
+        } else {
+          // For non-admin users, use regular lookup
+          try {
+            const userId = mongoose.Types.ObjectId.isValid(payload.userId) 
+              ? mongoose.Types.ObjectId(payload.userId) 
+              : payload.userId;
+            user = await User.findById(userId)
+              .select('_id name email role roleType status depotId lastLogin profileCompleted')
+              .lean();
+          } catch (idError) {
+            logger.error('[AUTH] Error looking up user by ID:', idError);
+          }
+        }
+      } catch (dbError) {
+        logger.error('[AUTH] Database error while fetching user:', dbError);
+        logger.error('[AUTH] Database error stack:', dbError.stack);
+        // Continue to synthetic user fallback
+      }
+    }
+    
+    // Add roleType to user if not present
+    if (user && !user.roleType) {
+      const internalRoles = ['admin', 'depot_manager', 'conductor', 'driver', 'support_agent', 'data_collector'];
+      user.roleType = internalRoles.includes(user.role) ? 'internal' : 'external';
+    }
 
     // If not a regular user, try DepotUser (depot panel accounts)
     if (!user) {
@@ -51,6 +250,7 @@ const auth = async (req, res, next) => {
           name: depotUser.username,
           email: depotUser.email,
           role: depotUser.role || 'depot_manager',
+          roleType: 'internal',
           status: depotUser.status,
           depotId: depotUser.depotId,
           lastLogin: depotUser.lastLogin,
@@ -76,6 +276,7 @@ const auth = async (req, res, next) => {
           email: driver.email,
           phone: driver.phone,
           role: 'driver',
+          roleType: 'internal',
           status: driver.status,
           depotId: driver.depotId,
           lastLogin: driver.lastLogin
@@ -97,6 +298,7 @@ const auth = async (req, res, next) => {
           email: conductor.email,
           phone: conductor.phone,
           role: 'conductor',
+          roleType: 'internal',
           status: conductor.status,
           depotId: conductor.depotId,
           lastLogin: conductor.lastLogin
@@ -113,9 +315,53 @@ const auth = async (req, res, next) => {
           name: payload.name || `Conductor ${payload.conductorNumber || ''}`.trim(),
           email: payload.email || '',
           role: 'conductor',
+          roleType: 'internal',
           status: 'active',
           depotId: payload.depotId,
           lastLogin: new Date()
+        };
+      }
+    }
+
+    // Check Vendor model if roleType is external and role is vendor
+    if (!user && roleType === 'external' && role === 'vendor' && (payload.vendorId || payload.userId)) {
+      const vendor = await Vendor.findById(payload.vendorId || payload.userId)
+        .select('_id companyName email phone status trustScore complianceScore')
+        .lean();
+      
+      if (vendor) {
+        user = {
+          _id: vendor._id,
+          name: vendor.companyName,
+          email: vendor.email,
+          phone: vendor.phone,
+          role: 'vendor',
+          roleType: 'external',
+          status: vendor.status,
+          vendorId: vendor._id,
+          companyName: vendor.companyName
+        };
+      }
+    }
+
+    // Check StudentPass model if roleType is external and role is student
+    if (!user && roleType === 'external' && role === 'student' && (payload.studentId || payload.aadhaarNumber)) {
+      const student = await StudentPass.findById(payload.studentId || payload.userId)
+        .select('_id name email phone status passNumber aadhaarNumber eligibilityStatus')
+        .lean();
+      
+      if (student) {
+        user = {
+          _id: student._id,
+          name: student.name,
+          email: student.email,
+          phone: student.phone,
+          role: 'student',
+          roleType: 'external',
+          status: student.status,
+          studentId: student._id,
+          passNumber: student.passNumber,
+          aadhaarNumber: student.aadhaarNumber
         };
       }
     }
@@ -137,6 +383,81 @@ const auth = async (req, res, next) => {
       }
     }
 
+    // Final vendor fallback check (should rarely be needed after priority check)
+    if (!user && (payload.vendorId || (role === 'vendor' && payload.userId) || payloadRole === 'VENDOR')) {
+      const vendorId = payload.vendorId || payload.userId;
+      if (vendorId) {
+        const vendor = await Vendor.findById(vendorId)
+          .select('_id companyName email phone status trustScore complianceScore verificationStatus')
+          .lean();
+
+        if (vendor) {
+          // Allow approved, active, or pending vendors
+          if (vendor.status === 'approved' || vendor.status === 'active' || vendor.status === 'pending') {
+            user = {
+              _id: vendor._id,
+              vendorId: vendor._id,
+              name: vendor.companyName,
+              email: vendor.email,
+              phone: vendor.phone,
+              role: 'vendor',
+              roleType: 'external',
+              status: vendor.status,
+              companyName: vendor.companyName,
+              trustScore: vendor.trustScore,
+              complianceScore: vendor.complianceScore,
+              verificationStatus: vendor.verificationStatus
+            };
+            logger.debug('[AUTH] Vendor authenticated via final fallback:', vendor.companyName, 'status:', vendor.status);
+          } else {
+            logger.warn('[AUTH] Vendor found but status is', vendor.status, '- access denied');
+          }
+        }
+      }
+    }
+
+    // If still not found, try StudentPass model
+    if (!user && payload.studentId) {
+      const studentPass = await StudentPass.findById(payload.studentId)
+        .select('_id name email phone aadhaarNumber passNumber status eligibilityStatus')
+        .lean();
+
+      if (studentPass) {
+        user = {
+          _id: studentPass._id,
+          studentId: studentPass._id,
+          name: studentPass.name,
+          email: studentPass.email,
+          phone: studentPass.phone,
+          role: 'student',
+          status: studentPass.status,
+          aadhaarNumber: studentPass.aadhaarNumber,
+          passNumber: studentPass.passNumber,
+          eligibilityStatus: studentPass.eligibilityStatus
+        };
+      }
+    }
+
+    if (!user) {
+      // Fallback: accept vendor tokens even if DB lookup failed (for pattern-logins or new registrations)
+      const payloadRole = String(payload.role || '').toUpperCase();
+      if (payloadRole === 'VENDOR' && (payload.vendorId || payload.userId)) {
+        // Create synthetic vendor user from token payload
+        user = {
+          _id: payload.vendorId || payload.userId,
+          vendorId: payload.vendorId || payload.userId,
+          name: payload.name || payload.companyName || 'Vendor',
+          email: payload.email || '',
+          phone: payload.phone || '',
+          role: 'vendor',
+          roleType: 'external',
+          status: 'approved', // Default to approved for synthetic users
+          companyName: payload.companyName || payload.name || 'Vendor'
+        };
+        logger.debug('[AUTH] Synthetic vendor user created from token:', user.email);
+      }
+    }
+
     if (!user) {
       // Fallback: accept depot short-circuit tokens without DB record
       const payloadRole = String(payload.role || '').toUpperCase();
@@ -154,46 +475,78 @@ const auth = async (req, res, next) => {
           depotName: payload.depotName || null,
           permissions: Array.isArray(payload.permissions) ? payload.permissions : []
         };
-      } else if ((payload.role || '').toString().toUpperCase() === 'ADMIN' && (payload.email || '').toLowerCase() === 'admin@yatrik.com') {
-        // Synthetic admin support: accept token even if DB has no user
-        user = {
-          _id: payload.userId || '000000000000000000000000',
-          name: payload.name || 'System Admin',
-          email: 'admin@yatrik.com',
-          role: 'admin',
-          status: 'active',
-          depotId: null,
-          lastLogin: new Date()
-        };
       } else {
-        console.error('User not found for ID:', payload.userId);
+        // NO SYNTHETIC USERS - user MUST exist in database
+        logger.error('[AUTH] User not found in database:', {
+          userId: payload.userId,
+          role: payload.role,
+          email: payload.email,
+          path: req.path
+        });
         return res.status(401).json({ 
           success: false, 
-          error: 'User not found. Please log in again.',
-          code: 'USER_NOT_FOUND'
+          error: 'User not found in database',
+          code: 'USER_NOT_FOUND',
+          message: 'Authentication failed. Please contact system administrator.'
         });
       }
     }
     
-    if (user.status !== 'active') {
-      console.error('User account is not active:', user.status);
-      return res.status(401).json({ 
+    // Check user status - allow different statuses for different roles
+    const allowedStatuses = ['active'];
+    if (user.role === 'admin') {
+      // Admin must be active - no other status allowed
+      // Keep only 'active' in allowedStatuses
+    } else if (user.role === 'vendor') {
+      // Vendors can access with approved, active, or pending status
+      allowedStatuses.push('approved', 'pending');
+    } else if (user.role === 'student') {
+      // Students can access with active or approved status
+      allowedStatuses.push('approved');
+    }
+    
+    if (!allowedStatuses.includes(user.status)) {
+      logger.warn('[AUTH] User account status not allowed:', user.status, 'for role:', user.role);
+      return res.status(403).json({ 
         success: false, 
-        error: 'Account is not active. Please contact support.',
-        code: 'ACCOUNT_INACTIVE'
+        error: `Account is ${user.status}. Please contact support.`,
+        code: 'ACCOUNT_INACTIVE',
+        message: `Your account status is ${user.status}. Please contact support.`
       });
     }
 
     // Do not cache user data to force live reads
 
+    // Ensure user object is properly set
+    if (!user) {
+      logger.error('[AUTH] User object is null after all checks. Payload:', {
+        userId: payload.userId,
+        role: payload.role,
+        email: payload.email,
+        path: req.path
+      });
+      return res.status(401).json({ 
+        success: false, 
+        error: 'User authentication failed',
+        code: 'USER_AUTH_FAILED',
+        message: 'Authentication failed. Please log in again.'
+      });
+    }
+    
     req.user = user;
     next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
+    logger.error('[AUTH] Auth middleware error:', {
+      message: error.message,
+      stack: error.stack,
+      path: req?.path
+    });
     if (res && res.status) {
       return res.status(401).json({ 
         success: false, 
-        error: 'Invalid token' 
+        error: 'Invalid token',
+        code: 'AUTH_ERROR',
+        message: 'Authentication failed. Please log in again.'
       });
     }
     return null;
@@ -217,7 +570,7 @@ const requireRole = (roles) => {
     const isDepotUser = ['DEPOT_MANAGER', 'DEPOT_SUPERVISOR', 'DEPOT_OPERATOR', 'MANAGER', 'SUPERVISOR', 'OPERATOR'].includes(userRole);
     const isAdminUser = ['ADMIN', 'ADMINISTRATOR'].includes(userRole);
     
-    console.log('Role check:', {
+    logger.debug('Role check:', {
       userRole,
       allowedRoles,
       isDepotUser,

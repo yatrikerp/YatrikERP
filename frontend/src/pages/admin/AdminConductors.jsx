@@ -22,7 +22,8 @@ import {
   UserCheck,
   UserX,
   Filter,
-  UserPlus
+  UserPlus,
+  Ticket
 } from 'lucide-react';
 import BulkAssignmentModal from '../../components/Admin/BulkAssignmentModal';
 
@@ -38,6 +39,8 @@ const AdminConductors = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingConductor, setEditingConductor] = useState(null);
   const [viewingConductor, setViewingConductor] = useState(null);
+  const [conductorValidationData, setConductorValidationData] = useState(null);
+  const [loadingValidation, setLoadingValidation] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [conductorToDelete, setConductorToDelete] = useState(null);
   const [showBulkAssignment, setShowBulkAssignment] = useState(false);
@@ -286,8 +289,23 @@ const AdminConductors = () => {
     });
   };
 
-  const openViewConductor = (conductor) => {
+  const openViewConductor = async (conductor) => {
     setViewingConductor(conductor);
+    // Fetch validation statistics
+    try {
+      setLoadingValidation(true);
+      const response = await fetch(`/api/admin/conductors/${conductor._id}/validation-stats`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setConductorValidationData(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching validation stats:', error);
+    } finally {
+      setLoadingValidation(false);
+    }
   };
 
   const openDeleteModal = (conductor) => {
@@ -901,7 +919,10 @@ const AdminConductors = () => {
 
   {/* View Conductor Modal (Credentials & Details) */}
   {viewingConductor && (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setViewingConductor(null)}>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => {
+      setViewingConductor(null);
+      setConductorValidationData(null);
+    }}>
       <div className="bg-white rounded-xl shadow-xl max-w-xl w-full" onClick={(e) => e.stopPropagation()}>
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -913,7 +934,10 @@ const AdminConductors = () => {
               <p className="text-sm text-gray-500">ID: {String(viewingConductor._id).slice(-8)}</p>
             </div>
           </div>
-          <button onClick={() => setViewingConductor(null)} className="px-3 py-1 rounded border border-gray-300 hover:bg-gray-50">Close</button>
+          <button onClick={() => {
+            setViewingConductor(null);
+            setConductorValidationData(null);
+          }} className="px-3 py-1 rounded border border-gray-300 hover:bg-gray-50">Close</button>
         </div>
         <div className="p-6 space-y-4">
           <div>
@@ -938,6 +962,81 @@ const AdminConductors = () => {
             <div className="flex items-center gap-2"><Building2 className="w-4 h-4 text-gray-400" /><span>{getDepotName(viewingConductor.depotId)} ({getDepotCode(viewingConductor.depotId)})</span></div>
             <div>{getStatusBadge(viewingConductor.status)}</div>
           </div>
+
+          {/* Ticket Validation & Performance Tracking */}
+          {loadingValidation ? (
+            <div className="text-center py-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="text-sm text-gray-500 mt-2">Loading validation data...</p>
+            </div>
+          ) : conductorValidationData ? (
+            <div className="mt-6 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+              <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Ticket className="w-5 h-5 text-blue-600" />
+                Ticket Validation & Performance (Last 30 Days)
+              </h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                <div className="bg-white rounded-lg p-3">
+                  <p className="text-xs text-gray-600 mb-1">Validations Today</p>
+                  <p className="text-lg font-bold text-gray-900">{conductorValidationData.validations.today}</p>
+                </div>
+                <div className="bg-white rounded-lg p-3">
+                  <p className="text-xs text-gray-600 mb-1">This Week</p>
+                  <p className="text-lg font-bold text-gray-900">{conductorValidationData.validations.week}</p>
+                </div>
+                <div className="bg-white rounded-lg p-3">
+                  <p className="text-xs text-gray-600 mb-1">This Month</p>
+                  <p className="text-lg font-bold text-gray-900">{conductorValidationData.validations.month}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="bg-white rounded-lg p-3">
+                  <p className="text-xs text-gray-600 mb-1">Cash Collections</p>
+                  <p className="text-lg font-bold text-gray-900">₹{conductorValidationData.collections.cash.amount.toLocaleString()}</p>
+                  <p className="text-xs text-gray-500">{conductorValidationData.collections.cash.count} transactions</p>
+                </div>
+                <div className="bg-white rounded-lg p-3">
+                  <p className="text-xs text-gray-600 mb-1">Digital Collections</p>
+                  <p className="text-lg font-bold text-gray-900">₹{conductorValidationData.collections.digital.amount.toLocaleString()}</p>
+                  <p className="text-xs text-gray-500">{conductorValidationData.collections.digital.count} transactions</p>
+                </div>
+              </div>
+              <div className="bg-white rounded-lg p-3 mb-4">
+                <p className="text-xs text-gray-600 mb-1">Total Collections</p>
+                <p className="text-xl font-bold text-blue-600">₹{conductorValidationData.collections.total.toLocaleString()}</p>
+                <p className="text-xs text-gray-500 mt-1">Concession Validations: {conductorValidationData.concessionValidations}</p>
+              </div>
+              {conductorValidationData.fraudAlerts.length > 0 && (
+                <div className="space-y-2">
+                  {conductorValidationData.fraudAlerts.map((alert, idx) => (
+                    <div key={idx} className={`p-3 rounded-lg ${
+                      alert.severity === 'high' ? 'bg-red-100 border border-red-300' : 'bg-yellow-100 border border-yellow-300'
+                    }`}>
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className={`w-5 h-5 ${
+                          alert.severity === 'high' ? 'text-red-600' : 'text-yellow-600'
+                        }`} />
+                        <div>
+                          <p className={`text-sm font-medium ${
+                            alert.severity === 'high' ? 'text-red-800' : 'text-yellow-800'
+                          }`}>
+                            {alert.message}
+                          </p>
+                          {alert.count && (
+                            <p className={`text-xs mt-1 ${
+                              alert.severity === 'high' ? 'text-red-600' : 'text-yellow-600'
+                            }`}>
+                              Count: {alert.count}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
         <div className="p-6 border-t border-gray-200 flex items-center justify-end gap-2">
           <button onClick={() => setViewingConductor(null)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Close</button>

@@ -1,9 +1,0 @@
-Place third-party fallbacks here if needed.
-Expected files:
-- jsqr.min.js
-- razorpay.checkout.js
-
-These are optional; the app first tries CDNs and will use these if present.
-
-
-

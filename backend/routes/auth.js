@@ -11,8 +11,9 @@ const { sendEmail } = require('../config/email');
 const { queueEmail } = require('../services/emailQueue');
 const { validateRegistrationEmail, validateProfileUpdateEmail } = require('../middleware/emailValidation');
 const { userValidations, handleValidationErrors } = require('../middleware/validation');
+const { logger } = require('../src/core/logger');
 
-// POST /api/auth/check-email - Check if email exists
+// POST /api/auth/check-email - Check if email exists (checks User, Vendor, StudentPass)
 router.post('/check-email', async (req, res) => {
   try {
     const { email } = req.body;
@@ -24,26 +25,61 @@ router.post('/check-email', async (req, res) => {
       });
     }
 
-    // Validate email format
-    const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
+    // Validate email format - more lenient regex to handle @vendor.com
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid email format'
+        error: 'Invalid email format',
+        details: 'Email must be in format: name@domain.com'
       });
     }
 
-    // Check if user exists
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const normalizedEmail = email.toLowerCase();
+    
+    // Check if user exists in User model
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+      return res.json({
+        success: true,
+        exists: true,
+        message: 'Email already exists',
+        type: 'user'
+      });
+    }
+
+    // Check if vendor exists
+    const Vendor = require('../models/Vendor');
+    const existingVendor = await Vendor.findOne({ email: normalizedEmail });
+    if (existingVendor) {
+      return res.json({
+        success: true,
+        exists: true,
+        message: 'Email already registered as vendor',
+        type: 'vendor'
+      });
+    }
+
+    // Check if student exists
+    const StudentPass = require('../models/StudentPass');
+    const existingStudent = await StudentPass.findOne({ email: normalizedEmail });
+    if (existingStudent) {
+      return res.json({
+        success: true,
+        exists: true,
+        message: 'Email already registered as student',
+        type: 'student'
+      });
+    }
     
     res.json({
       success: true,
-      exists: !!existingUser,
-      message: existingUser ? 'Email already exists' : 'Email available'
+      exists: false,
+      message: 'Email available'
     });
 
   } catch (error) {
-    console.error('Email check error:', error);
+    logger.error('Email check error:', error);
     res.status(500).json({
       success: false,
       error: 'Server error during email check'
@@ -89,7 +125,7 @@ router.post('/register', userValidations.register, handleValidationErrors, valid
         userName: user.name,
         userEmail: user.email
       });
-      console.log('📧 Welcome email queued for passenger:', email);
+      logger.info('📧 Welcome email queued for passenger:', email);
     }
 
     res.status(201).json({
@@ -98,7 +134,7 @@ router.post('/register', userValidations.register, handleValidationErrors, valid
     });
 
   } catch (error) {
-    console.error('Registration error details:', error);
+    logger.error('Registration error details:', error);
     res.status(500).json({
       success: false,
       error: 'Registration failed',
@@ -128,38 +164,86 @@ router.post("/login", async (req, res) => {
     const normalizedIdentifier = identifier.toLowerCase();
     const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedIdentifier);
 
-    // Immediate success for constant admin credentials (no DB dependency)
-    if (normalizedIdentifier === 'admin@yatrik.com' && rawPassword === 'admin123') {
-      const adminUser = {
-        _id: '000000000000000000000000',
-        name: 'System Admin',
-        email: 'admin@yatrik.com',
-        role: 'admin',
-        status: 'active'
-      };
-      const token = jwt.sign(
-        { userId: adminUser._id, role: 'ADMIN', name: adminUser.name, email: adminUser.email },
-        process.env.JWT_SECRET || 'secret',
-        { expiresIn: '7d' }
-      );
-      return res.json({ success: true, token, user: adminUser, redirectPath: '/admin' });
-    }
+    // PRIORITY: Check for admin login first (admin@yatrik.com)
+    if (isEmail && normalizedIdentifier === 'admin@yatrik.com') {
+      try {
+        logger.info('[AUTH] Admin login attempt detected');
+        const adminUser = await User.findOne({ 
+          email: 'admin@yatrik.com',
+          role: 'admin'
+        }).select('+password').lean();
+        
+        if (adminUser) {
+          logger.info('[AUTH] Admin user found, verifying password...');
+          
+          // Verify password
+          const isMatch = await bcrypt.compare(rawPassword, adminUser.password);
+          
+          if (isMatch) {
+            // Check status
+            if (adminUser.status !== 'active') {
+              logger.warn(`[AUTH] Admin account status is ${adminUser.status}`);
+              return res.status(403).json({ 
+                success: false,
+                message: `Admin account is ${adminUser.status}. Please contact system administrator.` 
+              });
+            }
 
-    // Allow admin login by username as well ("admin" + "admin123")
-    if (!isEmail && normalizedIdentifier === 'admin' && rawPassword === 'admin123') {
-      const adminUser = {
-        _id: '000000000000000000000000',
-        name: 'System Admin',
-        email: 'admin@yatrik.com',
-        role: 'admin',
-        status: 'active'
-      };
-      const token = jwt.sign(
-        { userId: adminUser._id, role: 'ADMIN', name: adminUser.name, email: adminUser.email },
-        process.env.JWT_SECRET || 'secret',
-        { expiresIn: '7d' }
-      );
-      return res.json({ success: true, token, user: adminUser, redirectPath: '/admin' });
+            logger.info('[AUTH] Admin login successful');
+
+            // Generate JWT token
+            const token = jwt.sign(
+              {
+                userId: adminUser._id,
+                role: 'ADMIN',
+                roleType: 'internal',
+                name: adminUser.name,
+                email: adminUser.email
+              },
+              process.env.JWT_SECRET || 'secret',
+              { expiresIn: '7d' }
+            );
+
+            // Update last login in background
+            User.findByIdAndUpdate(adminUser._id, { 
+              lastLogin: new Date(),
+              loginAttempts: 0
+            }).catch(err => logger.warn('Background admin login update failed:', err));
+
+            return res.json({
+              success: true,
+              token,
+              user: {
+                _id: adminUser._id,
+                name: adminUser.name,
+                email: adminUser.email,
+                role: 'admin',
+                roleType: 'internal',
+                status: adminUser.status
+              },
+              redirectPath: '/admin'
+            });
+          } else {
+            logger.warn('[AUTH] Admin password mismatch');
+            return res.status(401).json({ 
+              success: false,
+              message: 'Invalid email or password' 
+            });
+          }
+        } else {
+          logger.warn('[AUTH] Admin user not found in database');
+          return res.status(401).json({ 
+            success: false,
+            message: 'Invalid email or password' 
+          });
+        }
+      } catch (adminError) {
+        logger.error('[AUTH] Admin login error:', adminError);
+        logger.error('[AUTH] Admin login error stack:', adminError.stack);
+        // Don't return 500 - continue to regular login flow instead
+        // This allows fallback to regular user login if admin user doesn't exist
+        // Only log the error but don't break the login flow
+      }
     }
 
     // Check for driver email format: driver{number}@{depotname}-depot.com
@@ -227,7 +311,7 @@ router.post("/login", async (req, res) => {
       const customDriverEmail = normalizedIdentifier.match(/^(.+)\.driver@yatrik\.com$/);
       if (customDriverEmail) {
         const driverName = customDriverEmail[1];
-        console.log(`🔍 [AUTH] Custom driver login attempt: ${normalizedIdentifier}`);
+        logger.info(`🔍 [AUTH] Custom driver login attempt: ${normalizedIdentifier}`);
         
         // Try to find driver by email - explicitly select password field
         let driver = await Driver.findOne({ 
@@ -235,7 +319,7 @@ router.post("/login", async (req, res) => {
           status: 'active'
         }).select('+password').populate('depotId', 'depotName depotCode');
         
-        console.log(`🔍 [AUTH] Driver found by email:`, driver ? 'YES' : 'NO');
+        logger.info(`🔍 [AUTH] Driver found by email:`, driver ? 'YES' : 'NO');
         
         // If not found by email, try by username - explicitly select password field
         if (!driver) {
@@ -244,14 +328,14 @@ router.post("/login", async (req, res) => {
             username: username,
             status: 'active'
           }).select('+password').populate('depotId', 'depotName depotCode');
-          console.log(`🔍 [AUTH] Driver found by username:`, driver ? 'YES' : 'NO');
+          logger.info(`🔍 [AUTH] Driver found by username:`, driver ? 'YES' : 'NO');
         }
         
         if (driver) {
-          console.log(`🔍 [AUTH] Driver found: ${driver.name}, verifying password...`);
+          logger.info(`🔍 [AUTH] Driver found: ${driver.name}, verifying password...`);
           // Verify password using bcrypt
           const isPasswordValid = await bcrypt.compare(rawPassword, driver.password);
-          console.log(`🔍 [AUTH] Password valid:`, isPasswordValid);
+          logger.info(`🔍 [AUTH] Password valid:`, isPasswordValid);
           
           if (isPasswordValid) {
             const token = jwt.sign(
@@ -306,7 +390,7 @@ router.post("/login", async (req, res) => {
       // Check for custom conductor email format (e.g., conductor001.conductor@yatrik.com)
       const customConductorEmail = normalizedIdentifier.match(/^(.+)\.conductor@yatrik\.com$/);
       if (customConductorEmail) {
-        console.log(`🔍 [AUTH] Custom conductor login attempt: ${normalizedIdentifier}`);
+        logger.info(`🔍 [AUTH] Custom conductor login attempt: ${normalizedIdentifier}`);
         
         // Try to find conductor by email - explicitly select password field
         let conductor = await Conductor.findOne({ 
@@ -314,7 +398,7 @@ router.post("/login", async (req, res) => {
           status: 'active'
         }).select('+password').populate('depotId', 'depotName depotCode');
         
-        console.log(`🔍 [AUTH] Conductor found by email:`, conductor ? 'YES' : 'NO');
+        logger.info(`🔍 [AUTH] Conductor found by email:`, conductor ? 'YES' : 'NO');
         
         // If not found by email, try by username - explicitly select password field
         if (!conductor) {
@@ -323,14 +407,14 @@ router.post("/login", async (req, res) => {
             username: username,
             status: 'active'
           }).select('+password').populate('depotId', 'depotName depotCode');
-          console.log(`🔍 [AUTH] Conductor found by username:`, conductor ? 'YES' : 'NO');
+          logger.info(`🔍 [AUTH] Conductor found by username:`, conductor ? 'YES' : 'NO');
         }
         
         if (conductor) {
-          console.log(`🔍 [AUTH] Conductor found: ${conductor.name}, verifying password...`);
+          logger.info(`🔍 [AUTH] Conductor found: ${conductor.name}, verifying password...`);
           // Verify password using bcrypt
           const isPasswordValid = await bcrypt.compare(rawPassword, conductor.password);
-          console.log(`🔍 [AUTH] Password valid:`, isPasswordValid);
+          logger.info(`🔍 [AUTH] Password valid:`, isPasswordValid);
           
           if (isPasswordValid) {
             const token = jwt.sign(
@@ -527,36 +611,7 @@ router.post("/login", async (req, res) => {
     let user = null;
     let userType = null;
 
-    // Constant admin credentials override (does not alter other flows)
-    if (normalizedIdentifier === 'admin@yatrik.com') {
-      if (rawPassword !== 'admin123') {
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid email or password'
-        });
-      }
-
-      // Ensure an admin user object is available for downstream logic
-      let adminUserDoc = await User.findOne({ email: 'admin@yatrik.com' }).select('+password');
-      if (!adminUserDoc) {
-        const created = new User({
-          name: 'System Admin',
-          email: 'admin@yatrik.com',
-          password: 'admin123',
-          role: 'admin',
-          status: 'active'
-        });
-        await created.save();
-        adminUserDoc = await User.findById(created._id).select('+password');
-      }
-
-      // Force the in-memory password to match the constant without changing existing stored hash
-      const forcedHash = await bcrypt.hash('admin123', 10);
-      const adminLean = adminUserDoc.toObject ? adminUserDoc.toObject() : adminUserDoc;
-      adminLean.password = forcedHash;
-      user = adminLean;
-      userType = 'regular';
-    }
+    // Admin login bypass removed - all admin logins must use database authentication with bcrypt
     
     // Try different user types based on identifier
     if (isDepotEmail) {
@@ -619,11 +674,252 @@ router.post("/login", async (req, res) => {
       }
     }
     
+    // Check for Student BEFORE regular user (students have priority)
+    if (!user && isEmail) {
+      try {
+        const StudentPass = require('../models/StudentPass');
+        let student = null;
+        
+        student = await StudentPass.findOne({ 
+          $or: [
+            { email: normalizedIdentifier },
+            { 'personalDetails.email': normalizedIdentifier }
+          ]
+        }).select('+password');
+        
+        if (student) {
+          const isMatch = await student.comparePassword(rawPassword);
+          if (isMatch) {
+            if (student.status !== 'active' && student.status !== 'approved' && student.passStatus !== 'approved') {
+              return res.status(403).json({ 
+                success: false,
+                message: `Student pass is ${student.status || student.passStatus}. Please contact administrator.` 
+              });
+            }
+            
+            const studentEmail = student.email || student.personalDetails?.email || '';
+            const studentName = student.name || student.personalDetails?.fullName || 'Student';
+            const studentPhone = student.phone || student.personalDetails?.mobile || '';
+            
+            const token = jwt.sign(
+              {
+                userId: student._id,
+                studentId: student._id,
+                email: studentEmail,
+                role: 'student',
+                roleType: 'external',
+                aadhaarNumber: student.aadhaarNumber,
+                name: studentName
+              },
+              process.env.JWT_SECRET || 'secret',
+              { expiresIn: '7d' }
+            );
+            return res.json({
+              success: true,
+              token,
+              user: {
+                _id: student._id,
+                name: studentName,
+                email: studentEmail,
+                phone: studentPhone,
+                role: 'student',
+                roleType: 'external',
+                status: student.status || student.passStatus,
+                studentId: student._id,
+                aadhaarNumber: student.aadhaarNumber,
+                passNumber: student.digitalPass?.passNumber || null
+              },
+              redirectPath: '/student/dashboard'
+            });
+          }
+        }
+      } catch (studentError) {
+        logger.error('[AUTH] Student login error:', studentError);
+        // Continue to next check
+      }
+    }
+    
+    // Check for Vendor if not found yet
+    if (!user && isEmail) {
+      try {
+        const Vendor = require('../models/Vendor');
+        logger.info(`[AUTH] Checking for vendor with email: ${normalizedIdentifier}`);
+        const vendor = await Vendor.findOne({ 
+          $or: [
+            { email: normalizedIdentifier },
+            { 'contactDetails.email': normalizedIdentifier }
+          ]
+        }).select('+password');
+        
+        if (vendor) {
+          logger.info(`[AUTH] Vendor found: ${vendor.companyName}, status: ${vendor.status}`);
+          
+          // Check if account is locked
+          if (vendor.lockUntil && vendor.lockUntil > Date.now()) {
+            logger.warn(`[AUTH] Vendor account locked until: ${vendor.lockUntil}`);
+            return res.status(423).json({ 
+              success: false,
+              message: 'Account is temporarily locked. Please try again later.' 
+            });
+          }
+
+          // Verify password
+          logger.info(`[AUTH] Verifying vendor password...`);
+          const isMatch = await vendor.comparePassword(rawPassword);
+          logger.info(`[AUTH] Password match: ${isMatch}`);
+          
+          if (isMatch) {
+            // Check status
+            if (vendor.status !== 'approved' && vendor.status !== 'active') {
+              logger.warn(`[AUTH] Vendor status is ${vendor.status}, not approved/active`);
+              return res.status(403).json({ 
+                success: false,
+                message: `Vendor account is ${vendor.status}. Please contact administrator.` 
+              });
+            }
+
+            // Reset login attempts on successful login
+            vendor.loginAttempts = 0;
+            vendor.lockUntil = null;
+            vendor.lastLogin = new Date();
+            await vendor.save();
+
+            logger.info(`[AUTH] Vendor login successful: ${vendor.companyName}`);
+
+            // Generate JWT token
+            const token = jwt.sign(
+              {
+                userId: vendor._id,
+                vendorId: vendor._id,
+                role: 'VENDOR',
+                roleType: 'external',
+                email: vendor.email,
+                name: vendor.companyName
+              },
+              process.env.JWT_SECRET || 'secret',
+              { expiresIn: '7d' }
+            );
+
+            // Return success response
+            return res.json({
+              success: true,
+              token,
+              user: {
+                _id: vendor._id,
+                name: vendor.companyName,
+                email: vendor.email,
+                phone: vendor.phone,
+                role: 'vendor',
+                roleType: 'external',
+                status: vendor.status,
+                vendorId: vendor._id,
+                companyName: vendor.companyName,
+                trustScore: vendor.trustScore,
+                complianceScore: vendor.complianceScore
+              },
+              redirectPath: '/vendor/dashboard'
+            });
+          } else {
+            // Increment login attempts on failed login
+            vendor.loginAttempts = (vendor.loginAttempts || 0) + 1;
+            if (vendor.loginAttempts >= 5) {
+              vendor.lockUntil = new Date(Date.now() + 30 * 60 * 1000); // Lock for 30 minutes
+              logger.warn(`[AUTH] Vendor account locked after 5 failed attempts`);
+            }
+            await vendor.save();
+            
+            logger.warn(`[AUTH] Vendor password mismatch for: ${normalizedIdentifier}`);
+            return res.status(401).json({ 
+              success: false,
+              message: 'Invalid email or password' 
+            });
+          }
+        } else {
+          logger.info(`[AUTH] No vendor found with email: ${normalizedIdentifier}`);
+        }
+      } catch (vendorError) {
+        logger.error('[AUTH] Vendor login error:', vendorError);
+        logger.error('[AUTH] Vendor error stack:', vendorError.stack);
+        // Continue to next check (don't fail completely)
+      }
+    }
+    
     // If not found as special user type, try regular user
     if (!user && isEmail) {
       user = await User.findOne({ email: normalizedIdentifier }).select('+password').lean();
       if (user) {
         userType = 'regular';
+      }
+    }
+    
+    // Check for Student by phone or Aadhaar if not found yet
+    if (!user) {
+      try {
+        const StudentPass = require('../models/StudentPass');
+        let student = null;
+        
+        if (/^[0-9]{10}$/.test(identifier)) {
+          // Phone number
+          student = await StudentPass.findOne({ 
+            $or: [
+              { phone: identifier },
+              { 'personalDetails.mobile': identifier }
+            ]
+          }).select('+password');
+        } else if (/^[0-9]{12}$/.test(identifier)) {
+          // Aadhaar number
+          student = await StudentPass.findOne({ aadhaarNumber: identifier }).select('+password');
+        }
+        
+        if (student) {
+          const isMatch = await student.comparePassword(rawPassword);
+          if (isMatch) {
+            if (student.status !== 'active' && student.status !== 'approved' && student.passStatus !== 'approved') {
+              return res.status(403).json({ 
+                success: false,
+                message: `Student pass is ${student.status || student.passStatus}. Please contact administrator.` 
+              });
+            }
+            
+            const studentEmail = student.email || student.personalDetails?.email || '';
+            const studentName = student.name || student.personalDetails?.fullName || 'Student';
+            const studentPhone = student.phone || student.personalDetails?.mobile || '';
+            
+            const token = jwt.sign(
+              {
+                userId: student._id,
+                studentId: student._id,
+                email: studentEmail,
+                role: 'student',
+                roleType: 'external',
+                aadhaarNumber: student.aadhaarNumber,
+                name: studentName
+              },
+              process.env.JWT_SECRET || 'secret',
+              { expiresIn: '7d' }
+            );
+            return res.json({
+              success: true,
+              token,
+              user: {
+                _id: student._id,
+                name: studentName,
+                email: studentEmail,
+                phone: studentPhone,
+                role: 'student',
+                roleType: 'external',
+                status: student.status || student.passStatus,
+                studentId: student._id,
+                aadhaarNumber: student.aadhaarNumber,
+                passNumber: student.digitalPass?.passNumber || null
+              },
+              redirectPath: '/student/dashboard'
+            });
+          }
+        }
+      } catch (studentError) {
+        logger.error('[AUTH] Student login error:', studentError);
+        // Continue to next check
       }
     }
     
@@ -647,7 +943,7 @@ router.post("/login", async (req, res) => {
     if (!isMatch) {
       // OPTIMIZED: Non-blocking login attempt increment
       User.findByIdAndUpdate(user._id, { $inc: { loginAttempts: 1 } }).catch(err => 
-        console.warn('Failed to increment login attempts:', err)
+        logger.warn('Failed to increment login attempts:', err)
       );
       return res.status(401).json({ 
         success: false,
@@ -655,10 +951,14 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // OPTIMIZED: Generate token immediately with depot-specific data
+    // OPTIMIZED: Generate token immediately with roleType and depot-specific data
+    const userRole = (user.role || 'passenger').toLowerCase();
+    const roleType = user.roleType || (['admin', 'depot_manager', 'conductor', 'driver', 'support_agent', 'data_collector'].includes(userRole) ? 'internal' : 'external');
+    
     const tokenPayload = {
       userId: user._id, 
-      role: (user.role || 'passenger').toUpperCase(), 
+      role: userRole.toUpperCase(), 
+      roleType: roleType,
       name: user.name, 
       email: user.email
     };
@@ -684,13 +984,13 @@ router.post("/login", async (req, res) => {
       DepotUser.findByIdAndUpdate(user._id, { 
         loginAttempts: 0, 
         lastLogin: new Date() 
-      }).catch(err => console.warn('Background depot user login update failed:', err));
+      }).catch(err => logger.warn('Background depot user login update failed:', err));
     } else {
       // Update regular user
       User.findByIdAndUpdate(user._id, { 
         loginAttempts: 0, 
         lastLogin: new Date() 
-      }).catch(err => console.warn('Background login update failed:', err));
+      }).catch(err => logger.warn('Background login update failed:', err));
     }
 
     // OPTIMIZED: Return response immediately for fastest login
@@ -698,7 +998,6 @@ router.post("/login", async (req, res) => {
     
     // Determine redirect path based on user role
     let redirectPath = '/pax'; // default for passengers
-    const userRole = (user.role || 'passenger').toLowerCase();
     
     if (user.isDepotUser || user.depotId || userRole === 'depot_manager') {
       redirectPath = '/depot';
@@ -795,9 +1094,9 @@ router.post("/login", async (req, res) => {
             newServices: newServices
           });
           
-          console.log('📧 Enhanced login notification email queued for passenger:', user.email);
+          logger.info('📧 Enhanced login notification email queued for passenger:', user.email);
         } catch (err) {
-          console.warn('Failed to fetch trip data for login email:', err);
+          logger.warn('Failed to fetch trip data for login email:', err);
           
           // Fallback: send basic login notification
           queueEmail(user.email, 'loginNotification', {
@@ -811,10 +1110,23 @@ router.post("/login", async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('[AUTH] Login error:', error);
+    logger.error('[AUTH] Login error stack:', error.stack);
+    logger.error('[AUTH] Login error details:', {
+      message: error.message,
+      name: error.name,
+      identifier: identifier ? identifier.substring(0, 20) + '...' : 'N/A'
+    });
+    
+    // Don't expose internal error details in production
+    const errorMessage = process.env.NODE_ENV === 'development' 
+      ? `Login failed: ${error.message}`
+      : 'Login failed. Please try again.';
+    
     res.status(500).json({ 
       success: false,
-      message: 'Login failed. Please try again.' 
+      message: errorMessage,
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -860,13 +1172,13 @@ router.post('/forgot-password', async (req, res) => {
     });
 
     if (emailResult.success) {
-      console.log(`Password reset email sent to ${email}`);
+      logger.info(`Password reset email sent to ${email}`);
       res.json({
         success: true,
         message: 'Password reset link has been sent to your email.'
       });
     } else {
-      console.error('Failed to send email:', emailResult.error);
+      logger.error('Failed to send email:', emailResult.error);
       // Still return success to user, but log the email failure
       res.json({
         success: true,
@@ -875,7 +1187,7 @@ router.post('/forgot-password', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Forgot password error:', error);
+    logger.error('Forgot password error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to process password reset request'
@@ -920,7 +1232,7 @@ router.post('/reset-password', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Reset password error:', error);
+    logger.error('Reset password error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to reset password'
@@ -942,10 +1254,38 @@ router.get('/me', async (req, res) => {
     }
 
     const payload = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    const role = (payload.role || '').toUpperCase();
+    const roleType = payload.roleType || 'internal';
+    
+    // PRIORITY: Check Vendor first if token indicates vendor
+    let user = null;
+    if (role === 'VENDOR' || (roleType === 'external' && payload.vendorId)) {
+      const Vendor = require('../models/Vendor');
+      const vendor = await Vendor.findById(payload.vendorId || payload.userId)
+        .select('_id companyName email phone status trustScore complianceScore verificationStatus')
+        .lean();
+      
+      if (vendor) {
+        user = {
+          _id: vendor._id,
+          name: vendor.companyName,
+          email: vendor.email,
+          phone: vendor.phone,
+          role: 'vendor',
+          roleType: 'external',
+          status: vendor.status,
+          vendorId: vendor._id,
+          companyName: vendor.companyName,
+          trustScore: vendor.trustScore,
+          complianceScore: vendor.complianceScore,
+          verificationStatus: vendor.verificationStatus
+        };
+        logger.info('[AUTH/ME] Vendor profile fetched:', vendor.companyName);
+      }
+    }
     
     // Check if it's a depot user, conductor, or driver based on token payload
-    let user = null;
-    if (payload.isDepotUser) {
+    if (!user && payload.isDepotUser) {
       user = await DepotUser.findById(payload.userId).select('-password');
       if (user) {
         // Convert depot user to standard format
@@ -962,7 +1302,7 @@ router.get('/me', async (req, res) => {
           isDepotUser: true
         };
       }
-    } else if (payload.conductorId) {
+    } else if (!user && payload.conductorId) {
       // Handle conductor token
       const conductor = await Conductor.findById(payload.conductorId).select('-password');
       if (conductor) {
@@ -1020,25 +1360,46 @@ router.get('/me', async (req, res) => {
       });
     }
 
+    // Build response user object with all relevant fields
+    const responseUser = {
+      id: user._id, 
+      _id: user._id,
+      name: user.name, 
+      email: user.email,
+      role: user.role, 
+      roleType: user.roleType || (user.role === 'vendor' || user.role === 'student' ? 'external' : 'internal'),
+      depotId: user.depotId || null,
+      depotCode: user.depotCode || null,
+      depotName: user.depotName || null,
+      permissions: user.permissions || null,
+      status: user.status,
+      isDepotUser: user.isDepotUser || false
+    };
+    
+    // Add vendor-specific fields
+    if (user.role === 'vendor' || user.vendorId) {
+      responseUser.vendorId = user.vendorId || user._id;
+      responseUser.companyName = user.companyName || user.name;
+      responseUser.trustScore = user.trustScore;
+      responseUser.complianceScore = user.complianceScore;
+      responseUser.verificationStatus = user.verificationStatus;
+    }
+    
+    // Add student-specific fields
+    if (user.role === 'student' || user.studentId) {
+      responseUser.studentId = user.studentId || user._id;
+      responseUser.passNumber = user.passNumber;
+      responseUser.aadhaarNumber = user.aadhaarNumber;
+    }
+
     return res.json({ 
       success: true, 
       data: { 
-        user: {
-          id: user._id, 
-          name: user.name, 
-          email: user.email,
-          role: user.role, 
-          depotId: user.depotId || null,
-          depotCode: user.depotCode || null,
-          depotName: user.depotName || null,
-          permissions: user.permissions || null,
-          status: user.status,
-          isDepotUser: user.isDepotUser || false
-        } 
+        user: responseUser
       }
     });
   } catch (error) {
-    console.error('Auth me error:', error);
+    logger.error('Auth me error:', error);
     return res.status(401).json({ 
       success: false, 
       error: 'Invalid token' 
@@ -1107,7 +1468,7 @@ router.get('/google/callback', (req, res, next) => {
     const redirectUrl = `${redirectURL}/oauth/callback?token=${encodeURIComponent(token)}&user=${userParam}&next=${encodeURIComponent(nextParam)}`;
     res.redirect(redirectUrl);
   } catch (err) {
-    console.error('Google OAuth callback error:', err);
+    logger.error('Google OAuth callback error:', err);
     const redirectURL = process.env.NODE_ENV === 'development' 
       ? 'http://localhost:3000'
       : (process.env.FRONTEND_URL || 'https://yatrikerp.live');
@@ -1253,7 +1614,7 @@ router.post('/role-login', async (req, res) => {
 
     return res.status(400).json({ success: false, message: 'Unsupported role' });
   } catch (error) {
-    console.error('Role login error:', error);
+    logger.error('Role login error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });

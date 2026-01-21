@@ -19,8 +19,11 @@ export default function RequireAuth({ children, roles }) {
     const userRole = (user.role || '').toLowerCase().trim();
     const allowedRoles = roles.map(r => (r || '').toLowerCase().trim());
     
+    const userRoleType = user.roleType || 'internal';
+    
     console.log('RequireAuth - Role check:', {
       userRole,
+      userRoleType,
       allowedRoles,
       userId: user._id,
       userName: user.name,
@@ -38,6 +41,8 @@ export default function RequireAuth({ children, roles }) {
       if (allowedRole === 'conductor' && userRole === 'conductor') return true;
       if (allowedRole === 'driver' && userRole === 'driver') return true;
       if (allowedRole === 'passenger' && userRole === 'passenger') return true;
+      if (allowedRole === 'vendor' && (userRole === 'vendor' || userRole === 'supplier')) return true;
+      if (allowedRole === 'student' && (userRole === 'student' || userRole === 'student_pass' || userRole === 'pass_holder')) return true;
       
       // Direct match
       return userRole === allowedRole;
@@ -82,6 +87,7 @@ export default function RequireAuth({ children, roles }) {
           <p className="text-gray-600 mb-4">You do not have permission to access this page.</p>
           <div className="text-sm text-gray-500 mb-4">
             <p>Your role: <strong className="text-gray-700">{user.role?.toUpperCase() || 'None'}</strong></p>
+            <p>Role type: <strong className="text-gray-700">{user.roleType?.toUpperCase() || 'INTERNAL'}</strong></p>
             <p>Required roles: <strong className="text-gray-700">{roles?.join(', ').toUpperCase()}</strong></p>
           </div>
           <button 

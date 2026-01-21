@@ -102,12 +102,28 @@ export const AuthProvider = ({ children }) => {
         // Handle role variations
         if (normalizedRole === 'administrator') normalizedRole = 'admin';
         if (normalizedRole === 'depot-manager' || normalizedRole === 'depotmanager') normalizedRole = 'depot_manager';
+        if (normalizedRole === 'vendor' || normalizedRole === 'supplier' || normalizedRole === 'VENDOR') normalizedRole = 'vendor';
+        if (normalizedRole === 'student' || normalizedRole === 'student_pass' || normalizedRole === 'pass_holder') normalizedRole = 'student';
+      }
+      
+      // Determine roleType
+      const internalRoles = ['admin', 'depot_manager', 'conductor', 'driver', 'support_agent', 'data_collector'];
+      const userRoleType = internalRoles.includes(normalizedRole) ? 'internal' : 'external';
+      
+      // Ensure vendorId is set for vendor users
+      if (normalizedRole === 'vendor' && !userData.vendorId && userData._id) {
+        userData.vendorId = userData._id;
       }
       
       const normalizedUser = {
         ...userData,
         role: normalizedRole,
-        isDepotUser: detectedDepotUser || isDepotUser
+        roleType: userData.roleType || userRoleType,
+        isDepotUser: detectedDepotUser || isDepotUser,
+        // Ensure vendorId is preserved
+        vendorId: userData.vendorId || (normalizedRole === 'vendor' ? userData._id : undefined),
+        // Ensure companyName is preserved for vendors
+        companyName: userData.companyName || (normalizedRole === 'vendor' ? userData.name : undefined)
       };
       
       console.log('AuthContext - Normalized user data:', {
@@ -122,25 +138,53 @@ export const AuthProvider = ({ children }) => {
       // OPTIMIZED: Update state immediately for instant UI response
       setUser(normalizedUser);
       
+      // Clean token - ensure no Bearer prefix is stored
+      const cleanToken = token.replace(/^Bearer\s+/i, '').trim();
+      
+      // Validate token format before storing
+      if (!cleanToken || cleanToken.split('.').length !== 3) {
+        console.error('❌ [AuthContext] Invalid token format received:', {
+          tokenLength: cleanToken?.length,
+          hasBearer: token.includes('Bearer'),
+          parts: cleanToken?.split('.').length
+        });
+        throw new Error('Invalid authentication token received from server');
+      }
+      
+      console.log('✅ [AuthContext] Token validated and ready to store:', {
+        tokenLength: cleanToken.length,
+        tokenPreview: cleanToken.substring(0, 20) + '...',
+        role: normalizedUser.role,
+        email: normalizedUser.email
+      });
+      
       // OPTIMIZED: Store data in background for fastest response
       if (normalizedUser.isDepotUser) {
         // Store depot-specific data
-        Promise.all([
-          localStorage.setItem('depotToken', token),
-          localStorage.setItem('depotUser', JSON.stringify(normalizedUser)),
+        try {
+          localStorage.setItem('depotToken', cleanToken);
+          localStorage.setItem('depotUser', JSON.stringify(normalizedUser));
           localStorage.setItem('depotInfo', JSON.stringify({
             depotId: normalizedUser.depotId,
             depotCode: normalizedUser.depotCode,
             depotName: normalizedUser.depotName,
             permissions: normalizedUser.permissions
-          }))
-        ]).catch(err => console.warn('Failed to store depot data:', err));
+          }));
+          console.log('✅ [AuthContext] Depot token stored successfully');
+        } catch (err) {
+          console.error('❌ [AuthContext] Failed to store depot data:', err);
+          throw err;
+        }
       } else {
         // Store regular user data
-        Promise.all([
-          localStorage.setItem('token', token),
-          localStorage.setItem('user', JSON.stringify(normalizedUser))
-        ]).catch(err => console.warn('Failed to store user data:', err));
+        try {
+          localStorage.setItem('token', cleanToken);
+          localStorage.setItem('user', JSON.stringify(normalizedUser));
+          console.log('✅ [AuthContext] Regular token stored successfully');
+        } catch (err) {
+          console.error('❌ [AuthContext] Failed to store user data:', err);
+          throw err;
+        }
       }
 
       // OPTIMIZED: Auto-start location tracking for drivers in background

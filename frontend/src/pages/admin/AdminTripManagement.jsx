@@ -27,6 +27,7 @@ import {
   Navigation,
   Zap
 } from 'lucide-react';
+import { apiFetch } from '../../utils/api';
 
 const AdminTripManagement = () => {
   const [trips, setTrips] = useState([]);
@@ -97,15 +98,19 @@ const AdminTripManagement = () => {
         ...(searchTerm && { search: searchTerm })
       });
 
-      const response = await fetch(`/api/admin/trips?${params}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      const res = await apiFetch(`/api/admin/trips?${params}`, {
+        suppressError: true
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      if (res.ok) {
+        const data = res.data;
         setTrips(data.trips || []);
         setTotalPages(data.pagination?.pages || 1);
         setStats(data.stats || stats);
+      } else if (res.status === 401) {
+        console.warn('Authentication required. Please log in again.');
+        localStorage.clear();
+        window.location.href = '/login';
       }
     } catch (error) {
       console.error('Error fetching trips:', error);
@@ -117,26 +122,28 @@ const AdminTripManagement = () => {
   const fetchSupportingData = async () => {
     try {
       const [depotsRes, routesRes, busesRes, driversRes, conductorsRes] = await Promise.all([
-        fetch('/api/admin/depots', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
-        fetch('/api/admin/routes', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
-        fetch('/api/admin/buses', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
-        fetch('/api/admin/drivers', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
-        fetch('/api/admin/conductors', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+        apiFetch('/api/admin/depots', { suppressError: true }),
+        apiFetch('/api/admin/routes', { suppressError: true }),
+        apiFetch('/api/admin/buses', { suppressError: true }),
+        apiFetch('/api/admin/drivers', { suppressError: true }),
+        apiFetch('/api/admin/conductors', { suppressError: true })
       ]);
 
-      const [depotsData, routesData, busesData, driversData, conductorsData] = await Promise.all([
-        depotsRes.json(),
-        routesRes.json(),
-        busesRes.json(),
-        driversRes.json(),
-        conductorsRes.json()
-      ]);
-
-      setDepots(depotsData.depots || []);
-      setRoutes(routesData.routes || []);
-      setBuses(busesData.buses || []);
-      setDrivers(driversData.drivers || []);
-      setConductors(conductorsData.conductors || []);
+      if (depotsRes.ok) {
+        setDepots(depotsRes.data.depots || []);
+      }
+      if (routesRes.ok) {
+        setRoutes(routesRes.data.routes || []);
+      }
+      if (busesRes.ok) {
+        setBuses(busesRes.data.buses || []);
+      }
+      if (driversRes.ok) {
+        setDrivers(driversRes.data.drivers || []);
+      }
+      if (conductorsRes.ok) {
+        setConductors(conductorsRes.data.conductors || []);
+      }
     } catch (error) {
       console.error('Error fetching supporting data:', error);
     }
@@ -144,13 +151,17 @@ const AdminTripManagement = () => {
 
   const fetchRecentActivities = async () => {
     try {
-      const response = await fetch('/api/admin/recent-activities', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      const res = await apiFetch('/api/admin/recent-activities', {
+        suppressLogout: true,
+        suppressError: true
       });
       
-      if (response.ok) {
-        const data = await response.json();
+      if (res.ok) {
+        const data = res.data;
         setRecentActivities(data.activities || []);
+      } else if (res.status === 401) {
+        console.warn('Authentication required for activities.');
+        // Don't redirect immediately for activities - let the main dashboard handle auth
       }
     } catch (error) {
       console.error('Error fetching recent activities:', error);
@@ -176,16 +187,12 @@ const AdminTripManagement = () => {
   const handleCreateTrip = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('/api/admin/trips', {
+      const res = await apiFetch('/api/admin/trips', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
         body: JSON.stringify(newTrip)
       });
 
-      if (response.ok) {
+      if (res.ok) {
         setShowCreateModal(false);
         setNewTrip({
           routeId: '',
@@ -210,16 +217,12 @@ const AdminTripManagement = () => {
   const handleUpdateTrip = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`/api/admin/trips/${editingTrip._id}`, {
+      const res = await apiFetch(`/api/admin/trips/${editingTrip._id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
         body: JSON.stringify(editingTrip)
       });
 
-      if (response.ok) {
+      if (res.ok) {
         setShowEditModal(false);
         setEditingTrip(null);
         fetchData();
@@ -232,12 +235,11 @@ const AdminTripManagement = () => {
   const handleDeleteTrip = async (tripId) => {
     if (window.confirm('Are you sure you want to delete this trip?')) {
       try {
-        const response = await fetch(`/api/admin/trips/${tripId}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        const res = await apiFetch(`/api/admin/trips/${tripId}`, {
+          method: 'DELETE'
         });
 
-        if (response.ok) {
+        if (res.ok) {
           fetchData();
         }
       } catch (error) {

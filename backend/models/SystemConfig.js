@@ -39,10 +39,76 @@ const systemConfigSchema = new mongoose.Schema({
       default: 'System is under maintenance. Please try again later.'
     }
   },
+  // Admin Dashboard Configuration Fields
+  concessionRules: {
+    schoolDiscount: {
+      type: Number,
+      default: 50,
+      min: 0,
+      max: 100
+    },
+    collegeDiscount: {
+      type: Number,
+      default: 50,
+      min: 0,
+      max: 100
+    },
+    seniorCitizenDiscount: {
+      type: Number,
+      default: 50,
+      min: 0,
+      max: 100
+    },
+    distanceCap: {
+      type: Number,
+      default: 100
+    },
+    validityPeriod: {
+      type: Number,
+      default: 365
+    }
+  },
+  schedulingConstraints: {
+    maxDriverHours: {
+      type: Number,
+      default: 10
+    },
+    minRestHours: {
+      type: Number,
+      default: 8
+    },
+    maxConsecutiveDays: {
+      type: Number,
+      default: 6
+    }
+  },
+  auctionRules: {
+    minBidAmount: {
+      type: Number,
+      default: 100
+    },
+    biddingDuration: {
+      type: Number,
+      default: 24
+    },
+    autoApproveThreshold: {
+      type: Number,
+      default: 10000
+    }
+  },
+  paymentThresholds: {
+    autoApprovalLimit: {
+      type: Number,
+      default: 10000
+    },
+    manualApprovalLimit: {
+      type: Number,
+      default: 50000
+    }
+  },
   updatedBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+    ref: 'User'
   },
   updatedAt: {
     type: Date,

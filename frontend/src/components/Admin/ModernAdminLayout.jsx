@@ -50,10 +50,13 @@ const ModernAdminLayout = ({ children }) => {
   const navigation = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'User Management', href: '/admin/users', icon: Users },
+    { name: 'Vendor Management', href: '/admin/vendors', icon: Building2 },
+    { name: 'Student Concession', href: '/admin/student-concession', icon: UserCheck },
     { name: 'Booking Management', href: '/admin/bookings', icon: Ticket },
     { name: 'Depot Management', href: '/admin/depot-management', icon: Building2 },
     { name: 'Driver Management', href: '/admin/drivers', icon: UserCheck },
     { name: 'Conductor Management', href: '/admin/conductors', icon: UserCog },
+    { name: 'RBAC & Access Control', href: '/admin/rbac', icon: UserCog },
     { name: 'Fare Policy', href: '/admin/fares', icon: DollarSign },
     { name: 'System Status', href: '/admin/status', icon: Activity },
     { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
