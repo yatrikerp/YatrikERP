@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const tripSchema = new mongoose.Schema({
   routeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Route', required: true },
-  busId: { type: mongoose.Schema.Types.ObjectId, ref: 'Bus', required: true },
+  busId: { type: mongoose.Schema.Types.ObjectId, ref: 'Bus' }, // Optional - can assign bus later
   driverId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   conductorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   serviceDate: { type: Date, required: true },
@@ -19,7 +19,18 @@ const tripSchema = new mongoose.Schema({
   },
   depotId: { type: mongoose.Schema.Types.ObjectId, ref: 'Depot', required: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  startedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  cancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  cancelledAt: { type: Date },
+  cancellationReason: { type: String },
   notes: { type: String },
+  completionNotes: { type: String },
+  
+  // Revenue tracking
+  totalRevenue: { type: Number, default: 0 },
+  totalPassengers: { type: Number, default: 0 },
   
   // Booking and payment details
   bookingOpen: { type: Boolean, default: true },
@@ -99,6 +110,13 @@ tripSchema.index({ serviceDate: 1 });
 tripSchema.index({ status: 1 });
 tripSchema.index({ depotId: 1 });
 tripSchema.index({ busId: 1 });
+
+// PERFORMANCE: Compound indexes for common query patterns
+tripSchema.index({ routeId: 1, serviceDate: 1 }); // Route trips by date
+tripSchema.index({ serviceDate: 1, status: 1 }); // Date with status filtering
+tripSchema.index({ depotId: 1, serviceDate: 1, status: 1 }); // Depot trips with date and status
+tripSchema.index({ busId: 1, serviceDate: 1 }); // Bus trips by date
+tripSchema.index({ status: 1, serviceDate: 1 }); // Status with date sorting
 
 // Virtual for trip duration
 // Phase-0 simplified schema

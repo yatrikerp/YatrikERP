@@ -1,69 +1,88 @@
+// Quick test to verify vendor login works
 const mongoose = require('mongoose');
-const User = require('./models/User');
-const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
-async function testVendorLogin() {
+const Vendor = require('./models/Vendor');
+const StudentPass = require('./models/StudentPass');
+
+async function test() {
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/yatrik_erp');
-    console.log('✅ Connected to MongoDB');
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log('✅ Connected to MongoDB\n');
 
     const email = 'vendor@yatrik.com';
-    const password = 'vendor123';
-    
-    // Simulate login flow
-    const normalizedIdentifier = email.toLowerCase();
-    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedIdentifier);
-    
-    console.log('🔍 Testing login for:', email);
-    console.log('Is email:', isEmail);
-    
-    // Find user
-    let user = null;
-    if (isEmail) {
-      user = await User.findOne({ email: normalizedIdentifier }).select('+password').lean();
-      console.log('User found:', user ? 'YES' : 'NO');
+
+    // Check StudentPass
+    const students = await StudentPass.find({ email });
+    console.log(`StudentPass records with email ${email}: ${students.length}`);
+    if (students.length > 0) {
+      console.log('❌ CONFLICT FOUND - StudentPass records exist:');
+      students.forEach((s, i) => {
+        console.log(`  ${i + 1}. ID: ${s._id}, Name: ${s.name}, Status: ${s.status}`);
+      });
+      
+      // Delete them
+      await StudentPass.deleteMany({ email });
+      console.log('✅ Deleted all conflicting StudentPass records\n');
+    } else {
+      console.log('✅ No conflicting StudentPass records\n');
     }
-    
-    if (!user) {
-      console.log('❌ User not found!');
-      return;
+
+    // Check Vendor
+    const vendors = await Vendor.find({ email }).select('+password');
+    console.log(`Vendor records with email ${email}: ${vendors.length}`);
+    if (vendors.length > 0) {
+      const vendor = vendors[0];
+      console.log('✅ Vendor found:');
+      console.log(`  ID: ${vendor._id}`);
+      console.log(`  Company: ${vendor.companyName}`);
+      console.log(`  Status: ${vendor.status}`);
+      console.log(`  Has Password: ${!!vendor.password}`);
+      
+      // Test password
+      const testPassword = 'Vendor123';
+      const isMatch = await vendor.comparePassword(testPassword);
+      console.log(`  Password '${testPassword}' matches: ${isMatch ? '✅ YES' : '❌ NO'}`);
+      
+      if (!isMatch) {
+        console.log('\n❌ Password mismatch - updating password...');
+        vendor.password = testPassword;
+        await vendor.save();
+        console.log('✅ Password updated');
+      }
+      
+      if (vendor.status !== 'approved' && vendor.status !== 'active') {
+        vendor.status = 'approved';
+        await vendor.save();
+        console.log('✅ Vendor status updated to approved');
+      }
+    } else {
+      console.log('❌ No vendor found - creating one...');
+      const newVendor = await Vendor.create({
+        companyName: 'Yatrik Demo Vendor Co.',
+        email: 'vendor@yatrik.com',
+        password: 'Vendor123',
+        phone: '9876543210',
+        panNumber: 'ABCDE1234F',
+        companyType: 'supplier',
+        status: 'approved',
+        verificationStatus: 'verified',
+        autoApproved: true,
+        trustScore: 75,
+        complianceScore: 75,
+        deliveryReliabilityScore: 75
+      });
+      console.log('✅ Created vendor:', newVendor._id);
     }
-    
-    console.log('✅ User found:', {
-      id: user._id,
-      email: user.email,
-      role: user.role,
-      status: user.status,
-      hasPassword: !!user.password
-    });
-    
-    // Check status
-    if (user.status && user.status !== 'active') {
-      console.log(`❌ Account is ${user.status}`);
-      return;
-    }
-    
-    // Check password
-    const isMatch = await bcrypt.compare(password, user.password);
-    console.log('Password match:', isMatch ? '✅ YES' : '❌ NO');
-    
-    if (!isMatch) {
-      console.log('❌ Invalid password');
-      return;
-    }
-    
-    console.log('✅ Login would succeed!');
-    console.log('User role:', user.role);
-    console.log('User status:', user.status);
-    
+
+    await mongoose.connection.close();
+    console.log('\n✅ Test complete!');
+    process.exit(0);
   } catch (error) {
     console.error('❌ Error:', error);
-  } finally {
-    await mongoose.disconnect();
-    console.log('\n🔌 Disconnected from MongoDB');
+    console.error(error.stack);
+    process.exit(1);
   }
 }
 
-testVendorLogin();
-
+test();

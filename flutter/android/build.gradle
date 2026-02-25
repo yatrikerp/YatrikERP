@@ -1,0 +1,21 @@
+// Top-level build file - Modern Flutter 3.41+ with AGP 8.3+
+// No buildscript block needed - using plugins DSL in settings.gradle
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.buildDir = '../build'
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+subprojects {
+    project.evaluationDependsOn(':app')
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}

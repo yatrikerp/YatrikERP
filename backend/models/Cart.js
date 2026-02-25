@@ -199,10 +199,19 @@ cartSchema.methods.addItem = async function(itemData) {
   return this.save();
 };
 
-// Method to remove item from cart
+// Method to remove item from cart by productId
 cartSchema.methods.removeItem = function(productId) {
   this.items = this.items.filter(
     item => item.productId.toString() !== productId.toString()
+  );
+  this.calculateSummary();
+  return this.save();
+};
+
+// Method to remove item from cart by item _id
+cartSchema.methods.removeItemById = function(itemId) {
+  this.items = this.items.filter(
+    item => item._id.toString() !== itemId.toString()
   );
   this.calculateSummary();
   return this.save();

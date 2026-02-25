@@ -42,7 +42,13 @@ export default function RedirectDashboard() {
         isDepotUser: user.isDepotUser
       });
       
-      if (role === 'admin' || role === 'administrator') {
+      if (role === 'super_admin' || role === 'super-admin' || role === 'superadmin') {
+        destination = '/state-command';
+        console.log('Redirecting super admin to:', destination);
+      } else if (role === 'state_transport_authority' || role === 'state-transport-authority' || role === 'statetransportauthority') {
+        destination = '/state-command';
+        console.log('Redirecting state transport authority to:', destination);
+      } else if (role === 'admin' || role === 'administrator') {
         destination = '/admin';
         console.log('Redirecting admin user to:', destination);
       } else if (role === 'support_agent' || role === 'support-agent' || role === 'supportagent') {

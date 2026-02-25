@@ -1,33 +1,25 @@
-node_modules
+# Dependencies
+node_modules/
+*/node_modules/
 
 # Environment variables
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
-frontend/.env
-backend/.env
-frontend/.env.local
-backend/.env.local
-frontend/.env.development.local
-backend/.env.development.local
-frontend/.env.test.local
-backend/.env.test.local
-frontend/.env.production.local
-backend/.env.production.local
-
-# Playwright
-/test-results/
-/playwright-report/
-/blob-report/
-/playwright/.cache/
-/playwright/.auth/
+.env.*.local
+*.env
 
 # Build outputs
-frontend/build/
-frontend/dist/
-backend/dist/
+build/
+dist/
+*/build/
+*/dist/
+
+# Test reports (regenerated)
+mochawesome-report/
+playwright-report/
+test-results/
+coverage/
+*/coverage/
 
 # Logs
 logs/
@@ -36,58 +28,68 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
+# OS files
+.DS_Store
+Thumbs.db
 
-# Coverage directory used by tools like istanbul
-coverage/
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# nyc test coverage
-.nyc_output
+# Temporary files
+*.tmp
+*.temp
+.cache/
 
-# Dependency directories
-node_modules/
-jspm_packages/
+# Flutter
+flutter/.dart_tool/
+flutter/.flutter-plugins
+flutter/.flutter-plugins-dependencies
+flutter/.packages
+flutter/build/
+flutter/.pub-cache/
+flutter/.pub/
 
-# Optional npm cache directory
-.npm
+# Android
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+local.properties
+.gradle/
+captures/
 
-# Optional REPL history
-.node_repl_history
+# iOS
+*.ipa
+*.dSYM.zip
+*.dSYM
+Pods/
+*.xcworkspace
+!default.xcworkspace
+xcuserdata/
 
-# Output of 'npm pack'
-*.tgz
+# Backup files
+*.backup
+*.bak
+*-backup.*
 
-# Yarn Integrity file
-.yarn-integrity
+# Database dumps
+*.sql
+*.sqlite
+*.db
 
-# dotenv environment variables file
-.env
+# Uploads
+uploads/
+*/uploads/
 
-# parcel-bundler cache (https://parceljs.org/)
-.cache
-.parcel-cache
-
-# next.js build output
-.next
-
-# nuxt.js build output
-.nuxt
-
-# vuepress build output
-.vuepress/dist
-
-# Serverless directories
-.serverless
-
-# FuseBox cache
-.fusebox/
-
-# DynamoDB Local files
-.dynamodb/
-
-# TernJS port file
-.tern-port
+# Java/Maven (if not needed)
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties

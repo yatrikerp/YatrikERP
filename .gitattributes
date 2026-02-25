@@ -1,0 +1,42 @@
+# Set default behavior to automatically normalize line endings
+* text=auto
+
+# Force LF for specific file types that should always use LF
+*.sh text eol=lf
+*.py text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.xml text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.scss text eol=lf
+*.dart text eol=lf
+*.java text eol=lf
+*.gradle text eol=lf
+*.properties text eol=lf
+
+# Force CRLF for Windows-specific files
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary
+*.apk binary
+*.ipa binary
+*.so binary
+*.dll binary
+*.exe binary

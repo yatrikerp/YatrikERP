@@ -21,6 +21,10 @@ const MobilePassengerDashboardEnhanced = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Set justLoggedIn flag when dashboard loads to prevent immediate logout
+    if (!sessionStorage.getItem('justLoggedIn')) {
+      sessionStorage.setItem('justLoggedIn', Date.now().toString());
+    }
     fetchDashboardData();
   }, []);
 

@@ -32,37 +32,78 @@ export const AuthProvider = ({ children }) => {
         // Validate depot user data structure
         if (parsedUser && parsedUser._id && parsedUser.role) {
           setUser(parsedUser);
+          setLoading(false);
         } else {
           // Invalid depot user data, clear storage
           localStorage.removeItem('depotToken');
           localStorage.removeItem('depotUser');
           localStorage.removeItem('depotInfo');
+          setLoading(false);
         }
       } catch (error) {
         console.error('Error parsing depot user data:', error);
         localStorage.removeItem('depotToken');
         localStorage.removeItem('depotUser');
         localStorage.removeItem('depotInfo');
+        setLoading(false);
       }
     } else if (token && userData) {
       try {
         const parsedUser = JSON.parse(userData);
         // Validate user data structure
         if (parsedUser && parsedUser._id && parsedUser.role) {
+          // ENHANCED: Normalize vendor data on session restoration
+          if (parsedUser.role === 'vendor') {
+            console.log('🔵 [AuthContext] Restoring vendor session from localStorage:', {
+              _id: parsedUser._id,
+              email: parsedUser.email,
+              role: parsedUser.role,
+              hasVendorId: !!parsedUser.vendorId,
+              hasCompanyName: !!parsedUser.companyName
+            });
+            
+            // Ensure vendor-specific fields are present
+            if (!parsedUser.vendorId && parsedUser._id) {
+              parsedUser.vendorId = parsedUser._id;
+              console.log('🔵 [AuthContext] Set vendorId:', parsedUser.vendorId);
+            }
+            // Ensure companyName is set (use name as fallback)
+            if (!parsedUser.companyName && parsedUser.name) {
+              parsedUser.companyName = parsedUser.name;
+              console.log('🔵 [AuthContext] Set companyName:', parsedUser.companyName);
+            }
+            // Ensure roleType is set for vendors
+            if (!parsedUser.roleType) {
+              parsedUser.roleType = 'external';
+              console.log('🔵 [AuthContext] Set roleType: external');
+            }
+            // Update localStorage with normalized vendor data
+            localStorage.setItem('user', JSON.stringify(parsedUser));
+            console.log('✅ [AuthContext] Vendor session restored successfully');
+          }
+          
+          // CRITICAL: Set user state SYNCHRONOUSLY - don't delay
+          // This ensures RequireAuth sees the user immediately
           setUser(parsedUser);
+          
+          // Set loading to false immediately for all users
+          setLoading(false);
         } else {
           // Invalid user data, clear storage
           localStorage.removeItem('token');
           localStorage.removeItem('user');
+          setLoading(false);
         }
       } catch (error) {
         console.error('Error parsing user data:', error);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        setLoading(false);
       }
+    } else {
+      // No token or user data - set loading to false
+      setLoading(false);
     }
-    
-    setLoading(false);
   }, []);
 
   const login = useCallback(async (userData, token, isDepotUser = false) => {
@@ -104,10 +145,12 @@ export const AuthProvider = ({ children }) => {
         if (normalizedRole === 'depot-manager' || normalizedRole === 'depotmanager') normalizedRole = 'depot_manager';
         if (normalizedRole === 'vendor' || normalizedRole === 'supplier' || normalizedRole === 'VENDOR') normalizedRole = 'vendor';
         if (normalizedRole === 'student' || normalizedRole === 'student_pass' || normalizedRole === 'pass_holder') normalizedRole = 'student';
+        if (normalizedRole === 'super-admin' || normalizedRole === 'superadmin') normalizedRole = 'super_admin';
+        if (normalizedRole === 'state-transport-authority' || normalizedRole === 'statetransportauthority') normalizedRole = 'state_transport_authority';
       }
       
       // Determine roleType
-      const internalRoles = ['admin', 'depot_manager', 'conductor', 'driver', 'support_agent', 'data_collector'];
+      const internalRoles = ['admin', 'depot_manager', 'conductor', 'driver', 'support_agent', 'data_collector', 'super_admin', 'state_transport_authority'];
       const userRoleType = internalRoles.includes(normalizedRole) ? 'internal' : 'external';
       
       // Ensure vendorId is set for vendor users

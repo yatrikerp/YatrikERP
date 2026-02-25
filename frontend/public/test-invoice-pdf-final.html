@@ -1,0 +1,367 @@
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Final Invoice PDF Test</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        button:hover {
+            background: #1d4ed8;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 4px;
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+        }
+        .invoice-preview {
+            background: white;
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Final Invoice PDF Test</h1>
+        <p>This test uses the same logic as the YATRIK ERP vendor dashboard.</p>
+        
+        <div class="status" id="status">
+            Ready to test PDF generation...
+        </div>
+        
+        <button onclick="testFinalInvoicePDF()">Generate Invoice PDF</button>
+        
+        <div class="invoice-preview">
+            <h3>Sample Invoice Data:</h3>
+            <p><strong>Invoice Number:</strong> INV-TEST-2026-001</p>
+            <p><strong>Status:</strong> PAID</p>
+            <p><strong>Date:</strong> February 4, 2026</p>
+            <p><strong>From:</strong> TATA Motors Ltd, Mumbai</p>
+            <p><strong>To:</strong> YATRIK ERP, Kochi</p>
+            <p><strong>Items:</strong></p>
+            <ul>
+                <li>Bus Engine Parts - Qty: 10 × Rs.2,500 = Rs.25,000</li>
+                <li>Brake System Components - Qty: 5 × Rs.5,000 = Rs.25,000</li>
+            </ul>
+            <p><strong>Total Amount:</strong> Rs.59,000 (including 18% tax)</p>
+        </div>
+    </div>
+
+    <script>
+        function updateStatus(message, isError = false) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.style.background = isError ? '#fef2f2' : '#f0f9ff';
+            status.style.borderColor = isError ? '#ef4444' : '#0ea5e9';
+            status.style.color = isError ? '#dc2626' : '#0369a1';
+        }
+
+        async function testFinalInvoicePDF() {
+            try {
+                updateStatus('🔄 Starting PDF generation...');
+                
+                // Sample invoice data (same structure as YATRIK ERP)
+                const invoice = {
+                    invoiceNumber: 'INV-TEST-2026-001',
+                    status: 'paid',
+                    date: new Date(),
+                    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                    poNumber: 'PO-TEST-001',
+                    clientName: 'YATRIK ERP',
+                    clientAddress: 'Kochi, Kerala, India',
+                    clientEmail: 'admin@yatrikerp.com',
+                    amount: 59000,
+                    subtotal: 50000,
+                    taxAmount: 9000,
+                    taxRate: 18,
+                    paymentStatus: 'paid',
+                    paymentDate: new Date(),
+                    paymentMethod: 'Bank Transfer',
+                    notes: 'Payment received on time. Thank you for your business.',
+                    items: [
+                        {
+                            description: 'Bus Engine Parts',
+                            productCode: 'ENG-001',
+                            quantity: 10,
+                            unitPrice: 2500,
+                            price: 2500
+                        },
+                        {
+                            description: 'Brake System Components',
+                            productCode: 'BRK-002',
+                            quantity: 5,
+                            unitPrice: 5000,
+                            price: 5000
+                        }
+                    ]
+                };
+
+                const vendorInfo = {
+                    companyName: 'TATA Motors Ltd',
+                    address: 'Mumbai, Maharashtra, India',
+                    email: 'vendor@yatrik.com',
+                    phone: '+91-9876543210',
+                    gstNumber: 'GST123456789'
+                };
+
+                const userInfo = {
+                    email: 'vendor@yatrik.com',
+                    phone: '+91-9876543210'
+                };
+
+                // Use the same PDF generation logic as YATRIK ERP
+                await generateInvoicePDF(invoice, vendorInfo, userInfo);
+                
+                updateStatus('✅ Invoice PDF generated and downloaded successfully!');
+                
+            } catch (error) {
+                console.error('Error generating PDF:', error);
+                updateStatus('❌ PDF generation failed: ' + error.message, true);
+            }
+        }
+
+        // Same PDF generation function as YATRIK ERP (simplified)
+        async function generateInvoicePDF(invoice, vendorInfo, userInfo) {
+            console.log('🔄 Starting PDF generation for invoice:', invoice.invoiceNumber);
+            
+            // Get jsPDF
+            const { jsPDF } = window.jspdf;
+            if (!jsPDF) {
+                throw new Error('jsPDF library not available');
+            }
+            
+            console.log('✅ jsPDF loaded successfully');
+            
+            // Create new PDF document
+            const doc = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            console.log('✅ PDF document created');
+
+            // Set font
+            doc.setFont('helvetica');
+            
+            // Page dimensions
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const margin = 20;
+            const contentWidth = pageWidth - (margin * 2);
+            
+            let yPosition = margin;
+            
+            // Helper function to add text
+            const addText = (text, x, y, options = {}) => {
+                try {
+                    const fontSize = options.fontSize || 10;
+                    const align = options.align || 'left';
+                    
+                    doc.setFontSize(fontSize);
+                    if (options.bold) doc.setFont('helvetica', 'bold');
+                    else doc.setFont('helvetica', 'normal');
+                    
+                    if (options.color && Array.isArray(options.color)) {
+                        doc.setTextColor(options.color[0], options.color[1], options.color[2]);
+                    } else {
+                        doc.setTextColor(0, 0, 0);
+                    }
+                    
+                    const lines = doc.splitTextToSize(String(text), contentWidth);
+                    
+                    if (align === 'center') {
+                        x = pageWidth / 2;
+                        doc.text(lines, x, y, { align: 'center' });
+                    } else if (align === 'right') {
+                        doc.text(lines, x, y, { align: 'right' });
+                    } else {
+                        doc.text(lines, x, y);
+                    }
+                    
+                    return y + (lines.length * fontSize * 0.35);
+                } catch (textError) {
+                    console.error('Error adding text:', textError);
+                    return y + 5;
+                }
+            };
+            
+            // Header
+            doc.setDrawColor(37, 99, 235);
+            doc.setLineWidth(2);
+            doc.line(margin, yPosition, pageWidth - margin, yPosition);
+            yPosition += 10;
+            
+            // Invoice title and number
+            yPosition = addText('INVOICE', margin, yPosition, { fontSize: 24, bold: true, color: [37, 99, 235] });
+            yPosition = addText(`#${invoice.invoiceNumber}`, margin, yPosition, { fontSize: 14, color: [102, 102, 102] });
+            
+            // Status and date (right aligned)
+            const statusY = yPosition - 20;
+            addText(invoice.status?.toUpperCase() || 'PENDING', pageWidth - margin, statusY, { 
+                fontSize: 12, bold: true, align: 'right', color: [16, 185, 129] 
+            });
+            addText(new Date(invoice.date || invoice.createdAt).toLocaleDateString('en-IN'), 
+                pageWidth - margin, statusY + 8, { fontSize: 10, align: 'right', color: [102, 102, 102] });
+            
+            yPosition += 20;
+            
+            // From and To sections
+            const leftColX = margin;
+            const rightColX = pageWidth / 2 + 10;
+            const sectionY = yPosition;
+            
+            // FROM (Vendor)
+            yPosition = addText('FROM (VENDOR)', leftColX, sectionY, { fontSize: 10, bold: true, color: [55, 65, 81] });
+            yPosition = addText(vendorInfo?.companyName || 'TATA Motors Ltd', 
+                leftColX, yPosition + 5, { fontSize: 12, bold: true });
+            yPosition = addText(vendorInfo?.address || 'Mumbai, Maharashtra, India', 
+                leftColX, yPosition + 3, { fontSize: 10, color: [102, 102, 102] });
+            yPosition = addText(`Email: ${vendorInfo?.email || 'vendor@yatrik.com'}`, 
+                leftColX, yPosition + 3, { fontSize: 10, color: [102, 102, 102] });
+            yPosition = addText(`Phone: ${vendorInfo?.phone || '+91-9876543210'}`, 
+                leftColX, yPosition + 3, { fontSize: 10, color: [102, 102, 102] });
+            
+            // TO (Client)
+            let rightY = sectionY;
+            rightY = addText('TO (CLIENT)', rightColX, rightY, { fontSize: 10, bold: true, color: [55, 65, 81] });
+            rightY = addText(invoice.clientName || 'YATRIK ERP', 
+                rightColX, rightY + 5, { fontSize: 12, bold: true });
+            rightY = addText(invoice.clientAddress || 'Kochi, Kerala, India', 
+                rightColX, rightY + 3, { fontSize: 10, color: [102, 102, 102] });
+            rightY = addText(`Email: ${invoice.clientEmail || 'admin@yatrikerp.com'}`, 
+                rightColX, rightY + 3, { fontSize: 10, color: [102, 102, 102] });
+            
+            yPosition = Math.max(yPosition, rightY) + 20;
+            
+            // Invoice Items Table
+            yPosition = addText('Invoice Items', margin, yPosition, { fontSize: 14, bold: true });
+            yPosition += 15;
+            
+            // Table header
+            addText('Description', margin, yPosition, { fontSize: 10, bold: true });
+            addText('Qty', margin + 80, yPosition, { fontSize: 10, bold: true });
+            addText('Unit Price', margin + 110, yPosition, { fontSize: 10, bold: true });
+            addText('Total', margin + 150, yPosition, { fontSize: 10, bold: true });
+            
+            yPosition += 10;
+            
+            // Table rows
+            if (invoice.items && invoice.items.length > 0) {
+                invoice.items.forEach((item, index) => {
+                    const itemName = item.description || item.productName || `Item ${index + 1}`;
+                    addText(itemName, margin, yPosition, { fontSize: 10 });
+                    if (item.productCode) {
+                        addText(`Code: ${item.productCode}`, margin, yPosition + 5, { fontSize: 8, color: [102, 102, 102] });
+                    }
+                    
+                    addText((item.quantity || 1).toString(), margin + 80, yPosition, { fontSize: 10 });
+                    addText(`Rs.${(item.unitPrice || item.price || 0).toLocaleString('en-IN')}`, margin + 110, yPosition, { fontSize: 10 });
+                    addText(`Rs.${((item.quantity || 1) * (item.unitPrice || item.price || 0)).toLocaleString('en-IN')}`, 
+                        margin + 150, yPosition, { fontSize: 10, bold: true });
+                    
+                    yPosition += 15;
+                });
+            }
+            
+            yPosition += 20;
+            
+            // Summary section
+            const summaryX = pageWidth - margin - 80;
+            
+            // Subtotal
+            addText('Subtotal:', summaryX, yPosition, { fontSize: 10 });
+            addText(`Rs.${(invoice.subtotal || invoice.amount || 0).toLocaleString('en-IN')}`, 
+                summaryX + 60, yPosition, { fontSize: 10, align: 'right' });
+            yPosition += 8;
+            
+            // Tax
+            if (invoice.taxAmount) {
+                addText(`Tax (${invoice.taxRate || 18}%):`, summaryX, yPosition, { fontSize: 10 });
+                addText(`Rs.${invoice.taxAmount.toLocaleString('en-IN')}`, 
+                    summaryX + 60, yPosition, { fontSize: 10, align: 'right' });
+                yPosition += 8;
+            }
+            
+            // Total
+            yPosition += 5;
+            addText('Total Amount:', summaryX, yPosition, { fontSize: 12, bold: true, color: [37, 99, 235] });
+            addText(`Rs.${(invoice.amount || invoice.totalAmount || 0).toLocaleString('en-IN')}`, 
+                summaryX + 60, yPosition, { fontSize: 12, bold: true, align: 'right', color: [37, 99, 235] });
+            
+            yPosition += 30;
+            
+            // Payment Information
+            if (invoice.paymentStatus) {
+                yPosition = addText('Payment Information', margin, yPosition, { fontSize: 12, bold: true, color: [29, 78, 216] });
+                yPosition += 5;
+                yPosition = addText(`Status: ${invoice.paymentStatus.toUpperCase()}`, margin, yPosition, { fontSize: 10 });
+                if (invoice.paymentDate) {
+                    yPosition = addText(`Date: ${new Date(invoice.paymentDate).toLocaleDateString('en-IN')}`, margin, yPosition, { fontSize: 10 });
+                }
+                if (invoice.paymentMethod) {
+                    yPosition = addText(`Method: ${invoice.paymentMethod}`, margin, yPosition, { fontSize: 10 });
+                }
+                yPosition += 10;
+            }
+            
+            // Notes
+            if (invoice.notes) {
+                yPosition = addText('Notes', margin, yPosition, { fontSize: 12, bold: true });
+                yPosition = addText(invoice.notes, margin, yPosition + 3, { fontSize: 10, color: [102, 102, 102] });
+                yPosition += 10;
+            }
+            
+            // Footer
+            yPosition = pageHeight - 30;
+            addText(`Generated on ${new Date().toLocaleDateString('en-IN')} at ${new Date().toLocaleTimeString('en-IN')}`, 
+                pageWidth / 2, yPosition, { fontSize: 8, align: 'center', color: [102, 102, 102] });
+            
+            console.log('✅ PDF content generated successfully');
+            
+            // Save the PDF
+            const filename = `Invoice_${invoice.invoiceNumber}_${new Date().toISOString().split('T')[0]}.pdf`;
+            doc.save(filename);
+            
+            console.log('✅ PDF saved successfully:', filename);
+        }
+
+        // Test if jsPDF is loaded
+        window.addEventListener('load', function() {
+            if (typeof window.jspdf !== 'undefined' && window.jspdf.jsPDF) {
+                updateStatus('✅ jsPDF loaded successfully. Ready to test!');
+            } else {
+                updateStatus('❌ jsPDF failed to load!', true);
+            }
+        });
+    </script>
+</body>
+</html>

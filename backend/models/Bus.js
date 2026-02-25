@@ -185,6 +185,11 @@ busSchema.index({ assignedConductor: 1 });
 busSchema.index({ currentTrip: 1 });
 busSchema.index({ 'currentRoute.routeId': 1 });
 
+// PERFORMANCE: Compound indexes for common query patterns
+busSchema.index({ depotId: 1, status: 1 }); // Depot buses by status
+busSchema.index({ status: 1, busType: 1 }); // Status with bus type
+busSchema.index({ depotId: 1, status: 1, busType: 1 }); // Full depot filtering
+
 // Calculate total capacity before saving (only if not explicitly set)
 busSchema.pre('save', function(next) {
   if (this.capacity && this.isNew) {

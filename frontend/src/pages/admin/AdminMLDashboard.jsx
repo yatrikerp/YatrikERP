@@ -106,8 +106,8 @@ const AdminMLDashboard = () => {
   const fetchModelMetrics = async () => {
     setLoading(true);
     try {
-      const res = await apiFetch('/api/ai/analytics');
-      if (res.ok) {
+      const res = await apiFetch('/api/admin/ai/ml/models');
+      if (res.ok && res.data) {
         setModels(res.data.models || mlModels);
       }
     } catch (error) {
@@ -121,10 +121,14 @@ const AdminMLDashboard = () => {
   const runModel = async (modelId) => {
     setLoading(true);
     try {
-      const res = await apiFetch(`/api/ai/analytics/run/${modelId}`, {
-        method: 'POST'
+      const res = await apiFetch('/api/admin/ai/ml/predict', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ modelId, parameters: {} })
       });
-      if (res.ok) {
+      if (res.ok && res.data) {
         setPredictions(prev => ({
           ...prev,
           [modelId]: res.data

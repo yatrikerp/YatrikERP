@@ -120,6 +120,8 @@ const Login = () => {
         
         // OPTIMIZED: Immediate UI response - await login to ensure token is stored
         try {
+          // Set justLoggedIn flag before login to prevent immediate logout
+          sessionStorage.setItem('justLoggedIn', Date.now().toString());
           await login(user, token);
           console.log('✅ [Login] Token stored successfully in localStorage');
           

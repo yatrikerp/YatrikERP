@@ -34,35 +34,55 @@ const BusMaintenance = () => {
 
   const fetchBuses = async () => {
     try {
-      const res = await apiFetch('/api/depot/buses');
-      if (res.ok) {
-        // Ensure buses is always an array
-        let busesData = res.data?.buses || res.data || [];
+      const res = await apiFetch('/api/depot/buses', { suppressError: true });
+      if (res.ok && res.data) {
+        // Backend uses res.guard.success() which returns {success: true, data: {...}}
+        // apiFetch returns: {ok: true, data: {success: true, data: {...}}}
+        let busesData = null;
+        if (res.data.success && res.data.data) {
+          busesData = res.data.data.buses || res.data.data;
+        } else if (res.data.data && res.data.data.buses) {
+          busesData = res.data.data.buses;
+        } else if (res.data.buses) {
+          busesData = res.data.buses;
+        } else if (Array.isArray(res.data)) {
+          busesData = res.data;
+        }
+        
         if (!Array.isArray(busesData)) {
           busesData = [];
         }
         setBuses(busesData);
       } else {
-        // If API call fails, ensure buses is still an array
         setBuses([]);
       }
     } catch (error) {
       console.error('Error fetching buses:', error);
-      setBuses([]); // Set to empty array on error
+      setBuses([]);
     }
   };
 
   const fetchMaintenanceLogs = async () => {
     try {
-      const res = await apiFetch('/api/depot/maintenance/logs');
-      if (res.ok) {
-        const logs = res.data?.logs || res.data || [];
+      const res = await apiFetch('/api/depot/maintenance/logs', { suppressError: true });
+      if (res.ok && res.data) {
+        // Backend uses res.guard.success() which returns {success: true, data: {...}}
+        let logs = null;
+        if (res.data.success && res.data.data) {
+          logs = res.data.data.logs || res.data.data;
+        } else if (res.data.data && res.data.data.logs) {
+          logs = res.data.data.logs;
+        } else if (res.data.logs) {
+          logs = res.data.logs;
+        } else if (Array.isArray(res.data)) {
+          logs = res.data;
+        }
         setMaintenanceLogs(Array.isArray(logs) ? logs : []);
       } else {
         setMaintenanceLogs([]);
       }
     } catch (error) {
-      // Handle missing endpoint gracefully
+      console.error('Error fetching maintenance logs:', error);
       setMaintenanceLogs([]);
     } finally {
       setLoading(false);
@@ -71,15 +91,25 @@ const BusMaintenance = () => {
 
   const fetchAlerts = async () => {
     try {
-      const res = await apiFetch('/api/depot/maintenance/alerts');
-      if (res.ok) {
-        const alertsData = res.data?.alerts || res.data || [];
+      const res = await apiFetch('/api/depot/maintenance/alerts', { suppressError: true });
+      if (res.ok && res.data) {
+        // Backend uses res.guard.success() which returns {success: true, data: {...}}
+        let alertsData = null;
+        if (res.data.success && res.data.data) {
+          alertsData = res.data.data.alerts || res.data.data;
+        } else if (res.data.data && res.data.data.alerts) {
+          alertsData = res.data.data.alerts;
+        } else if (res.data.alerts) {
+          alertsData = res.data.alerts;
+        } else if (Array.isArray(res.data)) {
+          alertsData = res.data;
+        }
         setAlerts(Array.isArray(alertsData) ? alertsData : []);
       } else {
         setAlerts([]);
       }
     } catch (error) {
-      // Handle missing endpoint gracefully
+      console.error('Error fetching maintenance alerts:', error);
       setAlerts([]);
     }
   };
@@ -91,28 +121,83 @@ const BusMaintenance = () => {
       return;
     }
     
+    if (!logForm.description || !logForm.type) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+    
+    // Optimistic update - show instantly
+    const newLog = {
+      _id: `temp_${Date.now()}`,
+      busId: selectedBus._id,
+      bus: selectedBus,
+      type: logForm.type,
+      description: logForm.description,
+      cost: parseFloat(logForm.cost) || 0,
+      nextServiceDate: logForm.nextServiceDate || null,
+      date: new Date(),
+      _isUpdating: true,
+      _lastUpdated: Date.now()
+    };
+    setMaintenanceLogs(prevLogs => [newLog, ...prevLogs]);
+    
+    // Update bus status if maintenance type requires it
+    if (logForm.type === 'repair' || logForm.type === 'emergency') {
+      setBuses(prevBuses =>
+        prevBuses.map(bus =>
+          bus._id === selectedBus._id
+            ? {
+                ...bus,
+                status: 'maintenance',
+                lastServiceDate: new Date(),
+                nextServiceDate: logForm.nextServiceDate ? new Date(logForm.nextServiceDate) : null,
+                _isUpdating: true,
+                _lastUpdated: Date.now()
+              }
+            : bus
+        )
+      );
+    }
+    
     try {
       const res = await apiFetch('/api/depot/maintenance/log', {
         method: 'POST',
         body: JSON.stringify({
-          bus_id: selectedBus?._id,
-          ...logForm
+          bus_id: selectedBus._id,
+          type: logForm.type,
+          description: logForm.description,
+          cost: parseFloat(logForm.cost) || 0,
+          nextServiceDate: logForm.nextServiceDate || null
         }),
         suppressError: true
       });
+      
       if (res.ok) {
-        toast.success('Maintenance logged successfully!');
-        setShowLogForm(false);
-        setLogForm({ type: 'routine', description: '', cost: '', nextServiceDate: '' });
-        fetchMaintenanceLogs();
-        fetchBuses();
+        // Check response structure
+        const success = res.data?.success || (res.data?.data && res.data.data.success);
+        if (success || res.ok) {
+          toast.success('Maintenance logged successfully!');
+          setShowLogForm(false);
+          setSelectedBus(null);
+          setLogForm({ type: 'routine', description: '', cost: '', nextServiceDate: '' });
+          // Update with server response
+          await Promise.all([fetchMaintenanceLogs(), fetchBuses(), fetchAlerts()]);
+        } else {
+          // Revert optimistic update on error
+          await Promise.all([fetchMaintenanceLogs(), fetchBuses(), fetchAlerts()]);
+          toast.error(res.data?.message || res.message || 'Failed to log maintenance');
+        }
       } else {
-        toast.error(res.message || 'Failed to log maintenance');
+        // Revert optimistic update on error
+        await Promise.all([fetchMaintenanceLogs(), fetchBuses(), fetchAlerts()]);
+        const errorMsg = res.data?.message || res.message || 'Failed to log maintenance';
+        toast.error(errorMsg);
       }
     } catch (error) {
+      console.error('Error logging maintenance:', error);
+      // Revert optimistic update on error
+      await Promise.all([fetchMaintenanceLogs(), fetchBuses(), fetchAlerts()]);
       toast.error('Error logging maintenance. Please try again.');
-      setShowLogForm(false);
-      setLogForm({ type: 'routine', description: '', cost: '', nextServiceDate: '' });
     }
   };
 
@@ -272,14 +357,18 @@ const BusMaintenance = () => {
                 maintenanceLogs.slice(0, 10).map((log, index) => (
                   <tr key={log._id || index}>
                     <td>
-                      {log.date
+                      {log.reportedAt
+                        ? new Date(log.reportedAt).toLocaleDateString('en-IN')
+                        : log.date
                         ? new Date(log.date).toLocaleDateString('en-IN')
+                        : log.createdAt
+                        ? new Date(log.createdAt).toLocaleDateString('en-IN')
                         : 'N/A'
                       }
                     </td>
-                    <td>{log.busId?.busNumber || log.bus?.busNumber || 'N/A'}</td>
+                    <td>{log.busId?.busNumber || log.bus?.busNumber || log.busId || 'N/A'}</td>
                     <td>
-                      <span className="status-badge">{log.type || 'routine'}</span>
+                      <span className="status-badge">{log.issueType || log.type || 'routine'}</span>
                     </td>
                     <td>{log.description || 'N/A'}</td>
                     <td>₹{log.cost || 0}</td>

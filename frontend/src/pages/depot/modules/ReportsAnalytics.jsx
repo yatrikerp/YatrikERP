@@ -32,11 +32,20 @@ const ReportsAnalytics = () => {
         endpoint = `/api/depot/reports/monthly?month=${new Date().getMonth() + 1}&year=${new Date().getFullYear()}`;
       }
 
-      const res = await apiFetch(endpoint);
-      if (res.ok) {
+      const res = await apiFetch(endpoint, { suppressError: true });
+      if (res.ok && res.data) {
+        // Handle res.guard.success() structure
+        let reportData = null;
+        if (res.data.success && res.data.data) {
+          reportData = res.data.data;
+        } else if (res.data.data) {
+          reportData = res.data.data;
+        } else {
+          reportData = res.data;
+        }
         setReports(prev => ({
           ...prev,
-          [reportType]: res.data
+          [reportType]: reportData
         }));
       } else {
         setReports(prev => ({

@@ -17,6 +17,11 @@ const InactivityHandler = () => {
     // Don't trigger during explicit login/logout transitions
     if (isLoggingOut || isLoggingIn) return;
 
+    // DISABLE inactivity logout for ALL users - all users should stay logged in
+    // Users should only logout when they click the logout button
+    // This applies to all roles: admin, depot_manager, vendor, passenger, driver, conductor, etc.
+    return;
+
     let timeoutId;
 
     const handleLogoutForInactivity = async () => {

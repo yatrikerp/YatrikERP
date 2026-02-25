@@ -54,7 +54,11 @@ export const useFormErrorHandling = () => {
       handleSuccess('Operation completed successfully!');
       return result;
     } catch (error) {
-      handleFormError(error);
+      if (typeof error === 'object' && error.message) {
+        handleError(error);
+      } else {
+        handleError(new Error(error), 'Form Error');
+      }
       throw error;
     }
   };

@@ -24,6 +24,21 @@ const VendorDashboardUltra = () => {
   const [showPOModal, setShowPOModal] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // PERMANENTLY protect vendor session - prevent auto-logout
+  useEffect(() => {
+    // Set justLoggedIn flag to prevent auto-logout
+    sessionStorage.setItem('justLoggedIn', Date.now().toString());
+    
+    // Keep refreshing the flag every 25 seconds to prevent expiration
+    const refreshInterval = setInterval(() => {
+      sessionStorage.setItem('justLoggedIn', Date.now().toString());
+    }, 25000); // Refresh every 25 seconds (before 30 second expiration)
+    
+    return () => {
+      clearInterval(refreshInterval);
+    };
+  }, []);
+
   useEffect(() => {
     // Add delay to ensure token is stored and auth state is ready
     if (user && user.role === 'vendor') {

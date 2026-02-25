@@ -28,15 +28,25 @@ const FuelMonitoring = () => {
 
   const fetchFuelLogs = async () => {
     try {
-      const res = await apiFetch('/api/depot/fuel/logs');
-      if (res.ok) {
-        const logs = res.data?.logs || res.data || [];
+      const res = await apiFetch('/api/depot/fuel/logs', { suppressError: true });
+      if (res.ok && res.data) {
+        // Handle res.guard.success() structure
+        let logs = null;
+        if (res.data.success && res.data.data) {
+          logs = res.data.data.logs || res.data.data;
+        } else if (res.data.data && res.data.data.logs) {
+          logs = res.data.data.logs;
+        } else if (res.data.logs) {
+          logs = res.data.logs;
+        } else if (Array.isArray(res.data)) {
+          logs = res.data;
+        }
         setFuelLogs(Array.isArray(logs) ? logs : []);
       } else {
         setFuelLogs([]);
       }
     } catch (error) {
-      // Handle missing endpoint gracefully
+      console.error('Error fetching fuel logs:', error);
       setFuelLogs([]);
     } finally {
       setLoading(false);
@@ -45,9 +55,18 @@ const FuelMonitoring = () => {
 
   const fetchAnalytics = async () => {
     try {
-      const res = await apiFetch('/api/depot/fuel/analytics');
-      if (res.ok) {
-        setAnalytics(res.data || {
+      const res = await apiFetch('/api/depot/fuel/analytics', { suppressError: true });
+      if (res.ok && res.data) {
+        // Handle res.guard.success() structure
+        let analyticsData = null;
+        if (res.data.success && res.data.data) {
+          analyticsData = res.data.data;
+        } else if (res.data.data) {
+          analyticsData = res.data.data;
+        } else {
+          analyticsData = res.data;
+        }
+        setAnalytics(analyticsData || {
           totalFuel: 0,
           averageKML: 0,
           routeComparison: [],
@@ -62,7 +81,7 @@ const FuelMonitoring = () => {
         });
       }
     } catch (error) {
-      // Handle missing endpoint gracefully
+      console.error('Error fetching fuel analytics:', error);
       setAnalytics({
         totalFuel: 0,
         averageKML: 0,
@@ -74,30 +93,44 @@ const FuelMonitoring = () => {
 
   const handleLogFuel = async (e) => {
     e.preventDefault();
-    if (!logForm.busId || !logForm.quantity) {
-      toast.error('Please fill all required fields');
+    if (!logForm.busId || !logForm.quantity || !logForm.cost) {
+      toast.error('Please fill all required fields (Bus, Quantity, Cost)');
       return;
     }
     
     try {
       const res = await apiFetch('/api/depot/fuel/log', {
         method: 'POST',
-        body: JSON.stringify(logForm),
+        body: JSON.stringify({
+          busId: logForm.busId,
+          tripId: logForm.tripId || null,
+          fuelType: 'diesel', // Default, can be made configurable
+          quantity: parseFloat(logForm.quantity),
+          cost: parseFloat(logForm.cost),
+          odometerReading: logForm.odometerReading || null
+        }),
         suppressError: true
       });
+      
       if (res.ok) {
-        toast.success('Fuel entry logged successfully!');
-        setShowLogForm(false);
-        setLogForm({ busId: '', tripId: '', quantity: '', cost: '', odometerReading: '' });
-        fetchFuelLogs();
-        fetchAnalytics();
+        // Check response structure
+        const success = res.data?.success || (res.data?.data && res.data.data.success);
+        if (success || res.ok) {
+          toast.success('Fuel entry logged successfully!');
+          setShowLogForm(false);
+          setLogForm({ busId: '', tripId: '', quantity: '', cost: '', odometerReading: '' });
+          await Promise.all([fetchFuelLogs(), fetchAnalytics()]);
+        } else {
+          const errorMsg = res.data?.message || res.data?.data?.message || 'Failed to log fuel entry';
+          toast.error(errorMsg);
+        }
       } else {
-        toast.error(res.message || 'Failed to log fuel entry');
+        const errorMsg = res.data?.message || res.message || 'Failed to log fuel entry';
+        toast.error(errorMsg);
       }
     } catch (error) {
+      console.error('Error logging fuel entry:', error);
       toast.error('Error logging fuel entry. Please try again.');
-      setShowLogForm(false);
-      setLogForm({ busId: '', tripId: '', quantity: '', cost: '', odometerReading: '' });
     }
   };
 

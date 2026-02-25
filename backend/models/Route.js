@@ -389,6 +389,12 @@ routeSchema.index({ validationStatus: 1 });
 routeSchema.index({ 'stops.stopId': 1 });
 routeSchema.index({ 'stops.lat': 1, 'stops.lng': 1 });
 
+// PERFORMANCE: Compound indexes for common query patterns
+routeSchema.index({ 'depot.depotId': 1, status: 1 }); // Depot routes with status
+routeSchema.index({ status: 1, isActive: 1 }); // Active routes filtering
+routeSchema.index({ 'startingPoint.city': 1, 'endingPoint.city': 1 }); // Route search
+routeSchema.index({ status: 1, createdAt: -1 }); // Status with sorting
+
 // Virtual for full route description
 routeSchema.virtual('fullRouteDescription').get(function() {
   return `${this.startingPoint.city} → ${this.endingPoint.city}`;

@@ -1,3 +1,21 @@
 {
-    "postman.settings.dotenv-detection-notification-visibility": false
+  "mochaExplorer.files": "tests/selenium/specs/**/*.test.js",
+  "mochaExplorer.require": "tests/selenium/config.js",
+  "mochaExplorer.timeout": 60000,
+  "mochaExplorer.env": {
+    "NODE_ENV": "test",
+    "HEADLESS": "false"
+  },
+  "files.associations": {
+    "*.test.js": "javascript"
+  },
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "testing.automaticallyOpenPeekView": "failureInVisibleDocument",
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+},
+"html.autoClosingTags": false
 }

@@ -138,6 +138,7 @@ const purchaseOrderSchema = new mongoose.Schema({
       'accepted',        // Vendor accepted
       'rejected',        // Vendor rejected
       'in_progress',     // Vendor processing
+      'dispatched_awaiting_payment', // Vendor dispatched, waiting for payment before delivery
       'partially_delivered',
       'delivered',       // All items delivered
       'completed',       // PO completed and closed
@@ -165,6 +166,7 @@ const purchaseOrderSchema = new mongoose.Schema({
   },
   expectedDeliveryDate: Date,
   actualDeliveryDate: Date,
+  dispatchDate: Date, // Date when vendor dispatched the order
   acceptedDate: Date,
   rejectedDate: Date,
   cancelledDate: Date,
@@ -208,7 +210,7 @@ const purchaseOrderSchema = new mongoose.Schema({
   deliveryStatus: {
     status: {
       type: String,
-      enum: ['pending', 'in_transit', 'delivered', 'partial', 'returned']
+      enum: ['pending', 'dispatched_awaiting_payment', 'in_transit', 'delivered', 'partial', 'returned']
     },
     items: [{
       itemIndex: Number,

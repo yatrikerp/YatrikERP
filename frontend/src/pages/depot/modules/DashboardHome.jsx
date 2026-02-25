@@ -15,7 +15,8 @@ import {
   ShoppingCart,
   CreditCard,
   Gavel,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 import { apiFetch } from '../../../utils/api';
 
@@ -52,7 +53,19 @@ const DashboardHome = () => {
     fetchDashboardData();
     // Real-time refresh every 30 seconds
     const interval = setInterval(fetchDashboardData, 30000);
-    return () => clearInterval(interval);
+    
+    // Listen for custom refresh events (triggered by attendance marking)
+    const handleRefresh = () => {
+      console.log('🔄 Dashboard refresh triggered by attendance update');
+      fetchDashboardData();
+    };
+    
+    window.addEventListener('refreshDashboard', handleRefresh);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('refreshDashboard', handleRefresh);
+    };
   }, []);
 
   const fetchDashboardData = async () => {
@@ -72,8 +85,32 @@ const DashboardHome = () => {
       ]);
       
       // Always try to set stats, even if main API fails
+      // Backend uses res.guard.success() which returns {success: true, data: {...}}
+      // apiFetch returns: {ok: true, data: {success: true, data: {...}}}
+      // So we need: res.data.data to get the actual dashboard data
+      let dashboardData = null;
+      
       if (res.ok && res.data) {
-        const data = res.data;
+        // Try nested structure first (guard.success format)
+        if (res.data.success && res.data.data) {
+          dashboardData = res.data.data;
+        } 
+        // Try direct data property
+        else if (res.data.data && typeof res.data.data === 'object' && res.data.data.stats) {
+          dashboardData = res.data.data;
+        }
+        // Try if data itself has stats (direct format)
+        else if (res.data.stats) {
+          dashboardData = res.data;
+        }
+        // Fallback to res.data
+        else {
+          dashboardData = res.data;
+        }
+      }
+      
+      if (dashboardData && dashboardData.stats) {
+        const data = dashboardData;
         console.log('📊 Dashboard Data:', data);
         console.log('📊 Stats:', data.stats);
         
@@ -141,6 +178,8 @@ const DashboardHome = () => {
         setRecentPayments(payments.slice(0, 5));
       } else {
         console.warn('⚠️ Dashboard API response not OK:', res);
+        console.warn('⚠️ Response structure:', { ok: res.ok, status: res.status, data: res.data });
+        
         // Try to fetch buses directly if dashboard endpoint fails
         try {
           const busesRes = await apiFetch('/api/depot/buses', { suppressError: true });
@@ -354,7 +393,7 @@ const DashboardHome = () => {
 
   return (
     <div>
-      {/* Real-time Indicator */}
+      {/* Real-time Indicator with Manual Refresh */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -378,9 +417,32 @@ const DashboardHome = () => {
             animation: 'pulse 2s infinite'
           }} />
         </div>
-        <span style={{ fontSize: '12px', color: '#64748b' }}>
-          Last updated: {lastUpdate.toLocaleTimeString('en-IN')}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button
+            onClick={fetchDashboardData}
+            disabled={loading}
+            style={{
+              padding: '6px 12px',
+              background: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontSize: '12px',
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              opacity: loading ? 0.6 : 1
+            }}
+          >
+            <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            Refresh
+          </button>
+          <span style={{ fontSize: '12px', color: '#64748b' }}>
+            Last updated: {lastUpdate.toLocaleTimeString('en-IN')}
+          </span>
+        </div>
       </div>
 
       {/* KPI Cards */}

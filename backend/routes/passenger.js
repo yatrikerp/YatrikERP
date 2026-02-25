@@ -612,6 +612,90 @@ router.get('/trips/search', async (req, res) => {
   }
 });
 
+// GET /api/passenger/tickets - Get passenger tickets/bookings
+router.get('/tickets', requireRole(['passenger']), async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { status, limit = 20, page = 1 } = req.query;
+
+    console.log('🎫 Fetching tickets for user:', userId);
+
+    const query = { createdBy: userId };
+    if (status) {
+      query.status = status;
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [bookings, totalCount] = await Promise.all([
+      Booking.find(query)
+        .populate('tripId', 'routeId busId startTime endTime fare capacity serviceDate')
+        .populate('tripId.routeId', 'routeName routeNumber startingPoint endingPoint')
+        .populate('tripId.busId', 'busNumber busType')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Booking.countDocuments(query)
+    ]);
+
+    console.log(`📊 Found ${bookings.length} bookings for user`);
+
+    // Transform bookings to ticket format expected by dashboard
+    const tickets = bookings.map(booking => {
+      const trip = booking.tripId;
+      const route = trip?.routeId;
+      const bus = trip?.busId;
+      
+      return {
+        id: booking._id,
+        pnr: booking.bookingId || booking._id.toString().slice(-8).toUpperCase(),
+        bookingId: booking.bookingId || booking._id.toString().slice(-8).toUpperCase(),
+        state: booking.status, // Map status to state for dashboard compatibility
+        status: booking.status,
+        boardingStop: route?.startingPoint?.city || route?.startingPoint || booking.journey?.from || 'Unknown',
+        destinationStop: route?.endingPoint?.city || route?.endingPoint || booking.journey?.to || 'Unknown',
+        seatNumber: booking.seats?.[0]?.seatNumber || 'N/A',
+        fareAmount: booking.pricing?.totalAmount || trip?.fare || 0,
+        tripDetails: {
+          routeName: route?.routeName || 'Unknown Route',
+          routeNumber: route?.routeNumber || 'N/A',
+          serviceDate: trip?.serviceDate || booking.journey?.departureDate,
+          startTime: trip?.startTime || booking.journey?.departureTime,
+          endTime: trip?.endTime || booking.journey?.arrivalTime,
+          busNumber: bus?.busNumber || 'N/A',
+          busType: bus?.busType || 'Standard'
+        },
+        passengerDetails: booking.customer || {},
+        bookingDate: booking.createdAt,
+        paymentStatus: booking.payment?.paymentStatus || 'pending'
+      };
+    });
+
+    res.json({
+      success: true,
+      tickets: tickets, // Use 'tickets' key for dashboard compatibility
+      data: {
+        tickets: tickets,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(totalCount / parseInt(limit)),
+          totalItems: totalCount,
+          itemsPerPage: parseInt(limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get passenger tickets error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch tickets',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/passenger/trips/all - Get all scheduled trips (no search filters)
 router.get('/trips/all', async (req, res) => {
   try {

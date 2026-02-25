@@ -369,7 +369,7 @@ const AdminBulkCart = () => {
       });
       
       if (res.ok && res.data.success) {
-        toast.success('Purchase order approved');
+        toast.success('Purchase order approved and sent to vendor');
         await fetchPurchaseOrders();
       } else {
         toast.error('Failed to approve purchase order');
@@ -690,6 +690,30 @@ const AdminBulkCart = () => {
               </div>
             </div>
             
+            {/* Workflow Header */}
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-6 mb-6">
+              <div className="flex items-start gap-4">
+                <div className="bg-amber-100 p-3 rounded-lg">
+                  <CheckCircle className="w-6 h-6 text-amber-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">🏛️ Admin Approval Required</h3>
+                  <p className="text-sm text-gray-700 mb-3">
+                    These Purchase Orders were <strong>created by Depots</strong> and require your approval before vendors can see them.
+                  </p>
+                  <div className="flex items-center gap-4 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-green-500 text-white px-2 py-1 rounded">1. Depot Creates</span>
+                      <span>→</span>
+                      <span className="bg-amber-500 text-white px-2 py-1 rounded font-bold">2. You Approve</span>
+                      <span>→</span>
+                      <span className="bg-blue-500 text-white px-2 py-1 rounded">3. Vendor Receives</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {poLoading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -697,8 +721,8 @@ const AdminBulkCart = () => {
             ) : purchaseOrders.length === 0 ? (
               <div className="text-center py-12">
                 <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Purchase Orders</h3>
-                <p className="text-gray-600">Purchase orders will appear here once created</p>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Purchase Orders Pending</h3>
+                <p className="text-gray-600">Purchase orders from depots will appear here when they need approval</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -706,6 +730,7 @@ const AdminBulkCart = () => {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PO Number</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created By Depot</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</th>
@@ -716,12 +741,22 @@ const AdminBulkCart = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {purchaseOrders.map((po) => (
-                      <tr key={po._id} className="hover:bg-gray-50">
+                      <tr key={po._id} className={`hover:bg-gray-50 ${po.status === 'pending_approval' ? 'bg-amber-50' : ''}`}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {po.poNumber}
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold">
+                              {po.depotName || po.depotId?.depotName || 'Depot'}
+                            </span>
+                            {po.requestedBy?.name && (
+                              <span className="text-gray-500 text-xs">by {po.requestedBy.name}</span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {po.vendorName || 'N/A'}
+                          {po.vendorName || po.vendorId?.companyName || 'N/A'}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500">
                           {po.items?.length || 0} items
@@ -741,40 +776,51 @@ const AdminBulkCart = () => {
                             {po.status === 'pending_approval' && (
                               <>
                                 <button
-                                  onClick={() => handleApprovePO(po._id)}
-                                  className="text-green-600 hover:text-green-800"
-                                  title="Approve"
+                                  onClick={() => {
+                                    if (window.confirm(`Approve Purchase Order ${po.poNumber}?\n\nThis will approve and automatically send it to the vendor for fulfillment.`)) {
+                                      handleApprovePO(po._id);
+                                    }
+                                  }}
+                                  className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs font-semibold"
+                                  title="Approve PO - Send to Vendor"
                                 >
-                                  <CheckCircle className="w-5 h-5" />
+                                  <CheckCircle className="w-4 h-4" />
+                                  Approve
                                 </button>
                                 <button
                                   onClick={() => {
-                                    const reason = prompt('Enter rejection reason:');
+                                    const reason = prompt('Enter rejection reason (will be sent to depot):');
                                     if (reason) {
                                       apiFetch(`/api/products/purchase-orders/${po._id}/reject`, {
                                         method: 'POST',
                                         body: JSON.stringify({ reason }),
                                         headers: { 'Content-Type': 'application/json' }
                                       }).then(() => {
-                                        toast.success('Purchase order rejected');
+                                        toast.success('Purchase order rejected and depot notified');
                                         fetchPurchaseOrders();
                                       });
                                     }
                                   }}
-                                  className="text-red-600 hover:text-red-800"
-                                  title="Reject"
+                                  className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-xs font-semibold"
+                                  title="Reject PO - Notify Depot"
                                 >
-                                  <XCircle className="w-5 h-5" />
+                                  <XCircle className="w-4 h-4" />
+                                  Reject
                                 </button>
                               </>
                             )}
                             {po.status === 'approved' && (
                               <button
-                                onClick={() => handleSendToVendor(po._id)}
-                                className="text-blue-600 hover:text-blue-800"
-                                title="Send to Vendor"
+                                onClick={() => {
+                                  if (window.confirm(`Send Purchase Order ${po.poNumber} to vendor?\n\nVendor will be able to accept or reject it.`)) {
+                                    handleSendToVendor(po._id);
+                                  }
+                                }}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs font-semibold"
+                                title="Send Approved PO to Vendor"
                               >
-                                <Package className="w-5 h-5" />
+                                <Package className="w-4 h-4" />
+                                Send to Vendor
                               </button>
                             )}
                             <button

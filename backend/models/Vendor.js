@@ -269,6 +269,11 @@ vendorSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
+// Method to check if account is locked
+vendorSchema.methods.isLocked = function() {
+  return !!(this.lockUntil && this.lockUntil > Date.now());
+};
+
 // Method to check if PAN and GST match (for auto-approval)
 // GST format: XXAAAAA0000A1Z5 (15 chars)
 // Positions 2-11: PAN (10 chars)

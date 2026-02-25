@@ -235,7 +235,10 @@ router.post('/purchase-orders/:id/approve', auth, async (req, res) => {
       comments: req.body.comments || 'Approved by admin'
     });
 
-    purchaseOrder.status = 'approved';
+    // When admin approves, automatically send to vendor (status = 'pending')
+    // This allows vendor to see the PO immediately after approval
+    purchaseOrder.status = 'pending';
+    purchaseOrder.orderDate = new Date(); // Set order date when sending to vendor
     purchaseOrder.updatedBy = req.user._id;
 
     await purchaseOrder.save();
@@ -336,6 +339,22 @@ router.post('/purchase-orders/:id/reject', auth, async (req, res) => {
         success: false,
         message: 'Rejection reason is required'
       });
+    }
+
+    // Release reserved stock when PO is rejected
+    for (const item of purchaseOrder.items) {
+      try {
+        const product = await Product.findById(item.sparePartId);
+        if (product && product.stock) {
+          const quantityToRelease = item.quantity || 0;
+          product.stock.quantity = (product.stock.quantity || 0) + quantityToRelease;
+          product.stock.reserved = Math.max(0, (product.stock.reserved || 0) - quantityToRelease);
+          await product.save();
+        }
+      } catch (stockError) {
+        logger.error(`Error releasing stock for product ${item.sparePartId}:`, stockError);
+        // Continue with other items even if one fails
+      }
     }
 
     purchaseOrder.status = 'cancelled';

@@ -399,9 +399,7 @@ router.post('/register-vendor', async (req, res) => {
           });
         }
         
-        // Reset login attempts
-        existingVendor.loginAttempts = 0;
-        existingVendor.lockUntil = null;
+        // Update last login
         existingVendor.lastLogin = new Date();
         await existingVendor.save();
         
@@ -410,9 +408,10 @@ router.post('/register-vendor', async (req, res) => {
           {
             userId: existingVendor._id,
             vendorId: existingVendor._id,
-            role: 'VENDOR',
+            role: 'vendor',
             roleType: 'external',
-            email: existingVendor.email
+            email: existingVendor.email,
+            name: existingVendor.companyName
           },
           process.env.JWT_SECRET || 'secret',
           { expiresIn: '7d' }
@@ -483,9 +482,10 @@ router.post('/register-vendor', async (req, res) => {
         {
           userId: vendor._id,
           vendorId: vendor._id,
-          role: 'VENDOR',
+          role: 'vendor',
           roleType: 'external',
-          email: vendor.email
+          email: vendor.email,
+          name: vendor.companyName
         },
         process.env.JWT_SECRET || 'secret',
         { expiresIn: '7d' }

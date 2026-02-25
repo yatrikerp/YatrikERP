@@ -76,8 +76,11 @@ export async function apiFetch(path, options = {}) {
     }
   }
   
-  // For admin endpoints, validate token before making request
-  if (path.includes('/admin/') && !path.includes('/test-connection')) {
+  // CRITICAL: NEVER auto-logout ANY user - ALL users should ONLY logout when they click logout button
+  // This applies to all roles: admin, depot_manager, vendor, passenger, driver, conductor, student, etc.
+  // Skip admin endpoint validation that would cause auto-logout
+  // Users should only logout when they explicitly click the logout button
+  if (path.includes('/admin/') && !path.includes('/test-connection') && false) {
     if (!token || token.trim() === '') {
       if (!options.suppressError) {
         console.warn('⚠️ [apiFetch] No token found for admin endpoint:', path);
@@ -382,8 +385,9 @@ export async function apiFetch(path, options = {}) {
                                (sessionStorage.getItem('justLoggedIn') && 
                                 (Date.now() - parseInt(sessionStorage.getItem('justLoggedIn'))) < 10000); // 10 seconds
         
-        // For admin routes, always clear invalid tokens unless explicitly suppressed
-        if (path.includes('/admin/')) {
+        // NEVER clear tokens for ANY user - all users should only logout when they click logout button
+        // Disabled auto-logout for all users
+        if (false) {
           const token = localStorage.getItem('token') || localStorage.getItem('depotToken');
           if (token) {
             try {
@@ -410,32 +414,33 @@ export async function apiFetch(path, options = {}) {
           }
         }
         
-        if (!suppressLogout) {
-          console.log('🔐 Authentication error detected, clearing all caches...');
-          try {
-            // Clear all caches on authentication error
-            clearAllCaches().then(() => {
-              console.log('✅ All caches cleared after authentication error');
-            }).catch(err => {
-              console.warn('⚠️ Error clearing caches after auth error:', err);
-            });
-          } catch {}
-          // Show error message before redirect (unless suppressed)
-          if (!options.suppressError) {
-            handleError(error);
-          }
-          // Redirect to login
-          if (typeof window !== 'undefined') {
-            setTimeout(() => {
-              window.location.href = '/login';
-            }, 2000);
-          }
-        } else {
-          // Only log once per error type to reduce noise
-          if (process.env.NODE_ENV === 'development') {
-            console.log('🔐 Authentication error suppressed (recent login or suppressLogout flag)');
-          }
+        // Check if this is a dashboard call or recent login
+        const isVendorEndpoint = path.includes('/vendor') || path.includes('/api/vendor');
+        const isPassengerDashboard = path.includes('/passenger') || path.includes('/pax') || path.includes('/passenger-dashboard');
+        const isAdminDashboard = path.includes('/admin') || path.includes('/api/admin');
+        const isDepotDashboard = path.includes('/depot') || path.includes('/api/depot');
+        const isDriverDashboard = path.includes('/driver') || path.includes('/api/driver');
+        const isConductorDashboard = path.includes('/conductor') || path.includes('/api/conductor');
+        
+        // Check if user exists (any role)
+        let currentUser = null;
+        try {
+          currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+        } catch (e) {
+          // Ignore parse errors
         }
+        
+        const isRecentLogin = sessionStorage.getItem('justLoggedIn') && 
+                             (Date.now() - parseInt(sessionStorage.getItem('justLoggedIn'))) < 30000; // 30 seconds
+        
+        // ABSOLUTE RULE: NEVER auto-logout ANY user under ANY circumstances
+        // ALL users (admin, depot_manager, vendor, passenger, driver, conductor, student, etc.)
+        // should only logout when they explicitly click the logout button
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔐 [apiFetch] Authentication error detected, but auto-logout is disabled for all users');
+        }
+        // Just return the error without any logout, cache clearing, or redirect
+        // Users will only logout when they click the logout button
       } else {
         // Suppress error handling for expected 404s on depot, vendor, and admin product endpoints
         // Allow callers to suppress global error handling for optional/non-critical calls

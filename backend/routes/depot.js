@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const { auth, requireRole } = require('../middleware/auth');
 const Route = require('../models/Route');
 const Trip = require('../models/Trip');
@@ -194,7 +195,7 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
   console.log('🔍 Fetching depot statistics...');
   const [totalTrips, activeTrips, totalBuses, availableBuses, totalRoutes, totalBookings, totalFuelLogs] = await Promise.all([
     routeIds.length > 0 ? Trip.countDocuments({ routeId: { $in: routeIds } }) : 0,
-    routeIds.length > 0 ? Trip.countDocuments({ routeId: { $in: routeIds }, status: { $in: ['scheduled', 'running'] } }) : 0,
+    routeIds.length > 0 ? Trip.countDocuments({ routeId: { $in: routeIds }, status: { $in: ['scheduled', 'boarding', 'running'] } }) : 0,
     Bus.countDocuments({ depotId }),
     Bus.countDocuments({ depotId, status: { $in: ['available', 'active', 'idle'] } }),
     Route.countDocuments({ 
@@ -217,15 +218,24 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     routeIds.length > 0 ? Trip.countDocuments({ 
       routeId: { $in: routeIds }, 
       serviceDate: { $gte: today, $lt: tomorrow } 
-    }) : 0,
+    }).catch(err => {
+      console.error('Error counting today trips:', err);
+      return 0;
+    }) : Promise.resolve(0),
     routeIds.length > 0 ? Booking.countDocuments({ 
       'tripId.routeId': { $in: routeIds }, 
       createdAt: { $gte: today, $lt: tomorrow } 
-    }) : 0,
+    }).catch(err => {
+      console.error('Error counting today bookings:', err);
+      return 0;
+    }) : Promise.resolve(0),
     routeIds.length > 0 ? Booking.aggregate([
       { $match: { 'tripId.routeId': { $in: routeIds }, createdAt: { $gte: today, $lt: tomorrow } } },
       { $group: { _id: null, total: { $sum: '$fareAmount' } } }
-    ]) : [{ total: 0 }]
+    ]).catch(err => {
+      console.error('Error aggregating today revenue:', err);
+      return [{ total: 0 }];
+    }) : Promise.resolve([{ total: 0 }])
   ]);
 
   // Get recent trips with full details (using routeIds from above)
@@ -236,7 +246,11 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     .populate('busId', 'busNumber registrationNumber busType')
     .sort({ createdAt: -1 })
     .limit(10)
-    .lean() : [];
+    .lean()
+    .catch(err => {
+      console.error('Error fetching recent trips:', err);
+      return [];
+    }) : [];
 
   // Get active crew assignments (real-time)
   const activeCrew = await Duty.find({ 
@@ -250,7 +264,11 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     .populate('busId', 'busNumber busType')
     .sort({ date: 1, createdAt: -1 })
     .limit(20)
-    .lean();
+    .lean()
+    .catch(err => {
+      console.error('Error fetching active crew:', err);
+      return [];
+    });
 
   // Get fuel logs for today
   const todayFuelLogs = await FuelLog.find({ 
@@ -259,15 +277,88 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
   })
     .populate('busId', 'busNumber')
     .sort({ createdAt: -1 })
-    .lean();
+    .lean()
+    .catch(err => {
+      console.error('Error fetching fuel logs:', err);
+      return [];
+    });
 
-  // Get crew counts
-  const [totalDrivers, activeDrivers, totalConductors, activeConductors] = await Promise.all([
-    Driver.countDocuments({ depotId }),
-    Driver.countDocuments({ depotId, status: 'active' }),
-    Conductor.countDocuments({ depotId }),
-    Conductor.countDocuments({ depotId, status: 'active' })
-  ]);
+  // Get crew counts - available means: status=active, attendance=present today, no active duty
+  // Reuse 'today' and 'tomorrow' variables already declared above
+  
+  const allDrivers = await Driver.find({ depotId, status: 'active' }).lean();
+  const allConductors = await Conductor.find({ depotId, status: 'active' }).lean();
+  
+  // Get active duties for today
+  const activeDuties = await Duty.find({
+    depotId,
+    date: { $gte: today, $lt: tomorrow },
+    status: { $in: ['assigned', 'in_progress', 'started'] }
+  }).select('driverId conductorId').lean();
+  
+  const assignedDriverIds = new Set(activeDuties.map(d => d.driverId?.toString()).filter(Boolean));
+  const assignedConductorIds = new Set(activeDuties.map(d => d.conductorId?.toString()).filter(Boolean));
+  
+  // Count available drivers: present today + not assigned to duty
+  const availableDrivers = allDrivers.filter(driver => {
+    const todayAttendance = driver.attendance?.find(a => {
+      const attDate = new Date(a.date);
+      attDate.setHours(0, 0, 0, 0);
+      return attDate.getTime() === today.getTime() && a.status === 'present';
+    });
+    const notAssigned = !assignedDriverIds.has(driver._id.toString());
+    return todayAttendance && notAssigned;
+  }).length;
+  
+  // Count available conductors: present today + not assigned to duty
+  const availableConductors = allConductors.filter(conductor => {
+    const todayAttendance = conductor.attendance?.find(a => {
+      const attDate = new Date(a.date);
+      attDate.setHours(0, 0, 0, 0);
+      return attDate.getTime() === today.getTime() && a.status === 'present';
+    });
+    const notAssigned = !assignedConductorIds.has(conductor._id.toString());
+    return todayAttendance && notAssigned;
+  }).length;
+  
+  // ATTENDANCE SUMMARY - Source of truth for operational status
+  const totalStaff = allDrivers.length + allConductors.length;
+  const presentStaff = allDrivers.filter(d => {
+    const att = d.attendance?.find(a => {
+      const attDate = new Date(a.date);
+      attDate.setHours(0, 0, 0, 0);
+      return attDate.getTime() === today.getTime() && a.status === 'present';
+    });
+    return att;
+  }).length + allConductors.filter(c => {
+    const att = c.attendance?.find(a => {
+      const attDate = new Date(a.date);
+      attDate.setHours(0, 0, 0, 0);
+      return attDate.getTime() === today.getTime() && a.status === 'present';
+    });
+    return att;
+  }).length;
+  
+  const absentStaff = allDrivers.filter(d => {
+    const att = d.attendance?.find(a => {
+      const attDate = new Date(a.date);
+      attDate.setHours(0, 0, 0, 0);
+      return attDate.getTime() === today.getTime() && a.status === 'absent';
+    });
+    return att;
+  }).length + allConductors.filter(c => {
+    const att = c.attendance?.find(a => {
+      const attDate = new Date(a.date);
+      attDate.setHours(0, 0, 0, 0);
+      return attDate.getTime() === today.getTime() && a.status === 'absent';
+    });
+    return att;
+  }).length;
+  
+  const notMarkedStaff = totalStaff - presentStaff - absentStaff;
+  
+  const totalDrivers = allDrivers.length;
+  const totalConductors = allConductors.length;
 
   // Get pending maintenance count
   const pendingMaintenance = await Bus.countDocuments({ 
@@ -281,15 +372,58 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
   // Calculate fuel consumed today
   const fuelToday = todayFuelLogs.reduce((sum, log) => sum + (log.quantity || 0), 0);
 
-  // Get complaints count
+  // Get complaints count (filtered by depot trips)
   let complaintsCount = 0;
   try {
     const Complaint = require('../models/Complaint');
-    complaintsCount = await Complaint.countDocuments({ 
-      status: { $ne: 'resolved' }
-    });
+    if (routeIds.length > 0) {
+      const depotTripIds = await Trip.find({ routeId: { $in: routeIds } }).select('_id').lean();
+      const tripIds = depotTripIds.map(t => t._id);
+      complaintsCount = await Complaint.countDocuments({ 
+        tripId: { $in: tripIds },
+        status: { $ne: 'resolved' }
+      });
+    }
   } catch (e) {
     // Complaint model might not exist
+  }
+  
+  // Get inventory alerts (low stock items)
+  let inventoryAlerts = 0;
+  let activeAuctions = 0;
+  let pendingPayments = 0;
+  try {
+    const InventoryItem = require('../models/InventoryItem');
+    const inventoryItems = await InventoryItem.find({ depotId }).lean();
+    inventoryAlerts = inventoryItems.filter(item => 
+      (item.currentStock || 0) <= (item.minStock || 10) && (item.currentStock || 0) > 0
+    ).length;
+  } catch (e) {
+    // Inventory model might not exist
+  }
+  
+  // Get active auctions
+  try {
+    const Auction = require('../models/Auction');
+    activeAuctions = await Auction.countDocuments({ 
+      depotId,
+      status: { $in: ['active', 'open'] }
+    });
+  } catch (e) {
+    // Auction model might not exist
+  }
+  
+  // Get pending payments (invoices with due amounts)
+  try {
+    const Invoice = require('../models/Invoice');
+    const pendingInvoices = await Invoice.find({ 
+      depotId,
+      status: { $in: ['pending', 'overdue'] },
+      dueAmount: { $gt: 0 }
+    }).lean();
+    pendingPayments = pendingInvoices.reduce((sum, inv) => sum + (inv.dueAmount || 0), 0);
+  } catch (e) {
+    // Invoice model might not exist
   }
 
   // Generate alerts
@@ -324,14 +458,23 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
       totalFuelLogs,
       todayTrips,
       todayBookings,
-      todayRevenue: todayRevenue[0]?.total || 0,
-      availableDrivers: activeDrivers,
-      availableConductors: activeConductors,
+      todayRevenue: (Array.isArray(todayRevenue) && todayRevenue[0] && todayRevenue[0].total) || 0,
+      availableDrivers,
+      availableConductors,
       totalDrivers,
       totalConductors,
       fuelToday,
       pendingMaintenance,
-      complaints: complaintsCount
+      complaints: complaintsCount,
+      inventoryAlerts,
+      activeAuctions,
+      pendingPayments,
+      // ATTENDANCE METRICS - Source of truth for operational status
+      totalStaff,
+      presentStaff,
+      absentStaff,
+      notMarkedStaff,
+      attendancePercentage: totalStaff > 0 ? parseFloat(((presentStaff / totalStaff) * 100).toFixed(1)) : 0
     },
     recentTrips,
     activeCrew,
@@ -512,59 +655,8 @@ router.get('/routes', async (req, res) => {
 // 2) Trip Management for Depot Managers
 // =================================================================
 
-// GET /api/depot/trips - Get trips for depot (Depot Manager)
-router.get('/trips', async (req, res) => {
-  try {
-    const depotId = req.user.depotId;
-    const { date } = req.query;
-
-    if (!depotId) {
-      return res.status(400).json({
-        success: false,
-        message: 'No depot assigned to user'
-      });
-    }
-
-    // Build query
-    let query = { depotId };
-    if (date) {
-      const searchDate = new Date(date);
-      searchDate.setHours(0, 0, 0, 0);
-      const nextDate = new Date(searchDate);
-      nextDate.setDate(nextDate.getDate() + 1);
-      query.serviceDate = { $gte: searchDate, $lt: nextDate };
-    }
-
-    // Get trips with populated data
-    const trips = await Trip.find(query)
-      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
-      .populate('busId', 'busNumber busType registrationNumber capacity')
-      .populate('driverId', 'name phone licenseNumber')
-      .populate('conductorId', 'name phone employeeId')
-      .sort({ serviceDate: 1, startTime: 1 })
-      .lean();
-
-    res.json({
-      success: true,
-      data: {
-        trips,
-        stats: {
-          totalTrips: trips.length,
-          scheduledTrips: trips.filter(t => t.status === 'scheduled').length,
-          runningTrips: trips.filter(t => t.status === 'running').length,
-          completedTrips: trips.filter(t => t.status === 'completed').length
-        }
-      }
-    });
-
-  } catch (error) {
-    console.error('Get depot trips error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch trips'
-    });
-  }
-});
+// REMOVED: Duplicate GET /api/depot/trips endpoint - using the one at line 4542 instead
+// This endpoint was causing conflicts and 404 errors
 
 // POST /api/depot/trips - Create new trip (Depot Manager)
 router.post('/trips', async (req, res) => {
@@ -901,121 +993,8 @@ router.delete('/trips/:id', async (req, res) => {
   }
 });
 
-// GET /api/depot/trips - Get depot trips with filters
-router.get('/trips', async (req, res) => {
-  try {
-    const depotId = req.user.depotId;
-    const {
-      page = 1,
-      limit = 20,
-      status,
-      date,
-      routeId,
-      busId,
-      search,
-      sortBy = 'serviceDate',
-      sortOrder = 'desc'
-    } = req.query;
-
-    const skip = (page - 1) * limit;
-    const filter = { depotId };
-
-    // Apply filters
-    if (status) filter.status = status;
-    if (date) {
-      const searchDate = new Date(date);
-      searchDate.setHours(0, 0, 0, 0);
-      const nextDay = new Date(searchDate);
-      nextDay.setDate(nextDay.getDate() + 1);
-      filter.serviceDate = { $gte: searchDate, $lt: nextDay };
-    }
-    if (routeId) filter.routeId = routeId;
-    if (busId) filter.busId = busId;
-    if (search) {
-      filter.$or = [
-        { 'routeId.routeName': { $regex: search, $options: 'i' } },
-        { 'busId.busNumber': { $regex: search, $options: 'i' } }
-      ];
-    }
-
-    // Build sort object
-    const sort = {};
-    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
-
-    const [trips, total] = await Promise.all([
-      Trip.find(filter)
-        .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
-        .populate('busId', 'busNumber busType registrationNumber capacity')
-        .populate('driverId', 'name phone licenseNumber')
-        .populate('conductorId', 'name phone employeeId')
-        .sort(sort)
-        .skip(skip)
-        .limit(parseInt(limit))
-        .lean(),
-      Trip.countDocuments(filter)
-    ]);
-
-    // Transform trips data to match frontend expectations
-    const transformedTrips = trips.map(trip => {
-      // Create proper datetime fields for frontend
-      const serviceDate = new Date(trip.serviceDate);
-      const departureTime = trip.startTime ? new Date(serviceDate.getFullYear(), serviceDate.getMonth(), serviceDate.getDate(), 
-        parseInt(trip.startTime.split(':')[0]), parseInt(trip.startTime.split(':')[1])) : null;
-      const arrivalTime = trip.endTime ? new Date(serviceDate.getFullYear(), serviceDate.getMonth(), serviceDate.getDate(), 
-        parseInt(trip.endTime.split(':')[0]), parseInt(trip.endTime.split(':')[1])) : null;
-
-      return {
-        ...trip,
-        tripNumber: `TRP${trip._id.toString().slice(-6).toUpperCase()}`,
-        departureTime: departureTime,
-        arrivalTime: arrivalTime,
-        // Ensure route data is properly structured
-        routeId: {
-          ...trip.routeId,
-          routeName: trip.routeId?.routeName || 'Unknown Route',
-          routeNumber: trip.routeId?.routeNumber || 'N/A'
-        },
-        // Ensure bus data is properly structured
-        busId: {
-          ...trip.busId,
-          busNumber: trip.busId?.busNumber || 'N/A',
-          busType: trip.busId?.busType || 'Standard',
-          capacity: trip.busId?.capacity || { total: 35 }
-        },
-        // Ensure crew data is properly structured
-        driverId: trip.driverId ? {
-          ...trip.driverId,
-          name: trip.driverId.name || 'Unknown Driver'
-        } : null,
-        conductorId: trip.conductorId ? {
-          ...trip.conductorId,
-          name: trip.conductorId.name || 'Unknown Conductor'
-        } : null
-      };
-    });
-
-    res.json({
-      success: true,
-      data: {
-        trips: transformedTrips,
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total,
-          pages: Math.ceil(total / limit)
-        }
-      }
-    });
-
-  } catch (error) {
-    console.error('Trips fetch error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch trips',
-      error: error.message
-    });
-  }
-});
+// REMOVED: Duplicate GET /api/depot/trips endpoint - using the one at line 4542 instead
+// This endpoint was causing conflicts and 404 errors
 
 // PUT /api/depot/trips/assign-bus - Assign a bus to a trip
 router.put('/trips/assign-bus', async (req, res) => {
@@ -1067,69 +1046,855 @@ router.put('/trips/assign-bus', async (req, res) => {
   }
 });
 
-// PUT /api/depot/trips/start - Start a trip (set status to running)
+// Helper function to verify trip belongs to depot (via route association)
+async function verifyTripBelongsToDepot(tripId, depotId) {
+  try {
+    if (!tripId || !depotId) {
+      console.error('verifyTripBelongsToDepot: Missing tripId or depotId', { tripId, depotId });
+      return null;
+    }
+
+    // Find the trip first
+    const trip = await Trip.findById(tripId);
+    if (!trip) {
+      console.error('verifyTripBelongsToDepot: Trip not found', tripId);
+      return null;
+    }
+    
+    const userDepotIdStr = depotId.toString();
+    
+    // Check if trip has direct depotId match
+    if (trip.depotId) {
+      const tripDepotIdStr = trip.depotId.toString();
+      if (tripDepotIdStr === userDepotIdStr) {
+        console.log('verifyTripBelongsToDepot: Match via direct depotId');
+        return trip;
+      }
+    }
+    
+    // Check via route association
+    if (trip.routeId) {
+      const tripRouteId = trip.routeId.toString();
+      
+      // First try: Find routes for this depot using the standard query
+      let depotRoutes = await Route.find({ 
+        'depot.depotId': depotId 
+      }).select('_id').lean();
+      
+      let routeIds = depotRoutes.map(r => r._id.toString());
+      
+      if (routeIds.includes(tripRouteId)) {
+        console.log('verifyTripBelongsToDepot: Match via route list');
+        return trip;
+      }
+      
+      // Second try: Direct route lookup to verify depot association
+      const route = await Route.findById(tripRouteId).select('depot').lean();
+      if (route) {
+        // Check nested depot structure
+        if (route.depot && route.depot.depotId) {
+          const routeDepotIdStr = route.depot.depotId.toString();
+          if (routeDepotIdStr === userDepotIdStr) {
+            console.log('verifyTripBelongsToDepot: Match via route depot lookup');
+            return trip;
+          }
+        }
+        
+        // Also check if route has direct depotId field (fallback)
+        if (route.depotId) {
+          const routeDepotIdStr = route.depotId.toString();
+          if (routeDepotIdStr === userDepotIdStr) {
+            console.log('verifyTripBelongsToDepot: Match via route direct depotId');
+            return trip;
+          }
+        }
+      }
+      
+      // Third try: If no routes found, try finding any route with this depot (broader search)
+      if (depotRoutes.length === 0) {
+        console.log('verifyTripBelongsToDepot: No routes found for depot, trying broader search');
+        depotRoutes = await Route.find({ 
+          $or: [
+            { 'depot.depotId': depotId },
+            { depotId: depotId }
+          ]
+        }).select('_id').lean();
+        
+        routeIds = depotRoutes.map(r => r._id.toString());
+        if (routeIds.includes(tripRouteId)) {
+          console.log('verifyTripBelongsToDepot: Match via broader route search');
+          return trip;
+        }
+      }
+    }
+    
+    console.log('verifyTripBelongsToDepot: No match found', {
+      tripId: trip._id.toString(),
+      tripDepotId: trip.depotId?.toString(),
+      tripRouteId: trip.routeId?.toString(),
+      userDepotId: userDepotIdStr
+    });
+    
+    return null;
+  } catch (error) {
+    console.error('verifyTripBelongsToDepot error:', error);
+    console.error('Error stack:', error.stack);
+    return null;
+  }
+}
+
+// PUT /api/depot/trips/start - Start a trip (set status to running) - supports both body and URL param
 router.put('/trips/start', async (req, res) => {
   try {
-    const { trip_id } = req.body;
-    const depotId = req.user.depotId;
-
+    const trip_id = req.body.trip_id || req.params.id;
+    
     if (!trip_id) {
       return res.status(400).json({ success: false, message: 'trip_id is required' });
     }
+
+    // Validate trip_id format
+    if (!mongoose.Types.ObjectId.isValid(trip_id)) {
+      return res.status(400).json({ success: false, message: 'Invalid trip_id format' });
+    }
+
+    let depotId = req.user?.depotId;
+
+    // Get depot ID if not directly available
+    if (!depotId) {
+      try {
+        const defaultDepot = await Depot.findOne({ status: 'active' });
+        if (defaultDepot) depotId = defaultDepot._id;
+      } catch (depotError) {
+        console.error('Error finding default depot:', depotError);
+      }
+    }
+    
     if (!depotId) {
       return res.status(400).json({ success: false, message: 'No depot assigned to user' });
     }
 
-    const trip = await Trip.findOne({ _id: trip_id, depotId });
+    // Use the helper to verify trip belongs to depot
+    const trip = await verifyTripBelongsToDepot(trip_id, depotId);
+    
+    // ATTENDANCE VALIDATION: Crew must be PRESENT before trip can start
+    if (trip.driverId) {
+      const driver = await Driver.findOne({ _id: trip.driverId, depotId });
+      if (driver) {
+        const tripDate = new Date(trip.serviceDate);
+        tripDate.setHours(0, 0, 0, 0);
+        const driverAttendance = driver.attendance?.find(a => {
+          if (!a || !a.date) return false;
+          const attDate = new Date(a.date);
+          attDate.setHours(0, 0, 0, 0);
+          return attDate.getTime() === tripDate.getTime();
+        });
+        
+        if (!driverAttendance || driverAttendance.status !== 'present') {
+          return res.status(400).json({
+            success: false,
+            message: `Cannot start trip: Driver attendance is ${driverAttendance?.status || 'not marked'} for ${trip.serviceDate.toISOString().split('T')[0]}. Only PRESENT staff can operate trips.`
+          });
+        }
+      }
+    }
+    
+    if (trip.conductorId) {
+      const conductor = await Conductor.findOne({ _id: trip.conductorId, depotId });
+      if (conductor) {
+        const tripDate = new Date(trip.serviceDate);
+        tripDate.setHours(0, 0, 0, 0);
+        const conductorAttendance = conductor.attendance?.find(a => {
+          if (!a || !a.date) return false;
+          const attDate = new Date(a.date);
+          attDate.setHours(0, 0, 0, 0);
+          return attDate.getTime() === tripDate.getTime();
+        });
+        
+        if (!conductorAttendance || conductorAttendance.status !== 'present') {
+          return res.status(400).json({
+            success: false,
+            message: `Cannot start trip: Conductor attendance is ${conductorAttendance?.status || 'not marked'} for ${trip.serviceDate.toISOString().split('T')[0]}. Only PRESENT staff can operate trips.`
+          });
+        }
+      }
+    }
     if (!trip) {
       return res.status(404).json({ success: false, message: 'Trip not found or access denied' });
     }
 
-    trip.status = 'running';
-    trip.actualDeparture = new Date();
-    await trip.save();
-
-    if (trip.busId) {
-      await Bus.findByIdAndUpdate(trip.busId, { currentTrip: trip._id, status: 'running' });
+    // Check if trip can be started
+    if (trip.status === 'completed') {
+      return res.status(400).json({ success: false, message: 'Cannot start a completed trip' });
     }
 
-    return res.json({ success: true, message: 'Trip started', data: trip });
+    if (trip.status === 'cancelled') {
+      return res.status(400).json({ success: false, message: 'Cannot start a cancelled trip' });
+    }
+
+    // Update trip status
+    trip.status = 'running';
+    trip.actualDeparture = new Date();
+    if (req.user?._id) {
+      trip.startedBy = req.user._id;
+    }
+    
+    try {
+      await trip.save();
+    } catch (saveError) {
+      console.error('Error saving trip:', saveError);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to save trip status', 
+        error: saveError.message 
+      });
+    }
+
+    // Update bus status if assigned
+    if (trip.busId) {
+      try {
+        await Bus.findByIdAndUpdate(
+          trip.busId, 
+          { currentTrip: trip._id, status: 'running' },
+          { new: true }
+        );
+      } catch (busError) {
+        console.error('Error updating bus status:', busError);
+        // Don't fail the request if bus update fails, just log it
+      }
+    }
+
+    // Populate for response
+    try {
+      const populatedTrip = await Trip.findById(trip._id)
+        .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+        .populate('busId', 'busNumber busType registrationNumber')
+        .lean();
+
+      return res.json({ 
+        success: true, 
+        message: 'Trip started successfully', 
+        data: populatedTrip || trip 
+      });
+    } catch (populateError) {
+      console.error('Error populating trip:', populateError);
+      // Return trip without population if populate fails
+      return res.json({ 
+        success: true, 
+        message: 'Trip started successfully', 
+        data: trip 
+      });
+    }
   } catch (error) {
     console.error('Start trip error:', error);
-    return res.status(500).json({ success: false, message: 'Failed to start trip', error: error.message });
+    console.error('Error stack:', error.stack);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Failed to start trip', 
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
-// PUT /api/depot/trips/close - Complete a running trip
-router.put('/trips/close', async (req, res) => {
+// PUT /api/depot/trips/start/:id - Start a trip by ID (URL parameter version)
+router.put('/trips/start/:id', asyncHandler(async (req, res) => {
+  const trip_id = req.params.id;
+  
+  if (!trip_id || !mongoose.Types.ObjectId.isValid(trip_id)) {
+    return res.status(400).json({ success: false, message: 'Invalid trip_id' });
+  }
+
+  let depotId = req.user?.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+  
+  if (!depotId) {
+    return res.status(400).json({ success: false, message: 'No depot assigned to user' });
+  }
+
+  const trip = await verifyTripBelongsToDepot(trip_id, depotId);
+  if (!trip) {
+    return res.status(404).json({ success: false, message: 'Trip not found or access denied' });
+  }
+
+  if (trip.status === 'completed' || trip.status === 'cancelled') {
+    return res.status(400).json({ success: false, message: `Cannot start a ${trip.status} trip` });
+  }
+
+  trip.status = 'running';
+  trip.actualDeparture = new Date();
+  if (req.user?._id) {
+    trip.startedBy = req.user._id;
+  }
+  
+  await trip.save();
+
+  if (trip.busId) {
+    await Bus.findByIdAndUpdate(trip.busId, { currentTrip: trip._id, status: 'running' }, { new: true });
+  }
+
+  const populatedTrip = await Trip.findById(trip._id)
+    .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+    .populate('busId', 'busNumber busType registrationNumber')
+    .lean();
+
+  return res.guard.success(populatedTrip || trip, 'Trip started successfully');
+}));
+
+// PUT /api/depot/trips/close - Complete a running trip (supports both body and URL param)
+router.put('/trips/close', asyncHandler(async (req, res) => {
+  const trip_id = req.body.trip_id || req.params.id;
+  const { revenue, passengers, notes } = req.body;
+  let depotId = req.user.depotId;
+
+  if (!trip_id) {
+    return res.status(400).json({ success: false, message: 'trip_id is required' });
+  }
+  
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+  
+  if (!depotId) {
+    return res.status(400).json({ success: false, message: 'No depot assigned to user' });
+  }
+
+  const trip = await verifyTripBelongsToDepot(trip_id, depotId);
+  if (!trip) {
+    return res.status(404).json({ success: false, message: 'Trip not found or access denied' });
+  }
+
+  trip.status = 'completed';
+  trip.actualArrival = new Date();
+  trip.completedBy = req.user._id;
+  
+  if (revenue !== undefined) trip.totalRevenue = revenue;
+  if (passengers !== undefined) trip.totalPassengers = passengers;
+  if (notes) trip.completionNotes = notes;
+  
+  await trip.save();
+
+  if (trip.busId) {
+    await Bus.findByIdAndUpdate(trip.busId, { currentTrip: null, status: 'available' });
+  }
+
+  const populatedTrip = await Trip.findById(trip._id)
+    .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+    .populate('busId', 'busNumber busType registrationNumber')
+    .lean();
+
+  return res.guard.success(populatedTrip, 'Trip completed successfully');
+}));
+
+// PUT /api/depot/trips/end/:id - End/Complete a trip by ID (URL parameter version)
+router.put('/trips/end/:id', asyncHandler(async (req, res) => {
+  req.body.trip_id = req.params.id;
+  // Reuse close endpoint logic
+  const trip_id = req.params.id;
+  const { revenue, passengers, notes } = req.body;
+  let depotId = req.user.depotId;
+
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+  
+  if (!depotId) {
+    return res.status(400).json({ success: false, message: 'No depot assigned to user' });
+  }
+
+  const trip = await verifyTripBelongsToDepot(trip_id, depotId);
+  if (!trip) {
+    return res.status(404).json({ success: false, message: 'Trip not found or access denied' });
+  }
+
+  trip.status = 'completed';
+  trip.actualArrival = new Date();
+  trip.completedBy = req.user._id;
+  
+  if (revenue !== undefined) trip.totalRevenue = revenue;
+  if (passengers !== undefined) trip.totalPassengers = passengers;
+  if (notes) trip.completionNotes = notes;
+  
+  await trip.save();
+
+  if (trip.busId) {
+    await Bus.findByIdAndUpdate(trip.busId, { currentTrip: null, status: 'available' });
+  }
+
+  const populatedTrip = await Trip.findById(trip._id)
+    .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+    .populate('busId', 'busNumber busType registrationNumber')
+    .lean();
+
+  return res.guard.success(populatedTrip, 'Trip completed successfully');
+}));
+
+// PUT /api/depot/trips/cancel - Cancel a trip
+router.put('/trips/cancel', async (req, res) => {
   try {
-    const { trip_id } = req.body;
-    const depotId = req.user.depotId;
+    const { trip_id, reason } = req.body;
+    let depotId = req.user.depotId;
 
     if (!trip_id) {
       return res.status(400).json({ success: false, message: 'trip_id is required' });
     }
+    
+    if (!depotId) {
+      const defaultDepot = await Depot.findOne({ status: 'active' });
+      if (defaultDepot) depotId = defaultDepot._id;
+    }
+    
     if (!depotId) {
       return res.status(400).json({ success: false, message: 'No depot assigned to user' });
     }
 
-    const trip = await Trip.findOne({ _id: trip_id, depotId });
+    const trip = await verifyTripBelongsToDepot(trip_id, depotId);
     if (!trip) {
       return res.status(404).json({ success: false, message: 'Trip not found or access denied' });
     }
 
-    trip.status = 'completed';
-    trip.actualArrival = new Date();
+    // Check if trip can be cancelled
+    if (trip.status === 'completed') {
+      return res.status(400).json({ success: false, message: 'Cannot cancel a completed trip' });
+    }
+
+    // Check for active bookings
+    const activeBookings = await Booking.countDocuments({
+      tripId: trip_id,
+      status: { $in: ['confirmed', 'issued'] }
+    });
+
+    if (activeBookings > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot cancel trip with ${activeBookings} active bookings. Please refund bookings first.`
+      });
+    }
+
+    trip.status = 'cancelled';
+    trip.cancelledBy = req.user._id;
+    trip.cancelledAt = new Date();
+    trip.cancellationReason = reason || 'Cancelled by depot manager';
     await trip.save();
 
     if (trip.busId) {
       await Bus.findByIdAndUpdate(trip.busId, { currentTrip: null, status: 'available' });
     }
 
-    return res.json({ success: true, message: 'Trip completed', data: trip });
+    return res.json({ success: true, message: 'Trip cancelled successfully', data: trip });
   } catch (error) {
-    console.error('Close trip error:', error);
-    return res.status(500).json({ success: false, message: 'Failed to close trip', error: error.message });
+    console.error('Cancel trip error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to cancel trip', error: error.message });
+  }
+});
+
+// POST /api/depot/trips/create - Create a new trip
+router.post('/trips/create', async (req, res) => {
+  try {
+    const {
+      routeId,
+      busId,
+      driverId,
+      conductorId,
+      serviceDate,
+      startTime,
+      endTime,
+      fare,
+      capacity,
+      notes
+    } = req.body;
+
+    let depotId = req.user.depotId;
+    
+    if (!depotId) {
+      const defaultDepot = await Depot.findOne({ status: 'active' });
+      if (defaultDepot) depotId = defaultDepot._id;
+    }
+
+    if (!depotId) {
+      return res.status(400).json({ success: false, message: 'No depot assigned to user' });
+    }
+
+    // Validation
+    if (!routeId || !serviceDate || !startTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: routeId, serviceDate, startTime'
+      });
+    }
+
+    // Validate route belongs to this depot
+    const route = await Route.findById(routeId);
+    if (!route) {
+      return res.status(400).json({ success: false, message: 'Route not found' });
+    }
+
+    // Verify route belongs to depot
+    const routeDepotId = route.depot?.depotId?.toString() || route.depotId?.toString();
+    if (routeDepotId && routeDepotId !== depotId.toString()) {
+      return res.status(400).json({ success: false, message: 'Route does not belong to this depot' });
+    }
+
+    // Create trip
+    const tripData = {
+      routeId,
+      busId: busId || null,
+      driverId: driverId || null,
+      conductorId: conductorId || null,
+      serviceDate: new Date(serviceDate),
+      startTime,
+      endTime: endTime || startTime,
+      fare: fare || route.baseFare || 50,
+      capacity: capacity || 50,
+      depotId,
+      status: 'scheduled',
+      createdBy: req.user._id,
+      notes
+    };
+
+    const trip = await Trip.create(tripData);
+
+    const populatedTrip = await Trip.findById(trip._id)
+      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+      .populate('busId', 'busNumber busType')
+      .lean();
+
+    return res.status(201).json({
+      success: true,
+      message: 'Trip created successfully',
+      data: populatedTrip
+    });
+  } catch (error) {
+    console.error('Create trip error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to create trip', error: error.message });
+  }
+});
+
+// PUT /api/depot/trips/update/:id - Update a trip
+router.put('/trips/update/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    let depotId = req.user.depotId;
+
+    if (!depotId) {
+      const defaultDepot = await Depot.findOne({ status: 'active' });
+      if (defaultDepot) depotId = defaultDepot._id;
+    }
+
+    const trip = await verifyTripBelongsToDepot(id, depotId);
+    if (!trip) {
+      return res.status(404).json({ success: false, message: 'Trip not found or access denied' });
+    }
+
+    // Prevent updating completed/cancelled trips
+    if (trip.status === 'completed' || trip.status === 'cancelled') {
+      return res.status(400).json({ success: false, message: 'Cannot update completed or cancelled trips' });
+    }
+
+    // Remove immutable fields
+    delete updateData._id;
+    delete updateData.depotId;
+    delete updateData.createdBy;
+
+    // Update allowed fields
+    const allowedFields = ['busId', 'driverId', 'conductorId', 'startTime', 'endTime', 'fare', 'capacity', 'notes', 'serviceDate'];
+    allowedFields.forEach(field => {
+      if (updateData[field] !== undefined) {
+        trip[field] = updateData[field];
+      }
+    });
+    
+    trip.updatedBy = req.user._id;
+    await trip.save();
+
+    const populatedTrip = await Trip.findById(trip._id)
+      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
+      .populate('busId', 'busNumber busType registrationNumber')
+      .lean();
+
+    return res.json({ success: true, message: 'Trip updated successfully', data: populatedTrip });
+  } catch (error) {
+    console.error('Update trip error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update trip', error: error.message });
+  }
+});
+
+// POST /api/depot/trips/payment - Record payment for a trip (simplified counter booking)
+// Also handles POST /api/depot/bookings/manual (same logic)
+const handleManualBooking = async (req, res) => {
+  try {
+    const {
+      trip_id,
+      amount,
+      paymentMethod,
+      passengerName,
+      passengerPhone,
+      passengerEmail,
+      seatNumber,
+      seatNumbers,
+      boardingStop,
+      destinationStop,
+      notes
+    } = req.body;
+
+    let depotId = req.user.depotId;
+
+    if (!trip_id || !amount) {
+      return res.status(400).json({ success: false, message: 'trip_id and amount are required' });
+    }
+
+    if (!depotId) {
+      const defaultDepot = await Depot.findOne({ status: 'active' });
+      if (defaultDepot) depotId = defaultDepot._id;
+    }
+
+    const trip = await verifyTripBelongsToDepot(trip_id, depotId);
+    if (!trip) {
+      return res.status(404).json({ success: false, message: 'Trip not found or access denied' });
+    }
+
+    // Get route and bus info
+    const route = await Route.findById(trip.routeId).lean();
+    const bus = trip.busId ? await Bus.findById(trip.busId).lean() : null;
+    
+    // Generate unique identifiers
+    const timestamp = Date.now().toString();
+    const random = Math.random().toString(36).substr(2, 5).toUpperCase();
+    const ticketNumber = `TKT${timestamp}${random}`;
+    const pnr = `PNR${timestamp.slice(-8)}${random}`;
+    
+    // Generate booking IDs
+    const date = new Date();
+    const year = date.getFullYear().toString().slice(-2);
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    const bookingRandom = Math.random().toString(36).substr(2, 4).toUpperCase();
+    const bookingId = `BK${year}${month}${day}${bookingRandom}`;
+    const bookingReference = `REF${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
+    
+    // Determine seat number
+    const selectedSeat = seatNumber || (seatNumbers?.[0]) || `S${String((trip.bookedSeats || 0) + 1).padStart(2, '0')}`;
+    const customerName = passengerName || 'Walk-in Passenger';
+    const customerPhone = passengerPhone || '0000000000';
+    const customerEmail = passengerEmail || `counter-${timestamp}@yatrik.local`;
+    
+    const fromStop = boardingStop || route?.startingPoint || 'Origin';
+    const toStop = destinationStop || route?.endingPoint || 'Destination';
+
+    // Create booking with full schema compliance
+    const booking = await Booking.create({
+      bookingId,
+      bookingReference,
+      customer: {
+        name: customerName,
+        email: customerEmail,
+        phone: customerPhone
+      },
+      tripId: trip._id,
+      routeId: trip.routeId,
+      busId: trip.busId || (await Bus.findOne({ depotId }).select('_id'))?._id,
+      depotId,
+      journey: {
+        from: fromStop,
+        to: toStop,
+        departureDate: trip.serviceDate,
+        departureTime: trip.startTime,
+        arrivalDate: trip.serviceDate,
+        arrivalTime: trip.endTime,
+        duration: 60 // Default 1 hour
+      },
+      seats: [{
+        seatNumber: selectedSeat,
+        seatType: 'seater',
+        seatPosition: 'aisle',
+        price: amount,
+        passengerName: customerName
+      }],
+      pricing: {
+        baseFare: amount,
+        seatFare: amount,
+        totalAmount: amount,
+        paidAmount: amount
+      },
+      payment: {
+        method: paymentMethod || 'cash',
+        paymentStatus: 'completed',
+        paidAt: new Date()
+      },
+      status: 'confirmed',
+      source: 'counter',
+      createdBy: req.user._id
+    });
+
+    // Create ticket record
+    const ticket = await Ticket.create({
+      bookingId: booking._id,
+      pnr,
+      ticketNumber,
+      qrPayload: JSON.stringify({ pnr, tripId: trip._id, seat: selectedSeat, bookingId }),
+      expiresAt: new Date(trip.serviceDate.getTime() + 24 * 60 * 60 * 1000),
+      state: 'issued',
+      passengerName: customerName,
+      seatNumber: selectedSeat,
+      boardingStop: fromStop,
+      destinationStop: toStop,
+      fareAmount: amount,
+      issuedBy: req.user._id,
+      issuedAt: new Date(),
+      source: 'counter',
+      tripDetails: {
+        tripId: trip._id,
+        busNumber: bus?.busNumber || 'N/A',
+        departureTime: trip.serviceDate,
+        routeName: route?.routeName || 'N/A'
+      }
+    });
+
+    // Update trip revenue and seat tracking
+    const seatsBooked = seatNumbers?.length || 1;
+    trip.bookedSeats = (trip.bookedSeats || 0) + seatsBooked;
+    trip.availableSeats = trip.capacity - trip.bookedSeats;
+    trip.totalRevenue = (trip.totalRevenue || 0) + amount;
+    trip.totalPassengers = (trip.totalPassengers || 0) + seatsBooked;
+    await trip.save();
+
+    return res.status(201).json({
+      success: true,
+      message: 'Payment recorded and ticket issued',
+      data: {
+        ticket: {
+          ticketNumber,
+          pnr,
+          passengerName: customerName,
+          seatNumber: selectedSeat,
+          fareAmount: amount,
+          paymentMethod: paymentMethod || 'cash',
+          issuedAt: new Date(),
+          boardingStop: fromStop,
+          destinationStop: toStop,
+          routeName: route?.routeName || 'N/A',
+          busNumber: bus?.busNumber || 'N/A',
+          departureTime: trip.startTime,
+          serviceDate: trip.serviceDate
+        },
+        booking: {
+          _id: booking._id,
+          bookingId,
+          bookingReference,
+          status: booking.status
+        },
+        tripId: trip._id
+      }
+    });
+  } catch (error) {
+    console.error('Record payment error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to record payment', error: error.message });
+  }
+};
+
+// Register both endpoints with the same handler
+router.post('/trips/payment', handleManualBooking);
+router.post('/bookings/manual', handleManualBooking);
+
+// GET /api/depot/trips/:id/payments - Get payments/tickets for a trip
+router.get('/trips/:id/payments', async (req, res) => {
+  try {
+    const { id } = req.params;
+    let depotId = req.user.depotId;
+
+    if (!depotId) {
+      const defaultDepot = await Depot.findOne({ status: 'active' });
+      if (defaultDepot) depotId = defaultDepot._id;
+    }
+
+    const trip = await verifyTripBelongsToDepot(id, depotId);
+    if (!trip) {
+      return res.status(404).json({ success: false, message: 'Trip not found or access denied' });
+    }
+
+    const tickets = await Ticket.find({ tripId: id })
+      .populate('issuedBy', 'name email')
+      .sort({ issuedAt: -1 })
+      .lean();
+
+    const totalRevenue = tickets.reduce((sum, t) => sum + (t.fareAmount || 0), 0);
+
+    return res.json({
+      success: true,
+      data: {
+        tickets,
+        summary: {
+          totalTickets: tickets.length,
+          totalRevenue,
+          paymentMethods: {
+            cash: tickets.filter(t => t.paymentMethod === 'cash').length,
+            card: tickets.filter(t => t.paymentMethod === 'card').length,
+            upi: tickets.filter(t => t.paymentMethod === 'upi').length,
+            online: tickets.filter(t => t.paymentMethod === 'online').length
+          }
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get trip payments error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to get payments', error: error.message });
+  }
+});
+
+// POST /api/depot/trips/refund - Process refund for a ticket
+router.post('/trips/refund', async (req, res) => {
+  try {
+    const { ticket_id, refund_amount, reason } = req.body;
+    let depotId = req.user.depotId;
+
+    if (!ticket_id) {
+      return res.status(400).json({ success: false, message: 'ticket_id is required' });
+    }
+
+    if (!depotId) {
+      const defaultDepot = await Depot.findOne({ status: 'active' });
+      if (defaultDepot) depotId = defaultDepot._id;
+    }
+
+    const ticket = await Ticket.findById(ticket_id);
+    if (!ticket) {
+      return res.status(404).json({ success: false, message: 'Ticket not found' });
+    }
+
+    // Verify ticket belongs to depot
+    const trip = await verifyTripBelongsToDepot(ticket.tripId, depotId);
+    if (!trip) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    // Process refund
+    ticket.status = 'refunded';
+    ticket.refundAmount = refund_amount || ticket.fareAmount;
+    ticket.refundReason = reason || 'Refund requested';
+    ticket.refundedBy = req.user._id;
+    ticket.refundedAt = new Date();
+    await ticket.save();
+
+    // Update trip seats
+    if (trip && ticket.seatNumbers?.length) {
+      trip.bookedSeats = Math.max(0, (trip.bookedSeats || 0) - ticket.seatNumbers.length);
+      trip.availableSeats = trip.capacity - trip.bookedSeats;
+      await trip.save();
+    }
+
+    return res.json({
+      success: true,
+      message: 'Refund processed successfully',
+      data: ticket
+    });
+  } catch (error) {
+    console.error('Refund error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to process refund', error: error.message });
   }
 });
 
@@ -1941,117 +2706,242 @@ router.get('/buses', async (req, res) => {
   }
 });
 
-// GET /api/depot/drivers - Get all drivers for depot
-router.get('/drivers', async (req, res) => {
-  try {
-    const depotId = req.user.depotId;
-    
-    if (!depotId) {
-      return res.status(400).json({
-        success: false,
-        message: 'No depot assigned to user'
-      });
-    }
-    
-    // Get all drivers from Driver model for this depot
-    const drivers = await Driver.find({
-      depotId: depotId,
-      status: 'active'
-    })
-    .select('name phone email employeeCode drivingLicense currentDuty')
-    .lean();
+// GET /api/depot/drivers - Get all drivers for depot (with attendance status)
+// Matches admin dashboard approach: queries both User and Driver models
+router.get('/drivers', asyncHandler(async (req, res) => {
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
 
-    // Also check User model as fallback
-    const userDrivers = await User.find({
+  if (!depotId) {
+    return res.guard.success({ drivers: [] }, 'No depot assigned');
+  }
+
+  // Get today's date for attendance check
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // Query both User model (role-based) and Driver model - same as admin dashboard
+  const [userDrivers, driverModelDrivers] = await Promise.all([
+    User.find({
       role: 'driver',
       depotId: depotId,
       status: 'active'
     })
-    .select('name phone email licenseNumber staffDetails')
-    .lean();
-
-    // Combine and deduplicate
-    const allDrivers = [...drivers, ...userDrivers];
-    
-    // Remove duplicates based on email or phone
-    const uniqueDrivers = Array.from(
-      new Map(allDrivers.map(d => [d.email || d.phone, d])).values()
-    );
-
-    res.json({
-      success: true,
-      data: {
-        drivers: uniqueDrivers,
-        stats: {
-          totalDrivers: uniqueDrivers.length
-        }
-      }
-    });
-
-  } catch (error) {
-    console.error('Get depot drivers error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch depot drivers'
-    });
-  }
-});
-
-// GET /api/depot/conductors - Get all conductors for depot
-router.get('/conductors', async (req, res) => {
-  try {
-    const depotId = req.user.depotId;
-    
-    if (!depotId) {
-      return res.status(400).json({
-        success: false,
-        message: 'No depot assigned to user'
-      });
-    }
-    
-    // Get all conductors from Conductor model for this depot
-    const conductors = await Conductor.find({
+    .select('-password')
+    .populate('depotId', 'depotName depotCode')
+    .sort({ createdAt: -1 })
+    .lean(),
+    Driver.find({
       depotId: depotId,
       status: 'active'
     })
-    .select('name phone email employeeCode currentDuty')
-    .lean();
+    .populate('depotId', 'depotName depotCode')
+    .select('name phone email employeeCode drivingLicense currentDuty attendance depotId status createdAt')
+    .sort({ createdAt: -1 })
+    .lean()
+  ]);
 
-    // Also check User model as fallback
-    const userConductors = await User.find({
+  // Transform User drivers to match Driver model format
+  const transformedUserDrivers = userDrivers.map(user => ({
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    role: 'driver',
+    status: user.status,
+    depotId: user.depotId,
+    createdAt: user.createdAt,
+    source: 'user_model',
+    employeeCode: user.employeeCode || user.licenseNumber,
+    driverId: user.driverId,
+    drivingLicense: user.licenseNumber,
+    attendance: [] // User model doesn't have attendance array
+  }));
+
+  // Transform Driver model drivers
+  const transformedDriverModelDrivers = driverModelDrivers.map(driver => ({
+    ...driver,
+    source: 'driver_model',
+    employeeCode: driver.employeeCode || driver.driverId
+  }));
+
+  // Combine all drivers
+  const allDrivers = [...transformedUserDrivers, ...transformedDriverModelDrivers];
+  
+  // Remove duplicates based on email, phone, or _id
+  const driverMap = new Map();
+  allDrivers.forEach(driver => {
+    const key = driver.email || driver.phone || driver._id.toString();
+    if (!driverMap.has(key)) {
+      driverMap.set(key, driver);
+    } else {
+      // Prefer Driver model over User model if duplicate
+      if (driver.source === 'driver_model' && driverMap.get(key).source === 'user_model') {
+        driverMap.set(key, driver);
+      }
+    }
+  });
+
+  const uniqueDrivers = Array.from(driverMap.values());
+
+  // Add attendance status and availability
+  // ATTENDANCE IS SOURCE OF TRUTH: Only PRESENT staff are available
+  const driversWithAttendance = uniqueDrivers.map(driver => {
+    // Check today's attendance (only Driver model has attendance array)
+    let attendanceStatus = 'not_marked';
+    let isAvailable = false; // Default to false - must be explicitly marked PRESENT
+    
+    if (driver.attendance && Array.isArray(driver.attendance)) {
+      const todayAttendance = driver.attendance.find(a => {
+        const attDate = new Date(a.date);
+        attDate.setHours(0, 0, 0, 0);
+        return attDate.getTime() === today.getTime();
+      });
+      
+      if (todayAttendance) {
+        attendanceStatus = todayAttendance.status || 'not_marked';
+        // Staff is available ONLY if present - attendance controls availability
+        isAvailable = attendanceStatus === 'present';
+      }
+    }
+
+    return {
+      ...driver,
+      attendanceStatus,
+      available: isAvailable && (!driver.currentDuty || driver.currentDuty.status !== 'in-progress'),
+      duty_status: driver.currentDuty?.status || 'available'
+    };
+  });
+
+  return res.guard.success({ 
+    drivers: driversWithAttendance,
+    stats: {
+      totalDrivers: driversWithAttendance.length,
+      availableDrivers: driversWithAttendance.filter(d => d.available).length
+    }
+  }, 'Drivers fetched');
+}));
+
+// GET /api/depot/conductors - Get all conductors for depot (with attendance status)
+// Matches admin dashboard approach: queries both User and Conductor models
+router.get('/conductors', asyncHandler(async (req, res) => {
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
+
+  if (!depotId) {
+    return res.guard.success({ conductors: [] }, 'No depot assigned');
+  }
+
+  // Get today's date for attendance check
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // Query both User model (role-based) and Conductor model - same as admin dashboard
+  const [userConductors, conductorModelConductors] = await Promise.all([
+    User.find({
       role: 'conductor',
       depotId: depotId,
       status: 'active'
     })
-    .select('name phone email staffDetails')
-    .lean();
+    .select('-password')
+    .populate('depotId', 'depotName depotCode')
+    .sort({ createdAt: -1 })
+    .lean(),
+    Conductor.find({
+      depotId: depotId,
+      status: 'active'
+    })
+    .populate('depotId', 'depotName depotCode')
+    .select('name phone email employeeCode currentDuty attendance depotId status createdAt')
+    .sort({ createdAt: -1 })
+    .lean()
+  ]);
 
-    // Combine and deduplicate
-    const allConductors = [...conductors, ...userConductors];
-    
-    // Remove duplicates based on email or phone
-    const uniqueConductors = Array.from(
-      new Map(allConductors.map(c => [c.email || c.phone, c])).values()
-    );
+  // Transform User conductors to match Conductor model format
+  const transformedUserConductors = userConductors.map(user => ({
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    role: 'conductor',
+    status: user.status,
+    depotId: user.depotId,
+    createdAt: user.createdAt,
+    source: 'user_model',
+    employeeCode: user.employeeCode || user.conductorId,
+    conductorId: user.conductorId,
+    attendance: [] // User model doesn't have attendance array
+  }));
 
-    res.json({
-      success: true,
-      data: {
-        conductors: uniqueConductors,
-        stats: {
-          totalConductors: uniqueConductors.length
-        }
+  // Transform Conductor model conductors
+  const transformedConductorModelConductors = conductorModelConductors.map(conductor => ({
+    ...conductor,
+    source: 'conductor_model',
+    employeeCode: conductor.employeeCode || conductor.conductorId
+  }));
+
+  // Combine all conductors
+  const allConductors = [...transformedUserConductors, ...transformedConductorModelConductors];
+  
+  // Remove duplicates based on email, phone, or _id
+  const conductorMap = new Map();
+  allConductors.forEach(conductor => {
+    const key = conductor.email || conductor.phone || conductor._id.toString();
+    if (!conductorMap.has(key)) {
+      conductorMap.set(key, conductor);
+    } else {
+      // Prefer Conductor model over User model if duplicate
+      if (conductor.source === 'conductor_model' && conductorMap.get(key).source === 'user_model') {
+        conductorMap.set(key, conductor);
       }
-    });
+    }
+  });
 
-  } catch (error) {
-    console.error('Get depot conductors error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch depot conductors'
-    });
-  }
-});
+  const uniqueConductors = Array.from(conductorMap.values());
+
+  // Add attendance status and availability
+  // ATTENDANCE IS SOURCE OF TRUTH: Only PRESENT staff are available
+  const conductorsWithAttendance = uniqueConductors.map(conductor => {
+    // Check today's attendance (only Conductor model has attendance array)
+    let attendanceStatus = 'not_marked';
+    let isAvailable = false; // Default to false - must be explicitly marked PRESENT
+    
+    if (conductor.attendance && Array.isArray(conductor.attendance)) {
+      const todayAttendance = conductor.attendance.find(a => {
+        const attDate = new Date(a.date);
+        attDate.setHours(0, 0, 0, 0);
+        return attDate.getTime() === today.getTime();
+      });
+      
+      if (todayAttendance) {
+        attendanceStatus = todayAttendance.status || 'not_marked';
+        // Staff is available ONLY if present - attendance controls availability
+        isAvailable = attendanceStatus === 'present';
+      }
+    }
+
+    return {
+      ...conductor,
+      attendanceStatus,
+      available: isAvailable && (!conductor.currentDuty || conductor.currentDuty.status !== 'in-progress'),
+      duty_status: conductor.currentDuty?.status || 'available'
+    };
+  });
+
+  return res.guard.success({ 
+    conductors: conductorsWithAttendance,
+    stats: {
+      totalConductors: conductorsWithAttendance.length,
+      availableConductors: conductorsWithAttendance.filter(c => c.available).length
+    }
+  }, 'Conductors fetched');
+}));
 
 // =================================================================
 // 4) Bus Management for Depot Managers
@@ -2785,11 +3675,61 @@ router.post('/crew', async (req, res) => {
       });
     }
 
+    // ATTENDANCE VALIDATION: Only PRESENT staff can be assigned to trips
+    const tripDate = new Date(date);
+    tripDate.setHours(0, 0, 0, 0);
+    
+    // Check driver attendance
+    const driver = await Driver.findOne({ _id: driverId, depotId });
+    if (!driver) {
+      return res.status(404).json({
+        success: false,
+        message: 'Driver not found or does not belong to this depot'
+      });
+    }
+    
+    const driverAttendance = driver.attendance?.find(a => {
+      if (!a || !a.date) return false;
+      const attDate = new Date(a.date);
+      attDate.setHours(0, 0, 0, 0);
+      return attDate.getTime() === tripDate.getTime();
+    });
+    
+    if (!driverAttendance || driverAttendance.status !== 'present') {
+      return res.status(400).json({
+        success: false,
+        message: `Driver attendance is ${driverAttendance?.status || 'not marked'} for ${date}. Only PRESENT staff can be assigned to trips.`
+      });
+    }
+    
+    // Check conductor attendance
+    const conductor = await Conductor.findOne({ _id: conductorId, depotId });
+    if (!conductor) {
+      return res.status(404).json({
+        success: false,
+        message: 'Conductor not found or does not belong to this depot'
+      });
+    }
+    
+    const conductorAttendance = conductor.attendance?.find(a => {
+      if (!a || !a.date) return false;
+      const attDate = new Date(a.date);
+      attDate.setHours(0, 0, 0, 0);
+      return attDate.getTime() === tripDate.getTime();
+    });
+    
+    if (!conductorAttendance || conductorAttendance.status !== 'present') {
+      return res.status(400).json({
+        success: false,
+        message: `Conductor attendance is ${conductorAttendance?.status || 'not marked'} for ${date}. Only PRESENT staff can be assigned to trips.`
+      });
+    }
+
     // Check if crew is already assigned for the time period
     const existingDuty = await Duty.findOne({
       $or: [
-        { driverId, date: new Date(date), status: { $in: ['assigned', 'in_progress'] } },
-        { conductorId, date: new Date(date), status: { $in: ['assigned', 'in_progress'] } }
+        { driverId, date: tripDate, status: { $in: ['assigned', 'in_progress'] } },
+        { conductorId, date: tripDate, status: { $in: ['assigned', 'in_progress'] } }
       ]
     });
 
@@ -3712,9 +4652,13 @@ router.get('/buses', asyncHandler(async (req, res) => {
 // DEPOT TRIPS ENDPOINTS
 // =================================================================
 
-// GET /api/depot/trips - Get trips for depot (REAL-TIME)
+// GET /api/depot/trips - Get trips for depot (REAL-TIME) - PRIMARY ENDPOINT
 router.get('/trips', asyncHandler(async (req, res) => {
-  let depotId = req.user.depotId;
+  console.log('🚌 GET /api/depot/trips called');
+  console.log('User:', req.user ? { id: req.user._id, role: req.user.role, depotId: req.user.depotId } : 'No user');
+  console.log('Query params:', req.query);
+  
+  let depotId = req.user?.depotId;
   if (!depotId) {
     const defaultDepot = await Depot.findOne({ status: 'active' });
     if (defaultDepot) depotId = defaultDepot._id;
@@ -3726,15 +4670,27 @@ router.get('/trips', asyncHandler(async (req, res) => {
 
   const { date, status } = req.query;
   
-  // First, get all routes for this depot
-  const depotRoutes = await Route.find({ 'depot.depotId': depotId }).select('_id').lean();
+  // Try multiple ways to find depot routes
+  let depotRoutes = await Route.find({ 
+    $or: [
+      { 'depot.depotId': depotId },
+      { depotId: depotId }
+    ]
+  }).select('_id').lean();
+  
   const routeIds = depotRoutes.map(r => r._id);
-
-  if (routeIds.length === 0) {
-    return res.guard.success({ trips: [] }, 'No routes found for depot');
+  
+  // Build query - try both route-based and direct depotId-based
+  let query = {};
+  if (routeIds.length > 0) {
+    query.$or = [
+      { routeId: { $in: routeIds } },
+      { depotId: depotId }
+    ];
+  } else {
+    // If no routes, use direct depotId
+    query.depotId = depotId;
   }
-
-  const query = { routeId: { $in: routeIds } };
 
   if (date) {
     const searchDate = new Date(date);
@@ -3750,7 +4706,7 @@ router.get('/trips', asyncHandler(async (req, res) => {
     query.serviceDate = { $gte: today };
   }
 
-  if (status && status !== 'all') {
+  if (status && status !== 'all' && status !== '') {
     query.status = status;
   }
 
@@ -3840,17 +4796,43 @@ router.get('/crew/suggestions/:tripId', asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'No depot assigned' });
   }
 
+  // Get trip date for attendance filtering
+  const tripDate = trip.serviceDate ? new Date(trip.serviceDate) : new Date();
+  tripDate.setHours(0, 0, 0, 0);
+  
   // Get available drivers and conductors for this depot
-  const [drivers, conductors] = await Promise.all([
+  // ATTENDANCE FILTER: Only PRESENT staff appear in suggestions
+  const [allDrivers, allConductors] = await Promise.all([
     Driver.find({ depotId, status: 'active' })
-      .select('name phone employeeCode status depotId')
-      .limit(20)
+      .select('name phone employeeCode status depotId attendance')
+      .limit(50)
       .lean(),
     Conductor.find({ depotId, status: 'active' })
-      .select('name phone employeeCode status depotId')
-      .limit(20)
+      .select('name phone employeeCode status depotId attendance')
+      .limit(50)
       .lean()
   ]);
+  
+  // Filter by attendance - only PRESENT staff
+  const drivers = allDrivers.filter(driver => {
+    const attendance = driver.attendance?.find(a => {
+      if (!a || !a.date) return false;
+      const attDate = new Date(a.date);
+      attDate.setHours(0, 0, 0, 0);
+      return attDate.getTime() === tripDate.getTime();
+    });
+    return attendance && attendance.status === 'present';
+  });
+  
+  const conductors = allConductors.filter(conductor => {
+    const attendance = conductor.attendance?.find(a => {
+      if (!a || !a.date) return false;
+      const attDate = new Date(a.date);
+      attDate.setHours(0, 0, 0, 0);
+      return attDate.getTime() === tripDate.getTime();
+    });
+    return attendance && attendance.status === 'present';
+  });
 
   // Get recent duties (last 7 days) for fatigue calculation
   const sevenDaysAgo = new Date();
@@ -4429,35 +5411,126 @@ router.put('/complaints/resolve', asyncHandler(async (req, res) => {
 // GET /api/depot/concessions - Get concession requests
 router.get('/concessions', asyncHandler(async (req, res) => {
   const { status } = req.query;
+  let depotId = req.user.depotId;
+  if (!depotId) {
+    const defaultDepot = await Depot.findOne({ status: 'active' });
+    if (defaultDepot) depotId = defaultDepot._id;
+  }
 
   // Try to get concessions, fallback to StudentPass
   let concessions = [];
   try {
     const query = {};
-    if (status && status !== 'all') {
-      query.status = status;
-      query.passStatus = status === 'pending' ? 'applied' : status;
+    
+    // Build status filter - StudentPass uses 'passStatus', ConcessionRequest might use 'status'
+    if (status && status !== 'all' && status !== '') {
+      // Handle different status field names and map 'pending' to 'applied'
+      if (status === 'pending') {
+        query.$or = [
+          { passStatus: 'applied' },
+          { passStatus: 'pending' },
+          { status: 'pending' },
+          { status: 'applied' }
+        ];
+      } else {
+        query.$or = [
+          { passStatus: status },
+          { status: status }
+        ];
+      }
     } else {
-      query.passStatus = { $in: ['applied', 'pending'] };
+      // Show all statuses - don't filter by status if 'all' is selected
+      // Remove status filter entirely for 'all'
     }
 
-    concessions = await ConcessionRequest.find(query)
-      .select('personalDetails educationalDetails passStatus status createdAt')
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
+    // Try to filter by depot if possible, but don't restrict if no bookings exist
+    // For now, show all concessions to the depot (they can filter by status)
+    // In production, you might want to link concessions to routes/depots more directly
+    if (depotId && false) { // Temporarily disabled strict filtering
+      try {
+        // First, get trips for this depot
+        const depotTrips = await Trip.find({ depotId }).select('_id').lean();
+        const tripIds = depotTrips.map(t => t._id);
+        
+        if (tripIds.length > 0) {
+          // Get bookings for these trips
+          const depotBookings = await Booking.find({ tripId: { $in: tripIds } }).select('passengerId userId').lean();
+          const passengerIds = [...new Set(depotBookings.map(b => b.passengerId || b.userId).filter(Boolean))];
+          
+          if (passengerIds.length > 0) {
+            // Add passenger filter if we have passenger IDs
+            query.$or = [
+              ...(query.$or || []),
+              { userId: { $in: passengerIds } },
+              { passengerId: { $in: passengerIds } }
+            ];
+          }
+          // If no bookings, we'll show all concessions (less restrictive)
+        }
+      } catch (err) {
+        console.log('Could not filter by depot bookings, showing all concessions:', err.message);
+        // Continue without depot filtering
+      }
+    }
 
-    // Map to expected format
-    concessions = concessions.map(conc => ({
-      _id: conc._id,
-      passengerName: conc.personalDetails?.fullName || 'Student',
-      type: 'Student',
-      date: conc.createdAt,
-      status: conc.passStatus || conc.status || 'pending',
-      documentUrl: conc.documents?.studentIdCard?.url || null
-    }));
+    // Try to find concessions - handle both ConcessionRequest and StudentPass models
+    try {
+      concessions = await ConcessionRequest.find(query)
+        .select('personalDetails educationalDetails passStatus status createdAt documents passengerId name email phone')
+        .populate('passengerId', 'name email phone')
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean();
+    } catch (findError) {
+      console.log('Error finding concessions, trying alternative query:', findError.message);
+      // Try without populate if it fails
+      concessions = await ConcessionRequest.find(query)
+        .select('personalDetails educationalDetails passStatus status createdAt documents passengerId name email phone')
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean();
+    }
+
+    // Map to expected format - handle both ConcessionRequest and StudentPass structures
+    concessions = concessions.map(conc => {
+      // Handle different model structures
+      const passengerName = conc.passengerId?.name || 
+                           conc.name || 
+                           conc.personalDetails?.fullName || 
+                           conc.personalDetails?.name ||
+                           'Student';
+      
+      const passengerType = conc.educationalDetails?.studentType || 
+                           conc.type || 
+                           conc.passType ||
+                           'Student';
+      
+      const concessionStatus = conc.passStatus || 
+                              conc.status || 
+                              conc.passStatus ||
+                              'pending';
+      
+      const docUrl = conc.documents?.studentIdCard?.url || 
+                    conc.documents?.idCard?.url || 
+                    conc.documents?.url ||
+                    conc.documentUrl ||
+                    null;
+
+      return {
+        _id: conc._id,
+        passengerName: passengerName,
+        passenger: conc.passengerId || { name: passengerName },
+        type: passengerType,
+        date: conc.createdAt || conc.appliedAt || new Date(),
+        status: concessionStatus,
+        documentUrl: docUrl
+      };
+    });
   } catch (error) {
-    console.log('Concession model not available, returning empty array');
+    console.error('Error fetching concessions:', error);
+    console.error('Error stack:', error.stack);
+    // Return empty array on error
+    concessions = [];
   }
 
   return res.guard.success({ concessions }, 'Concession requests fetched');
@@ -4665,19 +5738,26 @@ router.get('/notifications', asyncHandler(async (req, res) => {
   const routeIds = depotRoutes.map(r => r._id);
 
   // Get alerts from various sources
-  // SparePart is already required at line 4120
+  let SparePart;
+  try {
+    SparePart = require('../models/SparePart');
+  } catch (e) {
+    SparePart = null;
+  }
+  
   const [lowStockParts, maintenanceAlerts, pendingTrips] = await Promise.all([
     SparePart ? SparePart.countDocuments({
+      depotId: depotId,
       $expr: { $lte: ['$stock.current', '$stock.minimum'] }
-    }) : Promise.resolve(0),
+    }).catch(() => 0) : Promise.resolve(0),
     Bus.countDocuments({
       depotId,
       nextServiceDate: { $lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }
-    }),
+    }).catch(() => 0),
     routeIds.length > 0 ? Trip.countDocuments({
       routeId: { $in: routeIds },
       status: 'pending'
-    }) : Promise.resolve(0)
+    }).catch(() => 0) : Promise.resolve(0)
   ]);
 
   const notifications = [];
@@ -4710,6 +5790,886 @@ router.get('/notifications', asyncHandler(async (req, res) => {
   }
 
   return res.guard.success({ notifications }, 'Notifications fetched');
+}));
+
+// =================================================================
+// DEPOT ATTENDANCE ENDPOINTS
+// =================================================================
+
+// GET /api/depot/attendance - Get attendance records for depot
+router.get('/attendance', asyncHandler(async (req, res) => {
+  try {
+    console.log('👥 GET /api/depot/attendance called');
+    console.log('User:', req.user ? { id: req.user._id, role: req.user.role, depotId: req.user.depotId } : 'No user');
+    console.log('Query params:', req.query);
+    
+    let depotId = req.user?.depotId;
+    if (!depotId) {
+      const defaultDepot = await Depot.findOne({ status: 'active' });
+      if (defaultDepot) depotId = defaultDepot._id;
+    }
+
+    if (!depotId) {
+      return res.guard.success({ attendance: [], staff: [] }, 'No depot assigned');
+    }
+
+    const { date } = req.query;
+    const attendanceDate = date ? new Date(date) : new Date();
+    attendanceDate.setHours(0, 0, 0, 0);
+    const nextDate = new Date(attendanceDate);
+    nextDate.setDate(nextDate.getDate() + 1);
+
+    // Get all drivers and conductors for this depot - same approach as admin dashboard
+    // Query both User model and Driver/Conductor models
+    let userDrivers = [], driverModelDrivers = [], userConductors = [], conductorModelConductors = [];
+    
+    try {
+      [userDrivers, driverModelDrivers, userConductors, conductorModelConductors] = await Promise.all([
+        User.find({ role: 'driver', depotId, status: 'active' })
+          .select('-password name phone email employeeCode depotId')
+          .lean(),
+        Driver.find({ depotId, status: 'active' })
+          .select('name phone email employeeCode depotId attendance')
+          .lean(),
+        User.find({ role: 'conductor', depotId, status: 'active' })
+          .select('-password name phone email employeeCode depotId')
+          .lean(),
+        Conductor.find({ depotId, status: 'active' })
+          .select('name phone email employeeCode depotId attendance')
+          .lean()
+      ]);
+    } catch (err) {
+      console.error('Error in Promise.all for staff queries:', err);
+      // Continue with empty arrays - don't fail the entire request
+      userDrivers = userDrivers || [];
+      driverModelDrivers = driverModelDrivers || [];
+      userConductors = userConductors || [];
+      conductorModelConductors = conductorModelConductors || [];
+    }
+
+    // Transform and combine drivers
+    const transformedUserDrivers = userDrivers.map(u => ({
+      ...u,
+      type: 'driver',
+      employeeId: u._id,
+      attendance: []
+    }));
+
+    const transformedDriverModelDrivers = driverModelDrivers.map(d => ({
+      ...d,
+      type: 'driver',
+      employeeId: d._id
+    }));
+
+    // Transform and combine conductors
+    const transformedUserConductors = userConductors.map(u => ({
+      ...u,
+      type: 'conductor',
+      employeeId: u._id,
+      attendance: []
+    }));
+
+    const transformedConductorModelConductors = conductorModelConductors.map(c => ({
+      ...c,
+      type: 'conductor',
+      employeeId: c._id
+    }));
+
+    // Combine and deduplicate
+    const allDrivers = [...transformedUserDrivers, ...transformedDriverModelDrivers];
+    const allConductors = [...transformedUserConductors, ...transformedConductorModelConductors];
+
+    // Remove duplicates
+    const driverMap = new Map();
+    allDrivers.forEach(d => {
+      const key = d.email || d.phone || d._id.toString();
+      if (!driverMap.has(key) || (d.attendance && driverMap.get(key).source === 'user_model')) {
+        driverMap.set(key, d);
+      }
+    });
+
+    const conductorMap = new Map();
+    allConductors.forEach(c => {
+      const key = c.email || c.phone || c._id.toString();
+      if (!conductorMap.has(key) || (c.attendance && conductorMap.get(key).source === 'user_model')) {
+        conductorMap.set(key, c);
+      }
+    });
+
+    const drivers = Array.from(driverMap.values());
+    const conductors = Array.from(conductorMap.values());
+
+    // Combine staff
+    const allStaff = [
+      ...drivers.map(d => ({ ...d, type: 'driver', employeeId: d._id })),
+      ...conductors.map(c => ({ ...c, type: 'conductor', employeeId: c._id }))
+    ];
+
+    // Get attendance for the selected date
+    const attendanceRecords = [];
+    allStaff.forEach(staff => {
+      try {
+      // Handle attendance - it might be an array or undefined
+      const staffAttendance = Array.isArray(staff.attendance) ? staff.attendance : [];
+      const dateAttendance = staffAttendance.find(a => {
+        if (!a || !a.date) return false;
+        try {
+          const attDate = new Date(a.date);
+          if (isNaN(attDate.getTime())) return false;
+          attDate.setHours(0, 0, 0, 0);
+          return attDate.getTime() === attendanceDate.getTime();
+        } catch (e) {
+          return false;
+        }
+      });
+
+        attendanceRecords.push({
+          _id: staff._id,
+          employeeId: staff.employeeId || staff._id,
+          employeeCode: staff.employeeCode || staff.driverId || staff.conductorId || 'N/A',
+          name: staff.name || 'Unknown',
+          type: staff.type || 'driver',
+          phone: staff.phone || 'N/A',
+          email: staff.email || 'N/A',
+          date: attendanceDate,
+          status: dateAttendance?.status || 'not_marked',
+          checkInTime: dateAttendance?.checkInTime || null,
+          checkOutTime: dateAttendance?.checkOutTime || null,
+          location: dateAttendance?.location || null,
+          notes: dateAttendance?.notes || null,
+          attendanceId: dateAttendance?._id || null
+        });
+      } catch (err) {
+        console.error('Error processing staff attendance:', err, 'Staff:', staff._id);
+        // Still add the staff member with default values
+        attendanceRecords.push({
+          _id: staff._id,
+          employeeId: staff.employeeId || staff._id,
+          employeeCode: staff.employeeCode || staff.driverId || staff.conductorId || 'N/A',
+          name: staff.name || 'Unknown',
+          type: staff.type || 'driver',
+          phone: staff.phone || 'N/A',
+          email: staff.email || 'N/A',
+          date: attendanceDate,
+          status: 'not_marked',
+          checkInTime: null,
+          checkOutTime: null,
+          location: null,
+          notes: null,
+          attendanceId: null
+        });
+      }
+    });
+
+    // Ensure staff list includes all staff, even if no attendance records
+    const staffList = allStaff.map(s => ({
+      _id: s._id,
+      employeeId: s.employeeId || s._id,
+      employeeCode: s.employeeCode || s.driverId || s.conductorId || s.employeeCode || 'N/A',
+      name: s.name || 'Unknown',
+      type: s.type || (s.driverId ? 'driver' : 'conductor'),
+      phone: s.phone || 'N/A',
+      email: s.email || 'N/A'
+    }));
+
+    // If no attendance records but staff exists, create attendance records for all staff
+    const finalAttendanceRecords = attendanceRecords.length > 0 
+      ? attendanceRecords 
+      : staffList.map(s => ({
+          _id: s._id,
+          employeeId: s.employeeId,
+          employeeCode: s.employeeCode,
+          name: s.name,
+          type: s.type,
+          phone: s.phone,
+          email: s.email,
+          date: attendanceDate,
+          status: 'not_marked',
+          checkInTime: null,
+          checkOutTime: null,
+          location: null,
+          notes: null,
+          attendanceId: null
+        }));
+
+    return res.guard.success({ 
+      attendance: finalAttendanceRecords,
+      staff: staffList
+    }, 'Attendance fetched');
+  } catch (error) {
+    console.error('❌ Error in /api/depot/attendance:', error);
+    console.error('Error stack:', error.stack);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch attendance',
+      message: error.message
+    });
+  }
+}));
+
+// POST /api/depot/attendance/mark - Mark attendance for staff
+router.post('/attendance/mark', asyncHandler(async (req, res) => {
+  try {
+    console.log('📝 POST /api/depot/attendance/mark called');
+    console.log('Request body:', req.body);
+    console.log('User:', req.user ? { id: req.user._id, role: req.user.role, depotId: req.user.depotId } : 'No user');
+    
+    let depotId = req.user?.depotId;
+    if (!depotId) {
+      const defaultDepot = await Depot.findOne({ status: 'active' });
+      if (defaultDepot) depotId = defaultDepot._id;
+    }
+
+    if (!depotId) {
+      return res.status(400).json({ success: false, error: 'No depot assigned' });
+    }
+
+    const { employeeId, employeeType, date, status, checkInTime, checkOutTime, location, notes } = req.body;
+
+    if (!employeeId || !employeeType || !date || !status) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required fields: employeeId, employeeType, date, status' 
+      });
+    }
+
+    // Validate employee type
+    if (employeeType !== 'driver' && employeeType !== 'conductor') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid employee type. Must be driver or conductor' 
+      });
+    }
+
+    // Validate status - normalize to match Driver/Conductor model enums
+    // Driver/Conductor models use: 'present', 'absent', 'late', 'half-day', 'overtime', 'leave'
+    // Frontend sends: 'present', 'absent', 'leave', 'half_day'
+    const statusMap = {
+      'present': 'present',
+      'absent': 'absent',
+      'leave': 'leave', // Leave is now a valid status
+      'half_day': 'half-day'
+    };
+    
+    const normalizedStatus = statusMap[status] || status;
+    const validStatuses = ['present', 'absent', 'late', 'half-day', 'overtime', 'leave'];
+    if (!validStatuses.includes(normalizedStatus)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid status. Must be present, absent, leave, or half_day' 
+      });
+    }
+
+    // Find employee - check both User model and Driver/Conductor models
+    let employee = null;
+    
+    if (employeeType === 'driver') {
+      // First try Driver model
+      employee = await Driver.findOne({ _id: employeeId, depotId });
+      // If not found, try by email from User model
+      if (!employee) {
+        const userEmployee = await User.findOne({ _id: employeeId, role: 'driver', depotId });
+        if (userEmployee) {
+          employee = await Driver.findOne({ email: userEmployee.email, depotId });
+        }
+      }
+    } else {
+      // First try Conductor model
+      employee = await Conductor.findOne({ _id: employeeId, depotId });
+      // If not found, try by email from User model
+      if (!employee) {
+        const userEmployee = await User.findOne({ _id: employeeId, role: 'conductor', depotId });
+        if (userEmployee) {
+          employee = await Conductor.findOne({ email: userEmployee.email, depotId });
+        }
+      }
+    }
+
+    if (!employee) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Employee not found or does not belong to this depot. Please ensure the employee is assigned to this depot in the admin dashboard.' 
+      });
+    }
+
+    // Ensure attendance array exists
+    if (!employee.attendance || !Array.isArray(employee.attendance)) {
+      employee.attendance = [];
+    }
+
+    // Parse date
+    const attendanceDate = new Date(date);
+    if (isNaN(attendanceDate.getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid date format' });
+    }
+    attendanceDate.setHours(0, 0, 0, 0);
+
+    // Check for existing attendance - ENFORCE LOCKING RULE
+    let existingIndex = -1;
+    let existingAttendance = null;
+    if (employee.attendance && employee.attendance.length > 0) {
+      existingIndex = employee.attendance.findIndex(a => {
+        if (!a || !a.date) return false;
+        try {
+          const attDate = new Date(a.date);
+          if (isNaN(attDate.getTime())) return false;
+          attDate.setHours(0, 0, 0, 0);
+          return attDate.getTime() === attendanceDate.getTime();
+        } catch (e) {
+          return false;
+        }
+      });
+      
+      if (existingIndex >= 0) {
+        existingAttendance = employee.attendance[existingIndex];
+      }
+    }
+    
+    // LEAVE cannot be marked directly - it's only an update from Present/Absent
+    if (normalizedStatus === 'leave' && existingIndex < 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Leave cannot be marked directly. Please mark Present or Absent first, then convert to Leave if needed.'
+      });
+    }
+    
+    // LOCKING ENFORCEMENT: If attendance exists and is locked, reject re-marking
+    if (existingAttendance && existingAttendance.locked === true) {
+      return res.status(403).json({
+        success: false,
+        error: 'Attendance is locked and cannot be modified',
+        message: `Attendance for ${employee.name} on ${date} is already marked as ${existingAttendance.status} and is locked. Only Leave status can be updated by Depot Manager.`
+      });
+    }
+
+    // LOCKING RULE: Present/Absent = LOCKED, Leave = NOT LOCKED (can be updated)
+    const isLocked = (normalizedStatus === 'present' || normalizedStatus === 'absent');
+    
+    const attendanceData = {
+      date: attendanceDate,
+      status: normalizedStatus, // Use normalized status
+      locked: isLocked, // Lock Present/Absent, Leave remains unlocked
+      loginTime: checkInTime ? new Date(checkInTime) : (normalizedStatus === 'present' ? new Date() : null),
+      logoutTime: checkOutTime ? new Date(checkOutTime) : null,
+      checkInTime: checkInTime ? new Date(checkInTime) : (normalizedStatus === 'present' ? new Date() : null), // Keep for compatibility
+      checkOutTime: checkOutTime ? new Date(checkOutTime) : null, // Keep for compatibility
+      notes: notes || null,
+      verifiedBy: req.user._id,
+      markedBy: existingIndex >= 0 ? (existingAttendance?.markedBy || req.user._id) : req.user._id,
+      markedAt: existingIndex >= 0 ? (existingAttendance?.markedAt || new Date()) : new Date(),
+      updatedBy: req.user._id,
+      updatedAt: new Date(),
+      enteredBy: req.user._id, // Keep for compatibility
+      entryType: 'manual'
+    };
+
+    // Only add location if we have valid coordinates (don't set to null - omit the field)
+    if (location && typeof location === 'object' && location.coordinates && Array.isArray(location.coordinates) && location.coordinates.length >= 2) {
+      attendanceData.location = {
+        type: 'Point',
+        coordinates: location.coordinates
+      };
+    }
+
+    if (existingIndex >= 0) {
+      // Update existing attendance (only if not locked, or if converting to Leave)
+      const existing = employee.attendance[existingIndex];
+      const existingObj = existing.toObject ? existing.toObject() : existing;
+      
+      // If locked and trying to change to non-Leave status, reject
+      if (existingObj.locked && normalizedStatus !== 'leave') {
+        return res.status(403).json({
+          success: false,
+          error: 'Attendance is locked',
+          message: `Attendance for ${employee.name} on ${date} is locked as ${existingObj.status}. Only Leave status can be updated.`
+        });
+      }
+      
+      // Remove location if it's null or invalid from existing data
+      if (existingObj.location === null || (existingObj.location && existingObj.location.type === null)) {
+        delete existingObj.location;
+      }
+      
+      // Preserve markedBy and markedAt if updating
+      attendanceData.markedBy = existingObj.markedBy || req.user._id;
+      attendanceData.markedAt = existingObj.markedAt || new Date();
+      
+      employee.attendance[existingIndex] = {
+        ...existingObj,
+        ...attendanceData,
+        _id: existing._id || existing.id || new mongoose.Types.ObjectId()
+      };
+      
+      // Ensure location is not null in the updated record
+      if (employee.attendance[existingIndex].location === null || 
+          (employee.attendance[existingIndex].location && employee.attendance[existingIndex].location.type === null)) {
+        delete employee.attendance[existingIndex].location;
+      }
+    } else {
+      // Add new attendance
+      employee.attendance.push(attendanceData);
+      // Update existingIndex to point to the newly added attendance
+      existingIndex = employee.attendance.length - 1;
+    }
+
+    // Save attendance within transaction
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      await employee.save({ session });
+
+      // Get the actual attendance ID after save (Mongoose assigns it automatically)
+      const savedAttendance = employee.attendance[existingIndex >= 0 ? existingIndex : employee.attendance.length - 1];
+      const savedAttendanceId = savedAttendance?._id || null;
+
+      // Create audit log entry (MANDATORY)
+      const AttendanceAuditLog = require('../models/AttendanceAuditLog');
+      const auditLog = new AttendanceAuditLog({
+        attendanceId: savedAttendanceId,
+        staffId: employee._id,
+        staffType: employeeType,
+        depotId: depotId,
+        date: attendanceDate,
+        actionType: existingIndex >= 0 ? 'UPDATE' : (normalizedStatus === 'present' ? 'MARK_PRESENT' : 'MARK_ABSENT'),
+        oldStatus: existingAttendance?.status || 'not_marked',
+        newStatus: normalizedStatus,
+        reason: normalizedStatus === 'leave' ? notes : null,
+        performedBy: req.user._id,
+        performedRole: req.user.role || 'depot_manager',
+        performedAt: new Date(),
+        ipAddress: req.ip || req.headers['x-forwarded-for'] || null,
+        deviceInfo: req.headers['user-agent'] || null
+      });
+
+      await auditLog.save({ session });
+
+      // Commit transaction
+      await session.commitTransaction();
+      session.endSession();
+
+      return res.guard.success({ 
+        attendance: attendanceData,
+        employee: {
+          _id: employee._id,
+          name: employee.name,
+          type: employeeType
+        }
+      }, 'Attendance marked successfully');
+    } catch (error) {
+      // Rollback on error
+      await session.abortTransaction();
+      session.endSession();
+      throw error;
+    }
+  } catch (error) {
+    console.error('❌ Error in /api/depot/attendance/mark:', error);
+    console.error('Error stack:', error.stack);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to mark attendance',
+      message: error.message
+    });
+  }
+}));
+
+// PUT /api/depot/attendance/convert-to-leave - Convert locked attendance to Leave (Depot Manager only)
+router.put('/attendance/convert-to-leave', asyncHandler(async (req, res) => {
+  try {
+    let depotId = req.user?.depotId;
+    if (!depotId) {
+      const defaultDepot = await Depot.findOne({ status: 'active' });
+      if (defaultDepot) depotId = defaultDepot._id;
+    }
+
+    if (!depotId) {
+      return res.status(400).json({ success: false, error: 'No depot assigned' });
+    }
+
+    // Only Depot Manager can convert to Leave
+    const userRole = req.user?.role?.toLowerCase();
+    if (userRole !== 'depot_manager' && userRole !== 'depot-manager' && userRole !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized',
+        message: 'Only Depot Manager can convert attendance to Leave'
+      });
+    }
+
+    const { employeeId, employeeType, date, leaveReason } = req.body;
+
+    if (!employeeId || !employeeType || !date || !leaveReason) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: employeeId, employeeType, date, leaveReason'
+      });
+    }
+
+    // Find employee
+    let employee = null;
+    if (employeeType === 'driver') {
+      employee = await Driver.findOne({ _id: employeeId, depotId });
+    } else {
+      employee = await Conductor.findOne({ _id: employeeId, depotId });
+    }
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        error: 'Employee not found or does not belong to this depot'
+      });
+    }
+
+    const attendanceDate = new Date(date);
+    attendanceDate.setHours(0, 0, 0, 0);
+
+    // Find existing attendance
+    const attendanceIndex = employee.attendance.findIndex(a => {
+      if (!a || !a.date) return false;
+      const attDate = new Date(a.date);
+      attDate.setHours(0, 0, 0, 0);
+      return attDate.getTime() === attendanceDate.getTime();
+    });
+
+    if (attendanceIndex < 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Attendance record not found for this date'
+      });
+    }
+
+    const attendance = employee.attendance[attendanceIndex];
+
+    // Only allow conversion from Present/Absent to Leave
+    if (attendance.status === 'leave') {
+      return res.status(400).json({
+        success: false,
+        error: 'Attendance is already marked as Leave'
+      });
+    }
+
+    if (attendance.status !== 'present' && attendance.status !== 'absent') {
+      return res.status(400).json({
+        success: false,
+        error: 'Can only convert Present or Absent status to Leave'
+      });
+    }
+
+    // Convert to Leave (unlock it)
+    const oldStatus = attendance.status;
+    attendance.status = 'leave';
+    attendance.locked = false; // Leave is not locked
+    attendance.leaveReason = leaveReason;
+    attendance.updatedBy = req.user._id;
+    attendance.updatedAt = new Date();
+    attendance.notes = attendance.notes ? `${attendance.notes}\n[Converted to Leave: ${leaveReason}]` : `[Converted to Leave: ${leaveReason}]`;
+
+    // Save attendance within transaction
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      await employee.save({ session });
+
+      // Create audit log entry (MANDATORY for Leave conversion)
+      const AttendanceAuditLog = require('../models/AttendanceAuditLog');
+      const auditLog = new AttendanceAuditLog({
+        attendanceId: attendance._id,
+        staffId: employee._id,
+        staffType: employeeType,
+        depotId: depotId,
+        date: attendanceDate,
+        actionType: 'CONVERT_TO_LEAVE',
+        oldStatus: oldStatus,
+        newStatus: 'leave',
+        reason: leaveReason,
+        performedBy: req.user._id,
+        performedRole: req.user.role || 'depot_manager',
+        performedAt: new Date(),
+        ipAddress: req.ip || req.headers['x-forwarded-for'] || null,
+        deviceInfo: req.headers['user-agent'] || null
+      });
+
+      await auditLog.save({ session });
+
+      // Commit transaction
+      await session.commitTransaction();
+      session.endSession();
+
+      return res.guard.success({
+        attendance: attendance,
+        employee: {
+          _id: employee._id,
+          name: employee.name,
+          type: employeeType
+        }
+      }, 'Attendance converted to Leave successfully');
+    } catch (error) {
+      // Rollback on error
+      await session.abortTransaction();
+      session.endSession();
+      throw error;
+    }
+  } catch (error) {
+    console.error('❌ Error converting attendance to Leave:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to convert attendance to Leave',
+      message: error.message
+    });
+  }
+}));
+
+// GET /api/depot/attendance/all - Get all marked attendance records (with date range filtering)
+router.get('/attendance/all', asyncHandler(async (req, res) => {
+  try {
+    let depotId = req.user?.depotId;
+    if (!depotId) {
+      const defaultDepot = await Depot.findOne({ status: 'active' });
+      if (defaultDepot) depotId = defaultDepot._id;
+    }
+
+    if (!depotId) {
+      return res.status(400).json({ success: false, error: 'No depot assigned' });
+    }
+
+    const { startDate, endDate, status, staffType, limit = 1000 } = req.query;
+
+    // Get all drivers and conductors for this depot
+    const [drivers, conductors] = await Promise.all([
+      Driver.find({ depotId, status: 'active' })
+        .select('name phone email employeeCode depotId attendance')
+        .lean(),
+      Conductor.find({ depotId, status: 'active' })
+        .select('name phone email employeeCode depotId attendance')
+        .lean()
+    ]);
+
+    // Collect all marked attendance records
+    const allMarkedAttendance = [];
+
+    // Process drivers
+    drivers.forEach(driver => {
+      if (driver.attendance && Array.isArray(driver.attendance)) {
+        driver.attendance.forEach(att => {
+          if (att && att.date && att.status && att.status !== 'not_marked') {
+            const attDate = new Date(att.date);
+            
+            // Apply date filter if provided
+            if (startDate) {
+              const start = new Date(startDate);
+              start.setHours(0, 0, 0, 0);
+              if (attDate < start) return;
+            }
+            if (endDate) {
+              const end = new Date(endDate);
+              end.setHours(23, 59, 59, 999);
+              if (attDate > end) return;
+            }
+
+            // Apply status filter if provided
+            if (status && att.status !== status) return;
+
+            // Apply staff type filter if provided
+            if (staffType && staffType !== 'driver') return;
+
+            allMarkedAttendance.push({
+              _id: att._id || new mongoose.Types.ObjectId(),
+              employeeId: driver._id,
+              employeeCode: driver.employeeCode || driver.driverId || 'N/A',
+              name: driver.name || 'Unknown',
+              type: 'driver',
+              phone: driver.phone || 'N/A',
+              email: driver.email || 'N/A',
+              date: att.date,
+              status: att.status,
+              locked: att.locked || false,
+              checkInTime: att.checkInTime || att.loginTime || null,
+              checkOutTime: att.checkOutTime || att.logoutTime || null,
+              markedAt: att.markedAt || null,
+              leaveReason: att.leaveReason || null,
+              notes: att.notes || null
+            });
+          }
+        });
+      }
+    });
+
+    // Process conductors
+    conductors.forEach(conductor => {
+      if (conductor.attendance && Array.isArray(conductor.attendance)) {
+        conductor.attendance.forEach(att => {
+          if (att && att.date && att.status && att.status !== 'not_marked') {
+            const attDate = new Date(att.date);
+            
+            // Apply date filter if provided
+            if (startDate) {
+              const start = new Date(startDate);
+              start.setHours(0, 0, 0, 0);
+              if (attDate < start) return;
+            }
+            if (endDate) {
+              const end = new Date(endDate);
+              end.setHours(23, 59, 59, 999);
+              if (attDate > end) return;
+            }
+
+            // Apply status filter if provided
+            if (status && att.status !== status) return;
+
+            // Apply staff type filter if provided
+            if (staffType && staffType !== 'conductor') return;
+
+            allMarkedAttendance.push({
+              _id: att._id || new mongoose.Types.ObjectId(),
+              employeeId: conductor._id,
+              employeeCode: conductor.employeeCode || conductor.conductorId || 'N/A',
+              name: conductor.name || 'Unknown',
+              type: 'conductor',
+              phone: conductor.phone || 'N/A',
+              email: conductor.email || 'N/A',
+              date: att.date,
+              status: att.status,
+              locked: att.locked || false,
+              checkInTime: att.checkInTime || att.loginTime || null,
+              checkOutTime: att.checkOutTime || att.logoutTime || null,
+              markedAt: att.markedAt || null,
+              leaveReason: att.leaveReason || null,
+              notes: att.notes || null
+            });
+          }
+        });
+      }
+    });
+
+    // Sort by date (newest first), then by name
+    allMarkedAttendance.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      if (dateB.getTime() !== dateA.getTime()) {
+        return dateB.getTime() - dateA.getTime();
+      }
+      return (a.name || '').localeCompare(b.name || '');
+    });
+
+    // Apply limit
+    const limitedAttendance = allMarkedAttendance.slice(0, parseInt(limit));
+
+    // Calculate summary statistics
+    const summary = {
+      total: allMarkedAttendance.length,
+      present: allMarkedAttendance.filter(a => a.status === 'present').length,
+      absent: allMarkedAttendance.filter(a => a.status === 'absent').length,
+      leave: allMarkedAttendance.filter(a => a.status === 'leave').length,
+      drivers: allMarkedAttendance.filter(a => a.type === 'driver').length,
+      conductors: allMarkedAttendance.filter(a => a.type === 'conductor').length
+    };
+
+    return res.guard.success({ 
+      attendance: limitedAttendance,
+      summary,
+      total: allMarkedAttendance.length,
+      returned: limitedAttendance.length
+    }, 'All marked attendance fetched successfully');
+  } catch (error) {
+    console.error('❌ Error fetching all marked attendance:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch marked attendance',
+      message: error.message
+    });
+  }
+}));
+
+// GET /api/depot/attendance/audit - Get attendance audit logs (read-only)
+router.get('/attendance/audit', asyncHandler(async (req, res) => {
+  try {
+    let depotId = req.user?.depotId;
+    if (!depotId) {
+      const defaultDepot = await Depot.findOne({ status: 'active' });
+      if (defaultDepot) depotId = defaultDepot._id;
+    }
+
+    if (!depotId) {
+      return res.status(400).json({ success: false, error: 'No depot assigned' });
+    }
+
+    const { staffId, date, actionType, limit = 100 } = req.query;
+    const AttendanceAuditLog = require('../models/AttendanceAuditLog');
+
+    let query = { depotId };
+    
+    if (staffId) {
+      query.staffId = staffId;
+    }
+    
+    if (date) {
+      const searchDate = new Date(date);
+      searchDate.setHours(0, 0, 0, 0);
+      const nextDate = new Date(searchDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      query.date = { $gte: searchDate, $lt: nextDate };
+    }
+    
+    if (actionType) {
+      query.actionType = actionType;
+    }
+
+    const auditLogs = await AttendanceAuditLog.find(query)
+      .populate('performedBy', 'name email role')
+      .populate('staffId', 'name employeeCode')
+      .sort({ performedAt: -1 })
+      .limit(parseInt(limit))
+      .lean();
+
+    return res.guard.success({ auditLogs }, 'Audit logs fetched successfully');
+  } catch (error) {
+    console.error('❌ Error fetching audit logs:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch audit logs',
+      message: error.message
+    });
+  }
+}));
+
+// GET /api/depot/payroll - Get payroll records for depot (read-only)
+router.get('/payroll', asyncHandler(async (req, res) => {
+  try {
+    let depotId = req.user?.depotId;
+    if (!depotId) {
+      const defaultDepot = await Depot.findOne({ status: 'active' });
+      if (defaultDepot) depotId = defaultDepot._id;
+    }
+
+    if (!depotId) {
+      return res.status(400).json({ success: false, error: 'No depot assigned' });
+    }
+
+    const { month, year, staffId } = req.query;
+    const PayrollMonthly = require('../models/PayrollMonthly');
+
+    let query = { depotId };
+    
+    if (month) query.month = parseInt(month);
+    if (year) query.year = parseInt(year);
+    if (staffId) query.staffId = staffId;
+
+    const payrolls = await PayrollMonthly.find(query)
+      .populate('staffId', 'name employeeCode')
+      .populate('generatedBy', 'name email')
+      .sort({ year: -1, month: -1, createdAt: -1 })
+      .lean();
+
+    return res.guard.success({ payrolls }, 'Payroll records fetched successfully');
+  } catch (error) {
+    console.error('❌ Error fetching payroll:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch payroll records',
+      message: error.message
+    });
+  }
 }));
 
 // GET /api/depot/payments - Get all payments for depot
@@ -4800,8 +6760,9 @@ router.post('/auctions/create', asyncHandler(async (req, res) => {
 
   // Create auction object (for now, store in a simple way)
   // In production, you'd have an Auction model
+  const mongoose = require('mongoose');
   const auction = {
-    _id: require('mongoose').Types.ObjectId(),
+    _id: new mongoose.Types.ObjectId(),
     auctionId: `AUCT-${Date.now()}`,
     depotId: depotId,
     productId: productId,
@@ -4829,10 +6790,219 @@ console.log('   GET /api/depot/dashboard');
 console.log('   GET /api/depot/notifications');
 console.log('   GET /api/depot/buses');
 console.log('   GET /api/depot/trips');
+console.log('   GET /api/depot/trips?date=YYYY-MM-DD');
+console.log('   GET /api/depot/attendance');
+console.log('   GET /api/depot/attendance?date=YYYY-MM-DD');
 console.log('   GET /api/depot/payments');
 console.log('   GET /api/depot/invoices');
 console.log('   GET /api/depot/auctions');
 console.log('   POST /api/depot/auctions/create');
 console.log('   ... and more');
+
+// PUT /api/depot/invoices/:id/mark-payment-received - Mark payment as received for invoice (Depot only)
+// This automatically updates PO status, delivery confirmation, and payment tracking
+router.put('/invoices/:id/mark-payment-received', asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { paymentMethod = 'bank_transfer', transactionId, notes } = req.body;
+    const depotId = req.user?.depotId;
+    
+    if (!depotId) {
+      return res.guard.error('Depot ID not found', 400);
+    }
+    
+    const Invoice = require('../models/Invoice');
+    const PurchaseOrder = require('../models/PurchaseOrder');
+    const logger = require('../utils/logger');
+
+    // Find invoice
+    const invoice = await Invoice.findById(id);
+    if (!invoice) {
+      return res.guard.error('Invoice not found', 404);
+    }
+
+    // Verify invoice belongs to this depot
+    if (invoice.purchaseOrderId) {
+      const po = await PurchaseOrder.findById(invoice.purchaseOrderId);
+      if (po && po.depotId && po.depotId.toString() !== depotId.toString()) {
+        return res.guard.error('Invoice does not belong to this depot', 403);
+      }
+    }
+
+    // Check if already paid
+    if (invoice.paymentStatus === 'paid' && invoice.status === 'paid') {
+      return res.guard.error('Invoice is already marked as paid', 400);
+    }
+
+    // Update invoice payment status
+    invoice.paymentStatus = 'paid';
+    invoice.status = 'paid';
+    invoice.paidAmount = invoice.totalAmount || invoice.subtotal + (invoice.tax || 0);
+    invoice.dueAmount = 0;
+    invoice.paymentDate = new Date();
+    invoice.paymentMethod = paymentMethod;
+    invoice.transactionId = transactionId;
+    invoice.updatedBy = req.user._id;
+    
+    if (notes) {
+      invoice.notes = (invoice.notes || '') + `\nPayment received: ${notes}`;
+    }
+
+    await invoice.save();
+
+    // Find and update associated Purchase Order
+    let purchaseOrder = null;
+    if (invoice.purchaseOrderId) {
+      purchaseOrder = await PurchaseOrder.findById(invoice.purchaseOrderId);
+      
+      if (purchaseOrder) {
+        // Update PO payment status
+        purchaseOrder.paymentStatus = 'paid';
+        purchaseOrder.paidAmount = invoice.paidAmount;
+        purchaseOrder.dueAmount = 0;
+        purchaseOrder.updatedBy = req.user._id;
+
+        // NEW WORKFLOW: Payment must be done before delivery can start
+        // If PO was dispatched and waiting for payment, now allow delivery to start
+        if (purchaseOrder.status === 'dispatched_awaiting_payment') {
+          // Payment received - now delivery can start
+          purchaseOrder.status = 'in_progress';
+          purchaseOrder.deliveryStatus = purchaseOrder.deliveryStatus || {};
+          purchaseOrder.deliveryStatus.status = 'in_transit'; // Ready for delivery
+          logger.info(`PO ${purchaseOrder.poNumber} payment received - delivery can now start`);
+        } else if (purchaseOrder.status === 'delivered' || purchaseOrder.deliveryStatus?.status === 'delivered') {
+          // If PO is already delivered, mark as completed
+          purchaseOrder.status = 'completed';
+          purchaseOrder.actualDeliveryDate = purchaseOrder.actualDeliveryDate || new Date();
+        } else if (purchaseOrder.status === 'in_progress' || purchaseOrder.status === 'accepted') {
+          // Legacy: If payment received before dispatch, mark as ready for delivery confirmation
+          purchaseOrder.status = 'in_progress';
+          purchaseOrder.deliveryStatus = purchaseOrder.deliveryStatus || {};
+          purchaseOrder.deliveryStatus.status = 'in_transit';
+        }
+
+        await purchaseOrder.save();
+        
+        logger.info(`PO ${purchaseOrder.poNumber} updated to status: ${purchaseOrder.status} after payment received`);
+      }
+    }
+
+    // Log the payment
+    logger.info(`Payment received for Invoice ${invoice.invoiceNumber} - Amount: ${invoice.paidAmount}, PO: ${purchaseOrder?.poNumber || 'N/A'}`);
+
+    return res.guard.success({
+      invoice,
+      purchaseOrder
+    }, 'Payment marked as received. PO status and delivery confirmation updated automatically.');
+  } catch (error) {
+    console.error('❌ Error marking payment as received:', error);
+    return res.guard.error('Failed to mark payment as received: ' + error.message, 500);
+  }
+}));
+
+// GET /api/depot/deliveries - Get dispatched POs waiting for payment/delivery
+router.get('/deliveries', asyncHandler(async (req, res) => {
+  try {
+    const depotId = req.user?.depotId;
+    if (!depotId) {
+      return res.guard.error('Depot ID not found', 400);
+    }
+
+    const PurchaseOrder = require('../models/PurchaseOrder');
+    
+    // Get all dispatched POs (waiting for payment, in transit, or delivered)
+    const deliveries = await PurchaseOrder.find({
+      depotId,
+      status: { $in: ['dispatched_awaiting_payment', 'in_progress', 'delivered'] },
+      $or: [
+        { dispatchDate: { $exists: true, $ne: null } },
+        { 'deliveryStatus.status': { $in: ['dispatched_awaiting_payment', 'in_transit', 'delivered'] } }
+      ]
+    })
+    .populate('vendorId', 'companyName email phone')
+    .populate('invoiceId', 'invoiceNumber paymentStatus status totalAmount paidAmount')
+    .sort({ dispatchDate: -1, createdAt: -1 })
+    .lean();
+    
+    // Add invoice information to each delivery
+    const deliveriesWithInvoice = deliveries.map(po => {
+      if (po.invoiceId && typeof po.invoiceId === 'object') {
+        return {
+          ...po,
+          invoiceNumber: po.invoiceId.invoiceNumber || po.invoiceNumber,
+          paymentStatus: po.invoiceId.paymentStatus || po.paymentStatus || 'pending',
+          invoiceStatus: po.invoiceId.status || 'pending'
+        };
+      }
+      return po;
+    });
+
+    return res.guard.success({ deliveries: deliveriesWithInvoice }, 'Deliveries fetched successfully');
+  } catch (error) {
+    console.error('❌ Error fetching deliveries:', error);
+    return res.guard.error('Failed to fetch deliveries: ' + error.message, 500);
+  }
+}));
+
+// PUT /api/depot/purchase-orders/:id/confirm-delivery - Confirm delivery (only after payment)
+router.put('/purchase-orders/:id/confirm-delivery', asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { items, notes } = req.body;
+    const depotId = req.user?.depotId;
+    
+    if (!depotId) {
+      return res.guard.error('Depot ID not found', 400);
+    }
+
+    const PurchaseOrder = require('../models/PurchaseOrder');
+    const logger = require('../utils/logger');
+
+    // Find PO
+    const purchaseOrder = await PurchaseOrder.findById(id);
+    if (!purchaseOrder) {
+      return res.guard.error('Purchase order not found', 404);
+    }
+
+    // Verify PO belongs to this depot
+    if (purchaseOrder.depotId && purchaseOrder.depotId.toString() !== depotId.toString()) {
+      return res.guard.error('Purchase order does not belong to this depot', 403);
+    }
+
+    // CRITICAL: Check if payment has been made before allowing delivery
+    if (purchaseOrder.paymentStatus !== 'paid') {
+      return res.guard.error('Payment must be completed before delivery can be confirmed. Please mark payment as received first.', 400);
+    }
+
+    // Check if PO is in correct status for delivery confirmation
+    if (purchaseOrder.status !== 'in_progress' && purchaseOrder.deliveryStatus?.status !== 'in_transit') {
+      return res.guard.error('Purchase order is not ready for delivery confirmation. Payment must be received and order must be in transit.', 400);
+    }
+
+    // Update delivery status
+    purchaseOrder.deliveryStatus = purchaseOrder.deliveryStatus || {};
+    purchaseOrder.deliveryStatus.status = 'delivered';
+    purchaseOrder.status = 'delivered';
+    purchaseOrder.actualDeliveryDate = new Date();
+    purchaseOrder.updatedBy = req.user._id;
+
+    if (items && Array.isArray(items)) {
+      purchaseOrder.deliveryStatus.items = items;
+    }
+
+    if (notes) {
+      purchaseOrder.notes = (purchaseOrder.notes || '') + `\nDelivery confirmed: ${notes}`;
+    }
+
+    await purchaseOrder.save();
+
+    logger.info(`PO ${purchaseOrder.poNumber} delivery confirmed by depot ${depotId}`);
+
+    return res.guard.success({ purchaseOrder }, 'Delivery confirmed successfully');
+  } catch (error) {
+    console.error('❌ Error confirming delivery:', error);
+    return res.guard.error('Failed to confirm delivery: ' + error.message, 500);
+  }
+}));
 
 module.exports = router;

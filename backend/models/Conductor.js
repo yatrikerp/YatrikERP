@@ -105,8 +105,12 @@ const conductorSchema = new mongoose.Schema({
     totalDutyHours: Number,
     status: {
       type: String,
-      enum: ['present', 'absent', 'late', 'half-day', 'overtime'],
+      enum: ['present', 'absent', 'late', 'half-day', 'overtime', 'leave'],
       default: 'present'
+    },
+    locked: {
+      type: Boolean,
+      default: false
     },
     location: {
       type: {
@@ -120,6 +124,23 @@ const conductorSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
     },
+    markedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    markedAt: {
+      type: Date,
+      default: Date.now
+    },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now
+    },
+    leaveReason: String, // For Leave status only
     notes: String
   }],
   

@@ -189,7 +189,6 @@ router.post('/confirm', async (req, res) => {
 
     // Update booking status
     booking.status = 'confirmed';
-    booking.paymentStatus = paymentStatus;
     if (paymentId) {
       booking.payment = {
         ...booking.payment,
@@ -197,6 +196,7 @@ router.post('/confirm', async (req, res) => {
         paymentStatus: 'completed',
         paidAt: new Date()
       };
+      booking.pricing.paidAmount = booking.pricing.totalAmount;
     }
     if (orderId) booking.orderId = orderId;
     booking.confirmedAt = new Date();
@@ -204,7 +204,7 @@ router.post('/confirm', async (req, res) => {
     await booking.save();
 
     // Generate PNR
-    const pnr = `PNR${Date.now().toString().slice(-8)}`;
+    const pnr = booking.bookingId || `PNR${Date.now().toString().slice(-8)}`;
 
     // Generate QR code data for the ticket
     const qrData = {
@@ -783,6 +783,91 @@ router.get('/user/:userId', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to get user bookings',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/booking/my-bookings - Get current user's bookings (simplified endpoint)
+router.get('/my-bookings', async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { status, limit = 20, page = 1 } = req.query;
+
+    console.log('🔍 Fetching bookings for user:', userId);
+
+    const query = { createdBy: userId };
+    if (status) {
+      query.status = status;
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [bookings, totalCount] = await Promise.all([
+      Booking.find(query)
+        .populate('tripId', 'routeId busId startTime endTime fare capacity serviceDate')
+        .populate('tripId.routeId', 'routeName routeNumber startingPoint endingPoint')
+        .populate('tripId.busId', 'busNumber busType')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Booking.countDocuments(query)
+    ]);
+
+    console.log(`📊 Found ${bookings.length} bookings for user`);
+
+    // Transform bookings to a consistent format
+    const transformedBookings = bookings.map(booking => {
+      const trip = booking.tripId;
+      const route = trip?.routeId;
+      const bus = trip?.busId;
+      
+      return {
+        id: booking._id,
+        bookingId: booking.bookingId || booking._id.toString().slice(-8).toUpperCase(),
+        pnr: booking.bookingId || booking._id.toString().slice(-8).toUpperCase(),
+        status: booking.status,
+        customer: booking.customer,
+        journey: {
+          from: route?.startingPoint?.city || route?.startingPoint || booking.journey?.from || 'Unknown',
+          to: route?.endingPoint?.city || route?.endingPoint || booking.journey?.to || 'Unknown',
+          departureDate: trip?.serviceDate || booking.journey?.departureDate,
+          departureTime: trip?.startTime || booking.journey?.departureTime,
+          arrivalTime: trip?.endTime || booking.journey?.arrivalTime
+        },
+        seats: booking.seats || [],
+        pricing: booking.pricing || { totalAmount: 0 },
+        payment: booking.payment || { paymentStatus: 'pending' },
+        trip: {
+          routeName: route?.routeName || 'Unknown Route',
+          routeNumber: route?.routeNumber || 'N/A',
+          busNumber: bus?.busNumber || 'N/A',
+          busType: bus?.busType || 'Standard'
+        },
+        createdAt: booking.createdAt,
+        updatedAt: booking.updatedAt
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        bookings: transformedBookings,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(totalCount / parseInt(limit)),
+          totalItems: totalCount,
+          itemsPerPage: parseInt(limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get my bookings error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get bookings',
       error: error.message
     });
   }

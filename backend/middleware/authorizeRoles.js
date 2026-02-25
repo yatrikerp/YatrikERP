@@ -36,6 +36,8 @@ const authorizeRoles = (...allowedRoles) => {
         if (normalizedAllowed === 'depot_manager' && (normalizedUser === 'depot_manager' || normalizedUser === 'depot-manager' || normalizedUser === 'depotmanager')) return true;
         if (normalizedAllowed === 'vendor' && normalizedUser === 'vendor') return true;
         if (normalizedAllowed === 'student' && normalizedUser === 'student') return true;
+        if (normalizedAllowed === 'super_admin' && (normalizedUser === 'super_admin' || normalizedUser === 'super-admin' || normalizedUser === 'superadmin')) return true;
+        if (normalizedAllowed === 'state_transport_authority' && (normalizedUser === 'state_transport_authority' || normalizedUser === 'state-transport-authority' || normalizedUser === 'statetransportauthority')) return true;
         
         return false;
       });

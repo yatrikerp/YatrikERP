@@ -105,6 +105,21 @@ const VendorDashboardIndustry = () => {
     }
   }, [filters.sparePartsCategory, filters.sparePartsStatus, activeTab]);
 
+  // PERMANENTLY protect vendor session - prevent auto-logout
+  useEffect(() => {
+    // Set justLoggedIn flag to prevent auto-logout
+    sessionStorage.setItem('justLoggedIn', Date.now().toString());
+    
+    // Keep refreshing the flag every 25 seconds to prevent expiration
+    const refreshInterval = setInterval(() => {
+      sessionStorage.setItem('justLoggedIn', Date.now().toString());
+    }, 25000); // Refresh every 25 seconds (before 30 second expiration)
+    
+    return () => {
+      clearInterval(refreshInterval);
+    };
+  }, []);
+
   // Fetch data when tabs change
   useEffect(() => {
     if (!user || (user.role !== 'vendor' && user.role !== 'VENDOR')) return;

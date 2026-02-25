@@ -20,6 +20,36 @@ const Auth = ({ initialMode = 'login' }) => {
   const redirectTo = searchParams.get('next') || '/pax';
   const { isMobile } = useMobileDetection();
   
+  // Check for OAuth errors from URL
+  useEffect(() => {
+    const oauthError = searchParams.get('error');
+    const oauthErrorType = searchParams.get('oauth_error');
+    
+    if (oauthError) {
+      let errorMessage = oauthError;
+      
+      // Provide specific messages for common OAuth errors
+      if (oauthErrorType === 'disabled_client') {
+        errorMessage = 'Google OAuth client is disabled. Please contact administrator or check Google Cloud Console settings.';
+        toast.error(errorMessage, { duration: 8000 });
+      } else if (oauthErrorType === 'access_denied') {
+        errorMessage = 'Google sign-in was cancelled.';
+        toast.error(errorMessage, { duration: 4000 });
+      } else if (oauthErrorType === 'invalid_client') {
+        errorMessage = 'Invalid Google OAuth configuration. Please check environment variables.';
+        toast.error(errorMessage, { duration: 8000 });
+      } else {
+        toast.error(errorMessage, { duration: 6000 });
+      }
+      
+      // Clean up URL
+      const newSearchParams = new URLSearchParams(searchParams);
+      newSearchParams.delete('error');
+      newSearchParams.delete('oauth_error');
+      navigate(window.location.pathname + (newSearchParams.toString() ? '?' + newSearchParams.toString() : ''), { replace: true });
+    }
+  }, [searchParams, navigate]);
+  
   // Form states with immediate validation
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [signupForm, setSignupForm] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
@@ -460,16 +490,31 @@ const Auth = ({ initialMode = 'login' }) => {
 
       // Ensure vendor users have vendorId set and roleType
       if (user && user.role === 'vendor') {
+        console.log('🔵 [Auth] Vendor user detected, normalizing vendor data...');
         if (!user.vendorId && user._id) {
           user.vendorId = user._id;
+          console.log('🔵 [Auth] Set vendorId:', user.vendorId);
         }
         if (!user.roleType) {
           user.roleType = 'external';
+          console.log('🔵 [Auth] Set roleType: external');
         }
         // Ensure redirectPath is set for vendors if not already set
         if (!redirectPath) {
           redirectPath = '/vendor/dashboard';
+          console.log('🔵 [Auth] Set vendor redirectPath:', redirectPath);
         }
+        console.log('🔵 [Auth] Final vendor user data:', {
+          _id: user._id,
+          vendorId: user.vendorId,
+          role: user.role,
+          roleType: user.roleType,
+          email: user.email,
+          companyName: user.companyName,
+          hasToken: !!token,
+          tokenLength: token?.length,
+          redirectPath
+        });
       }
 
       // Ensure student users have studentId set and roleType
@@ -491,19 +536,73 @@ const Auth = ({ initialMode = 'login' }) => {
       console.log('[Auth] Extracted user and token:', { user, token, redirectPath });
       
       if (user && token) {
+        // Validate token format
+        const tokenParts = token.split('.');
+        if (tokenParts.length !== 3) {
+          console.error('❌ [Auth] Invalid token format:', {
+            tokenLength: token.length,
+            parts: tokenParts.length,
+            tokenPreview: token.substring(0, 30) + '...'
+          });
+          toast.error('Invalid authentication token received');
+          setIsLoggingIn(false);
+          return;
+        }
+
+        // Decode token to verify vendor info
+        try {
+          const tokenPayload = JSON.parse(atob(tokenParts[1]));
+          console.log('🔵 [Auth] Token payload decoded:', {
+            userId: tokenPayload.userId,
+            vendorId: tokenPayload.vendorId,
+            role: tokenPayload.role,
+            email: tokenPayload.email,
+            exp: tokenPayload.exp ? new Date(tokenPayload.exp * 1000).toISOString() : 'No expiration'
+          });
+          
+          if (user.role === 'vendor' && tokenPayload.role !== 'vendor' && tokenPayload.role !== 'VENDOR') {
+            console.warn('⚠️ [Auth] Token role mismatch:', {
+              userRole: user.role,
+              tokenRole: tokenPayload.role
+            });
+          }
+        } catch (e) {
+          console.error('❌ [Auth] Failed to decode token:', e);
+        }
+
+        // Set justLoggedIn flag to prevent immediate logout
+        const justLoggedInTime = Date.now().toString();
+        sessionStorage.setItem('justLoggedIn', justLoggedInTime);
+        console.log('🔵 [Auth] Set justLoggedIn flag:', justLoggedInTime);
+        
         // Store redirect path if provided by backend
         if (redirectPath) {
           sessionStorage.setItem('authRedirectPath', redirectPath);
+          console.log('🔵 [Auth] Stored redirect path:', redirectPath);
         }
+        
         // Immediate login without waiting for profile fetch
+        console.log('🔵 [Auth] Calling fetchProfileAndLogin...');
         await fetchProfileAndLogin(user, token);
+        console.log('✅ [Auth] fetchProfileAndLogin completed');
       } else {
-        console.error('[Auth] Invalid response structure:', res.data);
+        console.error('❌ [Auth] Missing user or token:', {
+          hasUser: !!user,
+          hasToken: !!token,
+          userData: user,
+          responseData: res.data
+        });
         toast.error('Invalid response from server');
       }
     } catch (error) {
-      console.error('[Auth] Login error:', error);
-      toast.error('Network error. Please try again.');
+      console.error('❌ [Auth] Login error:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      toast.error(error.message || 'Network error. Please try again.');
     } finally {
       setIsLoggingIn(false);
     }

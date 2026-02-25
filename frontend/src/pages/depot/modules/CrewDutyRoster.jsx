@@ -35,25 +35,54 @@ const CrewDutyRoster = () => {
         fetchCrewSuggestions()
       ]);
 
-      // Set drivers
-      if (driversRes.ok) {
-        const driversData = driversRes.data?.drivers || driversRes.data?.data?.drivers || driversRes.data || [];
+      // Set drivers - handle res.guard.success() structure
+      if (driversRes.ok && driversRes.data) {
+        let driversData = null;
+        if (driversRes.data.success && driversRes.data.data) {
+          driversData = driversRes.data.data.drivers || driversRes.data.data;
+        } else if (driversRes.data.data && driversRes.data.data.drivers) {
+          driversData = driversRes.data.data.drivers;
+        } else if (driversRes.data.drivers) {
+          driversData = driversRes.data.drivers;
+        } else if (Array.isArray(driversRes.data)) {
+          driversData = driversRes.data;
+        }
         setDrivers(Array.isArray(driversData) ? driversData : []);
       } else {
         setDrivers([]);
       }
 
-      // Set conductors
-      if (conductorsRes.ok) {
-        const conductorsData = conductorsRes.data?.conductors || conductorsRes.data?.data?.conductors || conductorsRes.data || [];
+      // Set conductors - handle res.guard.success() structure
+      if (conductorsRes.ok && conductorsRes.data) {
+        let conductorsData = null;
+        if (conductorsRes.data.success && conductorsRes.data.data) {
+          conductorsData = conductorsRes.data.data.conductors || conductorsRes.data.data;
+        } else if (conductorsRes.data.data && conductorsRes.data.data.conductors) {
+          conductorsData = conductorsRes.data.data.conductors;
+        } else if (conductorsRes.data.conductors) {
+          conductorsData = conductorsRes.data.conductors;
+        } else if (Array.isArray(conductorsRes.data)) {
+          conductorsData = conductorsRes.data;
+        }
         setConductors(Array.isArray(conductorsData) ? conductorsData : []);
       } else {
         setConductors([]);
       }
 
-      // Set duty assignments
-      if (dutiesRes.ok) {
-        const dutiesData = dutiesRes.data?.duties || dutiesRes.data?.data?.duties || dutiesRes.data || [];
+      // Set duty assignments - handle res.guard.success() structure
+      if (dutiesRes.ok && dutiesRes.data) {
+        let dutiesData = null;
+        if (dutiesRes.data.success && dutiesRes.data.data) {
+          dutiesData = dutiesRes.data.data.duties || dutiesRes.data.data.assignments || dutiesRes.data.data;
+        } else if (dutiesRes.data.data && dutiesRes.data.data.duties) {
+          dutiesData = dutiesRes.data.data.duties;
+        } else if (dutiesRes.data.duties) {
+          dutiesData = dutiesRes.data.duties;
+        } else if (dutiesRes.data.assignments) {
+          dutiesData = dutiesRes.data.assignments;
+        } else if (Array.isArray(dutiesRes.data)) {
+          dutiesData = dutiesRes.data;
+        }
         setDutyAssignments(Array.isArray(dutiesData) ? dutiesData : []);
       } else {
         setDutyAssignments([]);
@@ -72,27 +101,48 @@ const CrewDutyRoster = () => {
   const fetchCrewSuggestions = async () => {
     try {
       // Fetch trips that need crew assignment
-      const tripsRes = await apiFetch('/api/depot/trips?status=approved', { suppressError: true });
-      if (tripsRes.ok) {
-        const trips = tripsRes.data?.trips || tripsRes.data?.data?.trips || tripsRes.data || [];
+      const tripsRes = await apiFetch('/api/depot/trips?status=scheduled', { suppressError: true });
+      if (tripsRes.ok && tripsRes.data) {
+        let trips = null;
+        if (tripsRes.data.success && tripsRes.data.data) {
+          trips = tripsRes.data.data.trips || tripsRes.data.data;
+        } else if (tripsRes.data.data && tripsRes.data.data.trips) {
+          trips = tripsRes.data.data.trips;
+        } else if (tripsRes.data.trips) {
+          trips = tripsRes.data.trips;
+        } else if (Array.isArray(tripsRes.data)) {
+          trips = tripsRes.data;
+        }
+        
         if (!Array.isArray(trips)) {
           setSuggestions([]);
           return;
         }
         
+        // Filter trips that need crew (no driver or conductor assigned)
+        const tripsNeedingCrew = trips.filter(trip => !trip.driverId || !trip.conductorId).slice(0, 10);
+        
         // For each trip, get AI suggestions
         const suggestionsData = await Promise.all(
-          trips.slice(0, 10).map(async (trip) => {
+          tripsNeedingCrew.map(async (trip) => {
             try {
               const res = await apiFetch(`/api/depot/crew/suggestions/${trip._id}`, { suppressError: true });
-              if (res.ok) {
+              if (res.ok && res.data) {
+                let suggestionData = null;
+                if (res.data.success && res.data.data) {
+                  suggestionData = res.data.data;
+                } else if (res.data.data) {
+                  suggestionData = res.data.data;
+                } else {
+                  suggestionData = res.data;
+                }
                 return {
                   trip,
-                  ...res.data
+                  ...suggestionData
                 };
               }
             } catch (error) {
-              // Silently handle missing endpoint
+              console.error('Error fetching suggestion for trip:', trip._id, error);
             }
             return null;
           })
@@ -124,10 +174,18 @@ const CrewDutyRoster = () => {
         suppressError: true
       });
       if (res.ok) {
-        toast.success('Crew assigned successfully!');
-        fetchAllCrewData();
+        // Check response structure
+        const success = res.data?.success || (res.data?.data && res.data.data.success);
+        if (success || res.ok) {
+          toast.success('Crew assigned successfully!');
+          await fetchAllCrewData();
+        } else {
+          const errorMsg = res.data?.message || res.data?.data?.message || 'Failed to assign crew';
+          toast.error(errorMsg);
+        }
       } else {
-        toast.error(res.data?.message || 'Failed to assign crew');
+        const errorMsg = res.data?.message || res.message || 'Failed to assign crew';
+        toast.error(errorMsg);
       }
     } catch (error) {
       toast.error('Error assigning crew. Please try again.');

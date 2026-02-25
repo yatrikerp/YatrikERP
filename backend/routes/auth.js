@@ -674,8 +674,90 @@ router.post("/login", async (req, res) => {
       }
     }
     
-    // Check for Student BEFORE regular user (students have priority)
+    // Detect vendor and system emails early (skip student check for these domains)
+    const isVendorEmail = normalizedIdentifier.includes('@vendor.com') || normalizedIdentifier.includes('@yatrik.com');
+    const isSystemEmail = isVendorEmail || normalizedIdentifier.includes('-depot@yatrik.com');
+    
+    // Check for Vendor FIRST for email-based logins (priority for vendor/system domains)
     if (!user && isEmail) {
+      try {
+        const Vendor = require('../models/Vendor');
+        const vendor = await Vendor.findOne({ 
+          $or: [
+            { email: normalizedIdentifier },
+            { 'contactDetails.email': normalizedIdentifier }
+          ]
+        }).select('+password');
+        
+        if (vendor) {
+          const isMatch = await vendor.comparePassword(rawPassword);
+          
+          if (isMatch) {
+            // Check status
+            if (vendor.status !== 'approved' && vendor.status !== 'active') {
+              // Status check - log only if needed
+              return res.status(403).json({ 
+                success: false,
+                message: `Vendor account is ${vendor.status}. Please contact administrator.` 
+              });
+            }
+
+            // Update last login
+            vendor.lastLogin = new Date();
+            await vendor.save();
+
+            // Vendor login successful
+
+            // Generate JWT token
+            const token = jwt.sign(
+              {
+                userId: vendor._id,
+                vendorId: vendor._id,
+                role: 'vendor',
+                roleType: 'external',
+                email: vendor.email,
+                name: vendor.companyName
+              },
+              process.env.JWT_SECRET || 'secret',
+              { expiresIn: '7d' }
+            );
+
+            // Return success response
+            return res.json({
+              success: true,
+              token,
+              user: {
+                _id: vendor._id,
+                name: vendor.companyName,
+                email: vendor.email,
+                phone: vendor.phone,
+                role: 'vendor',
+                roleType: 'external',
+                status: vendor.status,
+                vendorId: vendor._id,
+                companyName: vendor.companyName,
+                trustScore: vendor.trustScore,
+                complianceScore: vendor.complianceScore
+              },
+              redirectPath: '/vendor/dashboard'
+            });
+          } else {
+            // Password mismatch - invalid credentials
+            return res.status(401).json({ 
+              success: false,
+              message: 'Invalid email or password' 
+            });
+          }
+        }
+      } catch (vendorError) {
+        logger.error('[AUTH] Vendor login error:', vendorError);
+        logger.error('[AUTH] Vendor error stack:', vendorError.stack);
+        // Continue to next check (don't fail completely)
+      }
+    }
+    
+    // Check for Student by email ONLY if not a vendor/system domain
+    if (!user && isEmail && !isVendorEmail && !isSystemEmail) {
       try {
         const StudentPass = require('../models/StudentPass');
         let student = null;
@@ -739,111 +821,6 @@ router.post("/login", async (req, res) => {
       }
     }
     
-    // Check for Vendor if not found yet
-    if (!user && isEmail) {
-      try {
-        const Vendor = require('../models/Vendor');
-        logger.info(`[AUTH] Checking for vendor with email: ${normalizedIdentifier}`);
-        const vendor = await Vendor.findOne({ 
-          $or: [
-            { email: normalizedIdentifier },
-            { 'contactDetails.email': normalizedIdentifier }
-          ]
-        }).select('+password');
-        
-        if (vendor) {
-          logger.info(`[AUTH] Vendor found: ${vendor.companyName}, status: ${vendor.status}`);
-          
-          // Check if account is locked
-          if (vendor.lockUntil && vendor.lockUntil > Date.now()) {
-            logger.warn(`[AUTH] Vendor account locked until: ${vendor.lockUntil}`);
-            return res.status(423).json({ 
-              success: false,
-              message: 'Account is temporarily locked. Please try again later.' 
-            });
-          }
-
-          // Verify password
-          logger.info(`[AUTH] Verifying vendor password...`);
-          const isMatch = await vendor.comparePassword(rawPassword);
-          logger.info(`[AUTH] Password match: ${isMatch}`);
-          
-          if (isMatch) {
-            // Check status
-            if (vendor.status !== 'approved' && vendor.status !== 'active') {
-              logger.warn(`[AUTH] Vendor status is ${vendor.status}, not approved/active`);
-              return res.status(403).json({ 
-                success: false,
-                message: `Vendor account is ${vendor.status}. Please contact administrator.` 
-              });
-            }
-
-            // Reset login attempts on successful login
-            vendor.loginAttempts = 0;
-            vendor.lockUntil = null;
-            vendor.lastLogin = new Date();
-            await vendor.save();
-
-            logger.info(`[AUTH] Vendor login successful: ${vendor.companyName}`);
-
-            // Generate JWT token
-            const token = jwt.sign(
-              {
-                userId: vendor._id,
-                vendorId: vendor._id,
-                role: 'VENDOR',
-                roleType: 'external',
-                email: vendor.email,
-                name: vendor.companyName
-              },
-              process.env.JWT_SECRET || 'secret',
-              { expiresIn: '7d' }
-            );
-
-            // Return success response
-            return res.json({
-              success: true,
-              token,
-              user: {
-                _id: vendor._id,
-                name: vendor.companyName,
-                email: vendor.email,
-                phone: vendor.phone,
-                role: 'vendor',
-                roleType: 'external',
-                status: vendor.status,
-                vendorId: vendor._id,
-                companyName: vendor.companyName,
-                trustScore: vendor.trustScore,
-                complianceScore: vendor.complianceScore
-              },
-              redirectPath: '/vendor/dashboard'
-            });
-          } else {
-            // Increment login attempts on failed login
-            vendor.loginAttempts = (vendor.loginAttempts || 0) + 1;
-            if (vendor.loginAttempts >= 5) {
-              vendor.lockUntil = new Date(Date.now() + 30 * 60 * 1000); // Lock for 30 minutes
-              logger.warn(`[AUTH] Vendor account locked after 5 failed attempts`);
-            }
-            await vendor.save();
-            
-            logger.warn(`[AUTH] Vendor password mismatch for: ${normalizedIdentifier}`);
-            return res.status(401).json({ 
-              success: false,
-              message: 'Invalid email or password' 
-            });
-          }
-        } else {
-          logger.info(`[AUTH] No vendor found with email: ${normalizedIdentifier}`);
-        }
-      } catch (vendorError) {
-        logger.error('[AUTH] Vendor login error:', vendorError);
-        logger.error('[AUTH] Vendor error stack:', vendorError.stack);
-        // Continue to next check (don't fail completely)
-      }
-    }
-    
     // If not found as special user type, try regular user
     if (!user && isEmail) {
       user = await User.findOne({ email: normalizedIdentifier }).select('+password').lean();
@@ -852,7 +829,7 @@ router.post("/login", async (req, res) => {
       }
     }
     
-    // Check for Student by phone or Aadhaar if not found yet
+    // Check for Student by phone or Aadhaar (non-email identifiers)
     if (!user) {
       try {
         const StudentPass = require('../models/StudentPass');
@@ -953,7 +930,7 @@ router.post("/login", async (req, res) => {
 
     // OPTIMIZED: Generate token immediately with roleType and depot-specific data
     const userRole = (user.role || 'passenger').toLowerCase();
-    const roleType = user.roleType || (['admin', 'depot_manager', 'conductor', 'driver', 'support_agent', 'data_collector'].includes(userRole) ? 'internal' : 'external');
+    const roleType = user.roleType || (['admin', 'depot_manager', 'conductor', 'driver', 'support_agent', 'data_collector', 'super_admin', 'state_transport_authority'].includes(userRole) ? 'internal' : 'external');
     
     const tokenPayload = {
       userId: user._id, 
@@ -999,7 +976,9 @@ router.post("/login", async (req, res) => {
     // Determine redirect path based on user role
     let redirectPath = '/pax'; // default for passengers
     
-    if (user.isDepotUser || user.depotId || userRole === 'depot_manager') {
+    if (userRole === 'super_admin' || userRole === 'state_transport_authority') {
+      redirectPath = '/state-command';
+    } else if (user.isDepotUser || user.depotId || userRole === 'depot_manager') {
       redirectPath = '/depot';
     } else if (userRole === 'admin') {
       redirectPath = '/admin';
@@ -1410,6 +1389,16 @@ router.get('/me', async (req, res) => {
 // OAuth routes - RESTRICTED TO PASSENGERS ONLY
 // Staff members (conductors, drivers, depot managers, admins) must use email/password authentication
 router.get('/google', (req, res, next) => {
+  // Check if OAuth is properly configured
+  const oauthConfig = require('../config/oauth');
+  if (!oauthConfig.google.clientID || !oauthConfig.google.clientSecret) {
+    const redirectURL = process.env.NODE_ENV === 'development' 
+      ? 'http://localhost:3000'
+      : (process.env.FRONTEND_URL || 'https://yatrikerp.live');
+    logger.error('Google OAuth not configured - missing credentials');
+    return res.redirect(`${redirectURL}/login?error=${encodeURIComponent('Google OAuth is not configured. Please contact administrator.')}`);
+  }
+  
   // Determine redirect URL based on environment
   const redirectURL = process.env.NODE_ENV === 'development' 
     ? 'http://localhost:3000'
@@ -1431,7 +1420,30 @@ router.get('/google/callback', (req, res, next) => {
     ? 'http://localhost:3000'
     : (process.env.FRONTEND_URL || 'https://yatrikerp.live');
   
-  passport.authenticate('google', { failureRedirect: `${redirectURL}/login` })(req, res, next);
+  // Check for OAuth errors
+  if (req.query.error) {
+    logger.error('Google OAuth error:', {
+      error: req.query.error,
+      error_description: req.query.error_description,
+      error_uri: req.query.error_uri
+    });
+    
+    // Handle specific error types
+    let errorMessage = 'Google sign-in failed.';
+    if (req.query.error === 'disabled_client') {
+      errorMessage = 'Google OAuth client is disabled. Please contact administrator or check Google Cloud Console settings.';
+    } else if (req.query.error === 'access_denied') {
+      errorMessage = 'Google sign-in was cancelled.';
+    } else if (req.query.error === 'invalid_client') {
+      errorMessage = 'Invalid Google OAuth configuration. Please check environment variables.';
+    }
+    
+    return res.redirect(`${redirectURL}/login?error=${encodeURIComponent(errorMessage)}&oauth_error=${req.query.error}`);
+  }
+  
+  passport.authenticate('google', { 
+    failureRedirect: `${redirectURL}/login?error=${encodeURIComponent('Google authentication failed. Please try again.')}`
+  })(req, res, next);
 }, async (req, res) => {
   try {
     // Determine redirect URL based on environment
@@ -1441,13 +1453,28 @@ router.get('/google/callback', (req, res, next) => {
     
     const user = req.user;
     
-    // Generate JWT token instantly
-    const token = jwt.sign({ 
+    // Normalize role to lowercase for consistency
+    const userRole = (user.role || 'passenger').toLowerCase();
+    
+    // Determine roleType (internal vs external)
+    const internalRoles = ['admin', 'depot_manager', 'conductor', 'driver', 'support_agent', 'data_collector'];
+    const roleType = user.roleType || (internalRoles.includes(userRole) ? 'internal' : 'external');
+    
+    // Generate JWT token with consistent structure matching standard login
+    const tokenPayload = {
       userId: user._id, 
-      role: (user.role || 'passenger').toUpperCase(),
+      role: userRole.toUpperCase(), // Keep uppercase in token for consistency
+      roleType: roleType,
       name: user.name,
       email: user.email
-    }, oauthConfig.jwtSecret, { expiresIn: oauthConfig.jwtExpire });
+    };
+    
+    // Use the same JWT_SECRET as all other login endpoints for consistency
+    const token = jwt.sign(
+      tokenPayload,
+      process.env.JWT_SECRET || 'secret',
+      { expiresIn: '7d' }
+    );
     
     // Get the 'next' parameter from state (faster than session)
     let nextParam = '/pax';
@@ -1461,8 +1488,17 @@ router.get('/google/callback', (req, res, next) => {
       nextParam = '/pax';
     }
     
-    // Encode user data (remove password)
-    const userParam = encodeURIComponent(JSON.stringify({ ...user.toObject(), password: undefined }));
+    // Prepare user data with normalized role and roleType
+    const userObject = user.toObject();
+    const safeUserData = {
+      ...userObject,
+      password: undefined, // Remove password
+      role: userRole, // Normalized lowercase role
+      roleType: roleType // Include roleType
+    };
+    
+    // Encode user data
+    const userParam = encodeURIComponent(JSON.stringify(safeUserData));
     
     // Instant redirect with all data
     const redirectUrl = `${redirectURL}/oauth/callback?token=${encodeURIComponent(token)}&user=${userParam}&next=${encodeURIComponent(nextParam)}`;
@@ -1555,7 +1591,7 @@ module.exports = router;
  
 // Unified role-based login
 // POST /api/auth/role-login
-// Body: { role: 'admin'|'passenger'|'depot'|'driver'|'conductor', username/email/phone, password }
+// Body: { role: 'admin'|'passenger'|'depot'|'driver'|'conductor'|'vendor'|'student', username/email/phone, password }
 router.post('/role-login', async (req, res) => {
   try {
     const { role, username, email, phone, password } = req.body;
@@ -1563,6 +1599,7 @@ router.post('/role-login', async (req, res) => {
 
     const normalizedRole = String(role).toLowerCase();
 
+    // Admin, Passenger, User roles
     if (normalizedRole === 'admin' || normalizedRole === 'passenger' || normalizedRole === 'user') {
       const identifier = (email || phone || username || '').toString().trim().toLowerCase();
       if (!identifier) return res.status(400).json({ success: false, message: 'Email/phone required' });
@@ -1571,11 +1608,156 @@ router.post('/role-login', async (req, res) => {
       const ok = await bcrypt.compare(password, user.password);
       if (!ok) return res.status(401).json({ success: false, message: 'Invalid credentials' });
       if (user.status && user.status !== 'active') return res.status(403).json({ success: false, message: 'Account is not active' });
-      const token = jwt.sign({ userId: user._id, role: (user.role || 'passenger').toUpperCase(), name: user.name, email: user.email }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+      
+      const userRole = (user.role || 'passenger').toLowerCase();
+      const roleType = user.roleType || (['admin', 'depot_manager', 'conductor', 'driver', 'support_agent', 'data_collector'].includes(userRole) ? 'internal' : 'external');
+      
+      const token = jwt.sign({ 
+        userId: user._id, 
+        role: userRole.toUpperCase(), 
+        roleType: roleType,
+        name: user.name, 
+        email: user.email 
+      }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+      
       const { password: _pw, ...safe } = user.toObject();
-      return res.json({ success: true, token, user: safe });
+      const redirectPath = userRole === 'admin' ? '/admin' : '/pax';
+      return res.json({ success: true, token, user: safe, redirectPath });
     }
 
+    // Vendor role
+    if (normalizedRole === 'vendor') {
+      const identifier = (email || '').toString().trim().toLowerCase();
+      if (!identifier) return res.status(400).json({ success: false, message: 'Email required' });
+      
+      const Vendor = require('../models/Vendor');
+      const vendor = await Vendor.findOne({ 
+        $or: [
+          { email: identifier },
+          { 'contactDetails.email': identifier }
+        ]
+      }).select('+password');
+      
+      if (!vendor) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      
+      const ok = await vendor.comparePassword(password);
+      if (!ok) {
+        return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      }
+      
+      if (vendor.status !== 'approved' && vendor.status !== 'active') {
+        return res.status(403).json({ 
+          success: false,
+          message: `Vendor account is ${vendor.status}. Please contact administrator.` 
+        });
+      }
+      
+      // Update last login
+      vendor.lastLogin = new Date();
+      await vendor.save();
+      
+      const token = jwt.sign({ 
+        userId: vendor._id,
+        vendorId: vendor._id,
+        role: 'vendor',
+        roleType: 'external',
+        email: vendor.email,
+        name: vendor.companyName
+      }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+      
+      return res.json({ 
+        success: true, 
+        token, 
+        user: {
+          _id: vendor._id,
+          name: vendor.companyName,
+          email: vendor.email,
+          phone: vendor.phone,
+          role: 'vendor',
+          roleType: 'external',
+          status: vendor.status,
+          vendorId: vendor._id,
+          companyName: vendor.companyName
+        },
+        redirectPath: '/vendor/dashboard'
+      });
+    }
+
+    // Student role
+    if (normalizedRole === 'student') {
+      const identifier = (email || phone || '').toString().trim().toLowerCase();
+      if (!identifier) return res.status(400).json({ success: false, message: 'Email/phone required' });
+      
+      const StudentPass = require('../models/StudentPass');
+      let student = null;
+      
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
+        // Email
+        student = await StudentPass.findOne({ 
+          $or: [
+            { email: identifier },
+            { 'personalDetails.email': identifier }
+          ]
+        }).select('+password');
+      } else if (/^[0-9]{10}$/.test(identifier)) {
+        // Phone number
+        student = await StudentPass.findOne({ 
+          $or: [
+            { phone: identifier },
+            { 'personalDetails.mobile': identifier }
+          ]
+        }).select('+password');
+      } else if (/^[0-9]{12}$/.test(identifier)) {
+        // Aadhaar number
+        student = await StudentPass.findOne({ aadhaarNumber: identifier }).select('+password');
+      }
+      
+      if (!student) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      
+      const ok = await student.comparePassword(password);
+      if (!ok) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      
+      if (student.status !== 'active' && student.status !== 'approved' && student.passStatus !== 'approved') {
+        return res.status(403).json({ 
+          success: false,
+          message: `Student pass is ${student.status || student.passStatus}. Please contact administrator.` 
+        });
+      }
+      
+      const studentEmail = student.email || student.personalDetails?.email || '';
+      const studentName = student.name || student.personalDetails?.fullName || 'Student';
+      const studentPhone = student.phone || student.personalDetails?.mobile || '';
+      
+      const token = jwt.sign({
+        userId: student._id,
+        studentId: student._id,
+        email: studentEmail,
+        role: 'STUDENT',
+        roleType: 'external',
+        aadhaarNumber: student.aadhaarNumber,
+        name: studentName
+      }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+      
+      return res.json({
+        success: true,
+        token,
+        user: {
+          _id: student._id,
+          name: studentName,
+          email: studentEmail,
+          phone: studentPhone,
+          role: 'student',
+          roleType: 'external',
+          status: student.status || student.passStatus,
+          studentId: student._id,
+          aadhaarNumber: student.aadhaarNumber,
+          passNumber: student.digitalPass?.passNumber || null
+        },
+        redirectPath: '/student/dashboard'
+      });
+    }
+
+    // Depot Manager roles
     if (normalizedRole === 'depot' || normalizedRole === 'depot_manager' || normalizedRole === 'depot-supervisor' || normalizedRole === 'depot-operator') {
       const identifier = (username || email || '').toString().trim().toLowerCase();
       if (!identifier) return res.status(400).json({ success: false, message: 'Username/email required' });
@@ -1584,32 +1766,129 @@ router.post('/role-login', async (req, res) => {
       const ok = await bcrypt.compare(password, user.password);
       if (!ok) return res.status(401).json({ success: false, message: 'Invalid credentials' });
       if (user.status !== 'active') return res.status(403).json({ success: false, message: `Account is ${user.status}` });
-      const token = jwt.sign({ userId: user._id, username: user.username, role: (user.role || 'depot_manager').toUpperCase(), depotId: user.depotId, depotCode: user.depotCode, permissions: user.permissions }, process.env.JWT_SECRET || 'secret', { expiresIn: '24h' });
-      return res.json({ success: true, token, user: { _id: user._id, username: user.username, email: user.email, name: user.username, role: user.role || 'depot_manager', depotId: user.depotId, depotCode: user.depotCode, depotName: user.depotName, permissions: user.permissions, status: user.status, lastLogin: new Date() } });
+      
+      const token = jwt.sign({ 
+        userId: user._id, 
+        username: user.username, 
+        role: (user.role || 'depot_manager').toUpperCase(), 
+        roleType: 'internal',
+        depotId: user.depotId, 
+        depotCode: user.depotCode, 
+        permissions: user.permissions,
+        isDepotUser: true
+      }, process.env.JWT_SECRET || 'secret', { expiresIn: '24h' });
+      
+      return res.json({ 
+        success: true, 
+        token, 
+        user: { 
+          _id: user._id, 
+          username: user.username, 
+          email: user.email, 
+          name: user.username, 
+          role: user.role || 'depot_manager', 
+          roleType: 'internal',
+          depotId: user.depotId, 
+          depotCode: user.depotCode, 
+          depotName: user.depotName, 
+          permissions: user.permissions, 
+          status: user.status, 
+          isDepotUser: true
+        },
+        redirectPath: '/depot'
+      });
     }
 
+    // Driver role
     if (normalizedRole === 'driver') {
-      const identifier = (username || '').toString().trim();
-      if (!identifier) return res.status(400).json({ success: false, message: 'Username required' });
-      const driver = await Driver.findOne({ username: identifier }).select('+password');
+      const identifier = (username || email || '').toString().trim().toLowerCase();
+      if (!identifier) return res.status(400).json({ success: false, message: 'Username/email required' });
+      
+      let driver = await Driver.findOne({ username: identifier }).select('+password');
+      if (!driver && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
+        driver = await Driver.findOne({ email: identifier }).select('+password');
+      }
+      
       if (!driver) return res.status(401).json({ success: false, message: 'Invalid credentials' });
       const ok = await bcrypt.compare(password, driver.password);
       if (!ok) return res.status(401).json({ success: false, message: 'Invalid credentials' });
       if (driver.status !== 'active') return res.status(403).json({ success: false, message: 'Account is not active' });
-      const token = jwt.sign({ driverId: driver._id, username: driver.username, depotId: driver.depotId, role: 'DRIVER' }, process.env.JWT_SECRET || 'secret', { expiresIn: '12h' });
-      return res.json({ success: true, token, user: { _id: driver._id, name: driver.name, username: driver.username, role: 'driver', depotId: driver.depotId } });
+      
+      const token = jwt.sign({ 
+        userId: driver._id,
+        driverId: driver._id, 
+        username: driver.username, 
+        role: 'DRIVER',
+        roleType: 'internal',
+        name: driver.name,
+        email: driver.email || `${driver.username}@yatrik.com`,
+        depotId: driver.depotId 
+      }, process.env.JWT_SECRET || 'secret', { expiresIn: '12h' });
+      
+      // Update last login
+      driver.lastLogin = new Date();
+      await driver.save();
+      
+      return res.json({ 
+        success: true, 
+        token, 
+        user: { 
+          _id: driver._id, 
+          name: driver.name, 
+          username: driver.username, 
+          email: driver.email || `${driver.username}@yatrik.com`,
+          role: 'driver',
+          roleType: 'internal',
+          depotId: driver.depotId 
+        },
+        redirectPath: '/driver'
+      });
     }
 
+    // Conductor role
     if (normalizedRole === 'conductor') {
-      const identifier = (username || '').toString().trim();
-      if (!identifier) return res.status(400).json({ success: false, message: 'Username required' });
-      const conductor = await Conductor.findOne({ username: identifier }).select('+password');
+      const identifier = (username || email || '').toString().trim().toLowerCase();
+      if (!identifier) return res.status(400).json({ success: false, message: 'Username/email required' });
+      
+      let conductor = await Conductor.findOne({ username: identifier }).select('+password');
+      if (!conductor && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
+        conductor = await Conductor.findOne({ email: identifier }).select('+password');
+      }
+      
       if (!conductor) return res.status(401).json({ success: false, message: 'Invalid credentials' });
       const ok = await bcrypt.compare(password, conductor.password);
       if (!ok) return res.status(401).json({ success: false, message: 'Invalid credentials' });
       if (conductor.status !== 'active') return res.status(403).json({ success: false, message: 'Account is not active' });
-      const token = jwt.sign({ conductorId: conductor._id, username: conductor.username, depotId: conductor.depotId, role: 'CONDUCTOR' }, process.env.JWT_SECRET || 'secret', { expiresIn: '12h' });
-      return res.json({ success: true, token, user: { _id: conductor._id, name: conductor.name, username: conductor.username, role: 'conductor', depotId: conductor.depotId } });
+      
+      const token = jwt.sign({ 
+        userId: conductor._id,
+        conductorId: conductor._id, 
+        username: conductor.username, 
+        role: 'CONDUCTOR',
+        roleType: 'internal',
+        name: conductor.name,
+        email: conductor.email || `${conductor.username}@yatrik.com`,
+        depotId: conductor.depotId 
+      }, process.env.JWT_SECRET || 'secret', { expiresIn: '12h' });
+      
+      // Update last login
+      conductor.lastLogin = new Date();
+      await conductor.save();
+      
+      return res.json({ 
+        success: true, 
+        token, 
+        user: { 
+          _id: conductor._id, 
+          name: conductor.name, 
+          username: conductor.username,
+          email: conductor.email || `${conductor.username}@yatrik.com`,
+          role: 'conductor',
+          roleType: 'internal',
+          depotId: conductor.depotId 
+        },
+        redirectPath: '/conductor'
+      });
     }
 
     return res.status(400).json({ success: false, message: 'Unsupported role' });

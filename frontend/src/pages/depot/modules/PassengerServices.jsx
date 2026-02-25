@@ -21,9 +21,19 @@ const PassengerServices = () => {
   const fetchComplaints = async () => {
     try {
       setLoading(true);
-      const res = await apiFetch(`/api/depot/complaints?status=${filter === 'all' ? '' : filter}`);
-      if (res.ok) {
-        const complaintsData = res.data?.complaints || res.data || [];
+      const res = await apiFetch(`/api/depot/complaints?status=${filter === 'all' ? '' : filter}`, { suppressError: true });
+      if (res.ok && res.data) {
+        // Handle res.guard.success() structure
+        let complaintsData = null;
+        if (res.data.success && res.data.data) {
+          complaintsData = res.data.data.complaints || res.data.data;
+        } else if (res.data.data && res.data.data.complaints) {
+          complaintsData = res.data.data.complaints;
+        } else if (res.data.complaints) {
+          complaintsData = res.data.complaints;
+        } else if (Array.isArray(res.data)) {
+          complaintsData = res.data;
+        }
         setComplaints(Array.isArray(complaintsData) ? complaintsData : []);
       } else {
         setComplaints([]);
@@ -39,15 +49,25 @@ const PassengerServices = () => {
   const fetchConcessions = async () => {
     try {
       setLoading(true);
-      const res = await apiFetch(`/api/depot/concessions?status=${filter === 'all' ? '' : filter}`);
-      if (res.ok) {
-        const concessionsData = res.data?.concessions || res.data || [];
+      const res = await apiFetch(`/api/depot/concessions?status=${filter === 'all' ? '' : filter}`, { suppressError: true });
+      if (res.ok && res.data) {
+        // Handle res.guard.success() structure
+        let concessionsData = null;
+        if (res.data.success && res.data.data) {
+          concessionsData = res.data.data.concessions || res.data.data;
+        } else if (res.data.data && res.data.data.concessions) {
+          concessionsData = res.data.data.concessions;
+        } else if (res.data.concessions) {
+          concessionsData = res.data.concessions;
+        } else if (Array.isArray(res.data)) {
+          concessionsData = res.data;
+        }
         setConcessions(Array.isArray(concessionsData) ? concessionsData : []);
       } else {
         setConcessions([]);
       }
     } catch (error) {
-      // Handle missing endpoint gracefully
+      console.error('Error fetching concessions:', error);
       setConcessions([]);
     } finally {
       setLoading(false);
@@ -61,11 +81,19 @@ const PassengerServices = () => {
         body: JSON.stringify({ complaint_id: complaintId }),
         suppressError: true
       });
+      
       if (res.ok) {
-        toast.success('Complaint resolved successfully!');
-        fetchComplaints();
+        const success = res.data?.success || (res.data?.data && res.data.data.success);
+        if (success || res.ok) {
+          toast.success('Complaint resolved successfully!');
+          await fetchComplaints();
+        } else {
+          const errorMsg = res.data?.message || res.data?.data?.message || 'Failed to resolve complaint';
+          toast.error(errorMsg);
+        }
       } else {
-        toast.error(res.message || 'Failed to resolve complaint');
+        const errorMsg = res.data?.message || res.message || 'Failed to resolve complaint';
+        toast.error(errorMsg);
       }
     } catch (error) {
       toast.error('Error resolving complaint. Please try again.');
@@ -79,13 +107,22 @@ const PassengerServices = () => {
         body: JSON.stringify({ concession_id: concessionId }),
         suppressError: true
       });
+      
       if (res.ok) {
-        toast.success('Concession approved successfully!');
-        fetchConcessions();
+        const success = res.data?.success || (res.data?.data && res.data.data.success);
+        if (success || res.ok) {
+          toast.success('Concession approved successfully!');
+          await fetchConcessions();
+        } else {
+          const errorMsg = res.data?.message || res.data?.data?.message || 'Failed to approve concession';
+          toast.error(errorMsg);
+        }
       } else {
-        toast.error(res.message || 'Failed to approve concession');
+        const errorMsg = res.data?.message || res.message || 'Failed to approve concession';
+        toast.error(errorMsg);
       }
     } catch (error) {
+      console.error('Error approving concession:', error);
       toast.error('Error approving concession. Please try again.');
     }
   };
@@ -99,13 +136,22 @@ const PassengerServices = () => {
         body: JSON.stringify({ concession_id: concessionId }),
         suppressError: true
       });
+      
       if (res.ok) {
-        toast.success('Concession rejected');
-        fetchConcessions();
+        const success = res.data?.success || (res.data?.data && res.data.data.success);
+        if (success || res.ok) {
+          toast.success('Concession rejected');
+          await fetchConcessions();
+        } else {
+          const errorMsg = res.data?.message || res.data?.data?.message || 'Failed to reject concession';
+          toast.error(errorMsg);
+        }
       } else {
-        toast.error(res.message || 'Failed to reject concession');
+        const errorMsg = res.data?.message || res.message || 'Failed to reject concession';
+        toast.error(errorMsg);
       }
     } catch (error) {
+      console.error('Error rejecting concession:', error);
       toast.error('Error rejecting concession. Please try again.');
     }
   };

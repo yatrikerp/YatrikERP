@@ -44,7 +44,9 @@ const corsOrigins = process.env.CORS_ORIGIN
   : defaultCorsOrigins;
 
 // Enhanced CORS configuration
-logger.info("🌐 CORS Origins:", corsOrigins);
+if (process.env.NODE_ENV === "development") {
+  logger.info("🌐 CORS Origins:", corsOrigins);
+}
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -55,7 +57,9 @@ app.use(
       if (corsOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
-        logger.warn(`⚠️ CORS blocked origin: ${origin}`);
+        if (process.env.NODE_ENV === "development") {
+          logger.warn(`⚠️ CORS blocked origin: ${origin}`);
+        }
         callback(new Error("Not allowed by CORS"));
       }
     },
@@ -168,13 +172,18 @@ async function startServer() {
     logger.info("✅ Connected to Atlas MongoDB successfully");
     logger.info("📊 Database ready for operations");
 
-    // Start automatic schedule generator
-    try {
-      const autoScheduleGenerator = require('./services/autoScheduleGenerator');
-      autoScheduleGenerator.initializeSchedulers();
-      logger.info('🚀 Automatic schedule generator started');
-    } catch (error) {
-      logger.error('❌ Failed to start automatic schedule generator:', error.message);
+    // Start automatic schedule generator (only in production)
+    if (process.env.NODE_ENV === "production") {
+      try {
+        const autoScheduleGenerator = require("./services/autoScheduleGenerator");
+        autoScheduleGenerator.initializeSchedulers();
+        logger.info("🚀 Automatic schedule generator started");
+      } catch (error) {
+        logger.error(
+          "❌ Failed to start automatic schedule generator:",
+          error.message,
+        );
+      }
     }
 
     // Start the server after database connection
@@ -206,32 +215,23 @@ async function startServer() {
     } = require("./services/aiScheduleWebSocket");
     initializeAIScheduleWebSocket(io);
 
-    // WebSocket connection handler
+    // WebSocket connection handler (minimal logging)
     io.on("connection", (socket) => {
-      logger.info(`🔌 Client connected: ${socket.id}`);
-
       // Join job-specific room
       socket.on("subscribe-job", (jobId) => {
         socket.join(`job-${jobId}`);
-        logger.info(`📡 Client subscribed to job: ${jobId}`);
       });
 
       socket.on("unsubscribe-job", (jobId) => {
         socket.leave(`job-${jobId}`);
-        logger.info(`📡 Client unsubscribed from job: ${jobId}`);
-      });
-
-      socket.on("disconnect", () => {
-        logger.info(`🔌 Client disconnected: ${socket.id}`);
       });
     });
 
     server.listen(PORT, () => {
-      logger.info(`Starting server...`);
-      logger.info(`Port: ${PORT}`);
-      logger.info(`Server running on port ${PORT}`);
-      logger.info("Socket.IO server ready");
-      logger.info(`Health endpoint: http://localhost:${PORT}/api/health`);
+      logger.info(`✅ Server running on port ${PORT}`);
+      if (process.env.NODE_ENV === "development") {
+        logger.info(`Health: http://localhost:${PORT}/api/health`);
+      }
     });
   } catch (error) {
     logger.error("❌ MongoDB connection error:", error.message);
@@ -317,14 +317,12 @@ app.use("/api/admin", require("./routes/bulkAssignment"));
 app.use("/api/admin", require("./routes/aiScheduler"));
 app.use("/api/admin", require("./routes/adminAdvancedFeatures"));
 app.use("/api/admin/ai", require("./routes/adminAIScheduling"));
+app.use("/api/admin/ai", require("./routes/adminAI")); // Comprehensive AI endpoints
 app.use("/api/scheduler", require("./routes/schedulerV2"));
-console.log('📋 Registering depot routes...');
 try {
   app.use("/api/depot", require("./routes/depot"));
-  console.log('✅ Depot routes registered at /api/depot');
 } catch (error) {
-  console.error('❌ Failed to load depot routes:', error.message);
-  console.error('   Stack:', error.stack);
+  logger.error("Failed to load depot routes:", error.message);
 }
 app.use("/api/depots", require("./routes/depots"));
 app.use("/api/admin/depot-users", require("./routes/depotUsers"));
@@ -341,45 +339,23 @@ app.use("/api/seats", require("./routes/seats"));
 app.use("/api/tracking", require("./routes/tracking"));
 app.use("/api/booking", require("./routes/booking"));
 app.use("/api/booking", require("./routes/ticketPNR")); // Ticket PNR lookup endpoint
-console.log('📋 Registering route endpoints...');
 app.use("/api/routes", require("./routes/routes"));
-console.log('✅ Routes registered at /api/routes (/, /cities, /popular, etc.)');
 app.use("/api/trips", require("./routes/trips"));
 app.use("/api/stops", require("./routes/stops"));
 app.use("/api/status", require("./routes/status"));
 app.use("/api/email", require("./routes/emailStatus"));
 
-// Vendor routes - Use direct vendor.js routes (most reliable)
-console.log('📋 Registering vendor routes...');
+// Vendor routes
 try {
-  const vendorRoutes = require("./routes/vendor");
-  app.use("/api/vendor", vendorRoutes);
-  console.log('✅ Vendor routes registered at /api/vendor');
-  if (vendorRoutes && vendorRoutes.stack) {
-    console.log('   Total endpoints:', vendorRoutes.stack.length);
-    // Log key routes
-    const keyRoutes = ['/dashboard', '/profile', '/purchase-orders', '/invoices', '/payments', '/trust-score', '/notifications', '/audit-log'];
-    vendorRoutes.stack.forEach((route) => {
-      if (route.route) {
-        const methods = Object.keys(route.route.methods || {}).filter(m => route.route.methods[m]).join(', ').toUpperCase();
-        const path = route.route.path || 'N/A';
-        if (keyRoutes.some(key => path.includes(key))) {
-          console.log(`   ${methods.padEnd(6)} /api/vendor${path}`);
-        }
-      }
-    });
-  }
+  app.use("/api/vendor", require("./routes/vendor"));
+  app.use("/api/vendor/alerts", require("./routes/vendorAlerts"));
+  app.use("/api/vendor/auctions", require("./routes/vendorAuctions"));
 } catch (error) {
-  console.error('❌ Failed to load vendor routes:', error.message);
-  console.error('   Stack:', error.stack);
-  // Try vendor.routes.js as fallback
+  logger.error("Failed to load vendor routes:", error.message);
   try {
-    const controllerRoutes = require("./routes/vendor.routes");
-    app.use("/api/vendor", controllerRoutes);
-    console.log('⚠️  Using vendor.routes.js (controller-based)');
+    app.use("/api/vendor", require("./routes/vendor.routes"));
   } catch (fallbackError) {
-    console.error('❌ Both vendor route files failed to load');
-    console.error('   Fallback error:', fallbackError.message);
+    logger.error("Both vendor route files failed to load");
   }
 }
 
@@ -403,6 +379,16 @@ app.use("/api/data-collector", require("./routes/dataCollector"));
 app.use("/api/fuel", require("./routes/fuel"));
 app.use("/api/ai", require("./routes/mlAnalytics"));
 app.use("/api/ml-recommendations", require("./routes/mlRecommendations"));
+// AI Scheduling Research Implementation
+app.use("/api/ai-scheduling", require("./routes/aiScheduling"));
+// State Transport Command Dashboard routes
+try {
+  app.use("/api/state", require("./routes/state"));
+  logger.info("✅ State routes loaded successfully");
+} catch (error) {
+  logger.error("❌ Failed to load state routes:", error.message);
+  logger.error("Error stack:", error.stack);
+}
 
 // Health check endpoint
 app.get("/api/health", async (req, res) => {
@@ -454,7 +440,9 @@ app.get("/api/depot/info", (req, res, next) => {
   // If the depot router handled this already, skip fallback
   if (res.headersSent) return;
   // Only use fallback if main route didn't handle
-  logger.warn("[Fallback] Serving /api/depot/info - Main route may not be registered");
+  logger.warn(
+    "[Fallback] Serving /api/depot/info - Main route may not be registered",
+  );
   return res.json({
     success: true,
     data: {
@@ -592,7 +580,12 @@ app.get("/api/admin/routes", (req, res) => {
 // Removed explicit '/api/*' 404 handler to avoid intercepting valid routes
 
 // Catch-all route for non-API requests (API-only mode)
-app.get("*", (req, res) => {
+// Only catch non-API routes to avoid interfering with /api/* routes
+app.get("*", (req, res, next) => {
+  // Skip if it's an API route - let it fall through to 404 handler
+  if (req.path.startsWith("/api/")) {
+    return next();
+  }
   res.status(404).json({
     error: "API endpoint not found",
     message: "This is an API-only server. Please use the frontend application.",

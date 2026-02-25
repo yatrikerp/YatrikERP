@@ -27,7 +27,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['passenger', 'conductor', 'driver', 'depot_manager', 'admin', 'support_agent', 'data_collector', 'vendor', 'student'],
+    enum: ['passenger', 'conductor', 'driver', 'depot_manager', 'admin', 'support_agent', 'data_collector', 'vendor', 'student', 'super_admin', 'state_transport_authority'],
     default: 'passenger'
   },
   roleType: {
@@ -35,7 +35,7 @@ const userSchema = new mongoose.Schema({
     enum: ['internal', 'external'],
     default: function() {
       // Auto-determine roleType based on role
-      const internalRoles = ['admin', 'depot_manager', 'conductor', 'driver', 'support_agent', 'data_collector'];
+      const internalRoles = ['admin', 'depot_manager', 'conductor', 'driver', 'support_agent', 'data_collector', 'super_admin', 'state_transport_authority'];
       return internalRoles.includes(this.role) ? 'internal' : 'external';
     }
   },
@@ -220,6 +220,13 @@ userSchema.index({ 'providerIds.twitter': 1 });
 userSchema.index({ 'providerIds.microsoft': 1 });
 userSchema.index({ 'vendorDetails.panNumber': 1 }, { sparse: true }); // Vendor PAN index
 userSchema.index({ 'studentDetails.aadhaarNumber': 1 }, { sparse: true }); // Student Aadhaar index
+
+// PERFORMANCE: Compound indexes for common query patterns
+userSchema.index({ role: 1, status: 1 }); // Role + status filtering
+userSchema.index({ status: 1, createdAt: -1 }); // Status with sorting
+userSchema.index({ depotId: 1, status: 1 }); // Depot users filtering
+userSchema.index({ email: 1, status: 1 }); // Email login with status check
+userSchema.index({ createdAt: -1 }); // Sorting by creation date
 
 // Password hashing middleware
 userSchema.pre('save', async function(next) {

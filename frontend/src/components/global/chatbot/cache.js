@@ -23,42 +23,85 @@ class QuickHelpCache {
   /**
    * Preload data at login
    * This should be called once when user logs in
+   *
+   * IMPORTANT:
+   * - Admin / HQ roles     → use /api/admin/... endpoints
+   * - Depot roles          → use /api/depot/... endpoints
+   * - Vendor / external    → SKIP network calls (no permission for admin/depot APIs)
+   * - Passengers / others  → SKIP (bot will work with static answers)
    */
   async preloadData(userRole, apiFetch) {
     try {
+      const normalizedRole = (userRole || '').toLowerCase();
+
+      // Vendors and other external roles do NOT have access to admin/depot routes.
+      // For them, we simply mark the role and return without any network call
+      // to avoid 401/403 spam in the console.
+      const isVendorLike =
+        normalizedRole === 'vendor' ||
+        normalizedRole === 'student' ||
+        normalizedRole === 'passenger' ||
+        normalizedRole === 'pax';
+
+      if (!normalizedRole || isVendorLike) {
+        this.cache.userRole = normalizedRole || null;
+        this.cache.lastUpdated = Date.now();
+        this.saveToStorage();
+        console.log('[QuickHelp] Skipping preload for external/non-admin role:', normalizedRole || 'guest');
+        return;
+      }
+
       const today = new Date().toISOString().split('T')[0];
-      
-      // Preload in parallel for speed
-      // Use role-based endpoints
-      const tripsEndpoint = userRole === 'depot_manager' || userRole === 'depot_supervisor' 
-        ? `/api/depot/trips?date=${today}` 
+
+      // Admin / HQ vs Depot endpoints
+      const isDepotRole =
+        normalizedRole === 'depot_manager' ||
+        normalizedRole === 'depot_supervisor' ||
+        normalizedRole === 'depot_operator';
+
+      const tripsEndpoint = isDepotRole
+        ? `/api/depot/trips?date=${today}`
         : `/api/admin/trips?date=${today}`;
-      const routesEndpoint = userRole === 'depot_manager' || userRole === 'depot_supervisor'
+
+      const routesEndpoint = isDepotRole
         ? '/api/depot/routes'
         : '/api/admin/routes';
-      
+
       const [busesResponse, routesResponse] = await Promise.all([
-        apiFetch(tripsEndpoint).catch(() => ({ data: { trips: [] } })),
-        apiFetch(routesEndpoint).catch(() => ({ data: { routes: [] } })),
+        apiFetch(tripsEndpoint, { suppressError: true, suppressLogout: true }).catch(() => ({ data: { trips: [] } })),
+        apiFetch(routesEndpoint, { suppressError: true, suppressLogout: true }).catch(() => ({ data: { routes: [] } })),
       ]);
 
       // Extract data from response structure
-      this.cache.todayBuses = busesResponse.data?.trips || busesResponse.data?.data?.trips || busesResponse.data || [];
-      this.cache.routes = routesResponse.data?.routes || routesResponse.data?.data?.routes || routesResponse.data || [];
-      this.cache.userRole = userRole;
+      this.cache.todayBuses =
+        busesResponse.data?.trips ||
+        busesResponse.data?.data?.trips ||
+        busesResponse.data ||
+        [];
+
+      this.cache.routes =
+        routesResponse.data?.routes ||
+        routesResponse.data?.data?.routes ||
+        routesResponse.data ||
+        [];
+
+      this.cache.userRole = normalizedRole;
       this.cache.lastUpdated = Date.now();
 
       // Save to localStorage for persistence
       this.saveToStorage();
-      
+
       console.log('[QuickHelp] Data preloaded:', {
         buses: this.cache.todayBuses.length,
         routes: this.cache.routes.length,
-        role: userRole
+        role: normalizedRole,
       });
     } catch (error) {
       console.warn('[QuickHelp] Preload error (non-critical):', error);
       // Continue with cached data if preload fails
+      this.cache.userRole = (userRole || '').toLowerCase() || null;
+      this.cache.lastUpdated = Date.now();
+      this.saveToStorage();
     }
   }
 

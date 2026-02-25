@@ -43,6 +43,11 @@ const EnhancedPassengerDashboard = () => {
   const [popularRoutes, setPopularRoutes] = useState(defaultPopularRoutes);
 
   useEffect(() => {
+    // Set justLoggedIn flag when dashboard loads to prevent immediate logout
+    if (!sessionStorage.getItem('justLoggedIn')) {
+      sessionStorage.setItem('justLoggedIn', Date.now().toString());
+    }
+    
     // Redirect mobile users to mobile dashboard
     if (isMobile && user) {
       console.log('🔄 Redirecting mobile user to mobile dashboard');

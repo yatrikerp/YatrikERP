@@ -16,6 +16,8 @@ const AIAnalyticsService = require('../services/aiAnalytics');
 const NotificationService = require('../services/notificationService');
 const { auth, requireRole } = require('../middleware/auth');
 const { createResponseGuard, safeObjectId, extractUserId, asyncHandler } = require('../middleware/responseGuard');
+const { logger } = require('../src/core/logger');
+const { enforcePagination, addPaginationMetadata } = require('../middleware/pagination');
 
 // Apply response guard middleware to all routes
 router.use(createResponseGuard);
@@ -110,7 +112,7 @@ router.get('/dashboard/summary', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error getting dashboard summary:', error);
+    logger.error('Error getting dashboard summary:', error);
     res.status(500).json({
       success: false,
       message: 'Error getting dashboard summary',
@@ -126,7 +128,7 @@ router.get('/dashboard', async (req, res) => {
   // Check cache first
   const cachedData = getCachedDashboardData();
   if (cachedData) {
-    console.log('📊 Returning cached dashboard data');
+    logger.info('📊 Returning cached dashboard data');
     return res.json({
       ...cachedData,
       cached: true,
@@ -144,7 +146,7 @@ router.get('/dashboard', async (req, res) => {
     const monthAgo = new Date(today);
     monthAgo.setDate(monthAgo.getDate() - 30);
 
-    console.log('📊 Fetching comprehensive dashboard data...');
+    logger.info('📊 Fetching comprehensive dashboard data...');
 
     // Helper wrappers to avoid throwing and always return a number with timeout
     const safeCount = async (model, query = {}, timeoutMs = 5000) => {
@@ -155,7 +157,7 @@ router.get('/dashboard', async (req, res) => {
         ]);
         return result;
       } catch (error) { 
-        console.warn(`Count query failed for ${model.modelName}:`, error.message);
+        logger.warn(`Count query failed for ${model.modelName}:`, error.message);
         return 0; 
       }
     };
@@ -171,7 +173,7 @@ router.get('/dashboard', async (req, res) => {
         ]);
         return result[0]?.total || 0;
       } catch (error) {
-        console.warn(`Aggregate query failed for ${model.modelName}:`, error.message);
+        logger.warn(`Aggregate query failed for ${model.modelName}:`, error.message);
         return 0;
       }
     };
@@ -312,7 +314,7 @@ router.get('/dashboard', async (req, res) => {
         
         return { recentBookings, recentTrips, recentUsers, recentDrivers, recentConductors };
       } catch (error) {
-        console.warn('Recent data fetch failed:', error.message);
+        logger.warn('Recent data fetch failed:', error.message);
         return { recentBookings: [], recentTrips: [], recentUsers: [], recentDrivers: [], recentConductors: [] };
       }
     };
@@ -325,7 +327,7 @@ router.get('/dashboard', async (req, res) => {
     const tripCompletionRate = totalTrips > 0 ? Math.round((completedTripsToday / tripsToday) * 100) : 0;
 
     const processingTime = Date.now() - startTime;
-    console.log(`✅ Dashboard data fetched successfully in ${processingTime}ms`);
+    logger.info(`✅ Dashboard data fetched successfully in ${processingTime}ms`);
 
     const responseData = {
       success: true,
@@ -414,7 +416,7 @@ router.get('/dashboard', async (req, res) => {
     
     res.json(responseData);
   } catch (error) {
-    console.error('❌ Dashboard error:', error);
+    logger.error('❌ Dashboard error:', error);
     res.status(500).json({ 
       success: false,
       error: 'Failed to fetch dashboard data',
@@ -427,7 +429,7 @@ router.get('/dashboard', async (req, res) => {
 router.post('/dashboard/clear-cache', (req, res) => {
   dashboardCache.data = null;
   dashboardCache.timestamp = null;
-  console.log('🗑️ Dashboard cache cleared');
+  logger.info('🗑️ Dashboard cache cleared');
   res.json({ success: true, message: 'Dashboard cache cleared' });
 });
 
@@ -1416,13 +1418,19 @@ router.delete('/depots/:id', async (req, res) => {
 // 5) Global Route/Stop/Trip CRUD
 // =================================================================
 
-// Routes
-router.get('/routes', async (req, res) => {
+// Routes - PERFORMANCE: Enforce pagination
+router.get('/routes', enforcePagination, async (req, res) => {
   try {
-    const routes = await Route.find().populate('depot', 'name code').sort({ createdAt: -1 });
-    res.json(routes);
+    const { page, limit, skip } = req.pagination;
+    
+    const [routes, total] = await Promise.all([
+      Route.find().populate('depot', 'name code').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Route.countDocuments()
+    ]);
+    
+    res.json(addPaginationMetadata(routes, total, req.pagination));
   } catch (error) {
-    console.error('Routes fetch error:', error);
+    logger.error('Routes fetch error:', error);
     res.status(500).json({ error: 'Failed to fetch routes' });
   }
 });
@@ -3153,16 +3161,24 @@ router.get('/passengers/:id/bookings', async (req, res) => {
 // =================================================================
 
 // Debug endpoint to check all users
-router.get('/debug/users', async (req, res) => {
+router.get('/debug/users', enforcePagination, async (req, res) => {
   try {
-    const allUsers = await User.find({}).select('name email role depotId status createdAt').sort({ createdAt: -1 });
-    const driverUsers = await User.find({ role: 'driver' }).select('name email role depotId status createdAt').sort({ createdAt: -1 });
-    const conductorUsers = await User.find({ role: 'conductor' }).select('name email role depotId status createdAt').sort({ createdAt: -1 });
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
     
-    console.log('=== DEBUG USERS ENDPOINT ===');
-    console.log('Total users:', allUsers.length);
-    console.log('Driver users:', driverUsers.length);
-    console.log('Conductor users:', conductorUsers.length);
+    const [allUsers, driverUsers, conductorUsers, total] = await Promise.all([
+      User.find({}).select('name email role depotId status createdAt').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      User.find({ role: 'driver' }).select('name email role depotId status createdAt').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      User.find({ role: 'conductor' }).select('name email role depotId status createdAt').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      User.countDocuments({})
+    ]);
+    
+    logger.info('=== DEBUG USERS ENDPOINT ===', {
+      totalUsers: allUsers.length,
+      driverUsers: driverUsers.length,
+      conductorUsers: conductorUsers.length
+    });
     
     res.json({
       success: true,
@@ -9492,5 +9508,470 @@ router.put('/system-config', async (req, res) => {
     });
   }
 });
+
+// =================================================================
+// Attendance Audit Log & Payroll Management
+// =================================================================
+
+// GET /api/admin/attendance/audit - Get attendance audit logs (full visibility)
+router.get('/attendance/audit', asyncHandler(async (req, res) => {
+  try {
+    const { depotId, staffId, date, actionType, startDate, endDate, limit = 500 } = req.query;
+    const AttendanceAuditLog = require('../models/AttendanceAuditLog');
+
+    let query = {};
+    
+    if (depotId) {
+      query.depotId = depotId;
+    }
+    
+    if (staffId) {
+      query.staffId = staffId;
+    }
+    
+    if (date) {
+      const searchDate = new Date(date);
+      searchDate.setHours(0, 0, 0, 0);
+      const nextDate = new Date(searchDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      query.date = { $gte: searchDate, $lt: nextDate };
+    } else if (startDate || endDate) {
+      query.date = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        query.date.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        query.date.$lte = end;
+      }
+    }
+    
+    if (actionType) {
+      query.actionType = actionType;
+    }
+
+    const auditLogs = await AttendanceAuditLog.find(query)
+      .populate('performedBy', 'name email role')
+      .populate('staffId', 'name employeeCode')
+      .populate('depotId', 'depotName depotCode')
+      .sort({ performedAt: -1 })
+      .limit(parseInt(limit))
+      .lean();
+
+    const total = await AttendanceAuditLog.countDocuments(query);
+
+    return res.guard.success({ 
+      auditLogs,
+      total,
+      filters: { depotId, staffId, date, actionType, startDate, endDate }
+    }, 'Audit logs fetched successfully');
+  } catch (error) {
+    console.error('❌ Error fetching audit logs:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch audit logs',
+      message: error.message
+    });
+  }
+}));
+
+// GET /api/admin/payroll - Get all payroll records (with filtering)
+router.get('/payroll', asyncHandler(async (req, res) => {
+  try {
+    const { depotId, month, year, staffId, status } = req.query;
+    const PayrollMonthly = require('../models/PayrollMonthly');
+
+    let query = {};
+    
+    if (depotId) query.depotId = depotId;
+    if (month) query.month = parseInt(month);
+    if (year) query.year = parseInt(year);
+    if (staffId) query.staffId = staffId;
+    if (status) query.status = status;
+
+    const payrolls = await PayrollMonthly.find(query)
+      .populate('staffId', 'name employeeCode')
+      .populate('depotId', 'depotName depotCode')
+      .populate('generatedBy', 'name email')
+      .populate('finalizedBy', 'name email')
+      .sort({ year: -1, month: -1, createdAt: -1 })
+      .lean();
+
+    const total = await PayrollMonthly.countDocuments(query);
+
+    return res.guard.success({ 
+      payrolls,
+      total,
+      filters: { depotId, month, year, staffId, status }
+    }, 'Payroll records fetched successfully');
+  } catch (error) {
+    console.error('❌ Error fetching payroll:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch payroll records',
+      message: error.message
+    });
+  }
+}));
+
+// POST /api/admin/payroll/generate - Generate payroll for a month (Admin only)
+router.post('/payroll/generate', requireRole(['admin', 'ADMIN']), asyncHandler(async (req, res) => {
+  try {
+    const { month, year, depotId } = req.body;
+
+    if (!month || !year) {
+      return res.status(400).json({
+        success: false,
+        error: 'Month and year are required'
+      });
+    }
+
+    const monthNum = parseInt(month);
+    const yearNum = parseInt(year);
+
+    if (monthNum < 1 || monthNum > 12) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid month (1-12)'
+      });
+    }
+
+    // Calculate date range for the month
+    const startDate = new Date(yearNum, monthNum - 1, 1);
+    const endDate = new Date(yearNum, monthNum, 0, 23, 59, 59, 999);
+
+    const Driver = require('../models/Driver');
+    const Conductor = require('../models/Conductor');
+    const PayrollMonthly = require('../models/PayrollMonthly');
+
+    // Get depots to process
+    let depots = [];
+    if (depotId) {
+      const depot = await Depot.findById(depotId);
+      if (depot) depots = [depot];
+    } else {
+      depots = await Depot.find({ isActive: true }).lean();
+    }
+
+    const generatedPayrolls = [];
+    const errors = [];
+
+    for (const depot of depots) {
+      try {
+        // Get all drivers and conductors for this depot
+        const drivers = await Driver.find({ depotId: depot._id }).lean();
+        const conductors = await Conductor.find({ depotId: depot._id }).lean();
+
+        const allStaff = [
+          ...drivers.map(d => ({ ...d, type: 'driver' })),
+          ...conductors.map(c => ({ ...c, type: 'conductor' }))
+        ];
+
+        for (const staff of allStaff) {
+          try {
+            // Check if payroll already exists
+            const existing = await PayrollMonthly.findOne({
+              staffId: staff._id,
+              depotId: depot._id,
+              month: monthNum,
+              year: yearNum
+            });
+
+            if (existing && existing.status === 'FINALIZED') {
+              errors.push({
+                staffId: staff._id,
+                staffName: staff.name,
+                depotId: depot._id,
+                depotName: depot.depotName,
+                error: 'Payroll already finalized for this month'
+              });
+              continue;
+            }
+
+            // Fetch attendance records for the month
+            const attendanceArray = staff.attendance || [];
+            const monthAttendance = attendanceArray.filter(att => {
+              if (!att || !att.date) return false;
+              const attDate = new Date(att.date);
+              return attDate >= startDate && attDate <= endDate;
+            });
+
+            // Count attendance statuses
+            const totalDays = new Date(yearNum, monthNum, 0).getDate(); // Days in month
+            let presentDays = 0;
+            let absentDays = 0;
+            let leaveDays = 0;
+
+            // Count marked attendance
+            monthAttendance.forEach(att => {
+              if (att.status === 'present') presentDays++;
+              else if (att.status === 'absent') absentDays++;
+              else if (att.status === 'leave') leaveDays++;
+            });
+
+            // Unmarked days = absent (per policy)
+            const markedDays = presentDays + absentDays + leaveDays;
+            const unmarkedDays = totalDays - markedDays;
+            absentDays += unmarkedDays; // Unmarked = absent
+
+            // Calculate payable days (PRESENT + LEAVE, per Kerala RTC policy)
+            const payableDays = presentDays + leaveDays;
+
+            // Get per-day rate from staff record (default to 1000 if not set)
+            const perDayRate = staff.salary?.perDay || staff.perDayRate || 1000;
+
+            // Calculate salary
+            const grossSalary = payableDays * perDayRate;
+            const deductions = 0; // Can be calculated from other factors
+            const netSalary = grossSalary - deductions;
+
+            // Create or update payroll record
+            const payrollData = {
+              staffId: staff._id,
+              staffType: staff.type,
+              depotId: depot._id,
+              month: monthNum,
+              year: yearNum,
+              totalDays,
+              presentDays,
+              absentDays,
+              leaveDays,
+              payableDays,
+              perDayRate,
+              grossSalary,
+              deductions,
+              netSalary,
+              status: 'DRAFT',
+              generatedBy: req.user._id,
+              attendanceSummary: {
+                markedDays,
+                unmarkedDays,
+                attendanceRecords: monthAttendance.length
+              }
+            };
+
+            let payroll;
+            if (existing) {
+              // Update existing draft
+              payroll = await PayrollMonthly.findByIdAndUpdate(
+                existing._id,
+                payrollData,
+                { new: true }
+              );
+            } else {
+              // Create new
+              payroll = new PayrollMonthly(payrollData);
+              await payroll.save();
+            }
+
+            generatedPayrolls.push(payroll);
+          } catch (staffError) {
+            errors.push({
+              staffId: staff._id,
+              staffName: staff.name,
+              depotId: depot._id,
+              depotName: depot.depotName,
+              error: staffError.message
+            });
+          }
+        }
+      } catch (depotError) {
+        errors.push({
+          depotId: depot._id,
+          depotName: depot.depotName || 'Unknown',
+          error: depotError.message
+        });
+      }
+    }
+
+    return res.guard.success({
+      generated: generatedPayrolls.length,
+      payrolls: generatedPayrolls,
+      errors: errors.length > 0 ? errors : undefined
+    }, `Payroll generated for ${month}/${year}. ${generatedPayrolls.length} records created.`);
+  } catch (error) {
+    console.error('❌ Error generating payroll:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to generate payroll',
+      message: error.message
+    });
+  }
+}));
+
+// PUT /api/admin/payroll/:id/finalize - Finalize payroll (Admin only)
+router.put('/payroll/:id/finalize', requireRole(['admin', 'ADMIN']), asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const PayrollMonthly = require('../models/PayrollMonthly');
+
+    const payroll = await PayrollMonthly.findById(id);
+    if (!payroll) {
+      return res.status(404).json({
+        success: false,
+        error: 'Payroll record not found'
+      });
+    }
+
+    if (payroll.status === 'FINALIZED') {
+      return res.status(400).json({
+        success: false,
+        error: 'Payroll is already finalized'
+      });
+    }
+
+    payroll.status = 'FINALIZED';
+    payroll.finalizedAt = new Date();
+    payroll.finalizedBy = req.user._id;
+    await payroll.save();
+
+    return res.guard.success({ payroll }, 'Payroll finalized successfully');
+  } catch (error) {
+    console.error('❌ Error finalizing payroll:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to finalize payroll',
+      message: error.message
+    });
+  }
+}));
+
+// PUT /api/admin/payroll/:id/mark-paid - Mark payroll as paid (Admin only)
+router.put('/payroll/:id/mark-paid', requireRole(['admin', 'ADMIN']), asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const PayrollMonthly = require('../models/PayrollMonthly');
+
+    const payroll = await PayrollMonthly.findById(id);
+    if (!payroll) {
+      return res.status(404).json({
+        success: false,
+        error: 'Payroll record not found'
+      });
+    }
+
+    if (payroll.status !== 'FINALIZED') {
+      return res.status(400).json({
+        success: false,
+        error: 'Payroll must be finalized before marking as paid'
+      });
+    }
+
+    payroll.status = 'PAID';
+    payroll.paidAt = new Date();
+    payroll.paidBy = req.user._id;
+    await payroll.save();
+
+    return res.guard.success({ payroll }, 'Payroll marked as paid successfully');
+  } catch (error) {
+    console.error('❌ Error marking payroll as paid:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to mark payroll as paid',
+      message: error.message
+    });
+  }
+}));
+
+// PUT /api/admin/invoices/:id/mark-payment-received - Mark payment as received for invoice (Admin/Depot only)
+// This automatically updates PO status, delivery confirmation, and payment tracking
+router.put('/invoices/:id/mark-payment-received', requireRole(['admin', 'ADMIN', 'depot', 'DEPOT']), asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { paymentMethod = 'bank_transfer', transactionId, notes } = req.body;
+    
+    const Invoice = require('../models/Invoice');
+    const PurchaseOrder = require('../models/PurchaseOrder');
+    const logger = require('../utils/logger');
+
+    // Find invoice
+    const invoice = await Invoice.findById(id);
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        error: 'Invoice not found'
+      });
+    }
+
+    // Check if already paid
+    if (invoice.paymentStatus === 'paid' && invoice.status === 'paid') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invoice is already marked as paid'
+      });
+    }
+
+    // Update invoice payment status
+    invoice.paymentStatus = 'paid';
+    invoice.status = 'paid';
+    invoice.paidAmount = invoice.totalAmount || invoice.subtotal + (invoice.tax || 0);
+    invoice.dueAmount = 0;
+    invoice.paymentDate = new Date();
+    invoice.paymentMethod = paymentMethod;
+    invoice.transactionId = transactionId;
+    invoice.updatedBy = req.user._id;
+    
+    if (notes) {
+      invoice.notes = (invoice.notes || '') + `\nPayment received: ${notes}`;
+    }
+
+    await invoice.save();
+
+    // Find and update associated Purchase Order
+    let purchaseOrder = null;
+    if (invoice.purchaseOrderId) {
+      purchaseOrder = await PurchaseOrder.findById(invoice.purchaseOrderId);
+      
+      if (purchaseOrder) {
+        // Update PO payment status
+        purchaseOrder.paymentStatus = 'paid';
+        purchaseOrder.paidAmount = invoice.paidAmount;
+        purchaseOrder.dueAmount = 0;
+        purchaseOrder.updatedBy = req.user._id;
+
+        // NEW WORKFLOW: Payment must be done before delivery can start
+        // If PO was dispatched and waiting for payment, now allow delivery to start
+        if (purchaseOrder.status === 'dispatched_awaiting_payment') {
+          // Payment received - now delivery can start
+          purchaseOrder.status = 'in_progress';
+          purchaseOrder.deliveryStatus = purchaseOrder.deliveryStatus || {};
+          purchaseOrder.deliveryStatus.status = 'in_transit'; // Ready for delivery
+          logger.info(`PO ${purchaseOrder.poNumber} payment received - delivery can now start`);
+        } else if (purchaseOrder.status === 'delivered' || purchaseOrder.deliveryStatus?.status === 'delivered') {
+          // If PO is already delivered, mark as completed
+          purchaseOrder.status = 'completed';
+          purchaseOrder.actualDeliveryDate = purchaseOrder.actualDeliveryDate || new Date();
+        } else if (purchaseOrder.status === 'in_progress' || purchaseOrder.status === 'accepted') {
+          // Legacy: If payment received before dispatch, mark as ready for delivery confirmation
+          purchaseOrder.status = 'in_progress';
+          purchaseOrder.deliveryStatus = purchaseOrder.deliveryStatus || {};
+          purchaseOrder.deliveryStatus.status = 'in_transit';
+        }
+
+        await purchaseOrder.save();
+        
+        logger.info(`PO ${purchaseOrder.poNumber} updated to status: ${purchaseOrder.status} after payment received`);
+      }
+    }
+
+    // Log the payment
+    logger.info(`Payment received for Invoice ${invoice.invoiceNumber} - Amount: ${invoice.paidAmount}, PO: ${purchaseOrder?.poNumber || 'N/A'}`);
+
+    return res.guard.success({
+      invoice,
+      purchaseOrder
+    }, 'Payment marked as received. PO status and delivery confirmation updated automatically.');
+  } catch (error) {
+    console.error('❌ Error marking payment as received:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to mark payment as received',
+      message: error.message
+    });
+  }
+}));
 
 module.exports = router;

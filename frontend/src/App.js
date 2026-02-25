@@ -45,8 +45,9 @@ import SupportAgentDashboard from "./pages/support/SupportAgentDashboard.jsx";
 import DataCollectorDashboard from "./pages/dataCollector/DataCollectorDashboard.jsx";
 import DepotDashboard from "./pages/depot/DepotDashboard";
 import DepotLogin from "./pages/DepotLogin";
+import StateCommandDashboard from "./pages/state/StateCommandDashboard";
 import DepotVendorProducts from "./pages/depot/VendorProducts";
-import VendorDashboard from "./pages/vendor/VendorDashboardIndustry";
+import VendorDashboard from "./pages/vendor/VendorDashboard";
 import VendorDashboardEnhanced from "./pages/vendor/VendorDashboardEnhanced";
 import VendorMarketplace from "./pages/vendor/VendorMarketplace";
 import VendorCart from "./pages/vendor/VendorCart";
@@ -94,6 +95,8 @@ import RedirectDashboard from "./pages/RedirectDashboard";
 import MLVisualization from "./pages/admin/MLVisualization";
 import AdminAutonomousScheduling from "./pages/admin/AdminAutonomousScheduling";
 import AdminMLDashboard from "./pages/admin/AdminMLDashboard";
+import ComprehensiveAIDashboard from "./pages/admin/ComprehensiveAIDashboard";
+import AIControlCenter from "./pages/admin/AIControlCenter";
 import AdminPredictiveAnalytics from "./pages/admin/AdminPredictiveAnalytics";
 import AdminSparePartsInventory from "./pages/admin/AdminSparePartsInventory";
 import AdminVendorInvoicing from "./pages/admin/AdminVendorInvoicing";
@@ -693,6 +696,38 @@ function App() {
                     </RequireAuth>
                   }
                 />
+                <Route
+                  path="/depot/attendance"
+                  element={
+                    <RequireAuth roles={["depot_manager"]}>
+                      <DepotDashboard />
+                    </RequireAuth>
+                  }
+                />
+                <Route
+                  path="/depot/product-purchasing"
+                  element={
+                    <RequireAuth roles={["depot_manager"]}>
+                      <DepotDashboard />
+                    </RequireAuth>
+                  }
+                />
+                <Route
+                  path="/depot/product-auction"
+                  element={
+                    <RequireAuth roles={["depot_manager"]}>
+                      <DepotDashboard />
+                    </RequireAuth>
+                  }
+                />
+                <Route
+                  path="/depot/payment-tracking"
+                  element={
+                    <RequireAuth roles={["depot_manager"]}>
+                      <DepotDashboard />
+                    </RequireAuth>
+                  }
+                />
 
                 {/* Passenger Routes */}
                 <Route
@@ -1042,6 +1077,16 @@ function App() {
                   element={
                     <RequireAuth roles={["passenger"]}>
                       <CompleteBookingFlow />
+                    </RequireAuth>
+                  }
+                />
+
+                {/* State Transport Command Dashboard */}
+                <Route
+                  path="/state-command"
+                  element={
+                    <RequireAuth roles={["state_transport_authority", "super_admin"]}>
+                      <StateCommandDashboard />
                     </RequireAuth>
                   }
                 />
@@ -1496,7 +1541,7 @@ function App() {
                   element={
                     <RequireAuth roles={["admin"]}>
                       <AdminLayout>
-                        <AICommandDashboard />
+                        <AIControlCenter />
                       </AdminLayout>
                     </RequireAuth>
                   }
@@ -1618,7 +1663,7 @@ function App() {
                   element={
                     <RequireAuth roles={["admin"]}>
                       <AdminLayout>
-                        <MLVisualization />
+                        <ComprehensiveAIDashboard />
                       </AdminLayout>
                     </RequireAuth>
                   }

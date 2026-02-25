@@ -60,7 +60,8 @@ passport.use(new GoogleStrategy({
     return done(null, user);
 
   } catch (error) {
-    console.error('Google OAuth error:', error);
+    const { logger } = require('../src/core/logger');
+    logger.error('Google OAuth error:', error);
     return done(error, null);
   }
 }));

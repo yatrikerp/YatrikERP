@@ -27,8 +27,10 @@ const getFrontendURL = () => {
 };
 
 export const GOOGLE_CONFIG = {
-  // Your Google OAuth Client ID (you'll get this from Google Cloud Console)
-  CLIENT_ID: '889305333159-938odo67058fepqktsd8ro7pvsp5c4lv.apps.googleusercontent.com',
+  // NOTE: This CLIENT_ID is NOT used - OAuth is handled entirely by the backend
+  // The backend uses GOOGLE_CLIENT_ID from environment variables
+  // This is kept for reference only
+  CLIENT_ID: null, // Removed hardcoded client ID - use backend environment variables
   
   // Backend OAuth endpoint (using environment variables)
   BACKEND_OAUTH_URL: `${getBackendURL().replace(/\/$/, '')}/api/auth/google`,

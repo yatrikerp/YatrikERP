@@ -8,9 +8,6 @@ import {
   Activity,
   RefreshCw,
   Brain,
-  MapPin,
-  Clock,
-  Zap,
   Shield
 } from 'lucide-react';
 import { apiFetch } from '../../utils/api';
@@ -32,7 +29,7 @@ const AICommandDashboard = () => {
     if (autoRefresh) {
       const interval = setInterval(() => {
         fetchDashboardData();
-      }, 15000); // Refresh every 15 seconds
+      }, 15000);
       return () => clearInterval(interval);
     }
   }, [autoRefresh]);
@@ -41,15 +38,15 @@ const AICommandDashboard = () => {
     try {
       setLoading(true);
       const [kpisRes, alertsRes] = await Promise.all([
-        apiFetch('/api/admin/command-dashboard/kpis'),
-        apiFetch('/api/admin/command-dashboard/ai-alerts')
+        apiFetch('/api/admin/ai/command-dashboard/kpis'),
+        apiFetch('/api/admin/ai/command-dashboard/ai-alerts')
       ]);
 
-      if (kpisRes.ok) {
+      if (kpisRes.ok && kpisRes.data) {
         setKpis(kpisRes.data);
       }
 
-      if (alertsRes.ok) {
+      if (alertsRes.ok && alertsRes.data) {
         setAiAlerts(alertsRes.data.alerts || []);
       }
     } catch (error) {
@@ -89,7 +86,6 @@ const AICommandDashboard = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center space-x-3">
@@ -121,39 +117,37 @@ const AICommandDashboard = () => {
         </div>
       </div>
 
-      {/* Real-time KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <KPICard
           title="Active Buses"
-          value={kpis.activeBuses}
+          value={kpis.activeBuses || 0}
           icon={Bus}
           color="bg-blue-500"
           subtitle="Currently in operation"
         />
         <KPICard
           title="Running Trips"
-          value={kpis.runningTrips}
+          value={kpis.runningTrips || 0}
           icon={Activity}
           color="bg-green-500"
           subtitle="Trips in progress"
         />
         <KPICard
           title="Passenger Load"
-          value={kpis.passengerLoad}
+          value={kpis.passengerLoad || 0}
           icon={Users}
           color="bg-purple-500"
           subtitle="Passengers today"
         />
         <KPICard
           title="Revenue"
-          value={`₹${kpis.revenue.toLocaleString()}`}
+          value={`₹${(kpis.revenue || 0).toLocaleString()}`}
           icon={DollarSign}
           color="bg-yellow-500"
           subtitle="Today's revenue"
         />
       </div>
 
-      {/* AI Alerts */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">
@@ -201,11 +195,10 @@ const AICommandDashboard = () => {
         </div>
       </div>
 
-      {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200 cursor-pointer hover:shadow-md transition-shadow">
           <div className="flex items-center space-x-3 mb-4">
-            <MapPin className="w-6 h-6 text-blue-600" />
+            <Activity className="w-6 h-6 text-blue-600" />
             <h3 className="text-lg font-semibold text-blue-900">Fleet Monitoring</h3>
           </div>
           <p className="text-blue-700 text-sm mb-4">View real-time GPS tracking and fleet status</p>

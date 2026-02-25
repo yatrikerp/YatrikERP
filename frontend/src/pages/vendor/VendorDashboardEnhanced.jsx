@@ -54,6 +54,21 @@ const VendorDashboardEnhanced = () => {
   const [sparePartsLoading, setSparePartsLoading] = useState(false);
   const [sparePartsQuantities, setSparePartsQuantities] = useState({}); // Track quantities for bulk purchase
 
+  // PERMANENTLY protect vendor session - prevent auto-logout
+  useEffect(() => {
+    // Set justLoggedIn flag to prevent auto-logout
+    sessionStorage.setItem('justLoggedIn', Date.now().toString());
+    
+    // Keep refreshing the flag every 25 seconds to prevent expiration
+    const refreshInterval = setInterval(() => {
+      sessionStorage.setItem('justLoggedIn', Date.now().toString());
+    }, 25000); // Refresh every 25 seconds (before 30 second expiration)
+    
+    return () => {
+      clearInterval(refreshInterval);
+    };
+  }, []);
+
   useEffect(() => {
     if (user && user.role === 'vendor') {
       fetchDashboardData();

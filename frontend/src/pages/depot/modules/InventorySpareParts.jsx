@@ -26,15 +26,25 @@ const InventorySpareParts = () => {
 
   const fetchInventory = async () => {
     try {
-      const res = await apiFetch('/api/depot/inventory');
-      if (res.ok) {
-        const parts = res.data?.parts || res.data || [];
+      const res = await apiFetch('/api/depot/inventory', { suppressError: true });
+      if (res.ok && res.data) {
+        // Handle res.guard.success() structure
+        let parts = null;
+        if (res.data.success && res.data.data) {
+          parts = res.data.data.parts || res.data.data;
+        } else if (res.data.data && res.data.data.parts) {
+          parts = res.data.data.parts;
+        } else if (res.data.parts) {
+          parts = res.data.parts;
+        } else if (Array.isArray(res.data)) {
+          parts = res.data;
+        }
         setInventory(Array.isArray(parts) ? parts : []);
       } else {
         setInventory([]);
       }
     } catch (error) {
-      // Handle missing endpoint gracefully
+      console.error('Error fetching inventory:', error);
       setInventory([]);
     } finally {
       setLoading(false);
@@ -43,15 +53,25 @@ const InventorySpareParts = () => {
 
   const fetchAlerts = async () => {
     try {
-      const res = await apiFetch('/api/depot/inventory/alerts');
-      if (res.ok) {
-        const alertsData = res.data?.alerts || res.data || [];
+      const res = await apiFetch('/api/depot/inventory/alerts', { suppressError: true });
+      if (res.ok && res.data) {
+        // Handle res.guard.success() structure
+        let alertsData = null;
+        if (res.data.success && res.data.data) {
+          alertsData = res.data.data.alerts || res.data.data;
+        } else if (res.data.data && res.data.data.alerts) {
+          alertsData = res.data.data.alerts;
+        } else if (res.data.alerts) {
+          alertsData = res.data.alerts;
+        } else if (Array.isArray(res.data)) {
+          alertsData = res.data;
+        }
         setAlerts(Array.isArray(alertsData) ? alertsData : []);
       } else {
         setAlerts([]);
       }
     } catch (error) {
-      // Handle missing endpoint gracefully
+      console.error('Error fetching inventory alerts:', error);
       setAlerts([]);
     }
   };
@@ -63,30 +83,65 @@ const InventorySpareParts = () => {
       return;
     }
     
-    if (parseInt(issueForm.quantity) > (selectedPart.currentStock || 0)) {
+    const issueQuantity = parseInt(issueForm.quantity);
+    if (issueQuantity > (selectedPart.currentStock || 0)) {
       toast.error('Insufficient stock available');
       return;
+    }
+    
+    // Optimistic update - show instantly
+    const partIndex = inventory.findIndex(p => p._id === selectedPart._id);
+    if (partIndex !== -1) {
+      const updatedPart = {
+        ...inventory[partIndex],
+        currentStock: (inventory[partIndex].currentStock || 0) - issueQuantity,
+        _isUpdating: true,
+        _lastUpdated: Date.now()
+      };
+      setInventory(prevInventory => {
+        const newInventory = [...prevInventory];
+        newInventory[partIndex] = updatedPart;
+        return newInventory;
+      });
     }
     
     try {
       const res = await apiFetch('/api/depot/inventory/issue', {
         method: 'POST',
         body: JSON.stringify({
-          part_id: selectedPart?._id,
-          ...issueForm
+          part_id: selectedPart._id,
+          quantity: issueQuantity,
+          issuedTo: issueForm.issuedTo,
+          purpose: issueForm.purpose
         }),
         suppressError: true
       });
+      
       if (res.ok) {
-        toast.success('Part issued successfully!');
-        setShowIssueForm(false);
-        setIssueForm({ quantity: '', issuedTo: '', purpose: '' });
-        setSelectedPart(null);
-        fetchInventory();
+        const success = res.data?.success || (res.data?.data && res.data.data.success);
+        if (success || res.ok) {
+          toast.success('Part issued successfully!');
+          setShowIssueForm(false);
+          setIssueForm({ quantity: '', issuedTo: '', purpose: '' });
+          setSelectedPart(null);
+          // Update with server response
+          await fetchInventory();
+          await fetchAlerts();
+        } else {
+          // Revert optimistic update on error
+          fetchInventory();
+          const errorMsg = res.data?.message || res.data?.data?.message || 'Failed to issue part';
+          toast.error(errorMsg);
+        }
       } else {
-        toast.error(res.message || 'Failed to issue part');
+        // Revert optimistic update on error
+        fetchInventory();
+        const errorMsg = res.data?.message || res.message || 'Failed to issue part';
+        toast.error(errorMsg);
       }
     } catch (error) {
+      // Revert optimistic update on error
+      fetchInventory();
       toast.error('Error issuing part. Please try again.');
       setShowIssueForm(false);
       setIssueForm({ quantity: '', issuedTo: '', purpose: '' });
@@ -100,22 +155,56 @@ const InventorySpareParts = () => {
       return;
     }
     
+    const returnQuantity = parseInt(quantity);
+    
+    // Optimistic update - show instantly
+    const partIndex = inventory.findIndex(p => p._id === partId);
+    if (partIndex !== -1) {
+      const updatedPart = {
+        ...inventory[partIndex],
+        currentStock: (inventory[partIndex].currentStock || 0) + returnQuantity,
+        _isUpdating: true,
+        _lastUpdated: Date.now()
+      };
+      setInventory(prevInventory => {
+        const newInventory = [...prevInventory];
+        newInventory[partIndex] = updatedPart;
+        return newInventory;
+      });
+    }
+    
     try {
       const res = await apiFetch('/api/depot/inventory/return', {
         method: 'POST',
         body: JSON.stringify({
           part_id: partId,
-          quantity
+          quantity: returnQuantity
         }),
         suppressError: true
       });
+      
       if (res.ok) {
-        toast.success('Part returned successfully!');
-        fetchInventory();
+        const success = res.data?.success || (res.data?.data && res.data.data.success);
+        if (success || res.ok) {
+          toast.success('Part returned successfully!');
+          // Update with server response
+          await fetchInventory();
+          await fetchAlerts();
+        } else {
+          // Revert optimistic update on error
+          fetchInventory();
+          const errorMsg = res.data?.message || res.data?.data?.message || 'Failed to return part';
+          toast.error(errorMsg);
+        }
       } else {
-        toast.error(res.message || 'Failed to return part');
+        // Revert optimistic update on error
+        fetchInventory();
+        const errorMsg = res.data?.message || res.message || 'Failed to return part';
+        toast.error(errorMsg);
       }
     } catch (error) {
+      // Revert optimistic update on error
+      fetchInventory();
       toast.error('Error returning part. Please try again.');
     }
   };

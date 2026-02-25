@@ -18,7 +18,8 @@ import {
   RefreshCw,
   ShoppingCart,
   Gavel,
-  CreditCard
+  CreditCard,
+  UserCheck
 } from 'lucide-react';
 import { apiFetch } from '../../utils/api';
 import './depot.complete.css';
@@ -36,6 +37,7 @@ import ReportsAnalytics from './modules/ReportsAnalytics';
 import ProductPurchasing from './modules/ProductPurchasing';
 import ProductAuction from './modules/ProductAuction';
 import PaymentTracking from './modules/PaymentTracking';
+import StaffAttendance from './modules/StaffAttendance';
 
 const DepotDashboardComplete = () => {
   const { user, logout } = useAuth();
@@ -54,6 +56,7 @@ const DepotDashboardComplete = () => {
     { id: 'dashboard', label: 'Dashboard Home', icon: LayoutDashboard, path: '/depot', exact: true },
     { id: 'trips', label: 'Trip & Schedule', icon: Calendar, path: '/depot/trip-management' },
     { id: 'crew', label: 'Crew Duty Roster', icon: Users, path: '/depot/crew-roster' },
+    { id: 'attendance', label: 'Staff Attendance', icon: UserCheck, path: '/depot/attendance' },
     { id: 'buses', label: 'Bus & Maintenance', icon: Bus, path: '/depot/fleet-management' },
     { id: 'fuel', label: 'Fuel Monitoring', icon: Fuel, path: '/depot/fuel-monitoring' },
     { id: 'inventory', label: 'Inventory & Spares', icon: Package, path: '/depot/inventory' },
@@ -118,6 +121,7 @@ const DepotDashboardComplete = () => {
     if (path === '/depot' || path === '/depot/' || path === '/depot/dashboard' || path === '/dashboard/depot' || path === '/dashboard/depot_manager') return 'dashboard';
     if (path.includes('/trip-management') || path.includes('/trips') || path.includes('/schedule-approval')) return 'trips';
     if (path.includes('/crew-roster') || path.includes('/crew')) return 'crew';
+    if (path.includes('/attendance')) return 'attendance';
     if (path.includes('/fleet-management') || path.includes('/buses') || path.includes('/maintenance')) return 'buses';
     if (path.includes('/fuel-monitoring') || path.includes('/fuel')) return 'fuel';
     if (path.includes('/inventory') || path.includes('/spare')) return 'inventory';
@@ -234,6 +238,7 @@ const DepotDashboardComplete = () => {
           {activeModule === 'dashboard' && <DashboardHome />}
           {activeModule === 'trips' && <TripScheduleManagement />}
           {activeModule === 'crew' && <CrewDutyRoster />}
+          {activeModule === 'attendance' && <StaffAttendance />}
           {activeModule === 'buses' && <BusMaintenance />}
           {activeModule === 'fuel' && <FuelMonitoring />}
           {activeModule === 'inventory' && <InventorySpareParts />}

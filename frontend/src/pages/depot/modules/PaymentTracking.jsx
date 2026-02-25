@@ -57,10 +57,21 @@ const PaymentTracking = () => {
         suppressError: true
       });
       
-      if (res.ok) {
-        const paymentsData = res.data?.data?.payments || res.data?.payments || [];
-        setPayments(Array.isArray(paymentsData) ? paymentsData : []);
-        calculateStats(paymentsData);
+      if (res.ok && res.data) {
+        // Handle res.guard.success() structure
+        let paymentsData = null;
+        if (res.data.success && res.data.data) {
+          paymentsData = res.data.data.payments || res.data.data;
+        } else if (res.data.data && res.data.data.payments) {
+          paymentsData = res.data.data.payments;
+        } else if (res.data.payments) {
+          paymentsData = res.data.payments;
+        } else if (Array.isArray(res.data)) {
+          paymentsData = res.data;
+        }
+        const paymentsArray = Array.isArray(paymentsData) ? paymentsData : [];
+        setPayments(paymentsArray);
+        calculateStats(paymentsArray);
       }
     } catch (error) {
       console.error('Error fetching payments:', error);
@@ -75,8 +86,18 @@ const PaymentTracking = () => {
         suppressError: true
       });
       
-      if (res.ok) {
-        const invoicesData = res.data?.data?.invoices || res.data?.invoices || [];
+      if (res.ok && res.data) {
+        // Handle res.guard.success() structure
+        let invoicesData = null;
+        if (res.data.success && res.data.data) {
+          invoicesData = res.data.data.invoices || res.data.data;
+        } else if (res.data.data && res.data.data.invoices) {
+          invoicesData = res.data.data.invoices;
+        } else if (res.data.invoices) {
+          invoicesData = res.data.invoices;
+        } else if (Array.isArray(res.data)) {
+          invoicesData = res.data;
+        }
         setInvoices(Array.isArray(invoicesData) ? invoicesData : []);
       }
     } catch (error) {

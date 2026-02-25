@@ -16,14 +16,22 @@ const { logger } = require('../src/core/logger');
 const calculateFatigueScore = async (crewMember, crewType) => {
   try {
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     
-    // Get duties for the last 7 days
-    const duties = await Duty.find({
-      [crewType === 'driver' ? 'driverId' : 'conductorId']: crewMember._id,
-      date: { $gte: today },
-      status: { $in: ['completed', 'active'] }
-    }).populate('tripId', 'distance duration');
+    // Get duties for the last 7 days (with error handling for missing Duty collection)
+    let duties = [];
+    try {
+      duties = await Duty.find({
+        [crewType === 'driver' ? 'driverId' : 'conductorId']: crewMember._id,
+        date: { $gte: sevenDaysAgo },
+        status: { $in: ['completed', 'active'] }
+      }).populate('tripId', 'distance duration').lean();
+    } catch (dutyError) {
+      // If Duty collection doesn't exist or query fails, return low fatigue
+      logger.warn('Duty collection query failed, returning default fatigue score:', dutyError.message);
+      return 30; // Default low fatigue when no duty data available
+    }
 
     let totalDistance = 0;
     let totalHours = 0;
@@ -64,7 +72,7 @@ const calculateFatigueScore = async (crewMember, crewType) => {
     return Math.min(100, Math.round(fatigueScore));
   } catch (error) {
     logger.error('Error calculating fatigue score:', error);
-    return 50; // Default moderate fatigue
+    return 30; // Default low fatigue on error
   }
 };
 

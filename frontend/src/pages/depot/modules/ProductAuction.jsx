@@ -60,8 +60,18 @@ const ProductAuction = () => {
         suppressError: true
       });
       
-      if (res.ok) {
-        const auctionsData = res.data?.data?.auctions || res.data?.auctions || [];
+      if (res.ok && res.data) {
+        // Handle res.guard.success() structure
+        let auctionsData = null;
+        if (res.data.success && res.data.data) {
+          auctionsData = res.data.data.auctions || res.data.data;
+        } else if (res.data.data && res.data.data.auctions) {
+          auctionsData = res.data.data.auctions;
+        } else if (res.data.auctions) {
+          auctionsData = res.data.auctions;
+        } else if (Array.isArray(res.data)) {
+          auctionsData = res.data;
+        }
         setAuctions(Array.isArray(auctionsData) ? auctionsData : []);
       }
     } catch (error) {
@@ -77,8 +87,18 @@ const ProductAuction = () => {
         suppressError: true
       });
       
-      if (res.ok) {
-        const inventoryData = res.data?.parts || res.data || [];
+      if (res.ok && res.data) {
+        // Handle res.guard.success() structure
+        let inventoryData = null;
+        if (res.data.success && res.data.data) {
+          inventoryData = res.data.data.parts || res.data.data;
+        } else if (res.data.data && res.data.data.parts) {
+          inventoryData = res.data.data.parts;
+        } else if (res.data.parts) {
+          inventoryData = res.data.parts;
+        } else if (Array.isArray(res.data)) {
+          inventoryData = res.data;
+        }
         setInventory(Array.isArray(inventoryData) ? inventoryData : []);
       }
     } catch (error) {
@@ -100,27 +120,33 @@ const ProductAuction = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...auctionForm,
-          depotId: user?.depotId,
-          createdBy: user?._id
+          // depotId will be extracted from JWT on backend - DO NOT send manually
         })
       });
 
-      if (res.ok && res.data.success) {
-        toast.success('Auction created successfully!');
-        setShowCreateModal(false);
-        setAuctionForm({
-          productId: '',
-          productName: '',
-          quantity: 1,
-          startingPrice: 0,
-          reservePrice: 0,
-          endDate: '',
-          description: '',
-          condition: 'used'
-        });
-        await fetchAuctions();
+      if (res.ok) {
+        const success = res.data?.success || (res.data?.data && res.data.data.success);
+        if (success) {
+          toast.success('Auction created successfully!');
+          setShowCreateModal(false);
+          setAuctionForm({
+            productId: '',
+            productName: '',
+            quantity: 1,
+            startingPrice: 0,
+            reservePrice: 0,
+            endDate: '',
+            description: '',
+            condition: 'used'
+          });
+          await fetchAuctions();
+        } else {
+          const errorMsg = res.data?.message || res.data?.data?.message || 'Failed to create auction';
+          toast.error(errorMsg);
+        }
       } else {
-        toast.error(res.data?.message || 'Failed to create auction');
+        const errorMsg = res.data?.message || res.message || 'Failed to create auction';
+        toast.error(errorMsg);
       }
     } catch (error) {
       console.error('Create auction error:', error);
