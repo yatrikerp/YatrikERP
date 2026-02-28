@@ -6,6 +6,7 @@ import 'screens/landing/landing_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/home/home_screen.dart';
+import 'screens/home/passenger_home_screen.dart';
 import 'screens/conductor/conductor_dashboard.dart';
 import 'providers/auth_provider.dart';
 import 'providers/booking_provider.dart';
@@ -41,8 +42,11 @@ class YatrikApp extends StatelessWidget {
           '/landing': (context) => const LandingScreen(),
           '/login': (context) => const LoginScreen(),
           '/register': (context) => const RegisterScreen(),
-          '/home': (context) => const HomeScreen(),
+          '/home': (context) => const PassengerHomeScreen(),
           '/conductor': (context) => const ConductorDashboard(),
+          '/search': (context) => const HomeScreen(), // Trip search screen
+          '/bookings': (context) => const HomeScreen(), // Bookings list screen
+          '/profile': (context) => const HomeScreen(), // Profile screen
         },
       ),
     );

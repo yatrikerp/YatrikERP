@@ -67,19 +67,31 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           if (user != null) {
             final role = (user['role'] ?? 'passenger').toString().toLowerCase();
             
+            // Role-based routing matching web app
             if (role == 'conductor') {
               Navigator.pushReplacementNamed(context, '/conductor');
             } else if (role == 'passenger') {
               Navigator.pushReplacementNamed(context, '/home');
-            } else if (role == 'admin') {
+            } else if (role == 'admin' || role == 'depot_manager' || role == 'depot-supervisor' || role == 'depot_operator') {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Admin access is only available on web'),
+                  content: Text('Admin and depot access is only available on web'),
                   backgroundColor: AppColors.brandPink,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+              await authProvider.logout();
+            } else if (role == 'driver') {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Driver access is only available on web'),
+                  backgroundColor: AppColors.brandPink,
+                  duration: Duration(seconds: 3),
                 ),
               );
               await authProvider.logout();
             } else {
+              // Default to passenger home for unknown roles
               Navigator.pushReplacementNamed(context, '/home');
             }
           } else {
