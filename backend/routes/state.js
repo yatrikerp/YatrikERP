@@ -24,21 +24,25 @@ router.get("/test", (req, res) => {
   });
 });
 
-// All routes require authentication and STATE_TRANSPORT_AUTHORITY role
-// Note: /test endpoint is above this, so it doesn't require auth
+// Logging middleware for all routes
 router.use((req, res, next) => {
   // Log route access attempts for debugging
   logger.info(`State route accessed: ${req.method} ${req.path}`);
   next();
 });
 
-router.use(auth, authorizeRoles("state_transport_authority", "super_admin"));
+// All routes below require authentication and STATE_TRANSPORT_AUTHORITY role
+// Note: /test endpoint is above this, so it doesn't require auth
+const authMiddleware = [
+  auth,
+  authorizeRoles("state_transport_authority", "super_admin"),
+];
 
 /**
  * GET /api/state/dashboard
  * Main state command dashboard - aggregated metrics
  */
-router.get("/dashboard", async (req, res) => {
+router.get("/dashboard", authMiddleware, async (req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -95,7 +99,7 @@ router.get("/dashboard", async (req, res) => {
  * GET /api/state/live-map
  * Live Kerala mobility map - all buses with status
  */
-router.get("/live-map", async (req, res) => {
+router.get("/live-map", authMiddleware, async (req, res) => {
   try {
     const now = new Date();
     const today = new Date(now);
@@ -169,7 +173,7 @@ router.get("/live-map", async (req, res) => {
  * GET /api/state/revenue
  * State revenue command - detailed revenue analytics
  */
-router.get("/revenue", async (req, res) => {
+router.get("/revenue", authMiddleware, async (req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -340,7 +344,7 @@ router.get("/revenue", async (req, res) => {
  * GET /api/state/load-occupancy
  * Load & occupancy intelligence
  */
-router.get("/load-occupancy", async (req, res) => {
+router.get("/load-occupancy", authMiddleware, async (req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -418,7 +422,7 @@ router.get("/load-occupancy", async (req, res) => {
  * GET /api/state/citizen-pain
  * Citizen pain index - complaints and dissatisfaction metrics
  */
-router.get("/citizen-pain", async (req, res) => {
+router.get("/citizen-pain", authMiddleware, async (req, res) => {
   try {
     // This would integrate with complaints system
     // For now, using booking cancellations and delays as proxy
@@ -483,7 +487,7 @@ router.get("/citizen-pain", async (req, res) => {
  * GET /api/state/alerts
  * System alert center
  */
-router.get("/alerts", async (req, res) => {
+router.get("/alerts", authMiddleware, async (req, res) => {
   try {
     const { severity, status, limit = 50 } = req.query;
 
@@ -525,7 +529,7 @@ router.get("/alerts", async (req, res) => {
  * GET /api/state/policies
  * Get all policies (active and inactive)
  */
-router.get("/policies", async (req, res) => {
+router.get("/policies", authMiddleware, async (req, res) => {
   try {
     const { status, type } = req.query;
 
@@ -556,7 +560,7 @@ router.get("/policies", async (req, res) => {
  * POST /api/state/policy/apply
  * Activate or deactivate a policy (State Authority only)
  */
-router.post("/policy/apply", async (req, res) => {
+router.post("/policy/apply", authMiddleware, async (req, res) => {
   try {
     const { policyId, action } = req.body; // action: 'activate' or 'deactivate'
 
