@@ -1,0 +1,142 @@
+========================================
+YATRIK ERP - MANUAL INSTALLATION GUIDE
+========================================
+
+YOUR APK IS READY AT:
+D:\YATRIK ERP\flutter\build\app\outputs\flutter-apk\app-debug.apk
+
+========================================
+METHOD 1: USB TRANSFER (FASTEST)
+========================================
+
+1. Connect your phone to computer via USB
+
+2. On your phone:
+   - Swipe down notification
+   - Tap "USB for file transfer"
+   - Select "File Transfer" or "MTP"
+
+3. On computer:
+   - Open "This PC" or "My Computer"
+   - Open your phone's storage
+   - Open "Download" folder
+
+4. Copy the APK file:
+   - From: D:\YATRIK ERP\flutter\build\app\outputs\flutter-apk\app-debug.apk
+   - To: Your phone's Download folder
+
+5. On your phone:
+   - Open "Files" or "My Files" app
+   - Go to "Downloads" folder
+   - Tap on "app-debug.apk"
+   - Tap "Install"
+   - If blocked, tap "Settings" and enable "Install from unknown sources"
+   - Tap "Install" again
+
+========================================
+METHOD 2: FLUTTER INSTALL COMMAND
+========================================
+
+1. Connect phone via USB
+
+2. Enable USB Debugging on phone:
+   - Settings > About Phone
+   - Tap "Build Number" 7 times (Developer mode enabled)
+   - Go back to Settings > Developer Options
+   - Enable "USB Debugging"
+   - Allow USB debugging when prompted
+
+3. Run these commands:
+   cd D:\YATRIK ERP\flutter
+   flutter devices
+   (You should see your phone listed)
+   
+   flutter install
+
+========================================
+METHOD 3: EMAIL/CLOUD
+========================================
+
+1. Email the APK to yourself:
+   - Attach: D:\YATRIK ERP\flutter\build\app\outputs\flutter-apk\app-debug.apk
+   - Send to your email
+
+2. On phone:
+   - Open email
+   - Download attachment
+   - Tap downloaded file
+   - Install
+
+OR use Google Drive/Dropbox:
+   - Upload APK to cloud
+   - Download on phone
+   - Install
+
+========================================
+LOGIN CREDENTIALS
+========================================
+
+CONDUCTOR (NEW):
+  Email: conductor@yatrik.com
+  Password: Conductor@123
+
+PASSENGER:
+  Email: test@gmail.com
+  Password: Test@123
+
+ADMIN (AI FEATURES):
+  Email: admin@yatrik.com
+  Password: Admin@123
+
+========================================
+FEATURES INCLUDED
+========================================
+
+✓ Passenger booking system
+✓ Conductor dashboard with backend
+✓ Admin dashboard with AI features
+✓ AI Demand Prediction
+✓ Crew Fatigue Monitoring
+✓ Genetic Algorithm Scheduling
+✓ Fare Optimization
+✓ Concession Verification
+✓ Real-time trip tracking
+✓ QR code scanning
+✓ Google Maps integration
+
+========================================
+TROUBLESHOOTING
+========================================
+
+If installation blocked:
+- Settings > Security
+- Enable "Unknown sources" or "Install unknown apps"
+- Allow installation from Files app
+
+If phone not detected:
+- Check USB cable is working
+- Try different USB port
+- Restart phone
+- Reinstall phone drivers
+
+If app crashes:
+- Check internet connection
+- Backend may be starting (wait 30-60 seconds)
+- Try login again
+
+========================================
+BACKEND STATUS
+========================================
+
+Backend is running on:
+- Local: http://localhost:5000
+- Production: https://yatrikerp.onrender.com
+
+First API call may take 30-60 seconds (Render cold start)
+
+========================================
+READY TO USE!
+========================================
+
+The app is fully functional with all features integrated.
+Just install and login with any of the credentials above!

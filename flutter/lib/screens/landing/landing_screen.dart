@@ -13,6 +13,7 @@ class _LandingScreenState extends State<LandingScreen> with SingleTickerProvider
   final _fromController = TextEditingController();
   final _toController = TextEditingController();
   String _selectedDate = '';
+  bool _isSearching = false;
   late AnimationController _animController;
 
   @override
@@ -34,6 +35,24 @@ class _LandingScreenState extends State<LandingScreen> with SingleTickerProvider
 
   void _handleBookNow() {
     Navigator.pushNamed(context, '/login');
+  }
+
+  Future<void> _handleSearch() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() => _isSearching = true);
+      await Future.delayed(const Duration(seconds: 1));
+      setState(() => _isSearching = false);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please login to search and book buses'),
+            backgroundColor: AppColors.brandPink,
+          ),
+        );
+        Navigator.pushNamed(context, '/login');
+      }
+    }
   }
 
   @override
@@ -143,21 +162,18 @@ class _LandingScreenState extends State<LandingScreen> with SingleTickerProvider
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.transparent,
                                 shadowColor: Colors.transparent,
-                                padding: EdgeInsets.symmetm(
-                              backgroundColor: AppColors.brandPink,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
+                                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Text(
-                              'Sign Up',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
+                              child: const Text(
+                                'Sign Up',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
                           ),

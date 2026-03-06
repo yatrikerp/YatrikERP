@@ -46,7 +46,19 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     if (!mounted) return;
     
     if (authProvider.isAuthenticated) {
-      Navigator.pushReplacementNamed(context, '/home');
+      final user = authProvider.user;
+      final role = (user?['role'] ?? 'passenger').toString().toLowerCase();
+      
+      // Only allow passenger and conductor roles
+      if (role == 'conductor') {
+        Navigator.pushReplacementNamed(context, '/conductor');
+      } else if (role == 'passenger') {
+        Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        // Logout users with other roles
+        await authProvider.logout();
+        Navigator.pushReplacementNamed(context, '/landing');
+      }
     } else {
       Navigator.pushReplacementNamed(context, '/landing');
     }

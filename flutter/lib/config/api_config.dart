@@ -1,9 +1,10 @@
 class ApiConfig {
-  // Backend API URL - PRODUCTION
+  // Backend API URL - PRODUCTION (Always works)
   static const String baseUrl = 'https://yatrikerp.onrender.com';
   
   // Development URLs (uncomment for local testing)
-  // static const String baseUrl = 'http://192.168.55.175:5000'; // WiFi
+  // Find your IP: Windows (ipconfig), Mac/Linux (ifconfig)
+  // static const String baseUrl = 'http://192.168.1.XXX:5000'; // Replace XXX with your IP
   // static const String baseUrl = 'http://10.0.2.2:5000'; // Android emulator
   // static const String baseUrl = 'http://localhost:5000'; // iOS simulator
   
@@ -38,6 +39,6 @@ class ApiConfig {
   // Tracking
   static const String busTracking = '/api/tracking';
   
-  // Request timeout
+  // Request timeout (increased for better reliability)
   static const Duration timeout = Duration(seconds: 30);
 }

@@ -1,0 +1,50 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../utils/colors.dart';
+
+class ProfileTab extends StatefulWidget {
+  const ProfileTab({super.key});
+
+  @override
+  State<ProfileTab> createState() => _ProfileTabState();
+}
+
+class _ProfileTabState extends State<ProfileTab> {
+  bool _isEditing = false;
+  final _formKey = GlobalKey<FormState>();
+  
+  late TextEditingController _nameController;
+  late TextEditingController _emailController;
+  late TextEditingController _phoneController;
+  
+  @override
+  void initState() {
+    super.initState();
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.user;
+    
+    _nameController = TextEditingController(text: user?['name'] ?? '');
+    _emailController = TextEditingController(text: user?['email'] ?? '');
+    _phoneController = TextEditingController(text: user?['phone'] ?? '');
+  }
+  
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
+    final user = authProvider.user;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF9FAFB),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            _buildProfileHeader(user),

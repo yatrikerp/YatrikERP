@@ -108,6 +108,7 @@ import FinancialControlDashboard from "./pages/admin/FinancialControlDashboard";
 import FleetGPSMonitoring from "./pages/admin/FleetGPSMonitoring";
 import NotificationsAlertManagement from "./pages/admin/NotificationsAlertManagement";
 import SystemConfigPolicies from "./pages/admin/SystemConfigPolicies";
+import BlockchainTicketDashboard from "./pages/admin/BlockchainTicketDashboard";
 
 // New Streamlined Components
 import StreamlinedBusManagement from "./pages/admin/StreamlinedBusManagement";
@@ -1085,7 +1086,9 @@ function App() {
                 <Route
                   path="/state-command"
                   element={
-                    <RequireAuth roles={["state_transport_authority", "super_admin"]}>
+                    <RequireAuth
+                      roles={["state_transport_authority", "super_admin"]}
+                    >
                       <StateCommandDashboard />
                     </RequireAuth>
                   }
@@ -1553,6 +1556,17 @@ function App() {
                     <RequireAuth roles={["admin"]}>
                       <AdminLayout>
                         <AdminAutonomousScheduling />
+                      </AdminLayout>
+                    </RequireAuth>
+                  }
+                />
+
+                <Route
+                  path="/admin/blockchain-tickets"
+                  element={
+                    <RequireAuth roles={["admin"]}>
+                      <AdminLayout>
+                        <BlockchainTicketDashboard />
                       </AdminLayout>
                     </RequireAuth>
                   }

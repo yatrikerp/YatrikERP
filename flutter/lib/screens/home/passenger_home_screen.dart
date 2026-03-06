@@ -40,20 +40,43 @@ class _PassengerHomeScreenState extends State<PassengerHomeScreen> {
     setState(() => _isLoading = true);
     
     try {
+      // Ensure API service is initialized and token is loaded
+      await _apiService.init();
+      final token = await _apiService.getToken();
+      
+      if (token == null) {
+        print('⚠️ No token available, redirecting to login');
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/login');
+        }
+        return;
+      }
+      
+      print('🔑 Token available for dashboard fetch');
+      
       // Fetch tickets/bookings
-      final ticketsResponse = await _apiService.get(ApiConfig.passengerTickets);
-      if (ticketsResponse['success'] == true) {
-        final tickets = ticketsResponse['tickets'] ?? ticketsResponse['data'] ?? [];
+      try {
+        final ticketsResponse = await _apiService.get(ApiConfig.passengerTickets);
+        if (ticketsResponse['success'] == true) {
+          final tickets = ticketsResponse['tickets'] ?? ticketsResponse['data'] ?? [];
+          setState(() {
+            _recentTickets = tickets;
+            // Filter upcoming trips
+            _upcomingTrips = tickets.where((ticket) {
+              if (ticket['tripDetails'] != null && ticket['tripDetails']['serviceDate'] != null) {
+                final tripDate = DateTime.parse(ticket['tripDetails']['serviceDate']);
+                return tripDate.isAfter(DateTime.now()) && ticket['state'] == 'active';
+              }
+              return false;
+            }).toList();
+          });
+        }
+      } catch (ticketsError) {
+        print('⚠️ Error loading tickets: $ticketsError');
+        // Don't logout - just show empty state
         setState(() {
-          _recentTickets = tickets;
-          // Filter upcoming trips
-          _upcomingTrips = tickets.where((ticket) {
-            if (ticket['tripDetails'] != null && ticket['tripDetails']['serviceDate'] != null) {
-              final tripDate = DateTime.parse(ticket['tripDetails']['serviceDate']);
-              return tripDate.isAfter(DateTime.now()) && ticket['state'] == 'active';
-            }
-            return false;
-          }).toList();
+          _recentTickets = [];
+          _upcomingTrips = [];
         });
       }
       
@@ -67,21 +90,39 @@ class _PassengerHomeScreenState extends State<PassengerHomeScreen> {
         }
       } catch (e) {
         // Wallet endpoint might not exist, ignore error
-        print('Wallet fetch error: $e');
+        print('⚠️ Wallet fetch error: $e');
+        setState(() {
+          _walletBalance = 0.0;
+        });
       }
       
     } catch (e) {
-      print('Error fetching dashboard data: $e');
+      print('⚠️ Error fetching dashboard data: $e');
+      
+      // Set default empty state instead of logging out
+      setState(() {
+        _recentTickets = [];
+        _upcomingTrips = [];
+        _walletBalance = 0.0;
+      });
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to load dashboard data'),
-            backgroundColor: AppColors.error,
+            content: const Text('Some features may be limited. Pull down to refresh.'),
+            backgroundColor: Colors.orange,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: _fetchDashboardData,
+            ),
           ),
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 

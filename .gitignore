@@ -8,6 +8,10 @@ node_modules/
 .env.*.local
 *.env
 
+# Google OAuth client secrets
+client_secret_*.json
+*client_secret*.json
+
 # Build outputs
 build/
 dist/

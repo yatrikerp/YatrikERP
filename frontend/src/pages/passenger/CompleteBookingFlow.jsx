@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { apiFetch } from '../../utils/api';
+import PaymentGateway from '../../components/payment/PaymentGateway';
 
 const CompleteBookingFlow = () => {
   const { tripId } = useParams();
@@ -37,6 +38,8 @@ const CompleteBookingFlow = () => {
     gender: 'male'
   });
   const [bookingId, setBookingId] = useState(null);
+  const [bookingData, setBookingData] = useState(null);
+  const [paymentResult, setPaymentResult] = useState(null);
 
   // Mock boarding/dropping points (in real app, fetch from API)
   const boardingPoints = [
@@ -99,30 +102,64 @@ const CompleteBookingFlow = () => {
   const handlePayment = async () => {
     setLoading(true);
     try {
-      // Simulate payment processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Create booking
+      // Create booking first
       const bookingData = {
         tripId: tripId,
-        boardingPoint: boardingPoint,
-        droppingPoint: droppingPoint,
-        seats: selectedSeats,
-        passengerDetails: passengerDetails,
-        totalAmount: selectedSeats.reduce((sum, seat) => sum + seat.price, 0)
+        customer: {
+          name: passengerDetails.name,
+          email: passengerDetails.email,
+          phone: passengerDetails.phone,
+          age: passengerDetails.age,
+          gender: passengerDetails.gender
+        },
+        journey: {
+          from: boardingPoint?.name,
+          to: droppingPoint?.name,
+          departureDate: new Date(),
+          departureTime: '06:00 AM'
+        },
+        seats: selectedSeats.map(seat => ({
+          seatNumber: seat.seatNumber,
+          seatType: seat.type,
+          price: seat.price,
+          passengerName: passengerDetails.name
+        })),
+        pricing: {
+          baseFare: 200,
+          seatFare: totalAmount,
+          totalAmount: totalAmount,
+          taxes: { gst: 0 }
+        }
       };
 
-      // In real app, call API to create booking
-      // const response = await apiFetch('/api/bookings/create', {
-      //   method: 'POST',
-      //   body: JSON.stringify(bookingData)
-      // });
+      // Create booking via guest endpoint (no auth required)
+      const response = await apiFetch('/api/booking/guest', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(bookingData)
+      });
 
-      setBookingId('BK' + Date.now());
-      setCurrentStep(5);
-      toast.success('Booking confirmed!');
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to create booking');
+      }
+
+      // Store booking data for payment
+      const bookingForPayment = {
+        ...bookingData,
+        bookingId: response.data.bookingId,
+        totalAmount: response.data.totalAmount
+      };
+
+      // Set booking data and move to payment step
+      setBookingId(response.data.bookingId);
+      setBookingData(bookingForPayment);
+      setCurrentStep(4);
+      toast.success('Booking created! Please complete payment.');
     } catch (error) {
-      toast.error('Payment failed. Please try again.');
+      console.error('Booking creation error:', error);
+      toast.error(error.message || 'Failed to create booking. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -383,60 +420,35 @@ const CompleteBookingFlow = () => {
                 Back
               </button>
               <button
-                onClick={handleContinueToPayment}
-                className="flex-1 px-8 py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-700 flex items-center justify-center"
+                onClick={handlePayment}
+                disabled={loading}
+                className="flex-1 px-8 py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:bg-gray-400 flex items-center justify-center"
               >
-                Continue to Payment <ArrowRight className="w-5 h-5 ml-2" />
+                {loading ? 'Creating Booking...' : 'Continue to Payment'}
+                <ArrowRight className="w-5 h-5 ml-2" />
               </button>
             </div>
           </div>
         )}
 
         {/* Step 4: Payment */}
-        {currentStep === 4 && (
+        {currentStep === 4 && bookingData && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Payment</h2>
+            <h2 className="text-2xl font-bold text-gray-900">Complete Payment</h2>
             
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 max-w-2xl">
-              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                <h3 className="font-semibold mb-2">Booking Summary</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>Boarding:</span>
-                    <span className="font-medium">{boardingPoint?.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Dropping:</span>
-                    <span className="font-medium">{droppingPoint?.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Seats:</span>
-                    <span className="font-medium">{selectedSeats.map(s => s.seatNumber).join(', ')}</span>
-                  </div>
-                  <div className="border-t pt-2 flex justify-between text-lg font-bold">
-                    <span>Total Amount:</span>
-                    <span className="text-pink-600">₹{totalAmount}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="font-semibold">Select Payment Method</h4>
-                <div className="grid gap-3">
-                  {['UPI', 'Credit/Debit Card', 'Net Banking', 'Wallet'].map(method => (
-                    <button
-                      key={method}
-                      className="p-4 border-2 border-gray-200 rounded-lg hover:border-pink-300 text-left transition-all"
-                    >
-                      <div className="flex items-center">
-                        <CreditCard className="w-5 h-5 mr-3 text-pink-600" />
-                        <span className="font-medium">{method}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <PaymentGateway
+              bookingData={bookingData}
+              isGuest={true}
+              onPaymentSuccess={(result) => {
+                setPaymentResult(result);
+                setCurrentStep(5);
+                toast.success('Payment successful! Your ticket is confirmed.');
+              }}
+              onPaymentFailure={(error) => {
+                console.error('Payment failed:', error);
+                toast.error('Payment failed. Please try again.');
+              }}
+            />
 
             <div className="flex gap-4">
               <button
@@ -445,44 +457,33 @@ const CompleteBookingFlow = () => {
               >
                 Back
               </button>
-              <button
-                onClick={handlePayment}
-                disabled={loading}
-                className="flex-1 px-8 py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:bg-gray-400 flex items-center justify-center"
-              >
-                {loading ? 'Processing...' : `Pay ₹${totalAmount}`}
-              </button>
             </div>
           </div>
         )}
 
         {/* Step 5: Ticket/Confirmation */}
-        {currentStep === 5 && (
+        {currentStep === 5 && paymentResult && (
           <div className="max-w-2xl mx-auto text-center space-y-6">
             <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-8">
               <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle className="w-12 h-12 text-green-600" />
               </div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Booking Confirmed!</h2>
-              <p className="text-gray-600 mb-6">Your ticket has been booked successfully</p>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">Payment Successful!</h2>
+              <p className="text-gray-600 mb-6">Your ticket has been booked and paid successfully</p>
               
               <div className="bg-gray-50 rounded-lg p-6 mb-6 text-left">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-semibold">Booking ID</h3>
                   <span className="text-2xl font-bold text-pink-600">{bookingId}</span>
                 </div>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-semibold">Payment ID</h3>
+                  <span className="text-sm font-mono text-green-600">{paymentResult.paymentId}</span>
+                </div>
                 <div className="border-t pt-4 space-y-3 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Route:</span>
-                    <span className="font-medium">{trip?.fromCity} → {trip?.toCity}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Boarding:</span>
-                    <span className="font-medium">{boardingPoint?.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Dropping:</span>
-                    <span className="font-medium">{droppingPoint?.name}</span>
+                    <span className="font-medium">{boardingPoint?.name} → {droppingPoint?.name}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Seats:</span>
@@ -493,15 +494,24 @@ const CompleteBookingFlow = () => {
                     <span className="font-medium">{passengerDetails.name}</span>
                   </div>
                   <div className="border-t pt-3 flex justify-between text-lg">
-                    <span className="font-semibold">Total Paid:</span>
-                    <span className="font-bold text-pink-600">₹{totalAmount}</span>
+                    <span className="font-semibold">Amount Paid:</span>
+                    <span className="font-bold text-green-600">₹{paymentResult.amount}</span>
                   </div>
                 </div>
               </div>
 
               <div className="text-sm text-gray-600 mb-6">
-                A confirmation email has been sent to <strong>{passengerDetails.email}</strong>
+                A confirmation email with your e-ticket has been sent to <strong>{passengerDetails.email}</strong>
               </div>
+
+              {paymentResult.tickets && paymentResult.tickets.length > 0 && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="text-sm text-blue-800">
+                    <div className="font-medium">Digital Tickets Generated</div>
+                    <div>Your QR code tickets are ready for boarding</div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-4">
                 <button

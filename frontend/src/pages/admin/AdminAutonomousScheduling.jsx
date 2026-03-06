@@ -42,13 +42,17 @@ const AdminAutonomousScheduling = () => {
         })
       });
 
-      if (response.ok && response.data) {
-        setResults(response.data);
+      console.log('API Response:', response); // Debug log
+
+      if (response.ok && response.data && response.data.data) {
+        // API returns { success: true, data: {...} }
+        // apiFetch wraps it as { ok: true, data: { success: true, data: {...} } }
+        setResults(response.data.data);
         setExecutionLog(prev => prev.map((log, idx) => 
           idx === 0 ? { ...log, status: 'success' } : log
         ));
       } else {
-        throw new Error(response.message || 'Failed to generate schedule');
+        throw new Error(response.data?.message || response.message || 'Failed to generate schedule');
       }
     } catch (error) {
       console.error('Optimization error:', error);

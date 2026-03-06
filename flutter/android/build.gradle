@@ -1,5 +1,13 @@
 // Top-level build file - Modern Flutter 3.41+ with AGP 8.3+
-// No buildscript block needed - using plugins DSL in settings.gradle
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.google.gms:google-services:4.4.0'
+    }
+}
 
 allprojects {
     repositories {

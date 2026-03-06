@@ -1,63 +1,182 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { auth, requireRole } = require('../middleware/auth');
-const BookingService = require('../services/bookingService');
-const Booking = require('../models/Booking');
-const Trip = require('../models/Trip');
-const Bus = require('../models/Bus');
-const Route = require('../models/Route');
-const { sendEmail } = require('../config/email');
-const { queueEmail } = require('../services/emailQueue');
+const { auth, requireRole } = require("../middleware/auth");
+const BookingService = require("../services/bookingService");
+const Booking = require("../models/Booking");
+const Trip = require("../models/Trip");
+const Bus = require("../models/Bus");
+const Route = require("../models/Route");
+const { sendEmail } = require("../config/email");
+const { queueEmail } = require("../services/emailQueue");
 
 // Helper function to create role-based auth middleware
 const authRole = (roles) => [auth, requireRole(roles)];
 
 // Allow both admin and depot users to access booking routes
-const bookingAuth = authRole(['admin', 'depot_manager', 'depot_supervisor', 'depot_operator', 'MANAGER', 'SUPERVISOR', 'OPERATOR', 'passenger']);
+const bookingAuth = authRole([
+  "admin",
+  "depot_manager",
+  "depot_supervisor",
+  "depot_operator",
+  "MANAGER",
+  "SUPERVISOR",
+  "OPERATOR",
+  "passenger",
+]);
 
-// POST /api/booking - Create new booking - Auth required
-router.post('/', auth, async (req, res) => {
+// POST /api/booking/guest - Create booking without authentication (for guest users)
+router.post("/guest", async (req, res) => {
   try {
     const bookingData = req.body;
-    const userId = req.user._id;
-    console.log('📝 Received booking data:', JSON.stringify(bookingData, null, 2));
+    console.log(
+      "📝 Received guest booking data:",
+      JSON.stringify(bookingData, null, 2),
+    );
 
     // Validate required fields
-    const requiredFields = ['tripId', 'customer', 'journey', 'seats'];
+    const requiredFields = ["tripId", "customer", "journey", "seats"];
     for (const field of requiredFields) {
       if (!bookingData[field]) {
         return res.status(400).json({
           success: false,
-          message: `${field} is required`
+          message: `${field} is required`,
         });
       }
     }
 
     // Get trip details to extract proper references
     const trip = await Trip.findById(bookingData.tripId)
-      .populate('routeId', '_id routeName routeNumber startingPoint endingPoint')
-      .populate('busId', '_id busNumber busType')
-      .populate('depotId', '_id depotName')
+      .populate(
+        "routeId",
+        "_id routeName routeNumber startingPoint endingPoint",
+      )
+      .populate("busId", "_id busNumber busType")
+      .populate("depotId", "_id depotName")
       .lean();
-    
+
     if (!trip) {
       return res.status(404).json({
         success: false,
-        message: 'Trip not found'
+        message: "Trip not found",
       });
     }
 
     // Create a simple booking with all required fields
     const bookingId = `BK${Date.now().toString().slice(-8)}`;
     const bookingReference = `REF${Date.now().toString().slice(-8)}`;
-    
+
+    const booking = new Booking({
+      ...bookingData,
+      bookingId: bookingId,
+      bookingReference: bookingReference,
+      createdBy: null, // No user for guest booking
+      status: "pending", // Use valid enum value
+      payment: {
+        method: "card", // Required field
+        paymentStatus: "pending",
+      },
+      tripId: bookingData.tripId,
+      depotId: trip.depotId?._id || trip.depotId,
+      busId: trip.busId?._id || trip.busId,
+      routeId: trip.routeId?._id || trip.routeId,
+      journey: {
+        ...bookingData.journey,
+        arrivalDate: bookingData.journey.departureDate,
+        arrivalTime: "10:00 AM", // Required field
+        duration: 240,
+      },
+      seats: bookingData.seats.map((seat) => ({
+        ...seat,
+        passengerName: bookingData.customer.name,
+        seatPosition: "window",
+        seatType: "seater",
+      })),
+      pricing: {
+        baseFare: 200,
+        seatFare: bookingData.seats.reduce(
+          (total, seat) => total + (seat.price || 0),
+          0,
+        ),
+        totalAmount: bookingData.seats.reduce(
+          (total, seat) => total + (seat.price || 0),
+          0,
+        ),
+        taxes: { gst: 0 },
+      },
+    });
+
+    const savedBooking = await booking.save();
+    console.log("✅ Guest booking created:", savedBooking.bookingId);
+
+    res.status(201).json({
+      success: true,
+      message: "Guest booking created successfully",
+      data: {
+        bookingId: savedBooking._id,
+        bookingReference: savedBooking.bookingReference,
+        status: savedBooking.status,
+        totalAmount: savedBooking.pricing.totalAmount,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Guest booking creation error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create guest booking",
+      error: error.message,
+    });
+  }
+});
+
+// POST /api/booking - Create new booking - Auth required
+router.post("/", auth, async (req, res) => {
+  try {
+    const bookingData = req.body;
+    const userId = req.user._id;
+    console.log(
+      "📝 Received booking data:",
+      JSON.stringify(bookingData, null, 2),
+    );
+
+    // Validate required fields
+    const requiredFields = ["tripId", "customer", "journey", "seats"];
+    for (const field of requiredFields) {
+      if (!bookingData[field]) {
+        return res.status(400).json({
+          success: false,
+          message: `${field} is required`,
+        });
+      }
+    }
+
+    // Get trip details to extract proper references
+    const trip = await Trip.findById(bookingData.tripId)
+      .populate(
+        "routeId",
+        "_id routeName routeNumber startingPoint endingPoint",
+      )
+      .populate("busId", "_id busNumber busType")
+      .populate("depotId", "_id depotName")
+      .lean();
+
+    if (!trip) {
+      return res.status(404).json({
+        success: false,
+        message: "Trip not found",
+      });
+    }
+
+    // Create a simple booking with all required fields
+    const bookingId = `BK${Date.now().toString().slice(-8)}`;
+    const bookingReference = `REF${Date.now().toString().slice(-8)}`;
+
     const booking = new Booking({
       ...bookingData,
       bookingId: bookingId,
       bookingReference: bookingReference,
       createdBy: userId, // Link booking to the authenticated user
-      status: 'pending',
-      paymentStatus: 'pending',
+      status: "pending",
+      paymentStatus: "pending",
       tripId: bookingData.tripId,
       depotId: trip.depotId?._id || trip.depotId,
       busId: trip.busId?._id || trip.busId,
@@ -65,24 +184,31 @@ router.post('/', auth, async (req, res) => {
       journey: {
         ...bookingData.journey,
         arrivalDate: bookingData.journey.departureDate, // Use same date
-        duration: 240 // 4 hours in minutes
+        duration: 240, // 4 hours in minutes
       },
-      seats: bookingData.seats.map(seat => ({
+      seats: bookingData.seats.map((seat) => ({
         ...seat,
         passengerName: bookingData.customer.name,
-        seatPosition: 'window', // Valid enum value
-        seatType: 'seater'
+        seatPosition: "window", // Valid enum value
+        seatType: "seater",
       })),
       pricing: {
         baseFare: 200,
-        seatFare: bookingData.seats.reduce((total, seat) => total + (seat.price || 0), 0),
-        totalAmount: bookingData.seats.reduce((total, seat) => total + (seat.price || 0), 0) + 200
+        seatFare: bookingData.seats.reduce(
+          (total, seat) => total + (seat.price || 0),
+          0,
+        ),
+        totalAmount:
+          bookingData.seats.reduce(
+            (total, seat) => total + (seat.price || 0),
+            0,
+          ) + 200,
       },
       payment: {
-        method: 'upi', // Valid enum value
-        paymentStatus: 'pending'
+        method: "upi", // Valid enum value
+        paymentStatus: "pending",
       },
-      createdAt: new Date()
+      createdAt: new Date(),
     });
 
     await booking.save();
@@ -97,62 +223,78 @@ router.post('/', auth, async (req, res) => {
       pricing: booking.pricing,
       bus: trip.busId,
       route: trip.routeId,
-      trip: trip
+      trip: trip,
     };
-    
-    const requesterRole = (req.user?.role || 'passenger').toString().toLowerCase();
-    if (requesterRole === 'passenger' || requesterRole === 'user') {
-      queueEmail(booking.customer.email, 'ticketConfirmation', emailData);
-      console.log('📧 Booking confirmation email queued for passenger:', booking.customer.email);
+
+    const requesterRole = (req.user?.role || "passenger")
+      .toString()
+      .toLowerCase();
+    if (requesterRole === "passenger" || requesterRole === "user") {
+      queueEmail(booking.customer.email, "ticketConfirmation", emailData);
+      console.log(
+        "📧 Booking confirmation email queued for passenger:",
+        booking.customer.email,
+      );
     } else {
-      console.log(`ℹ️ Skipping booking email; requester role is ${requesterRole}`);
+      console.log(
+        `ℹ️ Skipping booking email; requester role is ${requesterRole}`,
+      );
     }
 
     res.status(201).json({
       success: true,
-      message: 'Booking created successfully',
+      message: "Booking created successfully",
       data: {
         bookingId: booking.bookingId,
         _id: booking._id,
         status: booking.status,
-        fare: booking.pricing?.totalAmount || 500
-      }
+        fare: booking.pricing?.totalAmount || 500,
+      },
     });
-
   } catch (error) {
-    console.error('Create booking error:', error);
+    console.error("Create booking error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to create booking',
-      error: error.message
+      message: "Failed to create booking",
+      error: error.message,
     });
   }
 });
 
 // POST /api/booking/confirm - Confirm booking (after payment) - No auth required
-router.post('/confirm', async (req, res) => {
+router.post("/confirm", async (req, res) => {
   try {
-    const { bookingId, paymentId, orderId, paymentStatus = 'completed' } = req.body;
-    
-    console.log('🔍 Booking confirmation request:', { bookingId, paymentId, orderId, paymentStatus });
+    const {
+      bookingId,
+      paymentId,
+      orderId,
+      paymentStatus = "completed",
+    } = req.body;
+
+    console.log("🔍 Booking confirmation request:", {
+      bookingId,
+      paymentId,
+      orderId,
+      paymentStatus,
+    });
 
     if (!bookingId) {
       return res.status(400).json({
         success: false,
-        message: 'Booking ID is required'
+        message: "Booking ID is required",
       });
     }
 
     // Find and update booking - try both ObjectId and string
     let booking = null;
-    
+
     // First try to find by bookingId field (string)
-    if (bookingId && typeof bookingId === 'string') {
-      console.log('🔍 Searching by bookingId field:', bookingId);
+    if (bookingId && typeof bookingId === "string") {
+      console.log("🔍 Searching by bookingId field:", bookingId);
       booking = await Booking.findOne({ bookingId: bookingId });
-      console.log('🔍 Found by bookingId:', !!booking);
+      console.log("🔍 Found by bookingId:", !!booking);
     }
-    
+
     // If not found and it looks like an ObjectId, try by _id
     if (!booking && bookingId && bookingId.length === 24) {
       try {
@@ -161,40 +303,44 @@ router.post('/confirm', async (req, res) => {
         // Ignore ObjectId casting errors
       }
     }
-    
+
     // If still not found, try to find by any field that might match
     if (!booking) {
       const searchConditions = [
         { bookingId: bookingId },
-        { bookingReference: bookingId }
+        { bookingReference: bookingId },
       ];
-      
+
       // Only add _id search if it looks like a valid ObjectId
-      if (bookingId && bookingId.length === 24 && /^[0-9a-fA-F]{24}$/.test(bookingId)) {
+      if (
+        bookingId &&
+        bookingId.length === 24 &&
+        /^[0-9a-fA-F]{24}$/.test(bookingId)
+      ) {
         searchConditions.push({ _id: bookingId });
       }
-      
+
       booking = await Booking.findOne({
-        $or: searchConditions
+        $or: searchConditions,
       });
     }
-    
+
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: 'Booking not found',
-        searchedId: bookingId
+        message: "Booking not found",
+        searchedId: bookingId,
       });
     }
 
     // Update booking status
-    booking.status = 'confirmed';
+    booking.status = "confirmed";
     if (paymentId) {
       booking.payment = {
         ...booking.payment,
         transactionId: paymentId,
-        paymentStatus: 'completed',
-        paidAt: new Date()
+        paymentStatus: "completed",
+        paidAt: new Date(),
       };
       booking.pricing.paidAmount = booking.pricing.totalAmount;
     }
@@ -206,134 +352,202 @@ router.post('/confirm', async (req, res) => {
     // Generate PNR
     const pnr = booking.bookingId || `PNR${Date.now().toString().slice(-8)}`;
 
+    // Issue blockchain ticket (async, non-blocking)
+    let blockchainTicket = null;
+    try {
+      const blockchainService = require("../services/blockchainService");
+      const BlockchainTicket = require("../models/BlockchainTicket");
+
+      if (blockchainService.initialized) {
+        const ticketData = {
+          bookingId: booking._id.toString(),
+          routeId: booking.routeId?.toString() || "UNKNOWN",
+          passengerName: booking.customer.name,
+          passengerWallet: null,
+          fare: (booking.pricing.totalAmount || 0) / 100, // Convert to decimal
+          travelDate: booking.journey.departureDate,
+        };
+
+        const result = await blockchainService.issueTicket(ticketData);
+
+        // Save blockchain ticket record
+        const bcTicket = new BlockchainTicket({
+          bookingId: booking._id,
+          tokenId: result.tokenId,
+          transactionHash: result.transactionHash,
+          blockNumber: result.blockNumber,
+          contractAddress: process.env.TICKET_CONTRACT_ADDRESS,
+          gasUsed: result.gasUsed,
+          metadata: {
+            routeId: ticketData.routeId,
+            passengerName: ticketData.passengerName,
+            fare: booking.pricing.totalAmount,
+            travelDate: booking.journey.departureDate,
+          },
+        });
+
+        await bcTicket.save();
+
+        // Link blockchain ticket to booking
+        booking.blockchainTicketId = bcTicket._id;
+        await booking.save();
+
+        blockchainTicket = {
+          tokenId: result.tokenId,
+          transactionHash: result.transactionHash,
+          explorerUrl: `https://mumbai.polygonscan.com/tx/${result.transactionHash}`,
+        };
+
+        console.log("✅ Blockchain ticket issued:", result.tokenId);
+      }
+    } catch (blockchainError) {
+      console.error(
+        "⚠️ Blockchain ticket issuance failed:",
+        blockchainError.message,
+      );
+      // Continue - booking is still valid without blockchain
+    }
+
     // Generate QR code data for the ticket
     const qrData = {
       pnr: pnr,
       bookingId: booking.bookingId,
+      tokenId: blockchainTicket?.tokenId || null,
       passengerName: booking.customer.name,
       from: booking.journey.from,
       to: booking.journey.to,
       departureDate: booking.journey.departureDate,
       departureTime: booking.journey.departureTime,
-      seatNumbers: booking.seats.map(seat => seat.seatNumber).join(', '),
-      amount: booking.pricing.totalAmount
+      seatNumbers: booking.seats.map((seat) => seat.seatNumber).join(", "),
+      amount: booking.pricing.totalAmount,
     };
 
     res.json({
       success: true,
-      message: 'Booking confirmed successfully',
+      message: "Booking confirmed successfully",
       data: {
         booking,
         ticket: {
           pnr,
           bookingId: booking.bookingId,
-          status: 'confirmed',
+          status: "confirmed",
           qrData: JSON.stringify(qrData),
           passengerName: booking.customer.name,
           from: booking.journey.from,
           to: booking.journey.to,
           departureDate: booking.journey.departureDate,
           departureTime: booking.journey.departureTime,
-          seatNumbers: booking.seats.map(seat => seat.seatNumber).join(', '),
-          amount: booking.pricing.totalAmount
-        }
-      }
+          seatNumbers: booking.seats.map((seat) => seat.seatNumber).join(", "),
+          amount: booking.pricing.totalAmount,
+          blockchain: blockchainTicket,
+        },
+      },
     });
-
   } catch (error) {
-    console.error('Confirm booking error:', error);
+    console.error("Confirm booking error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to confirm booking',
-      error: error.message
+      message: "Failed to confirm booking",
+      error: error.message,
     });
   }
 });
 
 // GET /api/booking/pnr/:pnr - Get booking by PNR (public endpoint for ticket display)
-router.get('/pnr/:pnr', async (req, res) => {
+router.get("/pnr/:pnr", async (req, res) => {
   try {
     const { pnr } = req.params;
-    
+
     if (!pnr) {
       return res.status(400).json({
         success: false,
-        message: 'PNR is required'
+        message: "PNR is required",
       });
     }
 
     // Search for booking by PNR
     const booking = await Booking.findOne({ bookingId: pnr })
-      .populate('tripId', 'serviceDate startTime endTime fare capacity')
-      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
-      .populate('busId', 'busNumber busType')
-      .populate('depotId', 'depotName')
+      .populate("tripId", "serviceDate startTime endTime fare capacity")
+      .populate("routeId", "routeName routeNumber startingPoint endingPoint")
+      .populate("busId", "busNumber busType")
+      .populate("depotId", "depotName")
       .lean();
 
     if (!booking) {
-      console.log('❌ Booking not found for PNR:', pnr);
-      
+      console.log("❌ Booking not found for PNR:", pnr);
+
       // Check if this is a test PNR and create a sample booking
-      if (pnr === 'PNR97032794' || pnr.startsWith('PNR')) {
-        console.log('🔧 Creating sample booking for test PNR:', pnr);
-        
+      if (pnr === "PNR97032794" || pnr.startsWith("PNR")) {
+        console.log("🔧 Creating sample booking for test PNR:", pnr);
+
         // Find a sample trip to create booking for
-        const sampleTrip = await Trip.findOne({ status: 'scheduled' })
-          .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
-          .populate('busId', 'busNumber busType')
-          .populate('depotId', 'depotName')
+        const sampleTrip = await Trip.findOne({ status: "scheduled" })
+          .populate(
+            "routeId",
+            "routeName routeNumber startingPoint endingPoint",
+          )
+          .populate("busId", "busNumber busType")
+          .populate("depotId", "depotName")
           .lean();
-          
+
         if (sampleTrip) {
           const sampleBooking = {
             pnr: pnr,
             bookingId: pnr,
-            status: 'confirmed',
+            status: "confirmed",
             customer: {
-              name: 'Rito Tensy',
-              email: 'rito.tensy@example.com',
-              phone: '+91-9876543210',
+              name: "Rito Tensy",
+              email: "rito.tensy@example.com",
+              phone: "+91-9876543210",
               age: 28,
-              gender: 'male'
+              gender: "male",
             },
             journey: {
-              from: sampleTrip.routeId?.startingPoint?.city || 'Kochi',
-              to: sampleTrip.routeId?.endingPoint?.city || 'Thiruvananthapuram',
+              from: sampleTrip.routeId?.startingPoint?.city || "Kochi",
+              to: sampleTrip.routeId?.endingPoint?.city || "Thiruvananthapuram",
               departureDate: sampleTrip.serviceDate,
               departureTime: sampleTrip.startTime,
               arrivalTime: sampleTrip.endTime,
-              boardingPoint: sampleTrip.routeId?.startingPoint?.location || 'KSRTC Bus Station',
-              droppingPoint: sampleTrip.routeId?.endingPoint?.location || 'Central Bus Station'
+              boardingPoint:
+                sampleTrip.routeId?.startingPoint?.location ||
+                "KSRTC Bus Station",
+              droppingPoint:
+                sampleTrip.routeId?.endingPoint?.location ||
+                "Central Bus Station",
             },
             seats: [
-              { seatNumber: 'U1', seatType: 'seater', price: sampleTrip.fare || 200 }
+              {
+                seatNumber: "U1",
+                seatType: "seater",
+                price: sampleTrip.fare || 200,
+              },
             ],
             pricing: {
               baseFare: sampleTrip.fare || 200,
-              total: sampleTrip.fare || 200
+              total: sampleTrip.fare || 200,
             },
             trip: sampleTrip,
             route: sampleTrip.routeId,
             bus: sampleTrip.busId,
-            depot: sampleTrip.depotId
+            depot: sampleTrip.depotId,
           };
-          
+
           return res.json({
             success: true,
-            message: 'Sample booking data (for testing)',
-            data: sampleBooking
+            message: "Sample booking data (for testing)",
+            data: sampleBooking,
           });
         }
       }
-      
+
       return res.status(404).json({
         success: false,
-        message: 'Booking not found',
+        message: "Booking not found",
         suggestions: [
-          'Check if the PNR is correct',
-          'PNR format should be like: PNR123456',
-          'Contact support if you believe this is an error'
-        ]
+          "Check if the PNR is correct",
+          "PNR format should be like: PNR123456",
+          "Contact support if you believe this is an error",
+        ],
       });
     }
 
@@ -344,35 +558,42 @@ router.get('/pnr/:pnr', async (req, res) => {
       status: booking.status,
       customer: booking.customer,
       journey: {
-        from: booking.journey?.from || booking.routeId?.startingPoint?.city || 'Origin',
-        to: booking.journey?.to || booking.routeId?.endingPoint?.city || 'Destination',
-        departureDate: booking.journey?.departureDate || booking.tripId?.serviceDate,
-        departureTime: booking.journey?.departureTime || booking.tripId?.startTime,
+        from:
+          booking.journey?.from ||
+          booking.routeId?.startingPoint?.city ||
+          "Origin",
+        to:
+          booking.journey?.to ||
+          booking.routeId?.endingPoint?.city ||
+          "Destination",
+        departureDate:
+          booking.journey?.departureDate || booking.tripId?.serviceDate,
+        departureTime:
+          booking.journey?.departureTime || booking.tripId?.startTime,
         arrivalTime: booking.journey?.arrivalTime || booking.tripId?.endTime,
-        boardingPoint: booking.journey?.boardingPoint || 'Central Bus Stand',
-        droppingPoint: booking.journey?.droppingPoint || 'Central Bus Stand'
+        boardingPoint: booking.journey?.boardingPoint || "Central Bus Stand",
+        droppingPoint: booking.journey?.droppingPoint || "Central Bus Stand",
       },
       seats: booking.seats,
       bus: {
-        busNumber: booking.busId?.busNumber || 'N/A',
-        busType: booking.busId?.busType || 'Standard'
+        busNumber: booking.busId?.busNumber || "N/A",
+        busType: booking.busId?.busType || "Standard",
       },
       pricing: booking.pricing,
       payment: booking.payment,
-      createdAt: booking.createdAt
+      createdAt: booking.createdAt,
     };
 
     res.json({
       success: true,
-      data: ticketData
+      data: ticketData,
     });
-
   } catch (error) {
-    console.error('Get booking by PNR error:', error);
+    console.error("Get booking by PNR error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch booking details',
-      error: error.message
+      message: "Failed to fetch booking details",
+      error: error.message,
     });
   }
 });
@@ -381,32 +602,33 @@ router.get('/pnr/:pnr', async (req, res) => {
 router.use(bookingAuth);
 
 // Test endpoint to create sample bookings (for development only)
-router.post('/create-sample', async (req, res) => {
+router.post("/create-sample", async (req, res) => {
   try {
     const { depotId } = req.body;
-    
+
     if (!depotId) {
       return res.status(400).json({
         success: false,
-        message: 'Depot ID is required'
+        message: "Depot ID is required",
       });
     }
 
     // Find existing trip, route, bus, and user
-    const trip = await Trip.findOne({ depotId }).populate('routeId busId');
-    const user = await User.findOne({ role: 'passenger' });
-    
+    const trip = await Trip.findOne({ depotId }).populate("routeId busId");
+    const user = await User.findOne({ role: "passenger" });
+
     if (!trip) {
       return res.status(400).json({
         success: false,
-        message: 'No trips found for this depot. Please create a trip first.'
+        message: "No trips found for this depot. Please create a trip first.",
       });
     }
 
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: 'No passenger user found. Please create a passenger user first.'
+        message:
+          "No passenger user found. Please create a passenger user first.",
       });
     }
 
@@ -420,32 +642,30 @@ router.post('/create-sample', async (req, res) => {
         depotId: depotId,
         createdBy: user._id,
         passenger: {
-          name: 'John Passenger',
-          email: 'john.passenger@example.com',
-          phone: '+91-9876543210',
+          name: "John Passenger",
+          email: "john.passenger@example.com",
+          phone: "+91-9876543210",
           age: 35,
-          gender: 'male'
+          gender: "male",
         },
         journey: {
           departureDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
           departureTime: trip.startTime,
           arrivalTime: trip.endTime,
           from: trip.routeId.startingPoint.name,
-          to: trip.routeId.endingPoint.name
+          to: trip.routeId.endingPoint.name,
         },
-        seats: [
-          { seatNumber: 'A1', seatType: 'seater', price: 550 }
-        ],
+        seats: [{ seatNumber: "A1", seatType: "seater", price: 550 }],
         pricing: {
           baseFare: 500,
           seatCharges: 50,
           taxes: 25,
-          total: 575
+          total: 575,
         },
-        status: 'confirmed',
-        paymentStatus: 'paid',
-        paymentMethod: 'online',
-        specialRequests: 'Window seat preferred'
+        status: "confirmed",
+        paymentStatus: "paid",
+        paymentMethod: "online",
+        specialRequests: "Window seat preferred",
       },
       {
         bookingId: `BK${Date.now()}-002`,
@@ -455,33 +675,31 @@ router.post('/create-sample', async (req, res) => {
         depotId: depotId,
         createdBy: user._id,
         passenger: {
-          name: 'Jane Smith',
-          email: 'jane.smith@example.com',
-          phone: '+91-9876543211',
+          name: "Jane Smith",
+          email: "jane.smith@example.com",
+          phone: "+91-9876543211",
           age: 28,
-          gender: 'female'
+          gender: "female",
         },
         journey: {
           departureDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // Day after tomorrow
           departureTime: trip.startTime,
           arrivalTime: trip.endTime,
           from: trip.routeId.startingPoint.name,
-          to: trip.routeId.endingPoint.name
+          to: trip.routeId.endingPoint.name,
         },
-        seats: [
-          { seatNumber: 'B1', seatType: 'seater', price: 550 }
-        ],
+        seats: [{ seatNumber: "B1", seatType: "seater", price: 550 }],
         pricing: {
           baseFare: 500,
           seatCharges: 50,
           taxes: 25,
-          total: 575
+          total: 575,
         },
-        status: 'pending',
-        paymentStatus: 'pending',
-        paymentMethod: 'online',
-        specialRequests: 'Lower berth'
-      }
+        status: "pending",
+        paymentStatus: "pending",
+        paymentMethod: "online",
+        specialRequests: "Lower berth",
+      },
     ];
 
     const createdBookings = [];
@@ -493,32 +711,31 @@ router.post('/create-sample', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Sample bookings created successfully',
+      message: "Sample bookings created successfully",
       data: {
         bookings: createdBookings,
-        count: createdBookings.length
-      }
+        count: createdBookings.length,
+      },
     });
-
   } catch (error) {
-    console.error('Create sample bookings error:', error);
+    console.error("Create sample bookings error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to create sample bookings',
-      error: error.message
+      message: "Failed to create sample bookings",
+      error: error.message,
     });
   }
 });
 
 // POST /api/booking/search - Search trips for booking
-router.post('/search', async (req, res) => {
+router.post("/search", async (req, res) => {
   try {
     const { from, to, departureDate, passengers = 1 } = req.body;
 
     if (!from || !to || !departureDate) {
       return res.status(400).json({
         success: false,
-        message: 'From, to, and departure date are required'
+        message: "From, to, and departure date are required",
       });
     }
 
@@ -526,7 +743,7 @@ router.post('/search', async (req, res) => {
       from,
       to,
       departureDate,
-      passengers
+      passengers,
     });
 
     res.json({
@@ -537,38 +754,37 @@ router.post('/search', async (req, res) => {
           from,
           to,
           departureDate,
-          passengers
-        }
-      }
+          passengers,
+        },
+      },
     });
-
   } catch (error) {
-    console.error('Search trips error:', error);
+    console.error("Search trips error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to search trips',
-      error: error.message
+      message: "Failed to search trips",
+      error: error.message,
     });
   }
 });
 
 // GET /api/booking/trip/:tripId - Get trip details for booking
-router.get('/trip/:tripId', async (req, res) => {
+router.get("/trip/:tripId", async (req, res) => {
   try {
     const { tripId } = req.params;
-    
+
     const trip = await Trip.findById(tripId)
-      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
-      .populate('busId', 'busNumber busType capacity')
-      .populate('depotId', 'depotName depotLocation')
-      .populate('driverId', 'name phone')
-      .populate('conductorId', 'name phone')
+      .populate("routeId", "routeName routeNumber startingPoint endingPoint")
+      .populate("busId", "busNumber busType capacity")
+      .populate("depotId", "depotName depotLocation")
+      .populate("driverId", "name phone")
+      .populate("conductorId", "name phone")
       .lean();
-    
+
     if (!trip) {
       return res.status(404).json({
         success: false,
-        message: 'Trip not found'
+        message: "Trip not found",
       });
     }
 
@@ -580,14 +796,14 @@ router.get('/trip/:tripId', async (req, res) => {
       if (route && route.startingPoint && route.endingPoint) {
         // Simple fare calculation based on bus type
         const busTypeFares = {
-          'ordinary': 1.2,
-          'fast_passenger': 1.5,
-          'super_fast': 1.8,
-          'ac': 2.0,
-          'volvo': 2.5,
-          'garuda': 3.0
+          ordinary: 1.2,
+          fast_passenger: 1.5,
+          super_fast: 1.8,
+          ac: 2.0,
+          volvo: 2.5,
+          garuda: 3.0,
         };
-        
+
         const baseFarePerKm = busTypeFares[trip.busId?.busType] || 1.5;
         const estimatedDistance = 150; // Default distance in km
         fare = Math.round(estimatedDistance * baseFarePerKm);
@@ -601,10 +817,10 @@ router.get('/trip/:tripId', async (req, res) => {
       data: {
         trip: {
           _id: trip._id,
-          routeName: trip.routeId?.routeName || 'Unknown Route',
-          routeNumber: trip.routeId?.routeNumber || 'N/A',
-          startingPoint: trip.routeId?.startingPoint || 'Unknown',
-          endingPoint: trip.routeId?.endingPoint || 'Unknown',
+          routeName: trip.routeId?.routeName || "Unknown Route",
+          routeNumber: trip.routeId?.routeNumber || "N/A",
+          startingPoint: trip.routeId?.startingPoint || "Unknown",
+          endingPoint: trip.routeId?.endingPoint || "Unknown",
           startTime: trip.startTime,
           endTime: trip.endTime,
           serviceDate: trip.serviceDate,
@@ -612,29 +828,28 @@ router.get('/trip/:tripId', async (req, res) => {
           capacity: trip.busId?.capacity || 35,
           availableSeats: trip.availableSeats || 35,
           bookedSeats: trip.bookedSeats || 0,
-          busNumber: trip.busId?.busNumber || 'N/A',
-          busType: trip.busId?.busType || 'Standard',
-          depotName: trip.depotId?.depotName || 'Unknown',
-          driverName: trip.driverId?.name || 'N/A',
-          conductorName: trip.conductorId?.name || 'N/A',
+          busNumber: trip.busId?.busNumber || "N/A",
+          busType: trip.busId?.busType || "Standard",
+          depotName: trip.depotId?.depotName || "Unknown",
+          driverName: trip.driverId?.name || "N/A",
+          conductorName: trip.conductorId?.name || "N/A",
           status: trip.status,
-          bookingOpen: trip.bookingOpen !== false // Default to true if not set
-        }
-      }
+          bookingOpen: trip.bookingOpen !== false, // Default to true if not set
+        },
+      },
     });
-    
   } catch (error) {
-    console.error('Error fetching trip details:', error);
+    console.error("Error fetching trip details:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch trip details',
-      error: error.message
+      message: "Failed to fetch trip details",
+      error: error.message,
     });
   }
 });
 
 // GET /api/booking/seats/:tripId - Get available seats for a trip
-router.get('/seats/:tripId', async (req, res) => {
+router.get("/seats/:tripId", async (req, res) => {
   try {
     const { tripId } = req.params;
     const { departureDate } = req.query;
@@ -642,33 +857,34 @@ router.get('/seats/:tripId', async (req, res) => {
     if (!departureDate) {
       return res.status(400).json({
         success: false,
-        message: 'Departure date is required'
+        message: "Departure date is required",
       });
     }
 
-    const availableSeats = await BookingService.getAvailableSeats(tripId, departureDate);
+    const availableSeats = await BookingService.getAvailableSeats(
+      tripId,
+      departureDate,
+    );
 
     res.json({
       success: true,
       data: {
         availableSeats,
-        totalSeats: availableSeats.length
-      }
+        totalSeats: availableSeats.length,
+      },
     });
-
   } catch (error) {
-    console.error('Get available seats error:', error);
+    console.error("Get available seats error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get available seats',
-      error: error.message
+      message: "Failed to get available seats",
+      error: error.message,
     });
   }
 });
 
-
 // GET /api/booking/:id - Get booking by ID
-router.get('/:id', async (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const booking = await BookingService.getBookingById(id);
@@ -676,36 +892,37 @@ router.get('/:id', async (req, res) => {
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: 'Booking not found'
+        message: "Booking not found",
       });
     }
 
     // Check if user has access to this booking
-    if (req.user.role === 'passenger' && booking.createdBy.toString() !== req.user._id.toString()) {
+    if (
+      req.user.role === "passenger" &&
+      booking.createdBy.toString() !== req.user._id.toString()
+    ) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied'
+        message: "Access denied",
       });
     }
 
     res.json({
       success: true,
-      data: booking
+      data: booking,
     });
-
   } catch (error) {
-    console.error('Get booking error:', error);
+    console.error("Get booking error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get booking',
-      error: error.message
+      message: "Failed to get booking",
+      error: error.message,
     });
   }
 });
 
-
 // PUT /api/booking/:id/confirm - Confirm booking (after payment) - legacy endpoint
-router.put('/:id/confirm', async (req, res) => {
+router.put("/:id/confirm", async (req, res) => {
   try {
     const { id } = req.params;
     const paymentData = req.body;
@@ -714,22 +931,21 @@ router.put('/:id/confirm', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Booking confirmed successfully',
-      data: booking
+      message: "Booking confirmed successfully",
+      data: booking,
     });
-
   } catch (error) {
-    console.error('Confirm booking error:', error);
+    console.error("Confirm booking error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to confirm booking',
-      error: error.message
+      message: "Failed to confirm booking",
+      error: error.message,
     });
   }
 });
 
 // PUT /api/booking/:id/cancel - Cancel booking
-router.put('/:id/cancel', async (req, res) => {
+router.put("/:id/cancel", async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
@@ -739,62 +955,60 @@ router.put('/:id/cancel', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Booking cancelled successfully',
-      data: booking
+      message: "Booking cancelled successfully",
+      data: booking,
     });
-
   } catch (error) {
-    console.error('Cancel booking error:', error);
+    console.error("Cancel booking error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to cancel booking',
-      error: error.message
+      message: "Failed to cancel booking",
+      error: error.message,
     });
   }
 });
 
 // GET /api/booking/user/:userId - Get bookings by user
-router.get('/user/:userId', async (req, res) => {
+router.get("/user/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
     const { status, limit = 20, page = 1 } = req.query;
 
     // Check if user has access
-    if (req.user.role === 'passenger' && req.user._id.toString() !== userId) {
+    if (req.user.role === "passenger" && req.user._id.toString() !== userId) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied'
+        message: "Access denied",
       });
     }
 
     const result = await BookingService.getBookingsByUser(userId, {
       status,
       limit: parseInt(limit),
-      page: parseInt(page)
+      page: parseInt(page),
     });
 
     res.json({
       success: true,
-      data: result
+      data: result,
     });
-
   } catch (error) {
-    console.error('Get user bookings error:', error);
+    console.error("Get user bookings error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get user bookings',
-      error: error.message
+      message: "Failed to get user bookings",
+      error: error.message,
     });
   }
 });
 
 // GET /api/booking/my-bookings - Get current user's bookings (simplified endpoint)
-router.get('/my-bookings', async (req, res) => {
+router.get("/my-bookings", async (req, res) => {
   try {
     const userId = req.user._id;
     const { status, limit = 20, page = 1 } = req.query;
 
-    console.log('🔍 Fetching bookings for user:', userId);
+    console.log("🔍 Fetching bookings for user:", userId);
 
     const query = { createdBy: userId };
     if (status) {
@@ -805,48 +1019,64 @@ router.get('/my-bookings', async (req, res) => {
 
     const [bookings, totalCount] = await Promise.all([
       Booking.find(query)
-        .populate('tripId', 'routeId busId startTime endTime fare capacity serviceDate')
-        .populate('tripId.routeId', 'routeName routeNumber startingPoint endingPoint')
-        .populate('tripId.busId', 'busNumber busType')
+        .populate(
+          "tripId",
+          "routeId busId startTime endTime fare capacity serviceDate",
+        )
+        .populate(
+          "tripId.routeId",
+          "routeName routeNumber startingPoint endingPoint",
+        )
+        .populate("tripId.busId", "busNumber busType")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit))
         .lean(),
-      Booking.countDocuments(query)
+      Booking.countDocuments(query),
     ]);
 
     console.log(`📊 Found ${bookings.length} bookings for user`);
 
     // Transform bookings to a consistent format
-    const transformedBookings = bookings.map(booking => {
+    const transformedBookings = bookings.map((booking) => {
       const trip = booking.tripId;
       const route = trip?.routeId;
       const bus = trip?.busId;
-      
+
       return {
         id: booking._id,
-        bookingId: booking.bookingId || booking._id.toString().slice(-8).toUpperCase(),
-        pnr: booking.bookingId || booking._id.toString().slice(-8).toUpperCase(),
+        bookingId:
+          booking.bookingId || booking._id.toString().slice(-8).toUpperCase(),
+        pnr:
+          booking.bookingId || booking._id.toString().slice(-8).toUpperCase(),
         status: booking.status,
         customer: booking.customer,
         journey: {
-          from: route?.startingPoint?.city || route?.startingPoint || booking.journey?.from || 'Unknown',
-          to: route?.endingPoint?.city || route?.endingPoint || booking.journey?.to || 'Unknown',
+          from:
+            route?.startingPoint?.city ||
+            route?.startingPoint ||
+            booking.journey?.from ||
+            "Unknown",
+          to:
+            route?.endingPoint?.city ||
+            route?.endingPoint ||
+            booking.journey?.to ||
+            "Unknown",
           departureDate: trip?.serviceDate || booking.journey?.departureDate,
           departureTime: trip?.startTime || booking.journey?.departureTime,
-          arrivalTime: trip?.endTime || booking.journey?.arrivalTime
+          arrivalTime: trip?.endTime || booking.journey?.arrivalTime,
         },
         seats: booking.seats || [],
         pricing: booking.pricing || { totalAmount: 0 },
-        payment: booking.payment || { paymentStatus: 'pending' },
+        payment: booking.payment || { paymentStatus: "pending" },
         trip: {
-          routeName: route?.routeName || 'Unknown Route',
-          routeNumber: route?.routeNumber || 'N/A',
-          busNumber: bus?.busNumber || 'N/A',
-          busType: bus?.busType || 'Standard'
+          routeName: route?.routeName || "Unknown Route",
+          routeNumber: route?.routeNumber || "N/A",
+          busNumber: bus?.busNumber || "N/A",
+          busType: bus?.busType || "Standard",
         },
         createdAt: booking.createdAt,
-        updatedAt: booking.updatedAt
+        updatedAt: booking.updatedAt,
       };
     });
 
@@ -858,45 +1088,42 @@ router.get('/my-bookings', async (req, res) => {
           currentPage: parseInt(page),
           totalPages: Math.ceil(totalCount / parseInt(limit)),
           totalItems: totalCount,
-          itemsPerPage: parseInt(limit)
-        }
-      }
+          itemsPerPage: parseInt(limit),
+        },
+      },
     });
-
   } catch (error) {
-    console.error('Get my bookings error:', error);
+    console.error("Get my bookings error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get bookings',
-      error: error.message
+      message: "Failed to get bookings",
+      error: error.message,
     });
   }
 });
 
 // GET /api/booking/depot/:depotId - Get bookings by depot
-router.get('/depot/:depotId', async (req, res) => {
+router.get("/depot/:depotId", async (req, res) => {
   try {
     const { depotId } = req.params;
-    const { 
-      status, 
-      startDate, 
-      endDate, 
-      limit = 50, 
-      page = 1 
-    } = req.query;
+    const { status, startDate, endDate, limit = 50, page = 1 } = req.query;
 
     // Check if user has access to this depot
-    if (req.user.role === 'passenger') {
+    if (req.user.role === "passenger") {
       return res.status(403).json({
         success: false,
-        message: 'Access denied'
+        message: "Access denied",
       });
     }
 
-    if (req.user.role !== 'admin' && req.user.depotId && req.user.depotId.toString() !== depotId) {
+    if (
+      req.user.role !== "admin" &&
+      req.user.depotId &&
+      req.user.depotId.toString() !== depotId
+    ) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied to this depot'
+        message: "Access denied to this depot",
       });
     }
 
@@ -905,62 +1132,64 @@ router.get('/depot/:depotId', async (req, res) => {
       startDate,
       endDate,
       limit: parseInt(limit),
-      page: parseInt(page)
+      page: parseInt(page),
     });
 
     res.json({
       success: true,
-      data: result
+      data: result,
     });
-
   } catch (error) {
-    console.error('Get depot bookings error:', error);
+    console.error("Get depot bookings error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get depot bookings',
-      error: error.message
+      message: "Failed to get depot bookings",
+      error: error.message,
     });
   }
 });
 
 // GET /api/booking/stats - Get booking statistics
-router.get('/stats', async (req, res) => {
+router.get("/stats", async (req, res) => {
   try {
     const { depotId, startDate, endDate } = req.query;
 
     // Check if user has access
-    if (req.user.role === 'passenger') {
+    if (req.user.role === "passenger") {
       return res.status(403).json({
         success: false,
-        message: 'Access denied'
+        message: "Access denied",
       });
     }
 
-    const stats = await BookingService.getBookingStats(depotId, startDate, endDate);
+    const stats = await BookingService.getBookingStats(
+      depotId,
+      startDate,
+      endDate,
+    );
 
     res.json({
       success: true,
-      data: stats
+      data: stats,
     });
-
   } catch (error) {
-    console.error('Get booking stats error:', error);
+    console.error("Get booking stats error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get booking statistics',
-      error: error.message
+      message: "Failed to get booking statistics",
+      error: error.message,
     });
   }
 });
 
 // GET /api/booking/refund/:id - Calculate refund for booking
-router.get('/refund/:id', async (req, res) => {
+router.get("/refund/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Try to find booking by different ID types
     let booking = null;
-    if (id && typeof id === 'string') {
+    if (id && typeof id === "string") {
       booking = await Booking.findOne({ bookingId: id });
     }
     if (!booking && id && id.length === 24) {
@@ -971,33 +1200,33 @@ router.get('/refund/:id', async (req, res) => {
       }
     }
     if (!booking) {
-      const searchConditions = [
-        { bookingId: id },
-        { bookingReference: id }
-      ];
-      
+      const searchConditions = [{ bookingId: id }, { bookingReference: id }];
+
       // Only add _id search if it looks like a valid ObjectId
       if (id && id.length === 24 && /^[0-9a-fA-F]{24}$/.test(id)) {
         searchConditions.push({ _id: id });
       }
-      
+
       booking = await Booking.findOne({
-        $or: searchConditions
+        $or: searchConditions,
       });
     }
 
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: 'Booking not found'
+        message: "Booking not found",
       });
     }
 
     // Check if user has access
-    if (req.user.role === 'passenger' && booking.createdBy.toString() !== req.user._id.toString()) {
+    if (
+      req.user.role === "passenger" &&
+      booking.createdBy.toString() !== req.user._id.toString()
+    ) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied'
+        message: "Access denied",
       });
     }
 
@@ -1005,65 +1234,66 @@ router.get('/refund/:id', async (req, res) => {
 
     res.json({
       success: true,
-      data: refundInfo
+      data: refundInfo,
     });
-
   } catch (error) {
-    console.error('Calculate refund error:', error);
+    console.error("Calculate refund error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to calculate refund',
-      error: error.message
+      message: "Failed to calculate refund",
+      error: error.message,
     });
   }
 });
 
 // GET /api/booking/test - Test endpoint
-router.get('/test', (req, res) => {
-  res.json({ success: true, message: 'Booking routes are working!' });
+router.get("/test", (req, res) => {
+  res.json({ success: true, message: "Booking routes are working!" });
 });
 
 // POST /api/booking/create-sample - Create sample booking for testing
-router.post('/create-sample', async (req, res) => {
+router.post("/create-sample", async (req, res) => {
   try {
     const sampleBooking = {
-      bookingId: 'PNR69154187',
+      bookingId: "PNR69154187",
       customer: {
-        name: 'Guest Passenger',
-        email: 'guest@example.com',
-        phone: '+91-9876543210',
+        name: "Guest Passenger",
+        email: "guest@example.com",
+        phone: "+91-9876543210",
         age: 30,
-        gender: 'male'
+        gender: "male",
       },
       journey: {
-        from: 'Kochi',
-        to: 'Thiruvananthapuram',
-        departureDate: new Date('2025-09-14'),
-        departureTime: '08:00',
-        arrivalTime: '14:00'
+        from: "Kochi",
+        to: "Thiruvananthapuram",
+        departureDate: new Date("2025-09-14"),
+        departureTime: "08:00",
+        arrivalTime: "14:00",
       },
       seats: [
-        { seatNumber: 'U1', seatType: 'seater', price: 225 },
-        { seatNumber: 'U2', seatType: 'seater', price: 225 }
+        { seatNumber: "U1", seatType: "seater", price: 225 },
+        { seatNumber: "U2", seatType: "seater", price: 225 },
       ],
       pricing: {
         baseFare: 400,
         seatCharges: 50,
-        total: 450
+        total: 450,
       },
-      status: 'confirmed',
-      paymentStatus: 'paid',
-      paymentMethod: 'upi',
-      createdAt: new Date()
+      status: "confirmed",
+      paymentStatus: "paid",
+      paymentMethod: "upi",
+      createdAt: new Date(),
     };
 
     // Check if booking already exists
-    const existingBooking = await Booking.findOne({ bookingId: sampleBooking.bookingId });
+    const existingBooking = await Booking.findOne({
+      bookingId: sampleBooking.bookingId,
+    });
     if (existingBooking) {
       return res.json({
         success: true,
-        message: 'Sample booking already exists',
-        data: existingBooking
+        message: "Sample booking already exists",
+        data: existingBooking,
       });
     }
 
@@ -1072,104 +1302,114 @@ router.post('/create-sample', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Sample booking created successfully',
-      data: booking
+      message: "Sample booking created successfully",
+      data: booking,
     });
-
   } catch (error) {
-    console.error('Create sample booking error:', error);
+    console.error("Create sample booking error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to create sample booking',
-      error: error.message
+      message: "Failed to create sample booking",
+      error: error.message,
     });
   }
 });
 
 // GET /api/booking/pnr/:pnr - Get booking by PNR (public endpoint for ticket display)
-router.get('/pnr/:pnr', async (req, res) => {
+router.get("/pnr/:pnr", async (req, res) => {
   try {
     const { pnr } = req.params;
-    
+
     if (!pnr) {
       return res.status(400).json({
         success: false,
-        message: 'PNR is required'
+        message: "PNR is required",
       });
     }
 
     // Search for booking by PNR
     const booking = await Booking.findOne({ bookingId: pnr })
-      .populate('tripId', 'serviceDate startTime endTime fare capacity')
-      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
-      .populate('busId', 'busNumber busType')
-      .populate('depotId', 'depotName')
+      .populate("tripId", "serviceDate startTime endTime fare capacity")
+      .populate("routeId", "routeName routeNumber startingPoint endingPoint")
+      .populate("busId", "busNumber busType")
+      .populate("depotId", "depotName")
       .lean();
 
     if (!booking) {
-      console.log('❌ Booking not found for PNR:', pnr);
-      
+      console.log("❌ Booking not found for PNR:", pnr);
+
       // Check if this is a test PNR and create a sample booking
-      if (pnr === 'PNR97032794' || pnr.startsWith('PNR')) {
-        console.log('🔧 Creating sample booking for test PNR:', pnr);
-        
+      if (pnr === "PNR97032794" || pnr.startsWith("PNR")) {
+        console.log("🔧 Creating sample booking for test PNR:", pnr);
+
         // Find a sample trip to create booking for
-        const sampleTrip = await Trip.findOne({ status: 'scheduled' })
-          .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
-          .populate('busId', 'busNumber busType')
-          .populate('depotId', 'depotName')
+        const sampleTrip = await Trip.findOne({ status: "scheduled" })
+          .populate(
+            "routeId",
+            "routeName routeNumber startingPoint endingPoint",
+          )
+          .populate("busId", "busNumber busType")
+          .populate("depotId", "depotName")
           .lean();
-          
+
         if (sampleTrip) {
           const sampleBooking = {
             pnr: pnr,
             bookingId: pnr,
-            status: 'confirmed',
+            status: "confirmed",
             customer: {
-              name: 'Rito Tensy',
-              email: 'rito.tensy@example.com',
-              phone: '+91-9876543210',
+              name: "Rito Tensy",
+              email: "rito.tensy@example.com",
+              phone: "+91-9876543210",
               age: 28,
-              gender: 'male'
+              gender: "male",
             },
             journey: {
-              from: sampleTrip.routeId?.startingPoint?.city || 'Kochi',
-              to: sampleTrip.routeId?.endingPoint?.city || 'Thiruvananthapuram',
+              from: sampleTrip.routeId?.startingPoint?.city || "Kochi",
+              to: sampleTrip.routeId?.endingPoint?.city || "Thiruvananthapuram",
               departureDate: sampleTrip.serviceDate,
               departureTime: sampleTrip.startTime,
               arrivalTime: sampleTrip.endTime,
-              boardingPoint: sampleTrip.routeId?.startingPoint?.location || 'KSRTC Bus Station',
-              droppingPoint: sampleTrip.routeId?.endingPoint?.location || 'Central Bus Station'
+              boardingPoint:
+                sampleTrip.routeId?.startingPoint?.location ||
+                "KSRTC Bus Station",
+              droppingPoint:
+                sampleTrip.routeId?.endingPoint?.location ||
+                "Central Bus Station",
             },
             seats: [
-              { seatNumber: 'U1', seatType: 'seater', price: sampleTrip.fare || 200 }
+              {
+                seatNumber: "U1",
+                seatType: "seater",
+                price: sampleTrip.fare || 200,
+              },
             ],
             pricing: {
               baseFare: sampleTrip.fare || 200,
-              total: sampleTrip.fare || 200
+              total: sampleTrip.fare || 200,
             },
             trip: sampleTrip,
             route: sampleTrip.routeId,
             bus: sampleTrip.busId,
-            depot: sampleTrip.depotId
+            depot: sampleTrip.depotId,
           };
-          
+
           return res.json({
             success: true,
-            message: 'Sample booking data (for testing)',
-            data: sampleBooking
+            message: "Sample booking data (for testing)",
+            data: sampleBooking,
           });
         }
       }
-      
+
       return res.status(404).json({
         success: false,
-        message: 'Booking not found',
+        message: "Booking not found",
         suggestions: [
-          'Check if the PNR is correct',
-          'PNR format should be like: PNR123456',
-          'Contact support if you believe this is an error'
-        ]
+          "Check if the PNR is correct",
+          "PNR format should be like: PNR123456",
+          "Contact support if you believe this is an error",
+        ],
       });
     }
 
@@ -1182,8 +1422,11 @@ router.get('/pnr/:pnr', async (req, res) => {
     // }
 
     // Debug logging
-    console.log('🔍 Debug - Booking found:', booking.bookingId);
-    console.log('🔍 Debug - Customer data:', JSON.stringify(booking.customer, null, 2));
+    console.log("🔍 Debug - Booking found:", booking.bookingId);
+    console.log(
+      "🔍 Debug - Customer data:",
+      JSON.stringify(booking.customer, null, 2),
+    );
 
     // Format the response data
     const ticketData = {
@@ -1192,48 +1435,55 @@ router.get('/pnr/:pnr', async (req, res) => {
       status: booking.status,
       customer: booking.customer,
       journey: {
-        from: booking.journey?.from || booking.routeId?.startingPoint?.city || 'Origin',
-        to: booking.journey?.to || booking.routeId?.endingPoint?.city || 'Destination',
-        departureDate: booking.journey?.departureDate || booking.tripId?.serviceDate,
-        departureTime: booking.journey?.departureTime || booking.tripId?.startTime,
+        from:
+          booking.journey?.from ||
+          booking.routeId?.startingPoint?.city ||
+          "Origin",
+        to:
+          booking.journey?.to ||
+          booking.routeId?.endingPoint?.city ||
+          "Destination",
+        departureDate:
+          booking.journey?.departureDate || booking.tripId?.serviceDate,
+        departureTime:
+          booking.journey?.departureTime || booking.tripId?.startTime,
         arrivalTime: booking.journey?.arrivalTime || booking.tripId?.endTime,
-        boardingPoint: booking.journey?.boardingPoint || 'Central Bus Stand',
-        droppingPoint: booking.journey?.droppingPoint || 'Central Bus Stand'
+        boardingPoint: booking.journey?.boardingPoint || "Central Bus Stand",
+        droppingPoint: booking.journey?.droppingPoint || "Central Bus Stand",
       },
       seats: booking.seats,
       bus: {
-        busNumber: booking.busId?.busNumber || 'N/A',
-        busType: booking.busId?.busType || 'Standard'
+        busNumber: booking.busId?.busNumber || "N/A",
+        busType: booking.busId?.busType || "Standard",
       },
       pricing: booking.pricing,
       payment: booking.payment,
-      createdAt: booking.createdAt
+      createdAt: booking.createdAt,
     };
 
     res.json({
       success: true,
-      data: ticketData
+      data: ticketData,
     });
-
   } catch (error) {
-    console.error('Get booking by PNR error:', error);
+    console.error("Get booking by PNR error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch booking details',
-      error: error.message
+      message: "Failed to fetch booking details",
+      error: error.message,
     });
   }
 });
 
 // POST /api/booking/check-in/:id - Check in passenger
-router.post('/check-in/:id', async (req, res) => {
+router.post("/check-in/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { boardingPoint, seatAllocated } = req.body;
 
     // Try to find booking by different ID types
     let booking = null;
-    if (id && typeof id === 'string') {
+    if (id && typeof id === "string") {
       booking = await Booking.findOne({ bookingId: id });
     }
     if (!booking && id && id.length === 24) {
@@ -1244,32 +1494,29 @@ router.post('/check-in/:id', async (req, res) => {
       }
     }
     if (!booking) {
-      const searchConditions = [
-        { bookingId: id },
-        { bookingReference: id }
-      ];
-      
+      const searchConditions = [{ bookingId: id }, { bookingReference: id }];
+
       // Only add _id search if it looks like a valid ObjectId
       if (id && id.length === 24 && /^[0-9a-fA-F]{24}$/.test(id)) {
         searchConditions.push({ _id: id });
       }
-      
+
       booking = await Booking.findOne({
-        $or: searchConditions
+        $or: searchConditions,
       });
     }
 
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: 'Booking not found'
+        message: "Booking not found",
       });
     }
 
-    if (booking.status !== 'confirmed') {
+    if (booking.status !== "confirmed") {
       return res.status(400).json({
         success: false,
-        message: 'Only confirmed bookings can be checked in'
+        message: "Only confirmed bookings can be checked in",
       });
     }
 
@@ -1279,140 +1526,134 @@ router.post('/check-in/:id', async (req, res) => {
       checkedInAt: new Date(),
       checkedInBy: req.user._id,
       boardingPoint,
-      seatAllocated
+      seatAllocated,
     };
 
     await booking.save();
 
     res.json({
       success: true,
-      message: 'Passenger checked in successfully',
-      data: booking
+      message: "Passenger checked in successfully",
+      data: booking,
     });
-
   } catch (error) {
-    console.error('Check-in error:', error);
+    console.error("Check-in error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to check in passenger',
-      error: error.message
+      message: "Failed to check in passenger",
+      error: error.message,
     });
   }
 });
 
 // GET /api/booking/search/:reference - Search booking by reference
-router.get('/search/:reference', async (req, res) => {
+router.get("/search/:reference", async (req, res) => {
   try {
     const { reference } = req.params;
 
     const booking = await Booking.findOne({
-      $or: [
-        { bookingReference: reference },
-        { bookingId: reference }
-      ]
+      $or: [{ bookingReference: reference }, { bookingId: reference }],
     })
-    .populate('tripId', 'tripNumber startTime endTime')
-    .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
-    .populate('busId', 'busNumber busType')
-    .populate('depotId', 'depotName');
+      .populate("tripId", "tripNumber startTime endTime")
+      .populate("routeId", "routeName routeNumber startingPoint endingPoint")
+      .populate("busId", "busNumber busType")
+      .populate("depotId", "depotName");
 
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: 'Booking not found'
+        message: "Booking not found",
       });
     }
 
     res.json({
       success: true,
-      data: booking
+      data: booking,
     });
-
   } catch (error) {
-    console.error('Search booking error:', error);
+    console.error("Search booking error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to search booking',
-      error: error.message
+      message: "Failed to search booking",
+      error: error.message,
     });
   }
 });
 
 // POST /api/booking/create-sample - Create sample booking for testing
-router.post('/create-sample', async (req, res) => {
+router.post("/create-sample", async (req, res) => {
   try {
-    console.log('🔧 Creating sample booking for testing...');
-    
+    console.log("🔧 Creating sample booking for testing...");
+
     // Find a sample trip
-    const sampleTrip = await Trip.findOne({ status: 'scheduled' })
-      .populate('routeId', 'routeName routeNumber startingPoint endingPoint')
-      .populate('busId', 'busNumber busType')
-      .populate('depotId', 'depotName')
+    const sampleTrip = await Trip.findOne({ status: "scheduled" })
+      .populate("routeId", "routeName routeNumber startingPoint endingPoint")
+      .populate("busId", "busNumber busType")
+      .populate("depotId", "depotName")
       .lean();
-      
+
     if (!sampleTrip) {
       return res.status(404).json({
         success: false,
-        message: 'No scheduled trips found to create sample booking'
+        message: "No scheduled trips found to create sample booking",
       });
     }
-    
+
     // Generate a sample PNR
     const samplePNR = `PNR${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
-    
+
     const sampleBooking = {
       bookingId: samplePNR,
-      status: 'confirmed',
+      status: "confirmed",
       customer: {
-        name: 'John Doe',
-        email: 'john.doe@example.com',
-        phone: '+91-9876543210',
+        name: "John Doe",
+        email: "john.doe@example.com",
+        phone: "+91-9876543210",
         age: 35,
-        gender: 'male'
+        gender: "male",
       },
       journey: {
-        from: sampleTrip.routeId?.startingPoint?.city || 'Kochi',
-        to: sampleTrip.routeId?.endingPoint?.city || 'Thiruvananthapuram',
+        from: sampleTrip.routeId?.startingPoint?.city || "Kochi",
+        to: sampleTrip.routeId?.endingPoint?.city || "Thiruvananthapuram",
         departureDate: sampleTrip.serviceDate,
         departureTime: sampleTrip.startTime,
-        arrivalTime: sampleTrip.endTime
+        arrivalTime: sampleTrip.endTime,
       },
       seats: [
-        { seatNumber: 'A1', seatType: 'seater', price: sampleTrip.fare || 200 }
+        { seatNumber: "A1", seatType: "seater", price: sampleTrip.fare || 200 },
       ],
       pricing: {
         baseFare: sampleTrip.fare || 200,
-        total: sampleTrip.fare || 200
+        total: sampleTrip.fare || 200,
       },
       tripId: sampleTrip._id,
       routeId: sampleTrip.routeId._id,
       busId: sampleTrip.busId._id,
       depotId: sampleTrip.depotId._id,
-      paymentStatus: 'paid',
-      createdAt: new Date()
+      paymentStatus: "paid",
+      createdAt: new Date(),
     };
-    
+
     // Save to database
     const booking = new Booking(sampleBooking);
     await booking.save();
-    
-    console.log('✅ Sample booking created:', samplePNR);
-    
+
+    console.log("✅ Sample booking created:", samplePNR);
+
     res.json({
       success: true,
-      message: 'Sample booking created successfully',
+      message: "Sample booking created successfully",
       data: {
         pnr: samplePNR,
-        booking: sampleBooking
-      }
+        booking: sampleBooking,
+      },
     });
-    
   } catch (error) {
-    console.error('❌ Error creating sample booking:', error);
+    console.error("❌ Error creating sample booking:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to create sample booking',
-      error: error.message
+      message: "Failed to create sample booking",
+      error: error.message,
     });
   }
 });

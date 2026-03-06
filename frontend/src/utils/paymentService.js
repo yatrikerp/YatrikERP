@@ -1,55 +1,56 @@
-import { apiFetch } from './api';
-import toast from 'react-hot-toast';
+import { apiFetch } from "./api";
+import toast from "react-hot-toast";
 
 // Razorpay configuration - Using working test key
-const RAZORPAY_KEY_ID = 'rzp_test_1DP5mmOlF5G5ag';
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || "rzp_test_your_key_here";
 
 class PaymentService {
   // Initialize Razorpay with CDN + local fallback loader
   static async initializeRazorpay() {
-    if (typeof window !== 'undefined' && window.Razorpay) {
+    if (typeof window !== "undefined" && window.Razorpay) {
       return window.Razorpay;
     }
-    const loadScript = (src) => new Promise((resolve) => {
-      const script = document.createElement('script');
-      script.src = src;
-      script.async = true;
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
+    const loadScript = (src) =>
+      new Promise((resolve) => {
+        const script = document.createElement("script");
+        script.src = src;
+        script.async = true;
+        script.onload = () => resolve(true);
+        script.onerror = () => resolve(false);
+        document.body.appendChild(script);
+      });
     // Try CDN first
-    let ok = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
+    let ok = await loadScript("https://checkout.razorpay.com/v1/checkout.js");
     if (!ok) {
-      console.warn('Razorpay CDN unavailable; using local fallback');
-      ok = await loadScript('/vendor/razorpay.checkout.js');
+      console.warn("Razorpay CDN unavailable; using local fallback");
+      ok = await loadScript("/vendor/razorpay.checkout.js");
     }
     if (!ok || !window.Razorpay) {
-      throw new Error('Razorpay script failed to load');
+      throw new Error("Razorpay script failed to load");
     }
     return window.Razorpay;
   }
 
   // Create payment order
-  static async createOrder(amount, bookingId, passengerId, currency = 'INR') {
+  static async createOrder(amount, bookingId, passengerId, currency = "INR") {
     try {
-      const response = await apiFetch('/api/payments/create-order', {
-        method: 'POST',
+      const response = await apiFetch("/api/payments/create-order", {
+        method: "POST",
         body: JSON.stringify({
           amount,
           currency,
           bookingId,
-          passengerId
-        })
+          passengerId,
+        }),
       });
 
       if (!response.ok) {
-        throw new Error(response.message || 'Failed to create payment order');
+        throw new Error(response.message || "Failed to create payment order");
       }
 
       return response.data;
     } catch (error) {
-      console.error('Error creating payment order:', error);
+      console.error("Error creating payment order:", error);
       throw error;
     }
   }
@@ -62,47 +63,46 @@ class PaymentService {
       const options = {
         key: RAZORPAY_KEY_ID,
         amount: orderData.amount,
-        currency: orderData.currency || 'INR',
-        name: 'YATRIK ERP',
-        description: 'Bus Ticket Booking',
+        currency: orderData.currency || "INR",
+        name: "YATRIK ERP",
+        description: "Bus Ticket Booking",
         order_id: orderData.orderId,
         handler: async (response) => {
           try {
             await this.verifyPayment(response, orderData.bookingId);
-            toast.success('Payment successful!');
+            toast.success("Payment successful!");
             return { success: true, paymentId: response.razorpay_payment_id };
           } catch (error) {
-            toast.error('Payment verification failed');
+            toast.error("Payment verification failed");
             throw error;
           }
         },
         prefill: {
-          name: userDetails.name || '',
-          email: userDetails.email || '',
-          contact: userDetails.phone || ''
+          name: userDetails.name || "",
+          email: userDetails.email || "",
+          contact: userDetails.phone || "",
         },
         theme: {
-          color: '#E91E63'
+          color: "#E91E63",
         },
         modal: {
           ondismiss: () => {
-            toast.error('Payment cancelled');
-          }
-        }
+            toast.error("Payment cancelled");
+          },
+        },
       };
 
       const rzp = new Razorpay(options);
       rzp.open();
 
       return new Promise((resolve, reject) => {
-        rzp.on('payment.failed', (response) => {
-          toast.error('Payment failed');
-          reject(new Error('Payment failed'));
+        rzp.on("payment.failed", (response) => {
+          toast.error("Payment failed");
+          reject(new Error("Payment failed"));
         });
       });
-
     } catch (error) {
-      console.error('Error processing payment:', error);
+      console.error("Error processing payment:", error);
       throw error;
     }
   }
@@ -110,23 +110,23 @@ class PaymentService {
   // Verify payment
   static async verifyPayment(paymentResponse, bookingId) {
     try {
-      const response = await apiFetch('/api/payments/verify-payment', {
-        method: 'POST',
+      const response = await apiFetch("/api/payments/verify-payment", {
+        method: "POST",
         body: JSON.stringify({
           razorpay_order_id: paymentResponse.razorpay_order_id,
           razorpay_payment_id: paymentResponse.razorpay_payment_id,
           razorpay_signature: paymentResponse.razorpay_signature,
-          bookingId
-        })
+          bookingId,
+        }),
       });
 
       if (!response.ok) {
-        throw new Error(response.message || 'Payment verification failed');
+        throw new Error(response.message || "Payment verification failed");
       }
 
       return response.data;
     } catch (error) {
-      console.error('Error verifying payment:', error);
+      console.error("Error verifying payment:", error);
       throw error;
     }
   }
@@ -135,14 +135,14 @@ class PaymentService {
   static async getPaymentStatus(paymentId) {
     try {
       const response = await apiFetch(`/api/payments/status/${paymentId}`);
-      
+
       if (!response.ok) {
-        throw new Error(response.message || 'Failed to get payment status');
+        throw new Error(response.message || "Failed to get payment status");
       }
 
       return response.data;
     } catch (error) {
-      console.error('Error getting payment status:', error);
+      console.error("Error getting payment status:", error);
       throw error;
     }
   }
@@ -150,15 +150,15 @@ class PaymentService {
   // Get payment history
   static async getPaymentHistory() {
     try {
-      const response = await apiFetch('/api/payments/history');
-      
+      const response = await apiFetch("/api/payments/history");
+
       if (!response.ok) {
-        throw new Error(response.message || 'Failed to get payment history');
+        throw new Error(response.message || "Failed to get payment history");
       }
 
       return response.data;
     } catch (error) {
-      console.error('Error getting payment history:', error);
+      console.error("Error getting payment history:", error);
       throw error;
     }
   }
@@ -166,21 +166,25 @@ class PaymentService {
   // Add money to wallet
   static async addMoneyToWallet(amount) {
     try {
-      const orderData = await this.createOrder(amount, `wallet_${Date.now()}`, 'wallet');
-      
+      const orderData = await this.createOrder(
+        amount,
+        `wallet_${Date.now()}`,
+        "wallet",
+      );
+
       return this.processPayment(orderData);
     } catch (error) {
-      console.error('Error adding money to wallet:', error);
+      console.error("Error adding money to wallet:", error);
       throw error;
     }
   }
 
   // Format currency
   static formatCurrency(amount) {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 2
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 2,
     }).format(amount);
   }
 }

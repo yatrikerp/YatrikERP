@@ -172,6 +172,19 @@ async function startServer() {
     logger.info("✅ Connected to Atlas MongoDB successfully");
     logger.info("📊 Database ready for operations");
 
+    // Initialize blockchain service
+    try {
+      const blockchainService = require("./services/blockchainService");
+      await blockchainService.initialize();
+      logger.info("✅ Blockchain service initialized");
+    } catch (error) {
+      logger.warn(
+        "⚠️ Blockchain service initialization failed:",
+        error.message,
+      );
+      logger.warn("Blockchain features will be disabled");
+    }
+
     // Start automatic schedule generator (only in production)
     if (process.env.NODE_ENV === "production") {
       try {
@@ -332,6 +345,7 @@ app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/bus-schedule", require("./routes/busSchedule"));
 app.use("/api/driver", require("./routes/driver"));
 app.use("/api/conductor", require("./routes/conductor"));
+app.use("/api/enhanced-conductor", require("./routes/enhancedConductor"));
 app.use("/api/staff", require("./routes/staff"));
 app.use("/api/payment", require("./routes/payment"));
 app.use("/api/payments", require("./routes/payments"));
@@ -381,6 +395,8 @@ app.use("/api/ai", require("./routes/mlAnalytics"));
 app.use("/api/ml-recommendations", require("./routes/mlRecommendations"));
 // AI Scheduling Research Implementation
 app.use("/api/ai-scheduling", require("./routes/aiScheduling"));
+// Blockchain Ticketing
+app.use("/api/blockchain", require("./routes/blockchain"));
 // State Transport Command Dashboard routes
 try {
   app.use("/api/state", require("./routes/state"));

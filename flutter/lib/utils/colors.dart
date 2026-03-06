@@ -9,10 +9,28 @@ class AppColors {
   static const Color brandTeal = Color(0xFF00ACC1);
   static const Color brandTealDark = Color(0xFF00838F);
   
-  // Text Colors
+  // Text Colors (Complete set)
   static const Color text900 = Color(0xFF0f172a);
+  static const Color text800 = Color(0xFF1e293b);
   static const Color text700 = Color(0xFF334155);
+  static const Color text600 = Color(0xFF475569);
   static const Color text500 = Color(0xFF64748b);
+  static const Color text400 = Color(0xFF94a3b8);
+  static const Color text300 = Color(0xFFcbd5e1);
+  static const Color text200 = Color(0xFFe2e8f0);
+  static const Color text100 = Color(0xFFf1f5f9);
+  
+  // Gray Colors (Complete set)
+  static const Color gray900 = Color(0xFF111827);
+  static const Color gray800 = Color(0xFF1f2937);
+  static const Color gray700 = Color(0xFF374151);
+  static const Color gray600 = Color(0xFF4b5563);
+  static const Color gray500 = Color(0xFF6b7280);
+  static const Color gray400 = Color(0xFF9ca3af);
+  static const Color gray300 = Color(0xFFd1d5db);
+  static const Color gray200 = Color(0xFFe5e7eb);
+  static const Color gray100 = Color(0xFFf3f4f6);
+  static const Color gray50 = Color(0xFFf9fafb);
   
   // Background Colors
   static const Color bgStart = Color(0xFFE8F3FF);

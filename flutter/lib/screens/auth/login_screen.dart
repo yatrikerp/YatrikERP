@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/colors.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,8 +15,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _rememberMe = false;
   late AnimationController _animController;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   @override
   void initState() {
@@ -26,6 +25,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       duration: const Duration(seconds: 3),
       vsync: this,
     )..repeat();
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final credentials = await authProvider.getSavedCredentials();
+    if (credentials['email'] != null && credentials['password'] != null) {
+      setState(() {
+        _emailController.text = credentials['email']!;
+        _passwordController.text = credentials['password']!;
+        _rememberMe = true;
+      });
+    }
   }
 
   @override
@@ -36,22 +48,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     super.dispose();
   }
 
-  Future<void> _handleGoogleSignIn() async {
-    try {
-      final account = await _googleSignIn.signIn();
-      if (account != null) {
-        // TODO: Send Google token to backend
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Google Sign-In coming soon!')),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Google Sign-In failed: $e')),
-      );
-    }
-  }
-
   Future<void> _login() async {
     if (_formKey.currentState!.validate()) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -59,6 +55,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       final success = await authProvider.login(
         _emailController.text.trim(),
         _passwordController.text,
+        rememberMe: _rememberMe,
       );
 
       if (mounted) {
@@ -67,32 +64,21 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           if (user != null) {
             final role = (user['role'] ?? 'passenger').toString().toLowerCase();
             
-            // Role-based routing matching web app
+            // Only allow passenger and conductor roles
             if (role == 'conductor') {
               Navigator.pushReplacementNamed(context, '/conductor');
             } else if (role == 'passenger') {
               Navigator.pushReplacementNamed(context, '/home');
-            } else if (role == 'admin' || role == 'depot_manager' || role == 'depot-supervisor' || role == 'depot_operator') {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Admin and depot access is only available on web'),
-                  backgroundColor: AppColors.brandPink,
-                  duration: Duration(seconds: 3),
-                ),
-              );
-              await authProvider.logout();
-            } else if (role == 'driver') {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Driver access is only available on web'),
-                  backgroundColor: AppColors.brandPink,
-                  duration: Duration(seconds: 3),
-                ),
-              );
-              await authProvider.logout();
             } else {
-              // Default to passenger home for unknown roles
-              Navigator.pushReplacementNamed(context, '/home');
+              // Reject all other roles
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('This app is only for passengers and conductors. Please use the web version for other roles.'),
+                  backgroundColor: AppColors.error,
+                  duration: Duration(seconds: 4),
+                ),
+              );
+              await authProvider.logout();
             }
           } else {
             Navigator.pushReplacementNamed(context, '/home');
@@ -236,60 +222,30 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 32),
-                      
-                      // Google Sign-In Button
+                      const SizedBox(height: 8),
                       Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.border),
-                          borderRadius: BorderRadius.circular(10),
+                          color: AppColors.brandPink.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: _handleGoogleSignIn,
-                            borderRadius: BorderRadius.circular(10),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Image.network(
-                                    'https://www.google.com/favicon.ico',
-                                    width: 20,
-                                    height: 20,
-                                    errorBuilder: (context, error, stackTrace) => 
-                                      const Icon(Icons.g_mobiledata, size: 20, color: Colors.red),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  const Text(
-                                    'Sign in with Google',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.text900,
-                                    ),
-                                  ),
-                                ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.info_outline, size: 16, color: AppColors.brandPink),
+                            const SizedBox(width: 8),
+                            Text(
+                              'For Passengers & Conductors only',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.brandPink,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      
-                      // OR Divider
-                      Row(
-                        children: [
-                          Expanded(child: Divider(color: AppColors.border)),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Text('OR', style: TextStyle(color: AppColors.text500, fontSize: 12)),
-                          ),
-                          Expanded(child: Divider(color: AppColors.border)),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 32),
                       
                       // Email Field
                       TextFormField(
@@ -374,18 +330,53 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       ),
                       const SizedBox(height: 8),
                       
-                      // Forgot Password
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: () {},
-                          child: Text(
-                            'Forgot Password?',
-                            style: TextStyle(color: AppColors.brandPink, fontSize: 13),
+                      // Remember Me & Forgot Password Row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: Checkbox(
+                                  value: _rememberMe,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _rememberMe = value ?? false;
+                                    });
+                                  },
+                                  activeColor: AppColors.brandPink,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Remember Me',
+                                style: TextStyle(
+                                  color: AppColors.text700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
+                          TextButton(
+                            onPressed: () {},
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(0, 0),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              'Forgot Password?',
+                              style: TextStyle(color: AppColors.brandPink, fontSize: 13),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
                       
                       // Login Button
                       Consumer<AuthProvider>(
@@ -432,6 +423,90 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             ),
                           );
                         },
+                      ),
+                      const SizedBox(height: 24),
+                      
+                      // OR Divider
+                      Row(
+                        children: [
+                          Expanded(child: Divider(color: AppColors.border)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Text('OR', style: TextStyle(color: AppColors.text500, fontSize: 12)),
+                          ),
+                          Expanded(child: Divider(color: AppColors.border)),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      
+                      // Google Sign-In Button
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppColors.border),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () async {
+                              final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                              final success = await authProvider.signInWithGoogle();
+                              
+                              if (mounted && success) {
+                                final user = authProvider.user;
+                                if (user != null) {
+                                  final role = (user['role'] ?? 'passenger').toString().toLowerCase();
+                                  
+                                  if (role == 'conductor') {
+                                    Navigator.pushReplacementNamed(context, '/conductor');
+                                  } else if (role == 'passenger') {
+                                    Navigator.pushReplacementNamed(context, '/home');
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('This app is only for passengers and conductors.'),
+                                        backgroundColor: AppColors.error,
+                                      ),
+                                    );
+                                    await authProvider.logout();
+                                  }
+                                }
+                              } else if (mounted && authProvider.error != null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(authProvider.error!),
+                                    backgroundColor: AppColors.error,
+                                  ),
+                                );
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Image.network(
+                                    'https://www.google.com/favicon.ico',
+                                    width: 20,
+                                    height: 20,
+                                    errorBuilder: (context, error, stackTrace) => 
+                                      const Icon(Icons.g_mobiledata, size: 20, color: Colors.red),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Text(
+                                    'Continue with Google',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.text900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 24),
                       

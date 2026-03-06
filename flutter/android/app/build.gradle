@@ -65,3 +65,7 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.0"
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
 }
+
+// Google Services plugin for Firebase/Google Sign-In
+// TEMPORARILY COMMENTED OUT - Uncomment when google-services.json is added
+// apply plugin: 'com.google.gms.google-services'
